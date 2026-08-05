@@ -44,7 +44,7 @@ The objective is to build a production-quality AI application demonstrating
 - LangChain
 - FastAPI
 - Supabase PostgreSQL
-- Redis
+- Redis with UpStash
 - Modern React Frontend
 - Enterprise Authentication
 - Role Based Access Control
@@ -249,7 +249,7 @@ Do not modify existing business tables.
 
 ## Cache
 
-Redis
+Redis with UpStash
 
 Redis should be used for
 

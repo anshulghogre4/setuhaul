@@ -134,7 +134,7 @@ Supabase PostgreSQL
 
 ## Cache
 
-Redis
+Redis with UpStash
 
 ---
 

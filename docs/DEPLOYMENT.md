@@ -311,14 +311,7 @@ npm run preview
 
 # Redis
 
-Docker Container
-
-```
-docker run -d \
---name redis \
--p 6379:6379 \
-redis:7-alpine
-```
+UpStash Redis Connection
 
 Redis must automatically reconnect if the connection drops.
 
@@ -697,7 +690,7 @@ The completed project must include
 
 ✓ Supabase Integration
 
-✓ Redis Integration
+✓ UpStash Redis Integration
 
 ✓ Docker
 

@@ -79,7 +79,7 @@ This project is based on the SetuHaul FDE Challenge and extends it into a produc
 - Pydantic
 - Alembic
 - JWT Authentication
-- Redis Cache
+- Redis Cache with upstash
 - Supabase PostgreSQL
 - Audit Logging
 - API Logging
@@ -344,4 +344,4 @@ This project is created for educational and portfolio purposes based on the Setu
 - FastAPI
 - Supabase
 - Redis
-- Monitoring with LangSmith, Cloudwatch & agencore
+- Monitoring with LangSmith, CloudWatch & AgentCore
