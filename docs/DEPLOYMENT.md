@@ -72,7 +72,7 @@ Port
 
 Redis is responsible for
 
-- LangGraph checkpointing
+- LangChain checkpointing
 - Session storage
 - Conversation cache
 - Frequently accessed operational data
@@ -85,9 +85,7 @@ Google Gemini
 
 LangChain
 
-LangGraph
-
-LangSmith
+LangSmith, AgentCore, CloudWatch
 
 ---
 
@@ -241,11 +239,9 @@ Supabase
 
 LangChain
 
-LangGraph
-
 Google Generative AI
 
-LangSmith
+LangSmith, AgentCore, CloudWatch
 
 python-dotenv
 
@@ -328,7 +324,7 @@ Redis must automatically reconnect if the connection drops.
 
 ---
 
-# LangGraph Checkpointer
+# LangChain Checkpointer
 
 Conversation state should be stored inside Redis.
 
@@ -695,7 +691,7 @@ The completed project must include
 
 ✓ Backend
 
-✓ LangGraph Agent
+✓ LangChain Agent
 
 ✓ FastAPI
 

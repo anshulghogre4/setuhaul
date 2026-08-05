@@ -41,7 +41,7 @@ The objective is to build a production-quality AI application demonstrating
 
 - Enterprise Software Architecture
 - AI Agents
-- LangGraph
+- LangChain
 - FastAPI
 - Supabase PostgreSQL
 - Redis
@@ -223,12 +223,13 @@ Alembic
 
 LangChain
 
-LangGraph
-
 Google Gemini
 
 LangSmith
 
+amazon bedrock agentcore
+
+amazon bedrock cloudwatch
 ---
 
 ## Database
@@ -255,7 +256,7 @@ Redis
 Redis should be used for
 
 - Session Cache
-- LangGraph Checkpointer
+- LangChain Checkpointer
 - Frequently Used Queries
 - AI Conversation State
 

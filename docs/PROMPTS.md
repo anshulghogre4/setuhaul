@@ -602,7 +602,7 @@ Prompt files should be cached.
 
 Prompt changes should not require backend code changes.
 
-Never hardcode prompts inside LangGraph nodes.
+Never hardcode prompts inside LangChain Agents.
 
 All AI nodes should reference prompt files from
 

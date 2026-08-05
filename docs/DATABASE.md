@@ -398,7 +398,7 @@ Driver asks
 
 ↓
 
-LangGraph
+LangChain
 
 ↓
 
@@ -456,7 +456,7 @@ Conversation Memory
 
 Session Cache
 
-LangGraph Checkpoints
+LangChain Checkpoints
 
 Frequently Used Queries
 

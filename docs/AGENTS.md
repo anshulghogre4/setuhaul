@@ -22,11 +22,11 @@ Every business action must be executed through backend tools.
 
 The application uses
 
-- LangGraph
 - LangChain
 - Google Gemini
 - Redis Checkpointer
 - FastAPI Tools
+- Monitoring with LangSmith, AgentCore, CloudWatch
 
 The graph is event driven.
 
@@ -692,7 +692,7 @@ Multiple warehouses
 
 Multiple companies
 
-without changing the core LangGraph implementation.
+without changing the core LangChain implementation.
 
 ---
 
@@ -700,7 +700,7 @@ without changing the core LangGraph implementation.
 
 The implementation should use
 
-LangGraph StateGraph
+LangChain
 
 Redis Checkpointer
 

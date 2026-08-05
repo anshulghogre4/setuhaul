@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.116-green)
 ![React](https://img.shields.io/badge/React-19-blue)
-![LangGraph](https://img.shields.io/badge/LangGraph-Latest-orange)
+![LangChain](https://img.shields.io/badge/LangChain-Latest-orange)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-purple)
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)
 ![Redis](https://img.shields.io/badge/Redis-Cache-red)
@@ -62,7 +62,7 @@ This project is based on the SetuHaul FDE Challenge and extends it into a produc
 
 ## AI Features
 
-- LangGraph Multi-Step Workflow
+- LangChain Multi-Step Workflow
 - Google Gemini
 - Context-aware Conversations
 - Structured Tool Calling
@@ -109,7 +109,7 @@ This project is based on the SetuHaul FDE Challenge and extends it into a produc
 
           ▼                ▼                ▼
 
-      LangGraph        Business API      Redis
+      LangChain        Business API      Redis
 
           │                                 │
 
@@ -154,7 +154,7 @@ This project is based on the SetuHaul FDE Challenge and extends it into a produc
 | Frontend | React + TypeScript |
 | Styling | TailwindCSS + Shadcn UI |
 | Backend | FastAPI |
-| AI | LangGraph + LangChain + Gemini |
+| AI | LangChain + Gemini |
 | Database | Supabase PostgreSQL |
 | Cache | Redis |
 | ORM | SQLAlchemy |
@@ -292,7 +292,7 @@ npm run dev
 | docs/ARCHITECTURE.md | System Architecture |
 | docs/DATABASE.md | Database Design |
 | docs/API.md | API Specification |
-| docs/AGENTS.md | LangGraph Design |
+| docs/AGENTS.md | LangChain Design |
 | docs/PROMPTS.md | Prompt Library |
 | docs/DEPLOYMENT.md | Deployment Guide |
 | docs/TASKS.md | Development Roadmap |
@@ -339,9 +339,9 @@ This project is created for educational and portfolio purposes based on the Setu
 
 - FDE Academy
 - SetuHaul Challenge
-- LangChain
-- LangGraph
+- LangChain 
 - Google Gemini
 - FastAPI
 - Supabase
 - Redis
+- Monitoring with LangSmith, Cloudwatch & agencore

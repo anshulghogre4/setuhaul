@@ -18,7 +18,8 @@ It explains:
 - Authentication flow
 - Database interactions
 - Redis usage
-- LangGraph workflow
+- LangChain integration
+- Monitorin with LangSmith, AgentCore, CloudWatch
 - Folder structure
 - Deployment architecture
 
@@ -48,7 +49,7 @@ This document does not define API contracts or database schemas. Those are docum
    Authentication         AI Assistant          Operations APIs
        |                       |                       |
        |                       |                       |
-       |                LangGraph Agent               |
+       |                LangChain Agent               |
        |                       |                       |
        |             Tool Calling Layer               |
        |                       |                       |
@@ -119,11 +120,9 @@ Alembic
 
 LangChain
 
-LangGraph
-
 Google Gemini
 
-LangSmith
+LangSmith, CloudWatch, AgentCore
 
 ---
 
@@ -290,7 +289,7 @@ Responsibilities
 
 ## Tool Layer
 
-LangGraph tools call the Service Layer.
+LangChain tools call the Service Layer.
 
 Examples
 
@@ -358,7 +357,7 @@ Return Response
 
 ---
 
-# LangGraph Workflow
+# LangChain Agent Flows
 
 ```
 START
@@ -538,7 +537,7 @@ TTL: 24 hours
 
 ---
 
-## LangGraph Checkpoint
+## LangChain Checkpoint
 
 Persist graph execution state.
 
@@ -715,7 +714,7 @@ FastAPI
 
 ↓
 
-LangGraph
+LangChain
 
 ↓
 
@@ -739,7 +738,7 @@ Tool
 
 ↓
 
-LangGraph
+LangChain
 
 ↓
 
