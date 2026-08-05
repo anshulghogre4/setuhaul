@@ -179,8 +179,6 @@ React 19
 
 TypeScript
 
-Vite
-
 TailwindCSS
 
 Shadcn UI
