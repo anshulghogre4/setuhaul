@@ -173,3 +173,49 @@ operational_messages,External or internal confirmations and notifications.,messa
 operational_messages,External or internal confirmations and notifications.,sent_at,TEXT,True,False,
 operational_messages,External or internal confirmations and notifications.,delivery_status,TEXT,True,False,
 operational_messages,External or internal confirmations and notifications.,reply_to_message_id,TEXT,False,False,operational_messages.operational_message_id
+
+roles,role_id,TEXT,NO,YES,NO,Unique role identifier (e.g. ROL001)
+roles,role_name,TEXT,NO,NO,NO,Unique business role name
+roles,description,TEXT,YES,NO,NO,Description of the role
+roles,created_at,TEXT,NO,NO,NO,Record creation timestamp
+
+users,user_id,TEXT,NO,YES,NO,Unique application user identifier
+users,role_id,TEXT,NO,NO,YES,References roles.role_id
+users,employee_code,TEXT,YES,NO,NO,Employee code for internal users
+users,full_name,TEXT,NO,NO,NO,Full name of the user
+users,email,TEXT,NO,NO,NO,Unique email address
+users,phone_number,TEXT,YES,NO,NO,Contact phone number
+users,password_hash,TEXT,NO,NO,NO,Hashed password (or Supabase Auth reference)
+users,driver_id,TEXT,YES,NO,YES,References drivers.driver_id for driver accounts
+users,facility_id,TEXT,YES,NO,YES,References facilities.facility_id for facility-based users
+users,is_active,INTEGER,NO,NO,NO,Whether the user account is active (0/1)
+users,last_login_ts,TEXT,YES,NO,NO,Timestamp of last successful login
+users,created_at,TEXT,NO,NO,NO,Record creation timestamp
+users,updated_at,TEXT,YES,NO,NO,Last record update timestamp
+
+audit_logs,audit_id,TEXT,NO,YES,NO,Unique audit log identifier
+audit_logs,user_id,TEXT,NO,NO,YES,References users.user_id
+audit_logs,action_type,TEXT,NO,NO,NO,Business action performed by the user
+audit_logs,entity_name,TEXT,NO,NO,NO,Business entity affected
+audit_logs,entity_id,TEXT,YES,NO,NO,Identifier of the affected entity
+audit_logs,old_value_json,TEXT,YES,NO,NO,JSON snapshot before update
+audit_logs,new_value_json,TEXT,YES,NO,NO,JSON snapshot after update
+audit_logs,ip_address,TEXT,YES,NO,NO,Client IP address
+audit_logs,user_agent,TEXT,YES,NO,NO,Client browser or application details
+audit_logs,created_at,TEXT,NO,NO,NO,Audit event timestamp
+
+api_logs,api_log_id,TEXT,NO,YES,NO,Unique API log identifier
+api_logs,user_id,TEXT,YES,NO,YES,References users.user_id
+api_logs,thread_id,TEXT,YES,NO,YES,References chat_threads.thread_id
+api_logs,api_name,TEXT,NO,NO,NO,Logical API or tool name
+api_logs,http_method,TEXT,YES,NO,NO,HTTP request method
+api_logs,endpoint,TEXT,YES,NO,NO,API endpoint path
+api_logs,request_json,TEXT,YES,NO,NO,Serialized API request payload
+api_logs,response_json,TEXT,YES,NO,NO,Serialized API response payload
+api_logs,response_status,INTEGER,YES,NO,NO,HTTP response status code
+api_logs,execution_time_ms,INTEGER,YES,NO,NO,API execution time in milliseconds
+api_logs,llm_model,TEXT,YES,NO,NO,LLM model used for AI requests
+api_logs,prompt_tokens,INTEGER,YES,NO,NO,Prompt token count
+api_logs,completion_tokens,INTEGER,YES,NO,NO,Completion token count
+api_logs,total_tokens,INTEGER,YES,NO,NO,Total token consumption
+api_logs,created_at,TEXT,NO,NO,NO,API execution timestamp

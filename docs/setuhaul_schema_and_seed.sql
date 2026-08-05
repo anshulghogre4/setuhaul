@@ -655,4 +655,509 @@ FROM facility_checkins fc
 JOIN shipments s ON s.shipment_id = fc.shipment_id
 JOIN v_latest_eta le ON le.shipment_id = s.shipment_id
 WHERE fc.queue_state IN ('WAITING_EARLY','WAITING_LATE','WAITING_DOCK_UNAVAILABLE','CALLED_TO_DOCK');
+/*==============================================================
+  ROLES
+==============================================================*/
+
+CREATE TABLE roles (
+    role_id             TEXT PRIMARY KEY,
+    role_name           TEXT NOT NULL UNIQUE,
+    description         TEXT,
+    created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO roles (role_id, role_name, description)
+VALUES
+('ROL001','DRIVER','Truck Driver'),
+('ROL002','OPERATIONS_EXECUTIVE','Operations Executive'),
+('ROL003','WAREHOUSE_PLANNER','Warehouse Planner'),
+('ROL004','OPERATIONS_MANAGER','Operations Manager'),
+('ROL005','FACILITY_MANAGER','Facility Manager'),
+('ROL006','TRANSPORT_MANAGER','Transport Manager'),
+('ROL007','REGIONAL_OPERATIONS_HEAD','Regional Operations Head'),
+('ROL008','ADMIN','System Administrator');
+
+
+/*==============================================================
+  USERS
+==============================================================*/
+
+CREATE TABLE users (
+    user_id                 TEXT PRIMARY KEY,
+
+    role_id                 TEXT NOT NULL,
+
+    employee_code           TEXT UNIQUE,
+
+    full_name               TEXT NOT NULL,
+
+    email                   TEXT NOT NULL UNIQUE,
+
+    phone_number            TEXT,
+
+    password_hash           TEXT NOT NULL,
+
+    driver_id               TEXT,
+
+    facility_id             TEXT,
+
+    is_active               INTEGER NOT NULL DEFAULT 1
+        CHECK (is_active IN (0,1)),
+
+    last_login_ts           TEXT,
+
+    created_at              TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at              TEXT,
+
+    FOREIGN KEY(role_id)
+        REFERENCES roles(role_id),
+
+    FOREIGN KEY(driver_id)
+        REFERENCES drivers(driver_id),
+
+    FOREIGN KEY(facility_id)
+        REFERENCES facilities(facility_id)
+);
+
+
+/*==============================================================
+  AUDIT LOGS
+==============================================================*/
+
+CREATE TABLE audit_logs (
+
+    audit_id                TEXT PRIMARY KEY,
+
+    user_id                 TEXT NOT NULL,
+
+    action_type             TEXT NOT NULL
+        CHECK(action_type IN (
+
+            'LOGIN',
+
+            'LOGOUT',
+
+            'VIEW',
+
+            'CREATE',
+
+            'UPDATE',
+
+            'DELETE',
+
+            'BOOK_APPOINTMENT',
+
+            'CANCEL_APPOINTMENT',
+
+            'UPDATE_ETA',
+
+            'SEND_MESSAGE'
+
+        )),
+
+    entity_name             TEXT NOT NULL,
+
+    entity_id               TEXT,
+
+    old_value_json          TEXT,
+
+    new_value_json          TEXT,
+
+    ip_address              TEXT,
+
+    user_agent              TEXT,
+
+    created_at              TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(user_id)
+        REFERENCES users(user_id)
+
+);
+
+
+/*==============================================================
+  API LOGS
+==============================================================*/
+
+CREATE TABLE api_logs (
+
+    api_log_id              TEXT PRIMARY KEY,
+
+    user_id                 TEXT,
+
+    thread_id               TEXT,
+
+    api_name                TEXT NOT NULL,
+
+    http_method             TEXT,
+
+    endpoint                TEXT,
+
+    request_json            TEXT,
+
+    response_json           TEXT,
+
+    response_status         INTEGER,
+
+    execution_time_ms       INTEGER,
+
+    llm_model               TEXT,
+
+    prompt_tokens           INTEGER,
+
+    completion_tokens       INTEGER,
+
+    total_tokens            INTEGER,
+
+    created_at              TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(user_id)
+        REFERENCES users(user_id),
+
+    FOREIGN KEY(thread_id)
+        REFERENCES chat_threads(thread_id)
+
+);
+
+
+
+/*==============================================================
+  INDEXES
+==============================================================*/
+
+CREATE INDEX idx_users_role
+ON users(role_id);
+
+CREATE INDEX idx_users_driver
+ON users(driver_id);
+
+CREATE INDEX idx_users_facility
+ON users(facility_id);
+
+CREATE INDEX idx_audit_user
+ON audit_logs(user_id);
+
+CREATE INDEX idx_audit_created
+ON audit_logs(created_at);
+
+CREATE INDEX idx_api_user
+ON api_logs(user_id);
+
+CREATE INDEX idx_api_thread
+ON api_logs(thread_id);
+
+CREATE INDEX idx_api_created
+ON api_logs(created_at);
+
+/*==============================================================
+  SEED DATA - USERS
+==============================================================*/
+
+INSERT INTO users (
+    user_id,
+    role_id,
+    employee_code,
+    full_name,
+    email,
+    phone_number,
+    password_hash,
+    driver_id,
+    facility_id,
+    is_active,
+    last_login_ts
+)
+VALUES
+
+-- Drivers
+(
+'USR001',
+'ROL001',
+NULL,
+'Ravi Kumar',
+'ravi.kumar@setuhaul.com',
+'9876543210',
+'$2b$12$driver_password_hash',
+'DRV001',
+'FAC-JAI-01',
+1,
+NULL
+),
+
+(
+'USR002',
+'ROL001',
+NULL,
+'Amit Singh',
+'amit.singh@setuhaul.com',
+'9876543211',
+'$2b$12$driver_password_hash',
+'DRV002',
+'FAC-JAI-01',
+1,
+NULL
+),
+
+(
+'USR003',
+'ROL001',
+NULL,
+'Vikas Sharma',
+'vikas.sharma@setuhaul.com',
+'9876543212',
+'$2b$12$driver_password_hash',
+'DRV003',
+'FAC-GGN-01',
+1,
+NULL
+),
+
+-- Operations Executive
+(
+'USR101',
+'ROL002',
+'EMP1001',
+'Priya Mehta',
+'priya.mehta@setuhaul.com',
+'9876500001',
+'$2b$12$ops_password_hash',
+NULL,
+'FAC-JAI-01',
+1,
+NULL
+),
+
+-- Warehouse Planner
+(
+'USR102',
+'ROL003',
+'EMP1002',
+'Rahul Verma',
+'rahul.verma@setuhaul.com',
+'9876500002',
+'$2b$12$planner_password_hash',
+NULL,
+'FAC-JAI-01',
+1,
+NULL
+),
+
+-- Operations Manager
+(
+'USR103',
+'ROL004',
+'EMP1003',
+'Anjali Kapoor',
+'anjali.kapoor@setuhaul.com',
+'9876500003',
+'$2b$12$manager_password_hash',
+NULL,
+'FAC-JAI-01',
+1,
+NULL
+),
+
+-- Facility Manager
+(
+'USR104',
+'ROL005',
+'EMP1004',
+'Deepak Joshi',
+'deepak.joshi@setuhaul.com',
+'9876500004',
+'$2b$12$facility_password_hash',
+NULL,
+'FAC-JAI-01',
+1,
+NULL
+),
+
+-- Transport Manager
+(
+'USR105',
+'ROL006',
+'EMP1005',
+'Sanjay Gupta',
+'sanjay.gupta@setuhaul.com',
+'9876500005',
+'$2b$12$transport_password_hash',
+NULL,
+NULL,
+1,
+NULL
+),
+
+-- Regional Operations Head
+(
+'USR106',
+'ROL007',
+'EMP1006',
+'Neha Bansal',
+'neha.bansal@setuhaul.com',
+'9876500006',
+'$2b$12$regional_password_hash',
+NULL,
+NULL,
+1,
+NULL
+),
+
+-- Admin
+(
+'USR999',
+'ROL008',
+'ADMIN001',
+'System Administrator',
+'admin@setuhaul.com',
+'9999999999',
+'$2b$12$admin_password_hash',
+NULL,
+NULL,
+1,
+NULL
+);
+
+
+
+/*==============================================================
+  SAMPLE AUDIT LOGS
+==============================================================*/
+
+INSERT INTO audit_logs
+(
+audit_id,
+user_id,
+action_type,
+entity_name,
+entity_id,
+old_value_json,
+new_value_json,
+ip_address,
+user_agent
+)
+VALUES
+
+(
+'AUD001',
+'USR001',
+'LOGIN',
+'users',
+'USR001',
+NULL,
+NULL,
+'127.0.0.1',
+'Chrome'
+),
+
+(
+'AUD002',
+'USR001',
+'UPDATE_ETA',
+'shipments',
+'SHP1006',
+'{"eta":"10:50"}',
+'{"eta":"11:20"}',
+'127.0.0.1',
+'Chrome'
+),
+
+(
+'AUD003',
+'USR101',
+'BOOK_APPOINTMENT',
+'appointments',
+'APT1013A',
+NULL,
+'{"status":"PENDING_CONFIRMATION"}',
+'127.0.0.1',
+'Chrome'
+),
+
+(
+'AUD004',
+'USR999',
+'LOGIN',
+'users',
+'USR999',
+NULL,
+NULL,
+'127.0.0.1',
+'Chrome'
+);
+
+
+
+/*==============================================================
+  SAMPLE API LOGS
+==============================================================*/
+
+INSERT INTO api_logs
+(
+api_log_id,
+user_id,
+thread_id,
+api_name,
+http_method,
+endpoint,
+request_json,
+response_json,
+response_status,
+execution_time_ms,
+llm_model,
+prompt_tokens,
+completion_tokens,
+total_tokens
+)
+VALUES
+
+(
+'API001',
+'USR001',
+'THR001',
+'Driver Chat',
+'POST',
+'/api/chat',
+'{"message":"I will reach at 11:20"}',
+'{"intent":"UPDATE_ETA"}',
+200,
+1265,
+'gemini-2.5-pro',
+198,
+74,
+272
+),
+
+(
+'API002',
+'USR101',
+'THR005',
+'Find Slots',
+'POST',
+'/api/find-slots',
+'{"shipment":"SHP1015"}',
+'{"slots":3}',
+200,
+941,
+'gemini-2.5-pro',
+245,
+63,
+308
+),
+
+(
+'API003',
+'USR999',
+NULL,
+'Dashboard Summary',
+'GET',
+'/api/dashboard',
+NULL,
+'{"status":"success"}',
+200,
+382,
+NULL,
+NULL,
+NULL,
+NULL
+);
 COMMIT;
