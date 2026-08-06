@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Operations Workspace Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary": "#ffffff",
+                    "primary": "#004ac6",
+                    "on-tertiary": "#ffffff",
+                    "secondary-container": "#e0e3e5",
+                    "surface-tint": "#0053db",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "surface-dim": "#d2d9f4",
+                    "background": "#faf8ff",
+                    "on-error-container": "#93000a",
+                    "surface-container": "#eaedff",
+                    "on-surface-variant": "#434655",
+                    "on-secondary-fixed": "#191c1e",
+                    "inverse-primary": "#b4c5ff",
+                    "on-tertiary-fixed": "#002113",
+                    "surface": "#faf8ff",
+                    "primary-fixed": "#dbe1ff",
+                    "primary-container": "#2563eb",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "surface-container-high": "#e2e7ff",
+                    "secondary": "#5c5f61",
+                    "inverse-on-surface": "#eef0ff",
+                    "outline": "#737686",
+                    "inverse-surface": "#283044",
+                    "surface-container-highest": "#dae2fd",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#c3c6d7",
+                    "surface-bright": "#faf8ff",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "secondary-fixed-dim": "#c4c7c9",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary-fixed": "#6ffbbe",
+                    "surface-variant": "#dae2fd",
+                    "on-background": "#131b2e",
+                    "error": "#ba1a1a",
+                    "tertiary-container": "#007d55",
+                    "secondary-fixed": "#e0e3e5",
+                    "surface-container-low": "#f2f3ff",
+                    "on-surface": "#131b2e",
+                    "tertiary": "#006242",
+                    "on-primary-container": "#eeefff",
+                    "on-secondary-container": "#626567",
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed-variant": "#444749",
+                    "on-tertiary-container": "#bdffdb",
+                    "on-primary-fixed": "#00174b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-lg": "32px",
+                    "unit": "4px",
+                    "container-max": "1440px",
+                    "stack-xs": "4px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "40px",
+                    "stack-md": "16px",
+                    "margin-tablet": "24px",
+                    "stack-sm": "8px"
+            },
+            "fontFamily": {
+                    "body-sm": ["Inter"],
+                    "label-md": ["Inter"],
+                    "display": ["Hanken Grotesk"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "code-sm": ["JetBrains Mono"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                    "display": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "code-sm": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Subtle glass effect for UI elements */
+        .glass-chip {
+            background-color: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid #E2E8F0;
+        }
+
+        /* Ambient Shadows */
+        .shadow-ambient {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 10px 15px -5px rgba(0,0,0,0.03);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-surface-container-low text-primary font-label-md text-label-md h-screen w-64 fixed left-0 top-0 border-r border-outline-variant flex flex-col h-full py-stack-lg px-stack-md z-40">
+<div class="flex items-center gap-3 mb-stack-lg px-2">
+<div class="w-10 h-10 rounded bg-primary-container flex items-center justify-center text-on-primary-container flex-shrink-0">
+<span class="material-symbols-outlined">local_shipping</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-primary leading-tight">SetuHaul</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Logistics Copilot</span>
+</div>
+</div>
+<nav class="flex-1 space-y-2 mt-4">
+<!-- Inactive Tab -->
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-all rounded-lg scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span>AI Assistant</span>
+</a>
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-3 py-2 bg-primary-container text-on-primary-container rounded-lg font-bold hover:bg-secondary-container transition-all scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="conveyor_belt">conveyor_belt</span>
+<span>Operations</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 border-t border-outline-variant space-y-2">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-all rounded-lg scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-all rounded-lg scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="ml-64 flex flex-col h-screen overflow-hidden bg-background relative z-10">
+<!-- TopNavBar -->
+<header class="bg-surface text-primary font-body-md text-body-md w-full h-16 border-b border-outline-variant shadow-sm flex-shrink-0 z-30">
+<div class="flex justify-between items-center px-margin-desktop w-full max-w-container-max mx-auto h-full">
+<div class="flex items-center gap-6">
+<!-- Brand Anchor -->
+<span class="text-headline-md font-headline-md font-bold text-primary">SetuHaul AI</span>
+<!-- Top Status Bar Below Header equivalent (placed inline for compactness) -->
+<div class="hidden lg:flex items-center gap-4 text-code-sm font-code-sm text-tertiary bg-surface-container px-3 py-1.5 rounded-full border border-outline-variant ml-4">
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim"></span> Redis: OK</span>
+<span class="w-px h-3 bg-outline-variant"></span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim"></span> Supabase: OK</span>
+<span class="w-px h-3 bg-outline-variant"></span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary-container"></span> AI: Online</span>
+<span class="w-px h-3 bg-outline-variant"></span>
+<span>API: 12ms</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-9 h-9 rounded-full bg-primary-fixed border border-primary-fixed-dim overflow-hidden flex-shrink-0 cursor-pointer ml-2">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="A professional headshot of a logistics manager in a bright, modern corporate office. Lighting is soft and natural, casting subtle highlights. The mood is confident and efficient. Corporate attire, neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAG74RwEgG25mazTftP_pcnmQQPy5C7XeAOqoyOcuU_z9XONpxe1__nTq-pINGkU5QR0uyldOD0w9RKamUStfdkN1-6MApl0RfbEAweBDFMXPm-sHZP6UHHOMvW7AbV0rvLiKZzlj--RtNv0mXZzLnx0bl5ei4vK99Ph60fHWmBX2vf-PwANcizCJVNf4L-8-mZBWAxQILJMLFe_nTWOn2IOM7FF-XnQ3UMqI86Arje7Sd0i0RqTPUhpg"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Workspace Canvas -->
+<main class="flex-1 overflow-y-auto w-full pb-16"> <!-- pb-16 to clear footer -->
+<div class="max-w-container-max mx-auto px-margin-desktop py-stack-lg flex flex-col gap-stack-lg">
+<!-- Workspace Header & Tabs -->
+<div class="flex flex-col gap-stack-md">
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Operations Workspace</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Live tracking and facility intelligence.</p>
+</div>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-tint transition-colors shadow-ambient flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                            New Shipment
+                        </button>
+</div>
+<!-- Navigation Tabs -->
+<div class="flex space-x-6 border-b border-outline-variant">
+<button class="text-primary font-bold border-b-2 border-primary pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Dashboard</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Shipments</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Appointments</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors flex items-center gap-1">Driver Exceptions <span class="bg-error-container text-on-error-container text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">3</span></button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Drivers</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Facilities</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Analytics</button>
+<button class="text-on-surface-variant pb-3 font-label-md text-label-md px-1 cursor-pointer active:opacity-80 hover:bg-surface-container-low transition-colors">Settings</button>
+</div>
+</div>
+<!-- KPI Bento Grid -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-stack-md">
+<!-- KPI Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">local_shipping</span> Active Shipments
+                        </span>
+<div class="mt-3 flex items-baseline gap-2">
+<span class="font-display text-display text-on-surface">1,248</span>
+<span class="font-body-sm text-body-sm text-tertiary-container flex items-center">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span> 12%
+                            </span>
+</div>
+</div>
+<!-- KPI Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col relative overflow-hidden">
+<div class="absolute top-0 right-0 w-16 h-16 bg-error/5 rounded-bl-full"></div>
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2 relative z-10">
+<span class="material-symbols-outlined text-[18px] text-error">warning</span> Delayed
+                        </span>
+<div class="mt-3 flex items-baseline gap-2 relative z-10">
+<span class="font-display text-display text-on-surface">42</span>
+<span class="font-body-sm text-body-sm text-error flex items-center">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span> 3
+                            </span>
+</div>
+</div>
+<!-- KPI Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">directions_bus</span> Waiting Trucks
+                        </span>
+<div class="mt-3 flex items-baseline gap-2">
+<span class="font-display text-display text-on-surface">18</span>
+</div>
+</div>
+<!-- KPI Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">warehouse</span> Available Docks
+                        </span>
+<div class="mt-3 flex items-baseline gap-2">
+<span class="font-display text-display text-on-surface">6<span class="text-on-surface-variant text-headline-md font-headline-md">/24</span></span>
+</div>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary h-full w-[75%]"></div>
+</div>
+</div>
+<!-- KPI Card 5 -->
+<div class="bg-surface-container-lowest border border-[transparent] rounded-xl p-6 shadow-ambient flex flex-col relative" style="background: linear-gradient(white, white) padding-box, linear-gradient(to right, #004ac6, #4edea3) border-box; border-width: 1px;">
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">schedule</span> Avg Delay
+                        </span>
+<div class="mt-3 flex items-baseline gap-2">
+<span class="font-display text-display text-on-surface">1.2h</span>
+<span class="glass-chip font-code-sm text-code-sm text-primary px-2 py-0.5 rounded ml-2">AI Optimized</span>
+</div>
+</div>
+</div>
+<!-- Main Data Content (Asymmetric Layout) -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-md">
+<!-- Left Column (Charts) -->
+<div class="lg:col-span-2 flex flex-col gap-stack-md">
+<!-- Chart Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col h-[320px]">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">Shipment Status Trend</h3>
+<button class="text-primary font-label-md text-label-md hover:underline">View Full Report</button>
+</div>
+<div class="flex-1 w-full bg-surface-container-low rounded-lg border border-outline-variant border-dashed flex items-center justify-center relative overflow-hidden">
+<!-- Placeholder for Chart graphic -->
+<div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle at 2px 2px, #004ac6 1px, transparent 0); background-size: 20px 20px;"></div>
+<span class="font-body-md text-on-surface-variant bg-surface px-4 py-2 rounded shadow-ambient z-10 relative">Chart Visualization Area (Shipment Trends)</span>
+</div>
+</div>
+<!-- Chart Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col h-[280px]">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">Dock Utilization Heatmap</h3>
+<div class="flex items-center gap-2 font-code-sm text-code-sm text-on-surface-variant">
+<span class="flex items-center gap-1"><span class="w-3 h-3 bg-surface-container-highest rounded-sm"></span> Low</span>
+<span class="flex items-center gap-1"><span class="w-3 h-3 bg-primary-fixed rounded-sm"></span> Med</span>
+<span class="flex items-center gap-1"><span class="w-3 h-3 bg-primary rounded-sm"></span> High</span>
+</div>
+</div>
+<div class="flex-1 w-full bg-surface-container-low rounded-lg border border-outline-variant border-dashed flex items-center justify-center">
+<span class="font-body-md text-on-surface-variant">Heatmap Visualization Area</span>
+</div>
+</div>
+</div>
+<!-- Right Column (Activity Feed) -->
+<div class="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-ambient flex flex-col h-full max-h-[616px]">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6">Recent Activity</h3>
+<div class="flex-1 overflow-y-auto pr-2 space-y-6">
+<!-- Feed Item -->
+<div class="flex gap-4">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[16px]">update</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">ETA Updated: Shipment #SH-9921</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">AI model predicts a 45m delay due to weather on route I-80. Dock schedule automatically adjusted.</span>
+<span class="font-code-sm text-code-sm text-outline mt-1.5">Just now</span>
+</div>
+</div>
+<!-- Feed Item Exception -->
+<div class="flex gap-4">
+<div class="w-8 h-8 rounded-full bg-error-container text-on-error-container flex items-center justify-center flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[16px]">report</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Exception Logged: Facility Alpha</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Driver reported missing paperwork for Dock 4. Holding for verification.</span>
+<span class="font-code-sm text-code-sm text-outline mt-1.5">12 mins ago</span>
+</div>
+</div>
+<!-- Feed Item -->
+<div class="flex gap-4">
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Shipment Completed: #SH-8840</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Unloading finished at Dock 12. Turnaround time: 1h 15m (10m under avg).</span>
+<span class="font-code-sm text-code-sm text-outline mt-1.5">34 mins ago</span>
+</div>
+</div>
+<!-- Feed Item -->
+<div class="flex gap-4">
+<div class="w-8 h-8 rounded-full bg-surface-variant text-on-surface flex items-center justify-center flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[16px]">person_add</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">New Appointment Scheduled</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Carrier 'Logistix Corp' scheduled drop-off for tomorrow 09:00 AM.</span>
+<span class="font-code-sm text-code-sm text-outline mt-1.5">1 hour ago</span>
+</div>
+</div>
+</div>
+<button class="w-full mt-4 py-2 border border-outline-variant text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container-low transition-colors">View All Activity</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-container text-tertiary font-code-sm text-code-sm font-label-md text-label-md text-primary fixed bottom-0 w-full h-8 border-t border-outline-variant flex justify-between items-center px-margin-desktop z-50 ml-64" style="width: calc(100% - 16rem);">
+<div class="text-tertiary">
+            System Health: Redis: OK | Supabase: OK | AI: Online | API: 12ms
+        </div>
+<div class="flex gap-4">
+<a class="text-on-surface-variant hover:text-primary transition-opacity duration-200" href="#">Terms</a>
+<a class="text-on-surface-variant hover:text-primary transition-opacity duration-200" href="#">Privacy</a>
+<a class="text-on-surface-variant hover:text-primary transition-opacity duration-200" href="#">Support</a>
+</div>
+</footer>
+</body></html>

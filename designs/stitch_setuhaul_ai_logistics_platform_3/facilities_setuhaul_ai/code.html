@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Facilities</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;450&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-container": "#626567",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "on-error": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-surface": "#131b2e",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "on-primary-container": "#eeefff",
+                      "on-surface-variant": "#434655",
+                      "surface": "#faf8ff",
+                      "on-secondary-fixed": "#191c1e",
+                      "background": "#faf8ff",
+                      "error": "#ba1a1a",
+                      "surface-container-highest": "#dae2fd",
+                      "on-error-container": "#93000a",
+                      "outline": "#737686",
+                      "secondary": "#5c5f61",
+                      "tertiary-container": "#007d55",
+                      "tertiary-fixed": "#6ffbbe",
+                      "outline-variant": "#c3c6d7",
+                      "primary": "#004ac6",
+                      "inverse-surface": "#283044",
+                      "surface-container-low": "#f2f3ff",
+                      "on-background": "#131b2e",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "on-secondary-fixed-variant": "#444749",
+                      "primary-fixed": "#dbe1ff",
+                      "tertiary": "#006242",
+                      "on-secondary": "#ffffff",
+                      "surface-bright": "#faf8ff",
+                      "on-primary-fixed": "#00174b",
+                      "surface-variant": "#dae2fd",
+                      "surface-tint": "#0053db",
+                      "on-primary": "#ffffff",
+                      "surface-container": "#eaedff",
+                      "on-tertiary-fixed": "#002113",
+                      "surface-dim": "#d2d9f4",
+                      "secondary-container": "#e0e3e5",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-container": "#2563eb",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "inverse-primary": "#b4c5ff",
+                      "secondary-fixed": "#e0e3e5",
+                      "on-tertiary-container": "#bdffdb",
+                      "surface-container-high": "#e2e7ff",
+                      "secondary-fixed-dim": "#c4c7c9",
+                      "inverse-on-surface": "#eef0ff",
+                      "on-tertiary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "container-max": "1440px",
+                      "stack-md": "16px",
+                      "margin-tablet": "24px",
+                      "unit": "4px",
+                      "margin-desktop": "40px",
+                      "stack-xs": "4px",
+                      "margin-mobile": "16px",
+                      "stack-sm": "8px",
+                      "stack-lg": "32px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "display": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "display": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "code-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "450"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid #E2E8F0;
+        }
+        .soft-ambient-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 10px 15px -5px rgba(0,0,0,0.03);
+        }
+        .ai-active-border {
+            border: 1px solid transparent;
+            background: linear-gradient(white, white) padding-box,
+                        linear-gradient(to right, #004ac6, #007d55) border-box;
+        }
+      </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-low dark:bg-surface-dim w-64 h-screen fixed left-0 top-0 border-r border-outline-variant dark:border-outline flex flex-col py-stack-lg z-40 hidden md:flex">
+<div class="px-margin-desktop mb-stack-lg">
+<h1 class="font-display text-headline-md font-bold text-primary dark:text-primary-fixed-dim tracking-tight">SetuHaul AI</h1>
+<p class="font-body-sm text-on-surface-variant mt-unit">Logistics Copilot</p>
+</div>
+<ul class="flex flex-col gap-unit px-stack-md flex-1">
+<li>
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all rounded-lg font-label-md text-label-md cursor-pointer active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+                    AI Assistant
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm bg-primary-container text-on-primary-container dark:bg-primary dark:text-on-primary rounded-lg font-bold font-label-md text-label-md cursor-pointer active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined" data-icon="conveyor_belt">conveyor_belt</span>
+                    Operations
+                </a>
+</li>
+</ul>
+<div class="px-stack-md mt-auto">
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all rounded-lg font-label-md text-label-md cursor-pointer active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined" data-icon="vital_signs">vital_signs</span>
+                System Health
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-64 flex flex-col min-h-screen relative">
+<!-- TopNavBar (Global) -->
+<header class="bg-surface dark:bg-inverse-surface w-full h-16 border-b border-outline-variant dark:border-outline shadow-sm flex justify-between items-center px-margin-desktop z-50 sticky top-0">
+<div class="flex items-center gap-stack-md md:hidden">
+<h1 class="font-display text-headline-md font-bold text-primary dark:text-primary-fixed-dim tracking-tight">SetuHaul AI</h1>
+</div>
+<div class="flex-1 md:flex-none max-w-md ml-auto md:ml-0 flex justify-end md:justify-start">
+<div class="relative w-full md:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full h-10 pl-10 pr-4 bg-surface-container-lowest border border-outline-variant rounded-full font-body-sm text-body-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all" placeholder="Search facilities..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="text-on-surface-variant hover:bg-surface-container-low p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border border-outline-variant cursor-pointer">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a logistics manager in a bright, modern corporate setting, clean lighting, enterprise visual style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9r1NpNCD3tsBZviUfob1BUBXGlkDNj_MZ7xBIZ3dZGx65PAGyfkmPVtjv4wvEXIhRchFL6DLGaxZSnnYD3yP94J3piZ9J5VNHDfF8uo9R0g_ehvOGCxDt0xdqSAZSalQxRJoHEEewN11t0xYCxTHNscYCYX4GBR9SakDvWVOCsOHo1vOD8LPQWsX9o_DodmWhzA3lRGYh8-NmQivSzQ3vxJvNnfdLwWV2eY5zXItCJ2o93HA52iNt0A"/>
+</div>
+</div>
+</header>
+<!-- TopNavBar (Sub-navigation) -->
+<nav class="bg-surface dark:bg-surface w-full border-b border-outline-variant flex gap-gutter px-margin-desktop py-stack-sm overflow-x-auto whitespace-nowrap hide-scrollbar">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Dashboard</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Shipments</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Appointments</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Exceptions</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Drivers</a>
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary font-bold transition-colors duration-200 py-2" href="#">Facilities</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Analytics</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 py-2" href="#">Settings</a>
+</nav>
+<!-- Canvas -->
+<main class="flex-1 p-margin-desktop max-w-container-max mx-auto w-full pb-32">
+<div class="flex justify-between items-end mb-stack-lg">
+<div>
+<h2 class="font-display text-headline-lg font-bold text-on-surface tracking-tight">Facility Network</h2>
+<p class="font-body-md text-on-surface-variant mt-unit">Live operational status and throughput metrics across all managed nodes.</p>
+</div>
+<div class="flex gap-stack-sm">
+<button class="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md hover:bg-surface-container-lowest transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                        Filter
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                        Add Node
+                    </button>
+</div>
+</div>
+<!-- Bento Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Card 1: Critical Status (AI Active) -->
+<div class="col-span-1 lg:col-span-2 bg-surface-container-lowest rounded-xl p-stack-lg soft-ambient-shadow ai-active-border relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-tertiary/5 opacity-50"></div>
+<div class="relative z-10 flex flex-col h-full">
+<div class="flex justify-between items-start mb-stack-lg">
+<div class="flex items-center gap-stack-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-2xl">warehouse</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Chicago Hub (ORD-1)</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-tertiary-container text-on-tertiary-container">
+                                            Online
+                                        </span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">ID: NODE-4892</span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-display text-headline-lg font-bold text-tertiary">98/100</div>
+<div class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide text-[10px]">Health Score</div>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-stack-md mt-auto border-t border-outline-variant/30 pt-stack-md">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Utilization</div>
+<div class="font-headline-md text-headline-md text-on-surface mt-1">87%</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5 mt-2 overflow-hidden">
+<div class="bg-primary h-1.5 rounded-full" style="width: 87%"></div>
+</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Dock Count</div>
+<div class="font-headline-md text-headline-md text-on-surface mt-1">42 <span class="text-sm font-normal text-on-surface-variant">/ 45 Active</span></div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Queue Length</div>
+<div class="font-headline-md text-headline-md text-on-surface mt-1 flex items-baseline gap-2">
+                                    14 <span class="material-symbols-outlined text-sm text-error">trending_up</span>
+</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Operating Hours</div>
+<div class="font-headline-md text-headline-md text-on-surface mt-1 text-sm">24/7</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant soft-ambient-shadow flex flex-col transition-all hover:-translate-y-1 hover:shadow-md">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-stack-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">business</span>
+</div>
+<div>
+<h3 class="font-label-md text-label-md text-on-surface text-lg">Dallas Cross-Dock</h3>
+<span class="font-code-sm text-code-sm text-on-surface-variant">DFW-3</span>
+</div>
+</div>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-tertiary-container text-on-tertiary-container">
+                            Online
+                        </span>
+</div>
+<div class="mt-auto space-y-stack-md">
+<div class="flex justify-between items-end">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-xs">Utilization</div>
+<div class="font-body-md text-body-md text-on-surface font-semibold">62%</div>
+</div>
+<div class="text-right">
+<div class="font-label-md text-label-md text-on-surface-variant text-xs">Health</div>
+<div class="font-body-md text-body-md text-tertiary font-bold">92</div>
+</div>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1 overflow-hidden">
+<div class="bg-primary h-1 rounded-full" style="width: 62%"></div>
+</div>
+<div class="grid grid-cols-2 gap-stack-sm pt-stack-sm border-t border-outline-variant/50">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase">Docks</div>
+<div class="font-code-sm text-code-sm text-on-surface">18/20</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase">Queue</div>
+<div class="font-code-sm text-code-sm text-on-surface">3 Trucks</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant soft-ambient-shadow flex flex-col transition-all hover:-translate-y-1 hover:shadow-md">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-stack-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">business</span>
+</div>
+<div>
+<h3 class="font-label-md text-label-md text-on-surface text-lg">Atlanta Sort</h3>
+<span class="font-code-sm text-code-sm text-on-surface-variant">ATL-1</span>
+</div>
+</div>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-error-container text-on-error-container">
+                           Warning
+                       </span>
+</div>
+<div class="mt-auto space-y-stack-md">
+<div class="flex justify-between items-end">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-xs">Utilization</div>
+<div class="font-body-md text-body-md text-on-surface font-semibold text-error">95%</div>
+</div>
+<div class="text-right">
+<div class="font-label-md text-label-md text-on-surface-variant text-xs">Health</div>
+<div class="font-body-md text-body-md text-error font-bold">71</div>
+</div>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1 overflow-hidden">
+<div class="bg-error h-1 rounded-full" style="width: 95%"></div>
+</div>
+<div class="grid grid-cols-2 gap-stack-sm pt-stack-sm border-t border-outline-variant/50">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase">Docks</div>
+<div class="font-code-sm text-code-sm text-on-surface">32/32</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase">Queue</div>
+<div class="font-code-sm text-code-sm text-error font-bold">28 Trucks</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Map / Empty State Representation (Glassmorphism overlay on map image) -->
+<div class="col-span-1 lg:col-span-2 rounded-xl border border-outline-variant overflow-hidden relative min-h-[300px]">
+<img alt="Network Map" class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-multiply" data-alt="A highly detailed, professional vector map of the United States displaying logistics routes and nodes. Styled in a clean, enterprise-grade aesthetic with subtle blues, grays, and glowing emerald connection points. Minimalist light-mode presentation." data-location="United States" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBy-HU2vCD1T1Y3X82enBfmv7x2uvAedgnDa-Mn4yXwXtDntpdKFN30805hEMoUFIY2oFWnHkRiFP7ymNB3oUcDVttJUMEVRIzIUtFJig_oXRiuiCVLpGu0AAwD9jYhX1zuZNBpyNKT2j85MhY2xL8U-AhREY4CVdTz1SVA7U2po7lP_sKrNWnTdGP0dxZ_BjhXlHoFmS3mvJQB-X31ko3Vu-saEyyeyH3nG9biOj3WutoDuCA7UkRsrg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/80 to-transparent"></div>
+<div class="absolute bottom-stack-lg left-stack-lg right-stack-lg glass-panel rounded-lg p-stack-md flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+<div class="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface">Network Connectivity Stable</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">14/14 nodes reporting.</p>
+</div>
+</div>
+<button class="px-3 py-1.5 border border-outline-variant rounded font-label-md text-label-md text-xs hover:bg-surface-container-lowest transition-colors">View Map</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-dim border-t border-outline-variant fixed bottom-0 right-0 w-[calc(100%-16rem)] flex items-center justify-between px-margin-desktop py-stack-xs z-30 hidden md:flex">
+<span class="font-display text-label-md text-tertiary dark:text-tertiary-fixed-dim font-bold">SetuHaul AI</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">System Status: Redis [Online] Supabase [Online] AI [Active] API [Stable]</span>
+</footer>
+</div>
+</body></html>

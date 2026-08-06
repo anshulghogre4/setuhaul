@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Exceptions Kanban</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;450;600&amp;family=JetBrains+Mono:wght@450&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-container": "#626567",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#131b2e",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "on-primary-container": "#eeefff",
+                        "on-surface-variant": "#434655",
+                        "surface": "#faf8ff",
+                        "on-secondary-fixed": "#191c1e",
+                        "background": "#faf8ff",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#dae2fd",
+                        "on-error-container": "#93000a",
+                        "outline": "#737686",
+                        "secondary": "#5c5f61",
+                        "tertiary-container": "#007d55",
+                        "tertiary-fixed": "#6ffbbe",
+                        "outline-variant": "#c3c6d7",
+                        "primary": "#004ac6",
+                        "inverse-surface": "#283044",
+                        "surface-container-low": "#f2f3ff",
+                        "on-background": "#131b2e",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-secondary-fixed-variant": "#444749",
+                        "primary-fixed": "#dbe1ff",
+                        "tertiary": "#006242",
+                        "on-secondary": "#ffffff",
+                        "surface-bright": "#faf8ff",
+                        "on-primary-fixed": "#00174b",
+                        "surface-variant": "#dae2fd",
+                        "surface-tint": "#0053db",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#eaedff",
+                        "on-tertiary-fixed": "#002113",
+                        "surface-dim": "#d2d9f4",
+                        "secondary-container": "#e0e3e5",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#2563eb",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "inverse-primary": "#b4c5ff",
+                        "secondary-fixed": "#e0e3e5",
+                        "on-tertiary-container": "#bdffdb",
+                        "surface-container-high": "#e2e7ff",
+                        "secondary-fixed-dim": "#c4c7c9",
+                        "inverse-on-surface": "#eef0ff",
+                        "on-tertiary": "#ffffff"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "container-max": "1440px",
+                        "stack-md": "16px",
+                        "margin-tablet": "24px",
+                        "unit": "4px",
+                        "margin-desktop": "40px",
+                        "stack-xs": "4px",
+                        "margin-mobile": "16px",
+                        "stack-sm": "8px",
+                        "stack-lg": "32px",
+                        "gutter": "24px"
+                    },
+                    fontFamily: {
+                        "display": ["Hanken Grotesk"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-sm": ["Inter"],
+                        "headline-lg-mobile": ["Hanken Grotesk"]
+                    },
+                    fontSize: {
+                        "display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "450" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<aside class="w-64 h-screen fixed left-0 top-0 bg-surface-container-low border-r border-outline-variant flex flex-col h-full py-stack-lg z-40">
+<div class="px-margin-desktop mb-stack-lg flex items-center gap-stack-sm">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<div>
+<h1 class="font-display text-headline-md font-bold text-primary">SetuHaul AI</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Logistics Copilot</p>
+</div>
+</div>
+<nav class="flex-1 px-stack-md flex flex-col gap-unit">
+<a class="font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-[0.98] flex items-center gap-stack-sm px-stack-sm py-stack-sm rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+                AI Assistant
+            </a>
+<a class="font-label-md text-label-md bg-primary-container text-on-primary-container rounded-lg font-bold hover:bg-surface-container-high transition-all cursor-pointer active:scale-[0.98] flex items-center gap-stack-sm px-stack-sm py-stack-sm" href="#">
+<span class="material-symbols-outlined" data-icon="conveyor_belt">conveyor_belt</span>
+                Operations
+            </a>
+</nav>
+<div class="mt-auto px-stack-md">
+<a class="font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-[0.98] flex items-center gap-stack-sm px-stack-sm py-stack-sm rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="vital_signs">vital_signs</span>
+                System Health
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col h-screen overflow-hidden">
+<!-- TopNavBar (Global) -->
+<header class="bg-surface w-full h-16 border-b border-outline-variant shadow-sm flex justify-between items-center px-margin-desktop w-full z-50 flex-shrink-0">
+<div class="flex items-center">
+<!-- Search could go here -->
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-full text-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-64" placeholder="Search shipments, drivers..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors p-2 rounded-full active:scale-95 duration-150 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<img alt="User profile" class="w-8 h-8 rounded-full border border-outline-variant object-cover" data-alt="A professional headshot of an enterprise logistics manager in a bright, modern corporate office. Soft, natural lighting. The mood is confident and efficient." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6CYIFyGTvhVBm0arGp7mCzfaj-yunWMh11-95yx9_9IDjFickrlRg10n6aJ1exxc1KUWOfFIKBqK7XbTWPfX67_KIU9cg4pHQ4Xe-zRWDcRABD2nnQJ1UEcvQVexVuihAqUFkEraBgktR0xYTJlVX5701aRrL9Cq8RloAOAvSevIVI0YcxPwWal3R0hQxcUFE4j78kYWq6CAbJ7uzhPw3j_zVrutnvrQe2lv1EVnJvvgAJLF-AzLPIA"/>
+</div>
+</header>
+<!-- TopNavBar (Sub-navigation) -->
+<nav class="bg-surface w-full border-b border-outline-variant flex gap-gutter px-margin-desktop py-stack-sm flex-shrink-0 overflow-x-auto scrollbar-hide">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Dashboard</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Shipments</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Appointments</a>
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary font-bold transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Exceptions</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Drivers</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Facilities</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Analytics</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 whitespace-nowrap px-unit py-unit" href="#">Settings</a>
+</nav>
+<!-- Kanban Board Area -->
+<div class="flex-1 overflow-x-auto bg-surface-container-lowest p-margin-desktop flex gap-gutter">
+<!-- Column: New -->
+<div class="flex-shrink-0 w-80 flex flex-col bg-surface-container-low rounded-xl border border-outline-variant h-full max-h-full">
+<div class="p-stack-md border-b border-outline-variant flex justify-between items-center bg-surface-container rounded-t-xl">
+<h3 class="font-label-md text-label-md text-on-surface flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+                        New
+                        <span class="bg-surface border border-outline-variant text-on-surface-variant px-2 py-0.5 rounded-full text-xs">2</span>
+</h3>
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span></button>
+</div>
+<div class="p-stack-md flex-1 overflow-y-auto space-y-stack-md scrollbar-hide">
+<!-- Card 1 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md shadow-sm hover:shadow-md transition-shadow cursor-grab relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-error"></div>
+<div class="flex justify-between items-start mb-2">
+<span class="font-code-sm text-code-sm text-on-surface-variant">SHP-9942</span>
+<span class="bg-error-container text-on-error-container font-label-md text-[10px] px-2 py-0.5 rounded border border-error/20">HIGH PRIORITY</span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<img alt="Driver" class="w-6 h-6 rounded-full object-cover" data-alt="A close up photo of a middle aged male truck driver with a short beard, wearing a casual jacket, in bright daylight. Clear crisp image." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIKt9jucpQKm9B0VeI6v9WoWb4Q2m053plDi1mewqvTOBWfDzNNphJRIBtRem7GbTLlIor3VJcD6fKDfu5tDHHtkm9D6_EHbuol_Lp-F33QsmV8P2sMDhXrr3Sx8Z9J27zJ9EZutE7i4AV1KaFAkRnDEPjQPgHNIrVp6QBPRantTubE0S_hLG8hmaH0wB6efDV7VWkewE41Qdq5nhjVXHgcYRpjsy0B6zGW9HCTuTmBrM_U-X1_Qrp4A"/>
+<span class="font-label-md text-label-md text-on-surface">Marcus Vance</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4 line-clamp-2">
+<span class="font-semibold text-primary">AI Summary:</span> Driver reported a blown tire on I-80. ETA delayed by estimated 3 hours. Awaiting repair service confirmation.
+                        </p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant mb-4">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span>
+                                ETA: 14:30
+                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="location_on">location_on</span>
+                                40mi out
+                            </div>
+</div>
+<button class="w-full flex items-center justify-center gap-2 py-2 bg-surface-container border border-outline-variant rounded hover:bg-surface-container-high transition-colors font-label-md text-label-md text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="chat_bubble">chat_bubble</span>
+                            Open Conversation
+                        </button>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md shadow-sm hover:shadow-md transition-shadow cursor-grab relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-surface-tint"></div>
+<div class="flex justify-between items-start mb-2">
+<span class="font-code-sm text-code-sm text-on-surface-variant">SHP-8103</span>
+<span class="bg-surface-variant text-on-surface font-label-md text-[10px] px-2 py-0.5 rounded border border-outline-variant">MEDIUM</span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<div class="w-6 h-6 rounded-full bg-secondary-container flex items-center justify-center font-label-md text-xs text-on-secondary-container">SJ</div>
+<span class="font-label-md text-label-md text-on-surface">Sarah Jenkins</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4 line-clamp-2">
+<span class="font-semibold text-primary">AI Summary:</span> Facility gate is closed upon arrival. Stated receiving hours mismatch. Need verification with warehouse manager.
+                        </p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant mb-4">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span>
+                                Arrived
+                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="location_on">location_on</span>
+                                At Facility
+                            </div>
+</div>
+<button class="w-full flex items-center justify-center gap-2 py-2 bg-surface-container border border-outline-variant rounded hover:bg-surface-container-high transition-colors font-label-md text-label-md text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="chat_bubble">chat_bubble</span>
+                            Open Conversation
+                        </button>
+</div>
+</div>
+</div>
+<!-- Column: Needs Clarification -->
+<div class="flex-shrink-0 w-80 flex flex-col bg-surface-container-low rounded-xl border border-outline-variant h-full max-h-full opacity-60">
+<div class="p-stack-md border-b border-outline-variant flex justify-between items-center bg-surface-container rounded-t-xl">
+<h3 class="font-label-md text-label-md text-on-surface flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                        Needs Clarification
+                        <span class="bg-surface border border-outline-variant text-on-surface-variant px-2 py-0.5 rounded-full text-xs">0</span>
+</h3>
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span></button>
+</div>
+<div class="p-stack-md flex-1 flex flex-col items-center justify-center text-center border-2 border-dashed border-outline-variant/50 m-4 rounded-lg">
+<span class="material-symbols-outlined text-outline text-3xl mb-2" data-icon="inbox">inbox</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">No items in this status</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest fixed bottom-0 right-0 w-[calc(100%-16rem)] border-t border-outline-variant flex items-center justify-between px-margin-desktop py-stack-xs z-40">
+<div class="font-code-sm text-code-sm text-tertiary">
+            SetuHaul AI • System Status: Redis [Online] Supabase [Online] AI [Active] API [Stable]
+        </div>
+</footer>
+</body></html>
