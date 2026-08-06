@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Executive Analytics - SETUHAUL AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#f8f9ff",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#00174d",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#434654",
+                        "outline": "#737686",
+                        "on-secondary-fixed": "#1c0062",
+                        "primary-fixed-dim": "#b5c4ff",
+                        "surface-container-low": "#eff4ff",
+                        "on-tertiary-fixed-variant": "#3a4761",
+                        "on-secondary-fixed-variant": "#4918c8",
+                        "on-secondary-container": "#fffbff",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#5f3add",
+                        "inverse-primary": "#b5c4ff",
+                        "surface-container-high": "#dee9fc",
+                        "tertiary-fixed": "#d7e2ff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface": "#f8f9ff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#dbe1ff",
+                        "surface-dim": "#d0dbed",
+                        "surface-container-highest": "#d9e3f6",
+                        "surface-bright": "#f8f9ff",
+                        "tertiary": "#4f5c78",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-variant": "#d9e3f6",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#fefcff",
+                        "primary": "#1351d3",
+                        "outline-variant": "#c3c5d7",
+                        "surface-container": "#e6eeff",
+                        "tertiary-fixed-dim": "#b9c6e7",
+                        "surface-tint": "#1953d5",
+                        "primary-container": "#3b6bed",
+                        "on-primary-fixed-variant": "#003dab",
+                        "on-primary-container": "#fefbff",
+                        "tertiary-container": "#687592",
+                        "on-tertiary-fixed": "#0d1b34",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#7857f8",
+                        "on-background": "#121c2a",
+                        "secondary-fixed-dim": "#cabeff",
+                        "on-surface": "#121c2a",
+                        "secondary-fixed": "#e6deff",
+                        "inverse-surface": "#27313f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "lg": "24px",
+                        "gutter": "24px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "container-max": "1440px",
+                        "md": "16px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "code": ["jetbrainsMono", "monospace"],
+                        "headline-lg": ["Inter", "sans-serif"],
+                        "display-lg": ["Inter", "sans-serif"],
+                        "body-lg": ["Inter", "sans-serif"],
+                        "headline-md": ["Inter", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "headline-lg-mobile": ["Inter", "sans-serif"],
+                        "body-sm": ["Inter", "sans-serif"],
+                        "label-md": ["Inter", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "code": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    },
+                    "backgroundImage": {
+                        'primary-gradient': 'linear-gradient(135deg, #4F7DFF 0%, #7C5CFC 100%)',
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 20px -2px rgba(45, 58, 84, 0.05);
+        }
+
+        .glass-panel:hover {
+            box-shadow: 0 12px 40px -4px rgba(45, 58, 84, 0.12);
+            border-color: rgba(79, 125, 255, 0.3);
+            transform: scale(1.01);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4F7DFF 0%, #7C5CFC 100%);
+            color: white;
+            border-radius: 8px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+        
+        /* Custom scrollbar for dense data areas */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-variant');
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline-variant');
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex">
+<!-- SideNavBar (Shared Component) -->
+<nav class="h-full w-64 fixed left-0 top-0 bg-inverse-surface shadow-md flex flex-col p-lg overflow-y-auto z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-8 h-8 rounded bg-primary-gradient flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-white text-sm" style="font-variation-settings: 'FILL' 1;">hexagon</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary-fixed">Prism Logic</h1>
+<p class="font-label-md text-label-md text-outline-variant">Enterprise Logistics</p>
+</div>
+</div>
+<button class="btn-primary w-full py-2 px-4 flex items-center justify-center gap-2 mb-xl font-label-md text-label-md transition-transform hover:scale-[1.02]">
+<span class="material-symbols-outlined text-sm">add</span>
+            New Shipment
+        </button>
+<div class="flex-1 space-y-sm">
+<p class="font-label-md text-label-md text-outline px-md mb-2">WORKSPACE</p>
+<a class="flex items-center gap-3 px-md py-2 text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-body-md text-body-md">AI Copilot</span>
+</a>
+<a class="flex items-center gap-3 px-md py-2 text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">conveyor_belt</span>
+<span class="font-body-md text-body-md">Operations</span>
+</a>
+<a class="flex items-center gap-3 px-md py-2 text-on-primary-fixed bg-primary-container/20 rounded-lg font-bold transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-body-md text-body-md">Analytics</span>
+</a>
+</div>
+<div class="mt-auto pt-xl border-t border-white/10 space-y-sm">
+<a class="flex items-center gap-3 px-md py-2 text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-md py-2 text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col min-h-screen bg-background">
+<!-- TopNavBar (Shared Component) -->
+<header class="docked full-width top-0 sticky z-40 bg-surface/70 backdrop-blur-xl border-b border-white/20 shadow-sm flex justify-between items-center w-full px-margin-desktop h-16">
+<div class="flex items-center gap-xl">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Operations Workspace</h2>
+<nav class="hidden md:flex gap-lg h-full items-center">
+<a class="font-body-md text-body-md text-on-surface-variant font-medium hover:text-primary transition-colors h-full flex items-center" href="#">Dashboard</a>
+<a class="font-body-md text-body-md text-primary font-bold border-b-2 border-primary pb-1 h-full flex items-center" href="#">Analytics</a>
+<a class="font-body-md text-body-md text-on-surface-variant font-medium hover:text-primary transition-colors h-full flex items-center" href="#">Fleet</a>
+<a class="font-body-md text-body-md text-on-surface-variant font-medium hover:text-primary transition-colors h-full flex items-center" href="#">History</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container-low border border-outline-variant/30 rounded-full font-body-sm text-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-64" placeholder="Search analytics..." type="text"/>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-variant/30">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-variant/30">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<img class="w-8 h-8 rounded-full border border-surface-variant object-cover cursor-pointer hover:border-primary transition-colors" data-alt="Professional headshot of a female logistics executive in her 40s. She is wearing a modern, tailored navy blazer over a crisp white silk blouse. The lighting is soft and natural, suggesting a high-end corporate office setting. The background is slightly blurred with abstract architectural elements in light grey and blue tones, reflecting a clean, corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsHDClu2R2Bx1FzWvWys6HYYMGBa324GnxCL9VACO0SV5xJv2CTq57_dQzI8_M74dQ6Y7TDPEhRtn1l7FZy3bHUWsa3U5pbRm1ReHbPCJiXATBdATUaGeeXdgPwtGLHNf4TlasZwFQWkE7Ck3p5kHvBpNWvr4o8N1Y8ilUcajB_gblMzplWdzRjNIw_JPKwyCaimV0Yubd13RUL3qqUsftgI5qhfIXIUscdwNkoQqP1K0A39yVhE7H"/>
+</div>
+</header>
+<!-- Canvas -->
+<div class="p-margin-desktop flex-1">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-background mb-1">Executive Overview</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Real-time network performance and AI insights.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+                        Last 7 Days
+                    </button>
+<button class="btn-primary px-4 py-2 font-label-md text-label-md flex items-center gap-2 transition-transform hover:scale-[1.02]">
+<span class="material-symbols-outlined text-sm">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg auto-rows-[minmax(180px,auto)]">
+<!-- Key Metrics (Top Row) -->
+<div class="md:col-span-3 glass-panel rounded-[24px] p-lg flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<p class="font-label-md text-label-md text-outline">NETWORK EFFICIENCY</p>
+<span class="material-symbols-outlined text-primary">speed</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-background">94.2%</div>
+<div class="flex items-center gap-1 text-sm mt-1">
+<span class="material-symbols-outlined text-[16px]" style="color: #10B981;">trending_up</span>
+<span class="font-medium" style="color: #10B981;">+2.1%</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">vs last week</span>
+</div>
+</div>
+</div>
+<div class="md:col-span-3 glass-panel rounded-[24px] p-lg flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<p class="font-label-md text-label-md text-outline">ACTIVE SHIPMENTS</p>
+<span class="material-symbols-outlined text-secondary">local_shipping</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-background">12,450</div>
+<div class="flex items-center gap-1 text-sm mt-1">
+<span class="material-symbols-outlined text-[16px]" style="color: #10B981;">trending_up</span>
+<span class="font-medium" style="color: #10B981;">+5.4%</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">vs last week</span>
+</div>
+</div>
+</div>
+<!-- AI Insight Banner -->
+<div class="md:col-span-6 glass-panel rounded-[24px] p-lg border-l-4 border-l-primary flex items-center gap-lg bg-gradient-to-r from-primary-container/10 to-transparent">
+<div class="w-12 h-12 rounded-full bg-primary-container/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-1">AI Optimization Alert</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Rerouting 42 shipments through the Midwest hub could mitigate impending weather delays and save an estimated $14,000 in late fees.</p>
+<button class="mt-3 font-label-md text-label-md text-primary hover:text-secondary transition-colors font-bold uppercase tracking-wider">Review AI Plan →</button>
+</div>
+</div>
+<!-- Regional Operations Map -->
+<div class="md:col-span-8 md:row-span-2 glass-panel rounded-[24px] p-lg relative overflow-hidden flex flex-col">
+<div class="flex justify-between items-center mb-4 relative z-10">
+<h3 class="font-headline-md text-headline-md text-on-background">Regional Operations</h3>
+<div class="flex gap-2">
+<span class="px-3 py-1 rounded-full bg-primary/10 text-primary font-label-md text-label-md flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-primary"></span> Hubs
+                            </span>
+<span class="px-3 py-1 rounded-full bg-error/10 text-error font-label-md text-label-md flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span> Alerts
+                            </span>
+</div>
+</div>
+<!-- Placeholder for Map Visualization -->
+<div class="flex-1 bg-surface-container-low rounded-xl border border-outline-variant/30 relative flex items-center justify-center" data-alt="A highly detailed, stylized digital map of the United States focusing on logistics nodes. The map should be rendered in a minimalist, light-mode style with a pale blue-grey background. Major logistics hubs (like Chicago, Dallas, Atlanta) should be highlighted with glowing, translucent blue and purple nodes connected by fine, curved lines representing supply routes. The overall aesthetic is clean, technical, and data-driven, fitting a high-end enterprise analytics dashboard." data-location="United States" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCBzWXBHZqBip61SVOENCf9F2z1dI6nK4qLiHN-IHCKVdHpQw7GrdiW4kxUbdQo-_f294kXpMsUY_Whcq6sKNdtn-yJJO2eaIItVJIz4X1lmIvvnuqMJwXAp1CuDrTt4o4fbYcbpfiu5pdjsRNBVl20VpM-_TLzut4-F4AE7Vm8lIH1CgKVl3CGdVGDXeSHhORLJ3gZQV3iNJ6afLqdhPzBi8sFLYGsTBYYbqtf6T-7KUh94NdflRgN')">
+<div class="absolute inset-0 bg-gradient-to-t from-surface/50 to-transparent rounded-xl"></div>
+<!-- Simulated Nodes -->
+<div class="absolute top-[30%] left-[60%] w-3 h-3 bg-primary rounded-full shadow-[0_0_15px_rgba(79,125,255,0.8)]"></div>
+<div class="absolute top-[40%] left-[70%] w-4 h-4 bg-primary rounded-full shadow-[0_0_20px_rgba(79,125,255,0.8)]"></div>
+<div class="absolute top-[60%] left-[50%] w-3 h-3 bg-error rounded-full shadow-[0_0_15px_rgba(186,26,26,0.8)] animate-pulse"></div>
+</div>
+</div>
+<!-- Delay Trends (Circular Gauge) -->
+<div class="md:col-span-4 glass-panel rounded-[24px] p-lg flex flex-col">
+<h3 class="font-headline-md text-headline-md text-on-background mb-4">Delay Trends</h3>
+<div class="flex-1 flex flex-col items-center justify-center">
+<div class="relative w-40 h-40 flex items-center justify-center mb-6">
+<!-- Simulated SVG Gauge -->
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<circle class="text-surface-container-high" cx="50" cy="50" fill="none" r="45" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-primary" cx="50" cy="50" fill="none" r="45" stroke="currentColor" stroke-dasharray="283" stroke-dashoffset="70" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute flex flex-col items-center">
+<span class="font-display-lg text-display-lg text-on-background leading-none">12%</span>
+<span class="font-label-md text-label-md text-outline">DELAYS</span>
+</div>
+</div>
+<div class="w-full space-y-3">
+<div class="flex justify-between items-center text-sm">
+<span class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm"><span class="w-2 h-2 rounded-full bg-primary"></span> Weather</span>
+<span class="font-code text-code">5%</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm"><span class="w-2 h-2 rounded-full bg-secondary"></span> Carrier</span>
+<span class="font-code text-code">4%</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm"><span class="w-2 h-2 rounded-full bg-outline"></span> Facility</span>
+<span class="font-code text-code">3%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Facility Health (Heatmap) -->
+<div class="md:col-span-6 glass-panel rounded-[24px] p-lg flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-background">Facility Health</h3>
+<span class="material-symbols-outlined text-outline-variant cursor-pointer hover:text-primary">more_horiz</span>
+</div>
+<div class="flex-1 w-full bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-4">
+<!-- Simulated Heatmap Grid -->
+<div class="grid grid-cols-5 gap-2 h-full">
+<!-- Row 1 -->
+<div class="bg-primary/20 rounded flex items-center justify-center font-code text-code text-primary-fixed hover:bg-primary/30 transition-colors cursor-pointer" title="ORD - Good">ORD</div>
+<div class="bg-primary/40 rounded flex items-center justify-center font-code text-code text-primary-fixed hover:bg-primary/50 transition-colors cursor-pointer" title="JFK - Nominal">JFK</div>
+<div class="bg-error/20 rounded flex items-center justify-center font-code text-code text-error hover:bg-error/30 transition-colors cursor-pointer" title="LAX - Warning">LAX</div>
+<div class="bg-primary/10 rounded flex items-center justify-center font-code text-code text-primary-fixed hover:bg-primary/20 transition-colors cursor-pointer" title="DFW - Excellent">DFW</div>
+<div class="bg-primary/30 rounded flex items-center justify-center font-code text-code text-primary-fixed hover:bg-primary/40 transition-colors cursor-pointer" title="ATL - Good">ATL</div>
+<!-- Row 2 -->
+<div class="bg-primary/30 rounded flex items-center justify-center font-code text-code text-primary-fixed">MIA</div>
+<div class="bg-error/40 rounded flex items-center justify-center font-code text-code text-error font-bold">SEA</div>
+<div class="bg-primary/20 rounded flex items-center justify-center font-code text-code text-primary-fixed">DEN</div>
+<div class="bg-primary/10 rounded flex items-center justify-center font-code text-code text-primary-fixed">SFO</div>
+<div class="bg-primary/20 rounded flex items-center justify-center font-code text-code text-primary-fixed">BOS</div>
+</div>
+<div class="mt-3 flex justify-between items-center px-1">
+<span class="font-label-md text-label-md text-outline">Optimal</span>
+<div class="h-2 w-32 bg-gradient-to-r from-primary/10 via-primary/50 to-error/40 rounded-full"></div>
+<span class="font-label-md text-label-md text-outline">Critical</span>
+</div>
+</div>
+</div>
+<!-- Carrier Performance (Line Chart) -->
+<div class="md:col-span-6 glass-panel rounded-[24px] p-lg flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-background">Carrier Performance</h3>
+<select class="bg-transparent border-none text-body-sm font-body-sm text-primary focus:ring-0 cursor-pointer">
+<option>On-Time Delivery</option>
+<option>Cost per Mile</option>
+</select>
+</div>
+<div class="flex-1 w-full relative pt-4 flex items-end border-b border-l border-outline-variant/30 pb-2 pl-2">
+<!-- Simulated Chart -->
+<svg class="w-full h-full overflow-visible preserve-3d" viewbox="0 0 400 150">
+<!-- Grid lines -->
+<line class="text-outline-variant/30" stroke="currentColor" stroke-width="1" x1="0" x2="400" y1="150" y2="150"></line>
+<line class="text-outline-variant/30" stroke="currentColor" stroke-dasharray="4" stroke-width="1" x1="0" x2="400" y1="75" y2="75"></line>
+<line class="text-outline-variant/30" stroke="currentColor" stroke-dasharray="4" stroke-width="1" x1="0" x2="400" y1="0" y2="0"></line>
+<!-- Primary Line -->
+<path d="M 0 120 C 50 120, 80 80, 150 90 C 220 100, 280 40, 350 50 L 400 30" fill="none" stroke="#4F7DFF" stroke-linecap="round" stroke-width="3"></path>
+<!-- Secondary Line -->
+<path d="M 0 140 C 60 130, 90 100, 160 110 C 230 120, 270 70, 360 80 L 400 60" fill="none" opacity="0.6" stroke="#7C5CFC" stroke-dasharray="4" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+<!-- Labels -->
+<div class="absolute bottom-[-24px] left-0 w-full flex justify-between px-2">
+<span class="font-label-md text-label-md text-outline">Mon</span>
+<span class="font-label-md text-label-md text-outline">Wed</span>
+<span class="font-label-md text-label-md text-outline">Fri</span>
+<span class="font-label-md text-label-md text-outline">Sun</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
