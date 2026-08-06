@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SETUHAUL AI - AI Copilot</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error": "#ba1a1a",
+                      "surface-tint": "#1953d5",
+                      "tertiary-fixed-dim": "#b9c6e7",
+                      "background": "#f8f9ff",
+                      "on-primary-container": "#fefbff",
+                      "outline": "#737686",
+                      "surface": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#4918c8",
+                      "tertiary-container": "#687592",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#dbe1ff",
+                      "on-surface": "#121c2a",
+                      "primary": "#1351d3",
+                      "inverse-surface": "#27313f",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#d7e2ff",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3a4761",
+                      "on-primary-fixed-variant": "#003dab",
+                      "secondary-fixed-dim": "#cabeff",
+                      "tertiary": "#4f5c78",
+                      "on-secondary-container": "#fffbff",
+                      "surface-container": "#e6eeff",
+                      "surface-container-high": "#dee9fc",
+                      "primary-container": "#3b6bed",
+                      "primary-fixed-dim": "#b5c4ff",
+                      "inverse-primary": "#b5c4ff",
+                      "outline-variant": "#c3c5d7",
+                      "surface-variant": "#d9e3f6",
+                      "on-error": "#ffffff",
+                      "surface-container-highest": "#d9e3f6",
+                      "on-secondary": "#ffffff",
+                      "secondary": "#5f3add",
+                      "on-background": "#121c2a",
+                      "surface-container-low": "#eff4ff",
+                      "on-tertiary-fixed": "#0d1b34",
+                      "on-secondary-fixed": "#1c0062",
+                      "secondary-container": "#7857f8",
+                      "secondary-fixed": "#e6deff",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-container": "#fefcff",
+                      "on-surface-variant": "#434654",
+                      "error-container": "#ffdad6",
+                      "surface-dim": "#d0dbed",
+                      "on-primary-fixed": "#00174d"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "32px",
+                      "md": "16px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "container-max": "1440px",
+                      "gutter": "24px",
+                      "base": "4px",
+                      "lg": "24px",
+                      "xxl": "48px",
+                      "xs": "4px",
+                      "sm": "8px"
+              },
+              "fontFamily": {
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "code": [
+                              "jetbrainsMono"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "code": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .ai-gradient-text {
+            background: linear-gradient(90deg, #4F7DFF, #7C5CFC);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .ai-message-bubble {
+            border: 1px solid;
+            border-image-source: linear-gradient(135deg, rgba(79, 125, 255, 0.2), rgba(124, 92, 252, 0.05));
+            border-image-slice: 1;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.7));
+        }
+
+        .primary-btn-gradient {
+            background: linear-gradient(90deg, #4F7DFF, #7C5CFC);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .ambient-shadow-1 {
+            box-shadow: 0 4px 20px -2px rgba(45, 58, 84, 0.05);
+        }
+
+        .ambient-shadow-2 {
+            box-shadow: 0 12px 40px -4px rgba(45, 58, 84, 0.12);
+        }
+        
+        /* Custom Scrollbar for sleek look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d0dbed;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #c3c5d7;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen overflow-hidden antialiased flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- Global Background Shader -->
+<div class="fixed inset-0 z-0 opacity-20 pointer-events-none">
+<!-- STITCH_SHADER_START:ANIMATION_1 class="absolute inset-0 w-full h-full" -->
+<div class="absolute inset-0 w-full h-full" style="display:block;">
+<canvas id="shader-canvas-ANIMATION_1" style="display:block;width:100%;height:100%"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_1');
+
+  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.
+  // This fires on initial layout and whenever the element is resized.
+  function syncSize() {
+    const w = canvas.clientWidth  || 1280;
+    const h = canvas.clientHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+varying vec2 v_texCoord;
+
+float grid(vec2 uv, float res) {
+    vec2 grid = fract(uv * res);
+    return 1.0 - smoothstep(0.0, 0.02, min(grid.x, grid.y));
+}
+
+float network(vec2 uv, float t) {
+    float n = 0.0;
+    for(int i = 0; i < 5; i++) {
+        float fi = float(i);
+        vec2 p = sin(vec2(1.2, 1.5) * t * (0.1 + fi * 0.1) + fi * 2.0) * 0.5 + 0.5;
+        float d = distance(uv, p);
+        n += smoothstep(0.2, 0.0, d) * 0.3;
+    }
+    return n;
+}
+
+void main() {
+    vec2 uv = v_texCoord;
+    vec2 center = uv - 0.5;
+    center.x *= u_resolution.x / u_resolution.y;
+
+    // Base sophisticated slate-blue gradient
+    vec3 color1 = vec3(0.933, 0.949, 0.969); // #EEF2F7
+    vec3 color2 = vec3(0.973, 0.98, 0.988);  // #F8FAFC
+    vec3 color = mix(color1, color2, uv.y + sin(u_time * 0.2) * 0.1);
+
+    // Subtle grid texture
+    float g = grid(uv, 40.0) * 0.02;
+    color += g;
+
+    // AI Neural Network patterns (very subtle)
+    float net = network(uv, u_time * 0.5);
+    color = mix(color, vec3(0.31, 0.49, 1.0), net * 0.03); // Primary #4F7DFF tint
+
+    // Soft glowing particles/blobs
+    float blob = smoothstep(0.8, 0.0, length(center - sin(u_time * 0.1) * 0.2));
+    color += blob * vec3(0.486, 0.361, 0.988) * 0.02; // Secondary #7C5CFC tint
+
+    gl_FragColor = vec4(color, 1.0);
+}`;
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).
+  // Shaders that need normalized coords should use: u_mouse / u_resolution.
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  window.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      mouse.x = nx * canvas.width;
+      mouse.y = ny * canvas.height;
+    }
+  });
+
+  function render(t) {
+    if (typeof ResizeObserver === 'undefined') syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+</script>
+</div>
+<!-- STITCH_SHADER_END:ANIMATION_1 -->
+</div>
+<!-- Left Sidebar (SideNavBar Concept from JSON, adapted for AI context) -->
+<aside class="w-[280px] h-full flex flex-col bg-inverse-surface dark:bg-inverse-surface shadow-md z-20 flex-shrink-0">
+<!-- Brand & Logo -->
+<div class="p-lg flex items-center gap-sm">
+<img alt="SetuHaul AI Logo" class="w-8 h-8 rounded-md object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdHIWo6_yuU3Youv51-we5kYsIieSfn8rFkLp-sTEOXVra1B6_riw63lY3DtIl-hiTgzLA0wuZcyUxI5C88ZQD_6bjD1BKQ6TXFdGpNMTFJyGFNqs8rYQOhGwUod8yE_kgSQU-5EAVZ9itqvKDHBmhfPmKXXCyatZ8Lb98wbjdBrs7MnMOVkbdqUskT8BPBngkgIqHvJWT6g6cAyMGrxKQc3IBQMEUVK9ph0mqqfR_CD9zfhRHWNzL"/>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary-fixed leading-tight">Prism Logic</h1>
+<p class="font-label-md text-label-md text-surface-variant/80">Enterprise Logistics</p>
+</div>
+</div>
+<!-- New Chat CTA -->
+<div class="px-md mb-md">
+<button class="w-full flex items-center justify-center gap-sm primary-btn-gradient text-white py-2 px-4 rounded-lg font-body-sm font-medium transition-transform hover:scale-[1.02] shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 20px;">add</span>
+                New Chat
+            </button>
+</div>
+<!-- Search -->
+<div class="px-md mb-md relative">
+<span class="material-symbols-outlined absolute left-lg top-1/2 -translate-y-1/2 text-outline-variant" style="font-size: 18px;">search</span>
+<input class="w-full bg-surface-container-low text-on-surface border-none rounded-lg pl-10 pr-3 py-2 font-body-sm placeholder:text-outline-variant focus:ring-2 focus:ring-primary/50 transition-shadow" placeholder="Search conversations..." type="text"/>
+</div>
+<!-- Navigation / Conversatons List -->
+<div class="flex-1 overflow-y-auto px-sm pb-lg">
+<!-- Pinned Section -->
+<div class="mb-md">
+<h3 class="px-3 mb-2 font-label-md text-label-md text-surface-variant/60 uppercase tracking-wider">Pinned</h3>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-primary-fixed bg-primary-container/20 font-bold group transition-colors" href="#">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 18px; font-variation-settings: 'FILL' 1;">keep</span>
+<span class="font-body-sm truncate flex-1">Q3 Fleet Efficiency Analysis</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined text-surface-variant group-hover:text-on-surface-variant transition-colors" style="font-size: 18px;">keep</span>
+<span class="font-body-sm truncate flex-1">European Route Optimization</span>
+</a>
+</nav>
+</div>
+<!-- Recent Section -->
+<div>
+<h3 class="px-3 mb-2 font-label-md text-label-md text-surface-variant/60 uppercase tracking-wider">Recent</h3>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined text-surface-variant group-hover:text-on-surface-variant transition-colors" style="font-size: 18px;">chat_bubble_outline</span>
+<span class="font-body-sm truncate flex-1">Delay at Port of LA</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined text-surface-variant group-hover:text-on-surface-variant transition-colors" style="font-size: 18px;">chat_bubble_outline</span>
+<span class="font-body-sm truncate flex-1">Draft Carrier Contract</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined text-surface-variant group-hover:text-on-surface-variant transition-colors" style="font-size: 18px;">chat_bubble_outline</span>
+<span class="font-body-sm truncate flex-1">Update on Shipment #49281</span>
+</a>
+</nav>
+</div>
+<!-- Workspace Nav (from JSON) -->
+<div class="mt-xl">
+<h3 class="px-3 mb-2 font-label-md text-label-md text-surface-variant/60 uppercase tracking-wider">Workspace</h3>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-primary-fixed bg-primary-container/20 font-bold group transition-colors" href="#">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 18px;">smart_toy</span>
+<span class="font-body-sm">AI Copilot</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined text-surface-variant group-hover:text-on-surface-variant transition-colors" style="font-size: 18px;">conveyor_belt</span>
+<span class="font-body-sm">Operations</span>
+</a>
+</nav>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="p-md mt-auto border-t border-surface-variant/10">
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">settings</span>
+<span class="font-body-sm">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-size: 18px;">help</span>
+<span class="font-body-sm">Support</span>
+</a>
+</nav>
+<!-- User Profile Snippet -->
+<div class="mt-md px-2 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-body-sm font-bold">
+                    JD
+                </div>
+<div class="flex-1 overflow-hidden">
+<p class="font-body-sm text-surface-bright truncate">Jane Doe</p>
+<p class="font-label-md text-label-md text-surface-variant/60 truncate">Logistics Manager</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Center Canvas (AI Conversation) -->
+<main class="flex-1 flex flex-col h-full relative z-10 bg-surface/50 backdrop-blur-sm">
+<!-- Header -->
+<header class="h-16 border-b border-outline-variant/30 flex items-center justify-between px-lg glass-panel sticky top-0 z-30">
+<div class="flex items-center gap-3">
+<h2 class="font-headline-md text-headline-md font-bold text-on-surface">Q3 Fleet Efficiency Analysis</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-md text-label-md border border-outline-variant/50">Model: Prism-Ultra</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</header>
+<!-- Conversation Area -->
+<div class="flex-1 overflow-y-auto p-xl flex flex-col gap-xl">
+<!-- User Message -->
+<div class="flex gap-4 max-w-4xl mx-auto w-full">
+<div class="w-8 h-8 rounded-full bg-primary-container flex-shrink-0 flex items-center justify-center text-on-primary-container font-body-sm font-bold mt-1 shadow-sm">
+                    JD
+                </div>
+<div class="flex-1 pt-1">
+<p class="font-body-md text-on-surface font-medium mb-1">Jane Doe</p>
+<div class="text-on-surface-variant font-body-md leading-relaxed">
+                        Can you analyze the recent delays we're seeing in the European sector, specifically routes passing through Rotterdam? I need a breakdown of the primary causes and how it's affecting our Q3 efficiency targets.
+                    </div>
+</div>
+</div>
+<!-- AI Response -->
+<div class="flex gap-4 max-w-4xl mx-auto w-full">
+<div class="w-8 h-8 rounded-full primary-btn-gradient flex-shrink-0 flex items-center justify-center text-white mt-1 shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 18px;">smart_toy</span>
+</div>
+<div class="flex-1 pt-1">
+<p class="font-body-md text-on-surface font-semibold mb-2 flex items-center gap-2">
+                        Prism AI
+                        <span class="material-symbols-outlined text-primary" style="font-size: 14px;">waves</span>
+</p>
+<div class="ai-message-bubble rounded-2xl p-6 ambient-shadow-1">
+<div class="prose prose-sm max-w-none text-on-surface-variant font-body-md leading-relaxed">
+<p class="mb-4">I've analyzed the telemetry and logistics data for the European sector over the last 45 days, focusing on the Rotterdam node. We are indeed seeing a statistically significant increase in dwell times.</p>
+<h3 class="font-headline-sm text-on-surface font-semibold mb-3">Primary Causes for Delay</h3>
+<ul class="list-disc pl-5 space-y-2 mb-6">
+<li><strong>Port Congestion (42%):</strong> Increased volume at APM Terminals is leading to a 36-hour average wait for berth allocation.</li>
+<li><strong>Inland Labor Shortages (28%):</strong> A strike by regional rail workers has diverted more load to trucking, causing chassis shortages.</li>
+<li><strong>Customs Processing (15%):</strong> New documentation requirements for cross-border electronics shipments are adding an average of 8 hours per manifest.</li>
+</ul>
+<h3 class="font-headline-sm text-on-surface font-semibold mb-3">Impact on Q3 Targets</h3>
+<div class="overflow-x-auto mb-4 border border-outline-variant/50 rounded-lg">
+<table class="min-w-full divide-y divide-outline-variant/30 text-left">
+<thead class="bg-surface-container-low">
+<tr>
+<th class="px-4 py-3 font-label-md text-label-md text-on-surface font-semibold">Metric</th>
+<th class="px-4 py-3 font-label-md text-label-md text-on-surface font-semibold">Q3 Target</th>
+<th class="px-4 py-3 font-label-md text-label-md text-on-surface font-semibold">Current Actual</th>
+<th class="px-4 py-3 font-label-md text-label-md text-on-surface font-semibold">Variance</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30 bg-surface-container-lowest">
+<tr>
+<td class="px-4 py-3 font-body-sm">On-Time Delivery (EU)</td>
+<td class="px-4 py-3 font-body-sm text-tertiary">94.5%</td>
+<td class="px-4 py-3 font-body-sm font-semibold text-error">88.2%</td>
+<td class="px-4 py-3 font-body-sm text-error">-6.3%</td>
+</tr>
+<tr class="bg-surface/30">
+<td class="px-4 py-3 font-body-sm">Avg. Dwell Time</td>
+<td class="px-4 py-3 font-body-sm text-tertiary">&lt; 24 hrs</td>
+<td class="px-4 py-3 font-body-sm font-semibold text-error">41 hrs</td>
+<td class="px-4 py-3 font-body-sm text-error">+17 hrs</td>
+</tr>
+<tr>
+<td class="px-4 py-3 font-body-sm">Cost per TEU</td>
+<td class="px-4 py-3 font-body-sm text-tertiary">$1,450</td>
+<td class="px-4 py-3 font-body-sm font-semibold text-error">$1,610</td>
+<td class="px-4 py-3 font-body-sm text-error">+$160</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Recommendation:</strong> Consider rerouting non-critical electronics shipments through Antwerp to alleviate the 15% customs processing bottleneck, although this will add approximately 120km to inland transport.</p>
+</div>
+<!-- AI Message Actions -->
+<div class="mt-4 flex items-center gap-2 border-t border-outline-variant/20 pt-3">
+<button class="p-1.5 rounded-md text-outline hover:bg-surface-container hover:text-primary transition-colors" title="Copy">
+<span class="material-symbols-outlined" style="font-size: 16px;">content_copy</span>
+</button>
+<button class="p-1.5 rounded-md text-outline hover:bg-surface-container hover:text-primary transition-colors" title="Regenerate">
+<span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>
+</button>
+<div class="flex-1"></div>
+<button class="px-3 py-1.5 rounded-md bg-surface-container-high text-on-surface-variant font-label-md hover:bg-surface-variant transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">insert_chart</span>
+                                Generate Chart
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Typing Indicator (Simulated) -->
+<div class="flex gap-4 max-w-4xl mx-auto w-full opacity-50">
+<div class="w-8 h-8 rounded-full primary-btn-gradient flex-shrink-0 flex items-center justify-center text-white mt-1 shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 18px;">smart_toy</span>
+</div>
+<div class="flex-1 pt-2">
+<div class="flex items-center gap-1">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse" style="animation-delay: 0.2s"></div>
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse" style="animation-delay: 0.4s"></div>
+</div>
+</div>
+</div>
+<!-- Spacer for bottom input -->
+<div class="h-24"></div>
+</div>
+<!-- Floating Input Area -->
+<div class="absolute bottom-0 left-0 right-0 p-lg bg-gradient-to-t from-surface via-surface/90 to-transparent">
+<div class="max-w-4xl mx-auto relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-20 group-focus-within:opacity-40 transition duration-500"></div>
+<div class="relative flex items-end gap-2 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-2 ambient-shadow-2">
+<button class="p-3 text-outline-variant hover:text-primary transition-colors rounded-xl hover:bg-surface-container-low shrink-0 mb-1">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<textarea class="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 font-body-md text-on-surface py-3 placeholder:text-outline-variant/60" placeholder="Ask Copilot about your logistics operations..." rows="1" style="min-height: 48px;"></textarea>
+<button class="p-3 primary-btn-gradient text-white rounded-xl shadow-sm shrink-0 mb-1 hover:shadow-md transition-shadow">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_upward</span>
+</button>
+</div>
+<div class="text-center mt-2 font-label-md text-label-md text-outline-variant/60">
+                    Prism-Ultra can make mistakes. Consider verifying critical operational decisions.
+                </div>
+</div>
+</div>
+</main>
+<!-- Right Context Panel (Operations View) -->
+<aside class="w-[320px] h-full bg-surface-container-lowest border-l border-outline-variant/20 flex flex-col z-20 flex-shrink-0 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] relative overflow-hidden">
+<!-- Subtle shader integration in the side panel -->
+<div class="absolute top-0 right-0 w-full h-48 opacity-10 pointer-events-none mix-blend-overlay">
+<!-- STITCH_SHADER_START:ANIMATION_1 class="w-full h-full" -->
+<div class="w-full h-full" style="display:block;">
+<canvas id="shader-canvas-ANIMATION_1" style="display:block;width:100%;height:100%"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_1');
+
+  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.
+  // This fires on initial layout and whenever the element is resized.
+  function syncSize() {
+    const w = canvas.clientWidth  || 1280;
+    const h = canvas.clientHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+varying vec2 v_texCoord;
+
+float grid(vec2 uv, float res) {
+    vec2 grid = fract(uv * res);
+    return 1.0 - smoothstep(0.0, 0.02, min(grid.x, grid.y));
+}
+
+float network(vec2 uv, float t) {
+    float n = 0.0;
+    for(int i = 0; i < 5; i++) {
+        float fi = float(i);
+        vec2 p = sin(vec2(1.2, 1.5) * t * (0.1 + fi * 0.1) + fi * 2.0) * 0.5 + 0.5;
+        float d = distance(uv, p);
+        n += smoothstep(0.2, 0.0, d) * 0.3;
+    }
+    return n;
+}
+
+void main() {
+    vec2 uv = v_texCoord;
+    vec2 center = uv - 0.5;
+    center.x *= u_resolution.x / u_resolution.y;
+
+    // Base sophisticated slate-blue gradient
+    vec3 color1 = vec3(0.933, 0.949, 0.969); // #EEF2F7
+    vec3 color2 = vec3(0.973, 0.98, 0.988);  // #F8FAFC
+    vec3 color = mix(color1, color2, uv.y + sin(u_time * 0.2) * 0.1);
+
+    // Subtle grid texture
+    float g = grid(uv, 40.0) * 0.02;
+    color += g;
+
+    // AI Neural Network patterns (very subtle)
+    float net = network(uv, u_time * 0.5);
+    color = mix(color, vec3(0.31, 0.49, 1.0), net * 0.03); // Primary #4F7DFF tint
+
+    // Soft glowing particles/blobs
+    float blob = smoothstep(0.8, 0.0, length(center - sin(u_time * 0.1) * 0.2));
+    color += blob * vec3(0.486, 0.361, 0.988) * 0.02; // Secondary #7C5CFC tint
+
+    gl_FragColor = vec4(color, 1.0);
+}`;
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).
+  // Shaders that need normalized coords should use: u_mouse / u_resolution.
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  window.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      mouse.x = nx * canvas.width;
+      mouse.y = ny * canvas.height;
+    }
+  });
+
+  function render(t) {
+    if (typeof ResizeObserver === 'undefined') syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+</script>
+</div>
+<!-- STITCH_SHADER_END:ANIMATION_1 -->
+</div>
+<header class="p-lg border-b border-outline-variant/20 bg-surface-container-lowest/80 backdrop-blur-md relative z-10">
+<h2 class="font-headline-md text-headline-md font-bold text-on-surface mb-1">Operations Context</h2>
+<p class="font-body-sm text-outline">Real-time workspace insights</p>
+</header>
+<div class="flex-1 overflow-y-auto p-lg flex flex-col gap-xl relative z-10">
+<!-- Today's Summary (KPIs) -->
+<section>
+<h3 class="font-label-md text-label-md text-outline-variant uppercase tracking-wider mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">monitoring</span>
+                    Today's Summary
+                </h3>
+<div class="grid grid-cols-2 gap-3">
+<!-- KPI Card -->
+<div class="bg-surface-container p-4 rounded-xl border border-outline-variant/20 ambient-shadow-1 hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<span class="material-symbols-outlined text-error" style="font-size: 20px;">warning</span>
+<span class="font-label-md text-label-md text-error bg-error-container px-2 py-0.5 rounded-full">+12%</span>
+</div>
+<p class="font-headline-md text-headline-md font-bold text-on-surface mb-1">24</p>
+<p class="font-label-md text-label-md text-on-surface-variant">Delayed Shipments</p>
+</div>
+<!-- KPI Card -->
+<div class="bg-surface-container p-4 rounded-xl border border-outline-variant/20 ambient-shadow-1 hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<span class="material-symbols-outlined text-primary" style="font-size: 20px;">local_shipping</span>
+<span class="font-label-md text-label-md text-primary bg-primary-container/20 px-2 py-0.5 rounded-full">-3%</span>
+</div>
+<p class="font-headline-md text-headline-md font-bold text-on-surface mb-1">18</p>
+<p class="font-label-md text-label-md text-on-surface-variant">Waiting Trucks</p>
+</div>
+<!-- KPI Card Full Width-->
+<div class="col-span-2 bg-surface-container p-4 rounded-xl border border-outline-variant/20 ambient-shadow-1 hover:border-primary/30 transition-colors flex items-center justify-between">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Avg Network Dwell</p>
+<p class="font-headline-md text-headline-md font-bold text-on-surface">14.2 hrs</p>
+</div>
+<div class="h-10 w-24 bg-surface-variant rounded-md flex items-end p-1 gap-1">
+<!-- Sparkline placeholder -->
+<div class="w-full bg-primary/40 h-[40%] rounded-sm"></div>
+<div class="w-full bg-primary/60 h-[60%] rounded-sm"></div>
+<div class="w-full bg-primary/50 h-[50%] rounded-sm"></div>
+<div class="w-full bg-error/70 h-[80%] rounded-sm"></div>
+<div class="w-full bg-error h-[100%] rounded-sm"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- AI Recommendations (Bento style) -->
+<section>
+<h3 class="font-label-md text-label-md text-outline-variant uppercase tracking-wider mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" style="font-size: 16px;">auto_awesome</span>
+                    AI Recommendations
+                </h3>
+<div class="flex flex-col gap-3">
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-4 ambient-shadow-1 group hover:border-secondary/50 transition-colors cursor-pointer">
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" style="font-size: 18px;">alt_route</span>
+</div>
+<div>
+<h4 class="font-body-sm font-semibold text-on-surface mb-1 group-hover:text-secondary transition-colors">Reroute EU-304</h4>
+<p class="font-label-md text-label-md text-on-surface-variant mb-2 line-clamp-2">Suggest rerouting shipment EU-304 via Antwerp to avoid Rotterdam congestion. Saves est. 14 hours.</p>
+<button class="font-label-md text-label-md text-secondary font-semibold hover:underline">Apply Route</button>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-4 ambient-shadow-1 group hover:border-secondary/50 transition-colors cursor-pointer">
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" style="font-size: 18px;">inventory_2</span>
+</div>
+<div>
+<h4 class="font-body-sm font-semibold text-on-surface mb-1 group-hover:text-primary transition-colors">Consolidate LTL</h4>
+<p class="font-label-md text-label-md text-on-surface-variant mb-2 line-clamp-2">3 LTL shipments in Chicago hub going to Dallas can be consolidated into FTL to save 12% on cost.</p>
+<button class="font-label-md text-label-md text-primary font-semibold hover:underline">Review Plan</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Quick Actions -->
+<section class="mt-auto pt-lg border-t border-outline-variant/20">
+<h3 class="font-label-md text-label-md text-outline-variant uppercase tracking-wider mb-4">Quick Actions</h3>
+<div class="grid grid-cols-2 gap-2">
+<button class="flex flex-col items-center justify-center gap-2 p-3 bg-surface border border-outline-variant/30 rounded-xl hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">description</span>
+<span class="font-label-md text-label-md text-on-surface font-medium text-center">Generate<br/>Report</span>
+</button>
+<button class="flex flex-col items-center justify-center gap-2 p-3 bg-surface border border-outline-variant/30 rounded-xl hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">travel_explore</span>
+<span class="font-label-md text-label-md text-on-surface font-medium text-center">Shipment<br/>Lookup</span>
+</button>
+</div>
+</section>
+</div>
+</aside>
+</body></html>
