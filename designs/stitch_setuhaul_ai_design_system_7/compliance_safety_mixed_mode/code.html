@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Compliance &amp; Safety</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#ffdad6",
+                    "surface-bright": "#fff8f7",
+                    "surface-container": "#fdeae8",
+                    "inverse-surface": "#392e2d",
+                    "on-tertiary-fixed-variant": "#554242",
+                    "tertiary-fixed": "#f7dcdc",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed-variant": "#920028",
+                    "secondary-fixed": "#ffdada",
+                    "on-primary-container": "#613b00",
+                    "on-primary": "#ffffff",
+                    "surface-dim": "#e8d6d4",
+                    "on-secondary-fixed": "#40000c",
+                    "on-background": "#231918",
+                    "on-primary-fixed-variant": "#653e00",
+                    "surface-container-lowest": "#ffffff",
+                    "error": "#ba1a1a",
+                    "surface-container-highest": "#f1dedc",
+                    "surface": "#fff8f7",
+                    "primary": "#855300",
+                    "primary-container": "#f59e0b",
+                    "on-error-container": "#93000a",
+                    "on-error": "#ffffff",
+                    "surface-tint": "#855300",
+                    "on-secondary-container": "#fffbff",
+                    "primary-fixed": "#ffddb8",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#f7e4e2",
+                    "tertiary": "#6d5a59",
+                    "outline-variant": "#d8c3ad",
+                    "on-tertiary-container": "#513f3f",
+                    "on-surface": "#231918",
+                    "primary-fixed-dim": "#ffb95f",
+                    "secondary": "#ba0035",
+                    "surface-container-low": "#fff0ef",
+                    "background": "#fff8f7",
+                    "inverse-on-surface": "#ffedeb",
+                    "secondary-fixed-dim": "#ffb3b6",
+                    "outline": "#867461",
+                    "inverse-primary": "#ffb95f",
+                    "secondary-container": "#e21e49",
+                    "tertiary-container": "#c4abab",
+                    "tertiary-fixed-dim": "#dac1c0",
+                    "on-primary-fixed": "#2a1700",
+                    "surface-variant": "#f1dedc",
+                    "on-surface-variant": "#534434",
+                    "on-tertiary-fixed": "#261818"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-md": "16px",
+                    "unit": "4px",
+                    "container-max": "1440px",
+                    "margin-desktop": "40px",
+                    "stack-sm": "8px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "stack-lg": "32px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Geist"],
+                    "mono-sm": ["Geist Mono"],
+                    "headline-md": ["Geist"],
+                    "display-lg": ["Geist"],
+                    "body-md": ["Geist"],
+                    "label-md": ["Geist"],
+                    "body-lg": ["Geist"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "mono-sm": ["13px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #FDFBF7; /* Sun-bleached cream as requested, aligning with background token */
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(45, 30, 30, 0.05); /* Tonal shadow */
+            border-radius: 16px;
+        }
+        .gauge-circle {
+            transition: stroke-dasharray 1s ease-out;
+        }
+        /* Custom scrollbar for aesthetic */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #dac1c0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-background antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col py-stack-lg bg-inverse-surface dark:bg-inverse-surface shadow-2xl z-50">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">SetuHaul AI</h1>
+<p class="font-label-md text-label-md text-inverse-on-surface/70">Elite Logistics</p>
+</div>
+</div>
+<button class="mx-6 mb-8 py-3 px-4 bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-md hover:bg-primary-container transition-all active:scale-95 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add</span>
+            New Dispatch
+        </button>
+<div class="flex-1 flex flex-col gap-1 px-2">
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">map</span>
+<span class="font-label-md text-label-md">Fleet Map</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">conveyor_belt</span>
+<span class="font-label-md text-label-md">Cargo Flow</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary font-bold border-r-4 border-primary rounded-l-lg ml-2 active:opacity-80 transition-all scale-98" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<span class="font-label-md text-label-md">Intelligence</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-md text-label-md">Archive</span>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-1 px-2 pt-4 border-t border-inverse-on-surface/10">
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-tertiary-fixed-dim/70 hover:text-tertiary-fixed-dim hover:bg-primary/5 transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<div class="flex-1 ml-0 md:ml-64 flex flex-col h-full relative z-0">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-256px)] h-16 bg-tertiary-fixed-dim dark:bg-tertiary-fixed-dim/95 backdrop-blur-md shadow-sm z-40 flex justify-between items-center px-4 md:px-margin-desktop transition-all duration-300">
+<div class="flex items-center gap-4">
+<div class="relative hidden md:flex items-center bg-surface-container-high rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-primary transition-all shadow-inner">
+<span class="material-symbols-outlined text-tertiary mr-2 text-sm">search</span>
+<input class="bg-transparent border-none text-on-tertiary-fixed focus:outline-none font-label-md text-label-md w-48 placeholder-tertiary" placeholder="Search parameters..." type="text"/>
+</div>
+<div class="flex md:hidden items-center gap-2">
+<span class="material-symbols-outlined text-on-tertiary-fixed" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+<span class="font-headline-md text-headline-md font-black text-on-tertiary-fixed">SetuHaul AI</span>
+</div>
+</div>
+<div class="hidden md:flex gap-6 items-center flex-1 justify-center">
+<a class="font-label-md text-label-md text-on-tertiary-fixed-variant hover:text-on-tertiary-fixed transition-all hover:bg-surface-container-high px-3 py-1 rounded-md" href="#">Network</a>
+<a class="font-label-md text-label-md text-primary font-bold border-b-2 border-primary pb-1 active:opacity-70 transition-opacity" href="#">Compliance</a>
+<a class="font-label-md text-label-md text-on-tertiary-fixed-variant hover:text-on-tertiary-fixed transition-all hover:bg-surface-container-high px-3 py-1 rounded-md" href="#">Safety</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="relative p-2 text-on-tertiary-fixed hover:bg-surface-container-high rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-secondary rounded-full border border-tertiary-fixed-dim"></span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant cursor-pointer hover:shadow-md transition-shadow">
+<img alt="Manager profile" class="w-full h-full object-cover" data-alt="A portrait of a male logistics manager in a modern, well-lit corporate office. He is wearing a tailored grey suit. The lighting is soft and natural, creating a professional and approachable mood. The aesthetic reflects a high-end corporate environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuALmXhBxMRdO0MvoNcDMBLLmBlznif2iT6Zdb-PFqB8h_-ZjMULAVy6WXjnk5I9tAiD3b-WS7cGmqWockkls9-MvzJdWKDTSgI4-IczH1Z8I-6JnB6can9bNDsJStMMdhBoN9SPEVSSnckgWGlJwJu2NzeuPaUsJuzwjCyWxtHbNhj6eMXieOydRZgTPllrj2na4NEEEqAcmzLWaIV96rEs9TpI93RlJN4GD9ZuF5sbyGSVDOMktKaaYw"/>
+</div>
+</div>
+</header>
+<!-- Main Dashboard Content -->
+<main class="flex-1 overflow-y-auto pt-24 pb-20 md:pb-12 px-4 md:px-margin-desktop w-full max-w-container-max mx-auto space-y-6">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-background mb-2">Compliance &amp; Safety</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Real-time regulatory health and risk assessment.</p>
+</div>
+<div class="flex gap-3">
+<button class="glass-card px-4 py-2 flex items-center gap-2 font-label-md text-label-md text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Regulatory Health Score (Main KPI) -->
+<div class="col-span-1 md:col-span-4 glass-card p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-shadow">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+<div>
+<div class="flex justify-between items-center mb-6 relative z-10">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Health Score</h3>
+<span class="material-symbols-outlined text-primary">health_and_safety</span>
+</div>
+<div class="flex justify-center items-center py-4 relative z-10">
+<div class="relative w-48 h-48">
+<svg class="w-full h-full" viewbox="0 0 100 100">
+<!-- Background circle -->
+<circle cx="50" cy="50" fill="none" r="40" stroke="#f1dedc" stroke-linecap="round" stroke-width="8"></circle>
+<!-- Progress circle (approx 92%) -->
+<circle class="gauge-circle drop-shadow-md" cx="50" cy="50" fill="none" r="40" stroke="#f59e0b" stroke-dasharray="230 251.2" stroke-linecap="round" stroke-width="8" transform="rotate(-90 50 50)"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-display-lg text-display-lg text-primary-container leading-none">92</span>
+<span class="font-label-md text-label-md text-on-surface-variant">/ 100</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-sm text-on-surface-variant relative z-10">
+<span class="material-symbols-outlined text-primary text-sm">trending_up</span>
+<span class="font-label-md">+2.4% from last week</span>
+</div>
+</div>
+<!-- ELD Compliance Status -->
+<div class="col-span-1 md:col-span-8 glass-card p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">ELD Status</h3>
+<div class="flex gap-2">
+<span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-surface-container-high text-xs font-medium text-on-surface-variant border border-outline-variant">
+                                Filter: Active Fleet
+                            </span>
+</div>
+</div>
+<div class="flex-1 overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant/30 text-on-surface-variant font-label-md text-sm">
+<th class="pb-3 font-medium">Driver ID</th>
+<th class="pb-3 font-medium">Vehicle</th>
+<th class="pb-3 font-medium">Hours of Service (HOS)</th>
+<th class="pb-3 font-medium">Status</th>
+<th class="pb-3 font-medium text-right">Action</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-on-surface text-sm">
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
+<td class="py-4 font-mono-sm">DRV-0892</td>
+<td class="py-4">Unit #442 (Kenworth)</td>
+<td class="py-4">
+<div class="w-full bg-surface-variant rounded-full h-2 mb-1">
+<div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+</div>
+<span class="text-xs text-on-surface-variant">9h 45m / 11h</span>
+</td>
+<td class="py-4">
+<span class="inline-flex items-center gap-1 text-primary-container text-xs font-bold bg-primary-container/10 px-2 py-1 rounded">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span> Warning
+                                        </span>
+</td>
+<td class="py-4 text-right">
+<button class="text-primary hover:text-primary-fixed-dim transition-colors"><span class="material-symbols-outlined text-lg">more_vert</span></button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
+<td class="py-4 font-mono-sm">DRV-1104</td>
+<td class="py-4">Unit #118 (Peterbilt)</td>
+<td class="py-4">
+<div class="w-full bg-surface-variant rounded-full h-2 mb-1">
+<div class="bg-secondary h-2 rounded-full shadow-[0_0_8px_rgba(225,29,72,0.6)]" style="width: 98%"></div>
+</div>
+<span class="text-xs text-secondary font-bold">10h 50m / 11h</span>
+</td>
+<td class="py-4">
+<span class="inline-flex items-center gap-1 text-secondary text-xs font-bold bg-secondary/10 px-2 py-1 rounded">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span> Violation Risk
+                                        </span>
+</td>
+<td class="py-4 text-right">
+<button class="text-primary hover:text-primary-fixed-dim transition-colors"><span class="material-symbols-outlined text-lg">more_vert</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-4 font-mono-sm">DRV-0731</td>
+<td class="py-4">Unit #305 (Freightliner)</td>
+<td class="py-4">
+<div class="w-full bg-surface-variant rounded-full h-2 mb-1">
+<div class="bg-tertiary h-2 rounded-full" style="width: 45%"></div>
+</div>
+<span class="text-xs text-on-surface-variant">5h 10m / 11h</span>
+</td>
+<td class="py-4">
+<span class="inline-flex items-center gap-1 text-tertiary text-xs font-bold bg-tertiary/10 px-2 py-1 rounded">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span> Compliant
+                                        </span>
+</td>
+<td class="py-4 text-right">
+<button class="text-primary hover:text-primary-fixed-dim transition-colors"><span class="material-symbols-outlined text-lg">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Driver Certification Tracking -->
+<div class="col-span-1 md:col-span-6 glass-card p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Certification Expirations</h3>
+<span class="material-symbols-outlined text-on-surface-variant">badge</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-lowest border border-outline-variant/30 hover:shadow-md transition-shadow">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                    CDL
+                                </div>
+<div>
+<p class="font-label-md text-label-md text-on-surface">James Robertson</p>
+<p class="font-body-md text-sm text-on-surface-variant">Class A • Endorsements: T, N</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-md text-sm text-primary-container">Exp in 14 days</p>
+<button class="text-xs font-medium text-primary hover:underline mt-1">Review</button>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-error-container/20 border border-secondary/30 shadow-[inset_0_0_10px_rgba(225,29,72,0.05)] hover:shadow-md transition-shadow">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-secondary/10 flex items-center justify-center text-secondary font-bold">
+                                    MED
+                                </div>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Sarah Jenkins</p>
+<p class="font-body-md text-sm text-on-surface-variant">DOT Medical Certificate</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-md text-sm text-secondary font-bold">Exp in 2 days</p>
+<button class="text-xs font-medium text-secondary hover:underline mt-1">Action Required</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Safety Incident Log -->
+<div class="col-span-1 md:col-span-6 glass-card p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Recent Incident Log</h3>
+<span class="material-symbols-outlined text-on-surface-variant">warning</span>
+</div>
+<div class="relative border-l-2 border-surface-variant ml-3 space-y-6 pb-2">
+<!-- Incident Item -->
+<div class="relative pl-6">
+<span class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-primary-container border-2 border-surface-bright shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+<div class="flex justify-between items-start mb-1">
+<h4 class="font-label-md text-label-md text-on-surface">Hard Braking Event</h4>
+<span class="font-mono-sm text-xs text-on-surface-variant">09:42 AM</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant mb-2">Unit #210 on I-95 North, mile marker 142. Speed reduced from 65mph to 20mph in 4s.</p>
+<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-surface-variant text-on-surface-variant uppercase tracking-wide">Review Pending</span>
+</div>
+<!-- Incident Item -->
+<div class="relative pl-6">
+<span class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface-variant border-2 border-surface-bright"></span>
+<div class="flex justify-between items-start mb-1">
+<h4 class="font-label-md text-label-md text-on-surface">Route Deviation</h4>
+<span class="font-mono-sm text-xs text-on-surface-variant">Yesterday, 14:15</span>
+</div>
+<p class="font-body-md text-sm text-on-surface-variant">Unit #405 diverted from planned route A-4 due to reported road closure.</p>
+<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-tertiary-fixed/50 text-tertiary uppercase tracking-wide">Resolved</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Command Node (Mobile Nav Alternative/Global Actions) -->
+<div class="md:hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-sm glass-card rounded-full p-2 flex justify-between items-center z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-white/40">
+<button class="p-3 text-tertiary hover:bg-white/50 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">dashboard</span>
+</button>
+<button class="p-3 text-primary bg-primary/10 rounded-full transition-colors flex items-center justify-center shadow-inner">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">health_and_safety</span>
+</button>
+<button class="p-4 bg-primary text-on-primary rounded-full shadow-lg transform -translate-y-4 hover:scale-105 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined">add</span>
+</button>
+<button class="p-3 text-tertiary hover:bg-white/50 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">map</span>
+</button>
+<button class="p-3 text-tertiary hover:bg-white/50 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+<script>
+        // Simple script to trigger the gauge animation on load for a premium feel
+        document.addEventListener("DOMContentLoaded", () => {
+            const gauge = document.querySelector('.gauge-circle');
+            if(gauge) {
+                // Start with 0 length
+                gauge.style.strokeDasharray = "0 251.2";
+                setTimeout(() => {
+                    // Animate to ~92% (230 out of 251.2 circumference)
+                    gauge.style.strokeDasharray = "230 251.2";
+                }, 100);
+            }
+        });
+    </script>
+</body></html>
