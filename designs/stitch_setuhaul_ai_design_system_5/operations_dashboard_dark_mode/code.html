@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Operations Workspace Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error": "#ba1a1a",
+                        "secondary-container": "#7857f8",
+                        "on-surface-variant": "#434654",
+                        "on-error-container": "#93000a",
+                        "inverse-surface": "#2e3038",
+                        "on-surface": "#191b23",
+                        "on-tertiary-container": "#fffbff",
+                        "surface-bright": "#faf8ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed-variant": "#4918c8",
+                        "on-tertiary-fixed-variant": "#723600",
+                        "surface-variant": "#e2e1ed",
+                        "on-primary-fixed": "#00174d",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#311400",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb786",
+                        "surface": "#faf8ff",
+                        "surface-tint": "#1953d5",
+                        "on-primary-fixed-variant": "#003dab",
+                        "secondary": "#5f3add",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#e6deff",
+                        "tertiary-fixed": "#ffdcc6",
+                        "inverse-on-surface": "#f0f0fb",
+                        "on-background": "#191b23",
+                        "on-primary-container": "#fefbff",
+                        "outline": "#737686",
+                        "surface-dim": "#d9d9e4",
+                        "primary-fixed-dim": "#b5c4ff",
+                        "on-secondary-container": "#fffbff",
+                        "primary-container": "#3b6bed",
+                        "background": "#faf8ff",
+                        "surface-container": "#ededf8",
+                        "secondary-fixed-dim": "#cabeff",
+                        "primary": "#1351d3",
+                        "primary-fixed": "#dbe1ff",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed": "#1c0062",
+                        "surface-container-highest": "#e2e1ed",
+                        "surface-container-high": "#e7e7f2",
+                        "inverse-primary": "#b5c4ff",
+                        "outline-variant": "#c3c5d7",
+                        "tertiary": "#924700",
+                        "tertiary-container": "#b75b00",
+                        "surface-container-low": "#f3f3fe"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "unit": "4px",
+                        "container-padding": "32px",
+                        "sidebar-width": "280px",
+                        "gutter": "24px",
+                        "stack-md": "16px",
+                        "stack-lg": "24px",
+                        "stack-sm": "8px"
+                    },
+                    fontFamily: {
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "title-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-sm": ["Inter"],
+                        "label-mono": ["Geist"]
+                    },
+                    fontSize: {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-mono": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #0F172A;
+            color: #ffffff;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #1351d3, #7857f8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .area-graph-fill {
+            background: linear-gradient(180deg, rgba(19, 81, 211, 0.2) 0%, rgba(19, 81, 211, 0) 100%);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col md:flex-row font-body-lg">
+<!-- Mobile Topnav (Hidden on Desktop) -->
+<header class="md:hidden flex justify-between items-center px-container-padding h-16 w-full bg-[#111827] dark:bg-[#111827] fixed top-0 w-full z-50 backdrop-blur-xl bg-opacity-90 shadow-sm shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+<div class="text-headline-lg-mobile font-headline-lg-mobile font-bold text-primary-fixed gradient-text">
+            SetuHaul AI
+        </div>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim cursor-pointer active:scale-95">notifications</span>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim cursor-pointer active:scale-95">menu</span>
+</div>
+</header>
+<!-- Side Navigation (Desktop) -->
+<nav class="hidden md:flex flex-col py-stack-lg px-stack-md bg-[#111827] dark:bg-[#111827] fixed left-0 top-0 h-full w-sidebar-width z-40 border-r border-white/10 shadow-2xl">
+<div class="mb-8 px-4">
+<div class="font-headline-lg text-headline-lg text-primary-fixed gradient-text font-bold mb-1">SetuHaul AI</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Enterprise Logistics</div>
+</div>
+<div class="flex flex-col gap-2 flex-grow">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">local_shipping</span>
+                Shipments
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">hub</span>
+                Fleet
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">insights</span>
+                Analytics
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">description</span>
+                Reports
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</div>
+<button class="mt-8 mb-6 w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-lg font-body-sm font-medium hover:opacity-90 transition-opacity">
+            New Shipment
+        </button>
+<div class="flex flex-col gap-2 mt-auto border-t border-white/10 pt-4">
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">help</span>
+                Support
+            </a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200 ease-in-out font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Logout
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-[280px] pt-20 md:pt-8 px-4 md:px-container-padding pb-24 md:pb-12 max-w-[1600px] mx-auto w-full">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+<div>
+<h1 class="font-display-lg text-display-lg md:text-[40px] text-white">Operations Workspace</h1>
+<p class="text-on-surface-variant mt-2 font-body-lg text-body-lg">Real-time logistics network status and performance.</p>
+</div>
+<div class="flex gap-4 items-center">
+<div class="glass-card px-4 py-2 rounded-full flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+<span class="font-label-mono text-label-mono text-white">SYSTEM ONLINE</span>
+</div>
+<div class="hidden md:flex gap-3">
+<span class="material-symbols-outlined text-outline-variant hover:text-white cursor-pointer transition-colors p-2 glass-card rounded-full">search</span>
+<span class="material-symbols-outlined text-outline-variant hover:text-white cursor-pointer transition-colors p-2 glass-card rounded-full">filter_list</span>
+</div>
+</div>
+</div>
+<!-- KPI Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-gutter">
+<!-- KPI 1: Active Shipments -->
+<div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/20 transition-all"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="flex items-center gap-2 text-outline-variant">
+<span class="material-symbols-outlined text-lg">local_shipping</span>
+<span class="font-body-sm text-body-sm uppercase tracking-wider">Active Shipments</span>
+</div>
+<span class="text-emerald-400 font-label-mono text-label-mono flex items-center bg-emerald-400/10 px-2 py-1 rounded">
+<span class="material-symbols-outlined text-[14px] mr-1">trending_up</span> +12.4%
+                    </span>
+</div>
+<div class="font-display-lg text-[40px] md:text-display-lg text-white font-bold relative z-10">
+                    1,248
+                </div>
+<div class="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[75%] rounded-full"></div>
+</div>
+</div>
+<!-- KPI 2: Delay Analytics -->
+<div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-error/10 rounded-full blur-2xl group-hover:bg-error/20 transition-all"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="flex items-center gap-2 text-outline-variant">
+<span class="material-symbols-outlined text-lg">warning</span>
+<span class="font-body-sm text-body-sm uppercase tracking-wider">Delay Alerts</span>
+</div>
+<span class="text-error font-label-mono text-label-mono flex items-center bg-error/10 px-2 py-1 rounded">
+<span class="material-symbols-outlined text-[14px] mr-1">trending_down</span> -2.1%
+                    </span>
+</div>
+<div class="font-display-lg text-[40px] md:text-display-lg text-white font-bold relative z-10">
+                    34
+                    <span class="text-outline-variant text-body-lg font-body-lg ml-2 font-normal">critical</span>
+</div>
+<div class="mt-4 flex gap-2">
+<span class="w-2 h-2 rounded-full bg-error mt-1"></span>
+<span class="text-body-sm font-body-sm text-on-surface-variant text-sm">Weather delay in Midwest Hub (12 trucks)</span>
+</div>
+</div>
+<!-- KPI 3: Dock Utilization -->
+<div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-secondary-container/10 rounded-full blur-2xl group-hover:bg-secondary-container/20 transition-all"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="flex items-center gap-2 text-outline-variant">
+<span class="material-symbols-outlined text-lg">warehouse</span>
+<span class="font-body-sm text-body-sm uppercase tracking-wider">Dock Utilization</span>
+</div>
+<span class="text-emerald-400 font-label-mono text-label-mono flex items-center bg-emerald-400/10 px-2 py-1 rounded">
+                        Stable
+                    </span>
+</div>
+<div class="font-display-lg text-[40px] md:text-display-lg text-white font-bold relative z-10">
+                    86%
+                </div>
+<div class="mt-4 flex justify-between text-label-mono font-label-mono text-outline-variant">
+<span>Peak expected: 14:00</span>
+<span>Cap: 95%</span>
+</div>
+</div>
+</div>
+<!-- Charts and Main Data Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Area Graph Container (Spans 2 columns on large screens) -->
+<div class="lg:col-span-2 glass-card rounded-2xl p-6 flex flex-col min-h-[400px]">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-title-md text-title-md text-white">Throughput vs Capacity</h2>
+<div class="flex gap-2">
+<button class="px-3 py-1 glass-card rounded text-body-sm font-body-sm text-white border border-white/20 bg-white/10">Today</button>
+<button class="px-3 py-1 rounded text-body-sm font-body-sm text-outline-variant hover:text-white transition-colors">Week</button>
+</div>
+</div>
+<!-- Simulated Vector Area Graph -->
+<div class="flex-1 relative mt-4">
+<!-- Y-Axis Labels -->
+<div class="absolute left-0 top-0 h-full flex flex-col justify-between text-label-mono font-label-mono text-outline-variant pb-8">
+<span>10k</span>
+<span>7.5k</span>
+<span>5k</span>
+<span>2.5k</span>
+<span>0</span>
+</div>
+<!-- Graph Canvas Area -->
+<div class="ml-10 h-full relative border-l border-b border-white/10 pb-8 flex items-end">
+<!-- Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between pt-2 pb-8 pointer-events-none">
+<div class="w-full border-b border-white/5"></div>
+<div class="w-full border-b border-white/5"></div>
+<div class="w-full border-b border-white/5"></div>
+<div class="w-full border-b border-white/5"></div>
+<div></div>
+</div>
+<!-- SVG Graph Simulation -->
+<div class="absolute inset-0 ml-0 mb-8 overflow-hidden">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 300">
+<defs>
+<lineargradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#1351d3" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#1351d3" stop-opacity="0"></stop>
+</lineargradient>
+<lineargradient id="lineGradient" x1="0" x2="1" y1="0" y2="0">
+<stop offset="0%" stop-color="#1351d3"></stop>
+<stop offset="50%" stop-color="#7857f8"></stop>
+<stop offset="100%" stop-color="#1351d3"></stop>
+</lineargradient>
+</defs>
+<!-- Area Fill -->
+<path d="M0,250 C100,200 200,280 300,150 C400,20 500,220 600,100 C700,0 800,150 900,50 C950,20 1000,80 1000,80 L1000,300 L0,300 Z" fill="url(#areaGradient)"></path>
+<!-- Stroke Line -->
+<path d="M0,250 C100,200 200,280 300,150 C400,20 500,220 600,100 C700,0 800,150 900,50 C950,20 1000,80 1000,80" fill="none" stroke="url(#lineGradient)" stroke-width="3"></path>
+<!-- Data Points (Nodes) -->
+<circle class="animate-pulse" cx="300" cy="150" fill="#ffffff" r="4" stroke="#7857f8" stroke-width="2"></circle>
+<circle cx="600" cy="100" fill="#ffffff" r="4" stroke="#7857f8" stroke-width="2"></circle>
+<circle cx="900" cy="50" fill="#ffffff" r="4" stroke="#7857f8" stroke-width="2"></circle>
+</svg>
+</div>
+</div>
+<!-- X-Axis Labels -->
+<div class="absolute bottom-0 left-10 right-0 flex justify-between text-label-mono font-label-mono text-outline-variant pt-2 border-t border-white/10">
+<span>06:00</span>
+<span>09:00</span>
+<span>12:00</span>
+<span>15:00</span>
+<span>18:00</span>
+<span>21:00</span>
+</div>
+</div>
+</div>
+<!-- Active Regional Hubs (Side Column) -->
+<div class="glass-card rounded-2xl p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-title-md text-title-md text-white">Hub Status</h2>
+<span class="material-symbols-outlined text-outline-variant cursor-pointer hover:text-white">more_vert</span>
+</div>
+<div class="flex flex-col gap-4 flex-grow">
+<!-- Hub Node 1 -->
+<div class="p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-white font-body-lg font-medium">
+<span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                Chicago Central
+                            </div>
+<span class="text-body-sm font-label-mono text-outline-variant group-hover:text-white transition-colors">94% Cap</span>
+</div>
+<div class="flex gap-4 text-body-sm font-body-sm text-outline-variant mt-2">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">login</span> 142 In</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">logout</span> 98 Out</span>
+</div>
+</div>
+<!-- Hub Node 2 -->
+<div class="p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-white font-body-lg font-medium">
+<span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                Dallas Metro
+                            </div>
+<span class="text-body-sm font-label-mono text-amber-400">High Load</span>
+</div>
+<div class="flex gap-4 text-body-sm font-body-sm text-outline-variant mt-2">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">login</span> 210 In</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">logout</span> 185 Out</span>
+</div>
+</div>
+<!-- Hub Node 3 -->
+<div class="p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group mt-auto">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-white font-body-lg font-medium">
+<span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                Atlanta Hub
+                            </div>
+<span class="text-body-sm font-label-mono text-outline-variant group-hover:text-white transition-colors">62% Cap</span>
+</div>
+<div class="w-full bg-white/10 h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary h-full w-[62%] rounded-full"></div>
+</div>
+</div>
+</div>
+<button class="mt-6 w-full py-2 border border-white/20 rounded-lg text-body-sm font-body-sm text-white hover:bg-white/5 transition-colors">
+                    View All Hubs
+                </button>
+</div>
+</div>
+</main>
+<!-- Mobile Bottom Navigation (Hidden on Desktop) -->
+<nav class="md:hidden fixed bottom-0 w-full h-16 bg-[#111827] border-t border-white/10 flex justify-around items-center px-4 z-50 backdrop-blur-xl bg-opacity-90">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-mono text-[10px]">Dashboard</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">local_shipping</span>
+<span class="font-label-mono text-[10px]">Shipments</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-label-mono text-[10px]">Fleet</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-label-mono text-[10px]">Analytics</span>
+</a>
+</nav>
+</body></html>
