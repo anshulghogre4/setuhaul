@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@500;600;700&amp;family=Geist:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error": "#ba1a1a",
+                        "secondary-container": "#7857f8",
+                        "on-surface-variant": "#434654",
+                        "on-error-container": "#93000a",
+                        "inverse-surface": "#2e3038",
+                        "on-surface": "#191b23",
+                        "on-tertiary-container": "#fffbff",
+                        "surface-bright": "#faf8ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed-variant": "#4918c8",
+                        "on-tertiary-fixed-variant": "#723600",
+                        "surface-variant": "#e2e1ed",
+                        "on-primary-fixed": "#00174d",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#311400",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb786",
+                        "surface": "#faf8ff",
+                        "surface-tint": "#1953d5",
+                        "on-primary-fixed-variant": "#003dab",
+                        "secondary": "#5f3add",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#e6deff",
+                        "tertiary-fixed": "#ffdcc6",
+                        "inverse-on-surface": "#f0f0fb",
+                        "on-background": "#191b23",
+                        "on-primary-container": "#fefbff",
+                        "outline": "#737686",
+                        "surface-dim": "#d9d9e4",
+                        "primary-fixed-dim": "#b5c4ff",
+                        "on-secondary-container": "#fffbff",
+                        "primary-container": "#3b6bed",
+                        "background": "#faf8ff",
+                        "surface-container": "#ededf8",
+                        "secondary-fixed-dim": "#cabeff",
+                        "primary": "#1351d3",
+                        "primary-fixed": "#dbe1ff",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed": "#1c0062",
+                        "surface-container-highest": "#e2e1ed",
+                        "surface-container-high": "#e7e7f2",
+                        "inverse-primary": "#b5c4ff",
+                        "outline-variant": "#c3c5d7",
+                        "tertiary": "#924700",
+                        "tertiary-container": "#b75b00",
+                        "surface-container-low": "#f3f3fe"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        full: "9999px",
+                        '4xl': "1rem"
+                    },
+                    spacing: {
+                        unit: "4px",
+                        "container-padding": "32px",
+                        "sidebar-width": "280px",
+                        gutter: "24px",
+                        "stack-md": "16px",
+                        "stack-lg": "24px",
+                        "stack-sm": "8px"
+                    },
+                    fontFamily: {
+                        "body-lg": ["Inter", "sans-serif"],
+                        "display-lg": ["Hanken Grotesk", "sans-serif"],
+                        "title-md": ["Hanken Grotesk", "sans-serif"],
+                        "headline-lg": ["Hanken Grotesk", "sans-serif"],
+                        "headline-lg-mobile": ["Hanken Grotesk", "sans-serif"],
+                        "body-sm": ["Inter", "sans-serif"],
+                        "label-mono": ["Geist", "monospace"]
+                    },
+                    fontSize: {
+                        "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+                        "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "title-md": ["20px", { lineHeight: "28px", fontWeight: "500" }],
+                        "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.01em", fontWeight: "600" }],
+                        "headline-lg-mobile": ["24px", { lineHeight: "32px", fontWeight: "600" }],
+                        "body-sm": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+                        "label-mono": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .bg-obsidian {
+            background-color: #0F172A;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #3b6bed 0%, #1351d3 100%);
+        }
+    </style>
+</head>
+<body class="bg-obsidian text-on-surface dark:text-white min-h-screen flex items-center justify-center overflow-hidden font-body-lg">
+<!-- Transactional Page: No Navigation Shell -->
+<div class="flex w-full min-h-screen">
+<!-- Left Side: Digital Map -->
+<div class="hidden lg:flex lg:w-1/2 relative bg-[#1E293B] items-center justify-center overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-r from-obsidian to-transparent z-10 opacity-50"></div>
+<img alt="Digital map background" class="absolute inset-0 w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGwbfM2r53NjVoaZnUhKvy5cG3HPvc5W6rr5P6nwY9rPIV0pIqJa0CToy4kMgdT9qZhv6QaKU3uWp58R5OxfCXyMxeDqFqjfUIGFTWvGtTnhfpjkrHwQu2s9mPgn2kwwGvl2JJfgEEounrsbkza2HcfU-kA_rEGNQrTYIZcg2GY7h2AB58QyqNaMIt0FTAVs5y_l-TNc9Sztax580dKrcIPN_SHsPdAWqQizNSzhVEZyBQ9F7G5wKy"/>
+<div class="relative z-20 p-container-padding text-left max-w-xl">
+<h1 class="font-display-lg text-display-lg text-white mb-stack-lg shadow-2xl">
+                    Global Logistics Intelligence
+                </h1>
+<p class="font-title-md text-title-md text-primary-fixed-dim opacity-90">
+                    Real-time visibility, predictive analytics, and seamless orchestration for the modern supply chain.
+                </p>
+</div>
+<!-- Glass overlay elements for depth -->
+<div class="absolute bottom-10 left-10 glass-panel rounded-xl p-stack-md flex items-center gap-stack-md shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-20">
+<span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings: 'FILL' 1;">
+                    language
+                </span>
+<div>
+<div class="font-label-mono text-label-mono text-outline-variant">ACTIVE NODES</div>
+<div class="font-title-md text-title-md text-white">24,892</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Login -->
+<div class="w-full lg:w-1/2 flex items-center justify-center p-container-padding relative z-30">
+<!-- Ambient glowing orb -->
+<div class="absolute top-1/4 right-1/4 w-96 h-96 bg-primary-container rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
+<div class="w-full max-w-md glass-panel rounded-4xl p-10 shadow-[0_20px_50px_rgba(0,0,0,0.3)] relative">
+<div class="text-center mb-10">
+<img alt="SetuHaul AI Logo" class="h-16 mx-auto mb-stack-lg" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgzDmt-Yx4rJoRRp1gnDJHjU1KaAGgG8ZVAcmjzCfMi1haC2bMXCP6foebMAmB68YUJqK9iR1XNUax5P-nr3NPJN1mW4MKFtjsWGFlLKSJO62d1jEcUz2XpvlQMOwP4qO3TV3eCK9EUb3UoaSwBCGtIPCen6NOYc4xVqJ-za3lXWCgxrJ6BWUIyMCV6GwqtxWuzTOK9FZtkHtDziO7KK2bTTag3_QgZ-5GB0pia9buqEyTDs-fhTJr"/>
+<h2 class="font-headline-lg text-headline-lg text-white">Welcome Back</h2>
+<p class="font-body-sm text-body-sm text-outline-variant mt-unit">Sign in to your enterprise dashboard</p>
+</div>
+<form class="space-y-stack-lg">
+<div>
+<label class="block font-label-mono text-label-mono text-outline-variant mb-unit" for="email">WORK EMAIL</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline-variant text-sm">mail</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 border border-white/10 rounded-lg leading-5 bg-[#0F172A]/50 text-white placeholder-outline-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-body-lg text-body-lg sm:text-sm transition-colors" id="email" placeholder="name@enterprise.com" required="" type="email"/>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-unit">
+<label class="block font-label-mono text-label-mono text-outline-variant" for="password">PASSWORD</label>
+<a class="font-body-sm text-body-sm text-primary hover:text-primary-fixed transition-colors" href="#">Forgot?</a>
+</div>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline-variant text-sm">lock</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 border border-white/10 rounded-lg leading-5 bg-[#0F172A]/50 text-white placeholder-outline-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-body-lg text-body-lg sm:text-sm transition-colors" id="password" placeholder="••••••••" required="" type="password"/>
+</div>
+</div>
+<button class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm font-title-md text-title-md text-white btn-gradient hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-[#0F172A] transition-all transform active:scale-[0.98]" type="submit">
+                        Sign In
+                    </button>
+<div class="relative my-stack-lg">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-white/10"></div>
+</div>
+<div class="relative flex justify-center text-sm">
+<span class="px-2 text-outline-variant font-body-sm text-body-sm bg-[#1E293B]">Or continue with SSO</span>
+</div>
+</div>
+<button class="w-full flex justify-center items-center gap-2 py-3 px-4 border border-white/20 rounded-lg shadow-sm font-title-md text-title-md text-white bg-transparent hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-[#0F172A] transition-all" type="button">
+<span class="material-symbols-outlined">business</span>
+                        Corporate Identity
+                    </button>
+</form>
+<div class="mt-10 text-center border-t border-white/10 pt-stack-lg">
+<p class="font-label-mono text-label-mono text-outline-variant">
+                        Powered by Google Gemini | Built with LangGraph
+                    </p>
+</div>
+</div>
+</div>
+</div>
+</body></html>
