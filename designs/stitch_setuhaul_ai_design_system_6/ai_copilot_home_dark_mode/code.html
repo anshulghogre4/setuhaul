@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Copilot Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline": "#867461",
+                    "on-tertiary-fixed": "#261818",
+                    "surface-bright": "#fff8f7",
+                    "surface-tint": "#855300",
+                    "tertiary": "#6d5a59",
+                    "on-background": "#231918",
+                    "on-secondary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#d8c3ad",
+                    "secondary-fixed-dim": "#ffb3b6",
+                    "surface-container-high": "#f7e4e2",
+                    "tertiary-fixed-dim": "#dac1c0",
+                    "primary-container": "#f59e0b",
+                    "on-error": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#f1dedc",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#ffb95f",
+                    "surface-variant": "#f1dedc",
+                    "primary": "#855300",
+                    "on-primary-container": "#613b00",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-fixed": "#40000c",
+                    "on-tertiary-container": "#513f3f",
+                    "surface": "#fff8f7",
+                    "on-primary-fixed": "#2a1700",
+                    "surface-container": "#fdeae8",
+                    "on-secondary-container": "#fffbff",
+                    "on-surface-variant": "#534434",
+                    "secondary": "#ba0035",
+                    "inverse-surface": "#392e2d",
+                    "surface-container-low": "#fff0ef",
+                    "background": "#1A1212", // Overridden for dark mode base
+                    "secondary-fixed": "#ffdada",
+                    "on-primary-fixed-variant": "#653e00",
+                    "tertiary-container": "#c4abab",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#e8d6d4",
+                    "on-tertiary-fixed-variant": "#554242",
+                    "inverse-on-surface": "#ffedeb",
+                    "primary-fixed-dim": "#ffb95f",
+                    "on-surface": "#231918",
+                    "primary-fixed": "#ffddb8",
+                    "on-secondary-fixed-variant": "#920028",
+                    "tertiary-fixed": "#f7dcdc",
+                    "secondary-container": "#e21e49"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "container-max": "1440px",
+                    "unit": "4px",
+                    "margin-desktop": "40px",
+                    "stack-md": "16px",
+                    "stack-lg": "32px",
+                    "gutter": "24px",
+                    "stack-sm": "8px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Geist"],
+                    "mono-sm": ["Geist Mono"],
+                    "body-lg": ["Geist"],
+                    "body-md": ["Geist"],
+                    "headline-lg": ["Geist"],
+                    "label-md": ["Geist"],
+                    "display-lg": ["Geist"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                    "mono-sm": ["13px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}],
+                    "body-md": ["16px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #1A1212;
+            color: #ffedeb;
+        }
+        
+        .glass-panel {
+            background: rgba(45, 30, 30, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(245, 158, 11, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(45, 30, 30, 0.37);
+        }
+
+        .volumetric-shadow {
+            box-shadow: 0 20px 40px -10px rgba(45, 30, 30, 0.8), inset 0 1px 0 rgba(245, 158, 11, 0.15);
+        }
+
+        /* Material Icons styling from guide */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="antialiased overflow-hidden flex h-screen w-full">
+<!-- Left Column: SideNavBar (Semantic Shell: Active Tab Navigation) -->
+<nav class="hidden md:flex flex-col h-screen py-stack-lg px-4 gap-stack-md w-64 rounded-r-xl border-r border-outline-variant/20 shadow-lg shrink-0 z-10 transition-all duration-200 ease-in-out" style="background-color: #140E0E;">
+<!-- Header -->
+<div class="flex items-center gap-4 mb-8 px-2">
+<div class="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="A glowing abstract holographic emblem in vibrant amber and gold against a dark charcoal background, resembling a high-tech corporate insignia for a logistics enterprise. The lighting is cinematic, casting subtle reflections on a multi-layered glass surface. Modern corporate aesthetic, hyper-detailed." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcICf2HaNy9f-rMaYY6WKLWNDQLDCHk1Gcl2SHr1DvW5LRHAdIaM84r0V9P69JbIEdMvYFbWnNweyDA5C2xfBhfnjpGvl0H-L80KeYb4LFXrB1kIxELOBN0AGhj2jcNvxJDJDWJISBojkwLsJIhPhv6KMMhptfbfU3I2-kxwQPUiufH1G7-vbOHq-A_r3jta2VW2ic9dGuZjkxM9NVbyaKYlybIkCYd5dBq_y_YMLhpHPapnoBOXyPIA"/>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary-fixed-dim m-0">SetuHaul Ops</h1>
+<p class="font-label-md text-label-md text-on-surface-variant m-0">Enterprise Intelligence</p>
+</div>
+</div>
+<!-- CTA Button -->
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-3 rounded-lg mb-6 flex items-center justify-center gap-2 hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all">
+<span class="material-symbols-outlined filled text-[20px]">add</span>
+            New Dispatch
+        </button>
+<!-- Main Navigation -->
+<div class="flex-1 flex flex-col gap-2">
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">local_shipping</span>
+                Fleet
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">map</span>
+                Routes
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">package_2</span>
+                Shipments
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+                Analytics
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">verified_user</span>
+                Compliance
+            </a>
+</div>
+<!-- Chat History Section (Specific to this page design) -->
+<div class="flex-1 overflow-y-auto mt-4 border-t border-outline-variant/10 pt-4 scrollbar-hide">
+<h3 class="font-mono-sm text-mono-sm text-outline px-4 mb-3 uppercase tracking-wider">Recent Queries</h3>
+<div class="flex flex-col gap-1">
+<div class="px-4 py-2 text-inverse-on-surface/80 hover:text-primary-fixed-dim hover:bg-surface-variant/10 cursor-pointer rounded-lg font-body-md text-body-md truncate transition-colors">
+                    Analyze route delays NYC-BOS
+                </div>
+<div class="px-4 py-2 text-inverse-on-surface/80 hover:text-primary-fixed-dim hover:bg-surface-variant/10 cursor-pointer rounded-lg font-body-md text-body-md truncate transition-colors">
+                    Fleet efficiency report Q3
+                </div>
+<div class="px-4 py-2 text-inverse-on-surface/80 hover:text-primary-fixed-dim hover:bg-surface-variant/10 cursor-pointer rounded-lg font-body-md text-body-md truncate transition-colors">
+                    Optimize cold chain parameters
+                </div>
+</div>
+</div>
+<!-- Footer Navigation -->
+<div class="mt-auto border-t border-outline-variant/10 pt-4 flex flex-col gap-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+                Archive
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/10 transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+                Support
+            </a>
+</div>
+</nav>
+<!-- Center Column: Copilot Workspace -->
+<main class="flex-1 flex flex-col relative h-full glass-panel m-4 rounded-2xl overflow-hidden z-0" style="background: rgba(57, 30, 30, 0.4);">
+<!-- Top App Bar equivalent inside workspace -->
+<header class="h-16 flex items-center justify-between px-8 border-b border-outline-variant/10 shrink-0">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed-dim filled text-[24px]">smart_toy</span>
+<h2 class="font-headline-md text-headline-md text-inverse-on-surface tracking-tight">AI Command Center</h2>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="hover:text-primary-fixed-dim transition-colors"><span class="material-symbols-outlined">history</span></button>
+<button class="hover:text-primary-fixed-dim transition-colors"><span class="material-symbols-outlined">tune</span></button>
+</div>
+</header>
+<!-- Chat Area -->
+<div class="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-hide pb-32">
+<!-- AI Welcome Message -->
+<div class="flex gap-4 max-w-3xl">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 border border-primary/30 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[20px] filled">smart_toy</span>
+</div>
+<div class="flex-1 space-y-4">
+<p class="font-body-lg text-body-lg text-inverse-on-surface leading-relaxed">
+                        Welcome to SetuHaul Copilot. System is nominal across all sectors. I am monitoring 432 active shipments and 18 fleet operations. How can I assist you today?
+                    </p>
+<!-- Suggestion Chips -->
+<div class="flex flex-wrap gap-3 mt-4">
+<button class="px-4 py-2 rounded-full border border-outline-variant/30 text-inverse-on-surface/80 hover:border-primary-fixed-dim hover:text-primary-fixed-dim transition-all font-label-md text-label-md bg-[#1A1212]/50 backdrop-blur-sm">
+                            Run diagnostic on Northeast corridor
+                        </button>
+<button class="px-4 py-2 rounded-full border border-outline-variant/30 text-inverse-on-surface/80 hover:border-primary-fixed-dim hover:text-primary-fixed-dim transition-all font-label-md text-label-md bg-[#1A1212]/50 backdrop-blur-sm">
+                            Show critical exceptions
+                        </button>
+<button class="px-4 py-2 rounded-full border border-outline-variant/30 text-inverse-on-surface/80 hover:border-primary-fixed-dim hover:text-primary-fixed-dim transition-all font-label-md text-label-md bg-[#1A1212]/50 backdrop-blur-sm">
+                            Predict fuel costs for Q4
+                        </button>
+</div>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex gap-4 max-w-3xl ml-auto flex-row-reverse">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant/30 shrink-0">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a logistics manager in a high-tech control room setting. Dramatic low-key lighting with subtle warm amber accents on the face. The background features blurred screens with data visualizations in deep reds and oranges. Modern, cinematic style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb1CgPLvX6XTrdOewW_xmS0qrcsEjmt1gDaQIu4VzVKfTFoiOOSeXOjxeMFu_qIWnGGvG07IsmtRXXH3FgafRR5TSE7lL28ElYnOdIPDmtODCKoYi_3rLzVPCWikX6iS0Ubdc2930kbW2yXfeEaxbuYNmi4vtfdD7H5-MBNj5O_C1MTv8INDelr77US-Mih85ghLMPy1UBBejKht75bfQFDaqP-MFOtBq2Nzj-ioVS_RFm62lbRyGtjw"/>
+</div>
+<div class="flex-1 bg-surface-variant/10 rounded-2xl rounded-tr-none p-5 border border-outline-variant/10">
+<p class="font-body-md text-body-md text-inverse-on-surface m-0">
+                        Show me the current operational exceptions impacting delivery times. Prioritize high-value cargo.
+                    </p>
+</div>
+</div>
+<!-- AI Response with Data Widget -->
+<div class="flex gap-4 max-w-4xl">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 border border-primary/30 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[20px] filled">smart_toy</span>
+</div>
+<div class="flex-1 space-y-4">
+<p class="font-body-md text-body-md text-inverse-on-surface leading-relaxed">
+                        I've identified 3 critical exceptions impacting high-value shipments. The most severe is a weather delay on Route 95. Here is the breakdown:
+                    </p>
+<!-- Inner Data Card (Bento style) -->
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-[#140E0E]/80 border border-outline-variant/20 rounded-xl p-4 volumetric-shadow">
+<div class="flex justify-between items-start mb-2">
+<span class="font-mono-sm text-mono-sm text-outline">EXCEPTION #01</span>
+<span class="material-symbols-outlined text-secondary-container text-[18px]">warning</span>
+</div>
+<h4 class="font-headline-md text-headline-md text-primary-fixed-dim mb-1">Route 95 Blockage</h4>
+<p class="font-body-md text-body-md text-inverse-on-surface/70 text-sm">Estimated Delay: +4h 20m</p>
+</div>
+<div class="bg-[#140E0E]/80 border border-outline-variant/20 rounded-xl p-4 volumetric-shadow">
+<div class="flex justify-between items-start mb-2">
+<span class="font-mono-sm text-mono-sm text-outline">AFFECTED VALUE</span>
+<span class="material-symbols-outlined text-primary-fixed-dim text-[18px]">payments</span>
+</div>
+<h4 class="font-headline-md text-headline-md text-inverse-on-surface mb-1">$1.2M</h4>
+<p class="font-body-md text-body-md text-inverse-on-surface/70 text-sm">High-Priority Pharmaceuticals</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating Command Input (Bottom Center) -->
+<div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-3/4 max-w-2xl z-50">
+<div class="bg-[#E11D48]/10 backdrop-blur-2xl border border-[#E11D48]/30 rounded-full px-6 py-4 flex items-center gap-4 volumetric-shadow shadow-[0_10px_30px_rgba(225,29,72,0.2)]">
+<span class="material-symbols-outlined text-[#ffb3b6]">mic</span>
+<input class="flex-1 bg-transparent border-none text-inverse-on-surface font-body-lg text-body-lg placeholder:text-outline focus:ring-0 p-0" placeholder="Command Copilot..." type="text"/>
+<button class="w-10 h-10 rounded-full bg-[#E11D48] flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-on-primary">send</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Right Column: Operational Exceptions -->
+<aside class="hidden lg:flex flex-col h-screen w-80 shrink-0 z-10 border-l border-outline-variant/20 py-stack-lg px-6 gap-stack-md" style="background-color: #221818;">
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-headline-md text-headline-md text-inverse-on-surface">Live Telemetry</h3>
+<span class="flex h-3 w-3 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-secondary-container"></span>
+</span>
+</div>
+<!-- Exception Cards Stack -->
+<div class="flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+<!-- Card 1 -->
+<div class="bg-[#1A1212] border-l-4 border-secondary-container rounded-r-xl p-4 shadow-lg hover:bg-surface-variant/5 transition-colors cursor-pointer">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-md text-label-md text-secondary-container font-bold">CRITICAL</span>
+<span class="font-mono-sm text-mono-sm text-outline">12:04 PM</span>
+</div>
+<h4 class="font-body-lg text-body-lg text-inverse-on-surface mb-1">Temperature Drop</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Reefer Unit TRK-889. Temp dropped below threshold.</p>
+<div class="mt-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[16px]">thermostat</span>
+<span class="font-mono-sm text-mono-sm text-inverse-on-surface/80">-2°C (Target: 4°C)</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-[#1A1212] border-l-4 border-primary-container rounded-r-xl p-4 shadow-lg hover:bg-surface-variant/5 transition-colors cursor-pointer">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-md text-label-md text-primary-fixed-dim font-bold">WARNING</span>
+<span class="font-mono-sm text-mono-sm text-outline">11:42 AM</span>
+</div>
+<h4 class="font-body-lg text-body-lg text-inverse-on-surface mb-1">Route Deviation</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Vehicle FLEET-02 off planned route by 15 miles.</p>
+<div class="mt-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[16px]">route</span>
+<span class="font-mono-sm text-mono-sm text-inverse-on-surface/80">Est. Delay: 45m</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-[#1A1212] border-l-4 border-outline rounded-r-xl p-4 shadow-lg hover:bg-surface-variant/5 transition-colors cursor-pointer opacity-70">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-md text-label-md text-outline font-bold">NOTICE</span>
+<span class="font-mono-sm text-mono-sm text-outline">09:15 AM</span>
+</div>
+<h4 class="font-body-lg text-body-lg text-inverse-on-surface mb-1">Maintenance Due</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">TRK-404 scheduled for brake inspection.</p>
+</div>
+</div>
+</aside>
+<!-- Mobile Bottom Nav Bar (Semantic Shell: Only shown on md:hidden) -->
+<nav class="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 w-fit rounded-full px-6 py-3 border border-primary/30 shadow-xl z-50 flex items-center justify-center gap-4" style="background: rgba(38, 24, 24, 0.8); backdrop-filter: blur(24px);">
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">map</span>
+</a>
+<a class="bg-primary text-on-primary rounded-full px-6 py-2 flex items-center gap-2 animate-pulse-slow" href="#">
+<span class="material-symbols-outlined filled">smart_toy</span>
+<span class="font-label-md text-label-md font-bold">AI Command</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+</a>
+</nav>
+</body></html>
