@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline": "#867461",
+                        "on-tertiary-fixed": "#261818",
+                        "surface-bright": "#fff8f7",
+                        "surface-tint": "#855300",
+                        "tertiary": "#6d5a59",
+                        "on-background": "#231918",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#d8c3ad",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "surface-container-high": "#f7e4e2",
+                        "tertiary-fixed-dim": "#dac1c0",
+                        "primary-container": "#f59e0b",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#f1dedc",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#ffb95f",
+                        "surface-variant": "#f1dedc",
+                        "primary": "#855300",
+                        "on-primary-container": "#613b00",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#40000c",
+                        "on-tertiary-container": "#513f3f",
+                        "surface": "#fff8f7",
+                        "on-primary-fixed": "#2a1700",
+                        "surface-container": "#fdeae8",
+                        "on-secondary-container": "#fffbff",
+                        "on-surface-variant": "#534434",
+                        "secondary": "#ba0035",
+                        "inverse-surface": "#392e2d",
+                        "surface-container-low": "#fff0ef",
+                        "background": "#fff8f7",
+                        "secondary-fixed": "#ffdada",
+                        "on-primary-fixed-variant": "#653e00",
+                        "tertiary-container": "#c4abab",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#e8d6d4",
+                        "on-tertiary-fixed-variant": "#554242",
+                        "inverse-on-surface": "#ffedeb",
+                        "primary-fixed-dim": "#ffb95f",
+                        "on-surface": "#231918",
+                        "primary-fixed": "#ffddb8",
+                        "on-secondary-fixed-variant": "#920028",
+                        "tertiary-fixed": "#f7dcdc",
+                        "secondary-container": "#e21e49"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "unit": "4px",
+                        "margin-desktop": "40px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "gutter": "24px",
+                        "stack-sm": "8px"
+                    },
+                    fontFamily: {
+                        "headline-md": ["Geist"],
+                        "mono-sm": ["Geist Mono"],
+                        "body-lg": ["Geist"],
+                        "body-md": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "label-md": ["Geist"],
+                        "display-lg": ["Geist"]
+                    },
+                    fontSize: {
+                        "headline-md": ["24px", { lineHeight: "1.3", letterSpacing: "-0.01em", fontWeight: "500" }],
+                        "mono-sm": ["13px", { lineHeight: "1.5", fontWeight: "400" }],
+                        "body-lg": ["18px", { lineHeight: "1.6", letterSpacing: "0", fontWeight: "400" }],
+                        "body-md": ["16px", { lineHeight: "1.6", letterSpacing: "0", fontWeight: "400" }],
+                        "headline-lg": ["32px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" }],
+                        "label-md": ["14px", { lineHeight: "1.4", letterSpacing: "0.02em", fontWeight: "500" }],
+                        "display-lg": ["48px", { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FDFBF7;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 40px -10px rgba(45, 30, 30, 0.05);
+        }
+        .btn-primary {
+            background-color: #2D1E1E;
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 0 4px rgba(45, 30, 30, 0.2);
+        }
+        .input-field {
+            border: none;
+            border-bottom: 1px solid #d8c3ad;
+            background: transparent;
+            border-radius: 0;
+            transition: all 0.2s ease;
+        }
+        .input-field:focus {
+            outline: none;
+            border-bottom-color: #f59e0b;
+            box-shadow: 0 1px 0 0 #f59e0b;
+        }
+    </style>
+</head>
+<body class="h-screen w-full font-body-md text-on-surface antialiased overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<main class="flex h-full w-full">
+<!-- Left Side: Image/Map (Hidden on smaller screens) -->
+<section class="hidden lg:block relative w-1/2 h-full bg-surface-container-high overflow-hidden">
+<img alt="" class="absolute inset-0 w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtiTFsGWxRCYFYlP-vrDYp-jG38Z5O4wllKlKF9SkV4EgG8ERS1uv-_YgIQ13ge1yS1b6ihxUZOMlf5cgQszYz3W_zddP2Pj7VtwaHCJZif7TcrLdJJhJdGPH5pwYEwODZZshuWomGnB7JvbVcw6DkZrgnGurs_G5Lk-bqDK8-weNLhu_7Tb5f6lJF2XJJ4VawQahTQf0V73Yk_Wt3QItCiN8-P7JFQ5m_fA9bzRz3sciFxB34wgJUmA"/>
+<div class="absolute inset-0 bg-gradient-to-r from-surface/20 to-surface/80 mix-blend-overlay pointer-events-none"></div>
+<!-- Optional overlay content on image -->
+<div class="absolute bottom-12 left-12 max-w-md p-6 glass-card rounded-xl">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Global Connectivity</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Real-time supply chain visualization and AI-driven route optimization.</p>
+</div>
+</section>
+<!-- Right Side: Login Form -->
+<section class="w-full lg:w-1/2 h-full flex flex-col justify-center items-center p-8 relative">
+<div class="w-full max-w-md space-y-10">
+<!-- Branding -->
+<div class="text-center space-y-2">
+<h1 class="font-display-lg text-display-lg text-primary tracking-tight">SetuHaul AI</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Elite Logistics Intelligence</p>
+</div>
+<!-- Login Card -->
+<div class="glass-card rounded-[16px] p-8 space-y-8">
+<form class="space-y-6">
+<div class="space-y-4">
+<!-- Email Input -->
+<div class="relative">
+<label class="block font-label-md text-label-md text-tertiary mb-1" for="email">Work Email</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-0 text-outline px-2" data-icon="mail">mail</span>
+<input class="input-field w-full pl-10 py-3 text-on-surface font-body-md placeholder-outline-variant" id="email" name="email" placeholder="commander@setuhaul.ai" required="" type="email"/>
+</div>
+</div>
+<!-- Password Input -->
+<div class="relative">
+<div class="flex justify-between items-center mb-1">
+<label class="block font-label-md text-label-md text-tertiary" for="password">Password</label>
+<a class="font-label-md text-label-md text-primary hover:text-primary-fixed-dim transition-colors" href="#">Forgot?</a>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-0 text-outline px-2" data-icon="lock">lock</span>
+<input class="input-field w-full pl-10 py-3 text-on-surface font-body-md placeholder-outline-variant" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+</div>
+</div>
+</div>
+<!-- CTA Button -->
+<button class="btn-primary w-full py-4 rounded-lg font-headline-md text-[18px] flex justify-center items-center gap-2 mt-4" type="submit">
+                            Access Command
+                            <span class="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</form>
+<!-- Divider -->
+<div class="flex items-center gap-4">
+<div class="h-px bg-outline-variant/30 flex-1"></div>
+<span class="font-label-md text-label-md text-outline">OR</span>
+<div class="h-px bg-outline-variant/30 flex-1"></div>
+</div>
+<!-- SSO Option -->
+<button class="w-full py-3 rounded-lg border border-outline-variant/50 hover:bg-surface-variant/50 transition-colors flex justify-center items-center gap-3 font-label-md text-on-surface" type="button">
+<span class="material-symbols-outlined text-[20px]" data-icon="business">business</span>
+                        Continue with Enterprise SSO
+                    </button>
+</div>
+</div>
+<!-- Footer -->
+<footer class="absolute bottom-8 text-center w-full flex flex-col items-center justify-center gap-1 opacity-70">
+<p class="font-mono-sm text-mono-sm text-on-surface-variant">Powered by Google Gemini | Built with LangGraph</p>
+<div class="flex gap-4 font-label-md text-[12px] text-tertiary">
+<a class="hover:text-on-surface" href="#">Privacy</a>
+<a class="hover:text-on-surface" href="#">Terms</a>
+<a class="hover:text-on-surface" href="#">System Status</a>
+</div>
+</footer>
+</section>
+</main>
+</body></html>
