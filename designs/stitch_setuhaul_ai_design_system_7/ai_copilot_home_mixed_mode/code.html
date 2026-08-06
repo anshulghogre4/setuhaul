@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Workspace - Deep Burgundy &amp; Cream</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;family=Be+Vietnam+Pro:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-surface": "#231918",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#513f3f",
+                        "background": "#fff8f7",
+                        "error": "#ba1a1a",
+                        "outline": "#867461",
+                        "primary-fixed": "#ffddb8",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "tertiary": "#6d5a59",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#d8c3ad",
+                        "on-secondary-fixed": "#40000c",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#e8d6d4",
+                        "secondary": "#ba0035",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#e21e49",
+                        "on-tertiary-fixed-variant": "#554242",
+                        "on-primary-fixed-variant": "#653e00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-variant": "#f1dedc",
+                        "on-surface-variant": "#534434",
+                        "on-primary-fixed": "#2a1700",
+                        "tertiary-fixed": "#f7dcdc",
+                        "primary": "#855300",
+                        "on-secondary-container": "#fffbff",
+                        "surface-tint": "#855300",
+                        "surface-container-high": "#f7e4e2",
+                        "primary-fixed-dim": "#ffb95f",
+                        "tertiary-fixed-dim": "#dac1c0",
+                        "on-tertiary-fixed": "#261818",
+                        "inverse-primary": "#ffb95f",
+                        "on-secondary-fixed-variant": "#920028",
+                        "primary-container": "#f59e0b",
+                        "tertiary-container": "#c4abab",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed": "#ffdada",
+                        "inverse-surface": "#392e2d",
+                        "surface": "#fff8f7",
+                        "surface-container-highest": "#f1dedc",
+                        "on-primary-container": "#613b00",
+                        "on-background": "#231918",
+                        "inverse-on-surface": "#ffedeb",
+                        "surface-container": "#fdeae8",
+                        "surface-container-low": "#fff0ef",
+                        "surface-bright": "#fff8f7",
+                        "on-secondary": "#ffffff",
+                        "deep-burgundy": "#2D1E1E"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Geist', sans-serif;
+            background-color: #FDFBF7;
+        }
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: #534434;
+            border-radius: 10px;
+        }
+        .chat-canvas {
+            background-color: #FDFBF7;
+        }
+        .custom-shadow {
+            box-shadow: 0 4px 20px rgba(45, 30, 30, 0.08);
+        }
+    </style>
+</head>
+<body class="flex h-screen w-full overflow-hidden">
+<!-- LEFT SIDEBAR: Deep Burgundy charcoal sidebar -->
+<aside class="w-72 bg-deep-burgundy text-surface flex flex-col shrink-0 border-r border-outline/20">
+<div class="p-6 flex items-center gap-3">
+<div class="size-8 bg-primary-container rounded-lg flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined">auto_awesome</span>
+</div>
+<div>
+<h1 class="text-white text-base font-bold leading-none">Deep AI</h1>
+<p class="text-outline-variant text-[11px] uppercase tracking-widest mt-1">Workspace v2.4</p>
+</div>
+</div>
+<div class="px-4 mb-6">
+<button class="w-full flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors px-4 py-3 rounded-xl text-white font-medium">
+<span class="material-symbols-outlined">add</span>
+<span>New Session</span>
+</button>
+</div>
+<nav class="flex-1 overflow-y-auto sidebar-scroll px-3 space-y-1">
+<div class="text-outline-variant text-[11px] font-bold uppercase px-4 py-2 mb-1">Recent Activity</div>
+<a class="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-xl text-white group" href="#">
+<span class="material-symbols-outlined text-primary-fixed-dim">chat_bubble</span>
+<span class="text-sm truncate">Project Alpha Strategy</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors rounded-xl text-outline-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">edit_note</span>
+<span class="text-sm truncate">Design Review Feedback</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors rounded-xl text-outline-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">query_stats</span>
+<span class="text-sm truncate">Market Research Q4</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors rounded-xl text-outline-variant hover:text-white" href="#">
+<span class="material-symbols-outlined">archive</span>
+<span class="text-sm truncate">Archived Experiments</span>
+</a>
+<div class="mt-8 text-outline-variant text-[11px] font-bold uppercase px-4 py-2 mb-1">Models</div>
+<div class="px-4 space-y-3">
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-2">
+<div class="size-2 rounded-full bg-primary-container"></div>
+<span class="text-sm text-white">Claude 3.5 Sonnet</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline-variant opacity-0 group-hover:opacity-100">info</span>
+</div>
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-2">
+<div class="size-2 rounded-full bg-outline"></div>
+<span class="text-sm text-outline-variant">GPT-4o</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline-variant opacity-0 group-hover:opacity-100">info</span>
+</div>
+</div>
+</nav>
+<div class="p-4 border-t border-white/10 space-y-2">
+<button class="w-full flex items-center justify-between px-3 py-2 text-outline-variant hover:text-white transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm">Settings</span>
+</div>
+</button>
+<div class="bg-primary-container/10 p-4 rounded-xl border border-primary-container/20">
+<p class="text-primary-fixed-dim text-xs font-bold mb-2">PRO PLAN</p>
+<p class="text-white/80 text-xs leading-relaxed mb-3">Unlimited high-fidelity generations and 100GB storage.</p>
+<button class="w-full py-2 bg-primary-container text-on-primary-container rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">Upgrade</button>
+</div>
+</div>
+</aside>
+<!-- CENTRAL CHAT CANVAS: Sun-bleached cream-white -->
+<main class="flex-1 flex flex-col relative chat-canvas">
+<!-- Header -->
+<header class="h-16 flex items-center justify-between px-8 border-b border-outline-variant/30 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+<div class="flex items-center gap-4">
+<div class="flex flex-col">
+<h2 class="text-on-surface font-semibold text-base leading-none">Project Alpha Strategy</h2>
+<span class="text-outline text-xs mt-1">Updated 2 minutes ago</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="p-2 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="p-2 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">bookmark</span>
+</button>
+<div class="h-6 w-[1px] bg-outline-variant mx-1"></div>
+<div class="flex items-center gap-3 pl-2">
+<div class="text-right hidden sm:block">
+<p class="text-xs font-bold text-on-surface leading-none">Alex Rivera</p>
+<p class="text-[10px] text-outline">Lead Designer</p>
+</div>
+<div class="size-9 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a creative director in a modern studio environment. The person has a friendly but focused expression. The lighting is soft and natural, emphasizing a professional yet approachable aesthetic, consistent with high-end tech workspace branding." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1RQs6985o6jErUqMB47iLx1QdlpwPVfbdQYu3tJm0WvrQsqSGr5HARXLCWd2TqsN2mc7ApIFjpkPDVXgqxiGkQ5zr1WBGACXyiZNTLksnRX-qy3OGh2N5ix_nb-szfGRKCi7iu5wY6LkEcKK_QcsTvB165pTaoGHE23YE49xNc60KOh7qup-pdp3uwxqkPxKd7MMRuVYM9_tSDD5SGB4b_loYOgblvzo2Kj9D-Zo_jq5hSVg-RsUHuQ"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Chat Area -->
+<div class="flex-1 overflow-y-auto px-8 py-10 sidebar-scroll">
+<div class="max-w-3xl mx-auto space-y-8">
+<!-- System/AI Response -->
+<div class="flex gap-6 animate-fade-in">
+<div class="size-10 rounded-xl bg-deep-burgundy flex items-center justify-center shrink-0 shadow-lg">
+<span class="material-symbols-outlined text-white text-xl">auto_awesome</span>
+</div>
+<div class="flex-1 space-y-4">
+<div class="bg-surface-container-low p-6 rounded-2xl rounded-tl-none border border-outline-variant/20 custom-shadow">
+<p class="text-on-surface leading-relaxed">
+                                I've analyzed the market trends for the Project Alpha launch. Based on the sun-bleached cream-white aesthetic and the deep burgundy accents, the visual identity should lean into "Industrial Minimalist" luxury.
+                            </p>
+<div class="mt-6 grid grid-cols-2 gap-4">
+<div class="aspect-video rounded-lg overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A sophisticated luxury brand moodboard featuring high-fashion photography, architectural minimalism, and a color palette of deep burgundy, cream white, and charcoal gray. The style is ultra-modern and elegant, suitable for a premium tech brand launch campaign." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfqkDNzBcKzZtQ_KrphwirEtWYlmQ6YTTzIaU5u2T5BUR96vRGGO7rFUroAH1OjXz2MIDt4bWQzN7X3i3qRTi765EWVICUEOzk_Z7S0ok3O2rLumttWv001wZU0gjZ6BIox8itMZEmnHPDIHds4inBI-QixeY5O7O4ThEpFyOgBvUAsYIsbjcpsHbaW1NdXWz7tArSozBCr-MhaLjXV4BVJWkFtptc_37E36SWEMq-9nUTl403fF81uA"/>
+</div>
+<div class="aspect-video rounded-lg overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="Interior design render of a minimalist showroom with large windows and soft afternoon light. The space features elegant furniture in deep burgundy leather against cream-white limestone walls, embodying a quiet luxury aesthetic for a creative workspace." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD8vMT594VnaV3HVZYF6kRUoIOiCyeNf-jcZ0svK1h3482M5h30xaAHFwL6aUU5ZpzNIUhaMQSs9tSdFzUEkmS07bWe1bHAFbEkzpVONIoyFrYtCThHb2wRBncoK72K_SE3ACtWT0F2RdbQM49pScVfwdLWlHODw6F_MKG-mDwbt0rOVb5L-6APQ15wtGXsK8q-JQeC3xOwmplhtcrDb41aN7KkZc0mf5xj_IE_M1dcv-XmBcf1WDHnQ"/>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 text-outline text-xs px-1">
+<button class="hover:text-primary transition-colors">Helpful</button>
+<button class="hover:text-primary transition-colors">Not Helpful</button>
+<button class="hover:text-primary transition-colors">Regenerate</button>
+</div>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex gap-6 justify-end">
+<div class="flex-1 max-w-[80%] space-y-2">
+<div class="bg-primary-container text-on-primary-container p-6 rounded-2xl rounded-tr-none shadow-md">
+<p class="leading-relaxed font-medium">
+                                This looks perfect. The contrast with the dark sidebar helps me focus. Can you generate a high-fidelity mockup of the homepage using these color anchors?
+                            </p>
+</div>
+<p class="text-right text-[10px] text-outline uppercase font-bold pr-2">Delivered • 12:45 PM</p>
+</div>
+<div class="size-10 rounded-xl overflow-hidden shrink-0 shadow-md">
+<img class="w-full h-full object-cover" data-alt="A portrait-style close-up of a designer's hands working on a sleek digital tablet. The environment is a bright, modern studio with sun-bleached materials and natural wood textures. High-end equipment and creative tools are visible in the soft-focus background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVyNnXw_50q3dU9ad_xyBwlQxRDtD8cTvViVjGxM2s5qM4lnJKCs0Z8vrta6-I9HfuVA-XE1A1Gt3YLjBY65EBe2kt_zcc6xYExDvLfmBgERUfGH7e8qKYWGSaMtXTuAAM0ZSw7rjT-koQzLgeQTKavzwylaAPO_WPyNPm4AYZRrTV52JSm2A6Qtk6hPLYMw3JFc_A7zoM5SpqPObtM_458p_g2c8CE2A-YJQ-sRoVD-wP08L9Xvdl9Q"/>
+</div>
+</div>
+<!-- AI Typing Animation Placeholder -->
+<div class="flex gap-6 items-start opacity-60">
+<div class="size-10 rounded-xl bg-deep-burgundy flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white text-xl animate-pulse">auto_awesome</span>
+</div>
+<div class="flex items-center gap-1 mt-4">
+<div class="size-1.5 bg-outline rounded-full animate-bounce"></div>
+<div class="size-1.5 bg-outline rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+<div class="size-1.5 bg-outline rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="px-8 pb-8 pt-2">
+<div class="max-w-3xl mx-auto relative">
+<div class="absolute inset-0 bg-white/20 blur-xl -z-10"></div>
+<div class="bg-white border border-outline-variant shadow-xl rounded-2xl p-2 flex items-end gap-2 focus-within:ring-2 ring-primary-container transition-all">
+<button class="p-3 text-outline hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<textarea class="flex-1 border-none focus:ring-0 text-on-surface placeholder:text-outline/50 py-3 resize-none max-h-48 scrollbar-hide text-base" placeholder="Message Project Alpha AI..." rows="1"></textarea>
+<div class="flex items-center gap-1 p-1">
+<button class="p-2 text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="bg-deep-burgundy text-white size-10 rounded-xl flex items-center justify-center hover:bg-black transition-colors shadow-lg">
+<span class="material-symbols-outlined">arrow_upward</span>
+</button>
+</div>
+</div>
+<div class="mt-3 flex justify-center gap-6">
+<p class="text-[10px] text-outline/60 uppercase tracking-tighter">Enter to send • Shift+Enter for new line</p>
+</div>
+</div>
+</div>
+</main>
+<!-- RIGHT CONTEXT MODULES: Light on Dark structural mix -->
+<aside class="w-80 bg-deep-burgundy border-l border-white/10 flex flex-col shrink-0">
+<div class="p-6 border-b border-white/10">
+<h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4">Live Context</h3>
+<div class="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+<div class="h-32 relative">
+<webgl-shader class="w-full h-full" src="{{DATA:ANIMATION:ANIMATION_1}}"></webgl-shader>
+<div class="absolute inset-0 bg-gradient-to-t from-deep-burgundy to-transparent"></div>
+<div class="absolute bottom-3 left-4">
+<p class="text-white text-xs font-bold">Neural Engine</p>
+<p class="text-primary-fixed-dim text-[10px]">Processing Vision Mockups</p>
+</div>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto sidebar-scroll p-6 space-y-6">
+<div>
+<h4 class="text-outline-variant text-[11px] font-bold uppercase mb-3">Project Assets</h4>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/20 transition-all cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed-dim">palette</span>
+<span class="text-xs text-white">Color_System.json</span>
+</div>
+<span class="material-symbols-outlined text-sm text-outline-variant">download</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/20 transition-all cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed-dim">font_download</span>
+<span class="text-xs text-white">Typography_Spec.pdf</span>
+</div>
+<span class="material-symbols-outlined text-sm text-outline-variant">download</span>
+</div>
+</div>
+</div>
+<div>
+<h4 class="text-outline-variant text-[11px] font-bold uppercase mb-3">Suggested Next Steps</h4>
+<div class="space-y-3">
+<button class="w-full text-left p-3 text-xs text-white border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                        Draft social media copy
+                    </button>
+<button class="w-full text-left p-3 text-xs text-white border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                        Generate competitive matrix
+                    </button>
+<button class="w-full text-left p-3 text-xs text-white border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                        Refine user persona "Alex"
+                    </button>
+</div>
+</div>
+</div>
+<!-- Mini Workspace Status -->
+<div class="p-6 bg-black/20 mt-auto">
+<div class="flex items-center justify-between mb-4">
+<span class="text-xs text-outline-variant">Storage</span>
+<span class="text-xs text-white">42.8 / 100 GB</span>
+</div>
+<div class="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[42.8%]"></div>
+</div>
+</div>
+</aside>
+<script>
+        // Micro-interaction for the textarea auto-resize
+        const textarea = document.querySelector('textarea');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Simple animation trigger for messages
+        document.querySelectorAll('.animate-fade-in').forEach((el, i) => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(10px)';
+            el.style.transition = 'all 0.5s ease-out';
+            setTimeout(() => {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            }, i * 200 + 100);
+        });
+    </script>
+</body></html>
