@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#dae2fd",
+                        "on-secondary-fixed": "#002113",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "outline-variant": "#434655",
+                        "secondary": "#4edea3",
+                        "surface-tint": "#b4c5ff",
+                        "on-error": "#690005",
+                        "secondary-fixed": "#6ffbbe",
+                        "surface-bright": "#31394d",
+                        "on-secondary-container": "#00311f",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-primary": "#002a78",
+                        "surface-container": "#171f33",
+                        "tertiary": "#ffb596",
+                        "on-surface-variant": "#c3c6d7",
+                        "on-primary-container": "#eeefff",
+                        "on-tertiary-fixed": "#360f00",
+                        "secondary-container": "#00a572",
+                        "surface-dim": "#0b1326",
+                        "on-tertiary-container": "#ffede6",
+                        "surface-container-highest": "#2d3449",
+                        "error": "#ffb4ab",
+                        "surface-container-lowest": "#060e20",
+                        "surface-container-low": "#131b2e",
+                        "primary-container": "#2563eb",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#0053db",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "surface": "#0b1326",
+                        "on-tertiary": "#581e00",
+                        "primary": "#b4c5ff",
+                        "primary-fixed": "#dbe1ff",
+                        "inverse-on-surface": "#283044",
+                        "on-primary-fixed": "#00174b",
+                        "surface-variant": "#2d3449",
+                        "on-secondary": "#003824",
+                        "error-container": "#93000a",
+                        "inverse-surface": "#dae2fd",
+                        "tertiary-container": "#bc4800",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "background": "#0b1326",
+                        "outline": "#8d90a0",
+                        "tertiary-fixed": "#ffdbcd",
+                        "on-secondary-fixed-variant": "#005236",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-surface": "#dae2fd",
+                        "surface-container-high": "#222a3d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "title-md": ["Hanken Grotesk", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-bubble {
+            background: rgba(36, 47, 71, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .ai-bubble {
+            background: rgba(37, 100, 235, 0.15);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(37, 100, 235, 0.3);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #242f47;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-hidden">
+<div class="relative flex h-screen w-full flex-col bg-background">
+<!-- Main Layout Container -->
+<div class="layout-container flex h-full grow flex-col">
+<!-- Shared Top Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-outline-variant px-10 py-3 bg-surface z-10">
+<div class="flex items-center gap-4 text-white">
+<div class="size-6 text-primary">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M39.475 21.6262C40.358 21.4363 40.6863 21.5589 40.7581 21.5934C40.7876 21.655 40.8547 21.857 40.8082 22.3336C40.7408 23.0255 40.4502 24.0046 39.8572 25.2301C38.6799 27.6631 36.5085 30.6631 33.5858 33.5858C30.6631 36.5085 27.6632 38.6799 25.2301 39.8572C24.0046 40.4502 23.0255 40.7407 22.3336 40.8082C21.8571 40.8547 21.6551 40.7875 21.5934 40.7581C21.5589 40.6863 21.4363 40.358 21.6262 39.475C21.8562 38.4054 22.4689 36.9657 23.5038 35.2817C24.7575 33.2417 26.5497 30.9744 28.7621 28.762C30.9744 26.5497 33.2417 24.7574 35.2817 23.5037C36.9657 22.4689 38.4054 21.8562 39.475 21.6262ZM4.41189 29.2403L18.7597 43.5881C19.8813 44.7097 21.4027 44.9179 22.7217 44.7893C24.0585 44.659 25.5148 44.1631 26.9723 43.4579C29.9052 42.0387 33.2618 39.5667 36.4142 36.4142C39.5667 33.2618 42.0387 29.9052 43.4579 26.9723C44.1631 25.5148 44.659 24.0585 44.7893 22.7217C44.9179 21.4027 44.7097 19.8813 43.5881 18.7597L29.2403 4.41187C27.8527 3.02428 25.8765 3.02573 24.2861 3.36776C22.6081 3.72863 20.7334 4.58419 18.8396 5.74801C16.4978 7.18716 13.9881 9.18353 11.5858 11.5858C9.18354 13.988 7.18717 16.4978 5.74802 18.8396C4.58421 20.7334 3.72865 22.6081 3.36778 24.2861C3.02574 25.8765 3.02429 27.8527 4.41189 29.2403Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] font-headline-lg">SetuHaul AI</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<label class="flex flex-col min-w-40 !h-10 max-w-64">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full overflow-hidden">
+<div class="text-[#92a4c8] flex border-none bg-surface-container-high items-center justify-center pl-4 border-r-0" data-icon="magnifying_glass">
+<span class="material-symbols-outlined">qr_code_2</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden text-white focus:outline-0 focus:ring-0 border-none bg-surface-container-high placeholder:text-[#92a4c8] px-4 pl-2 text-base font-normal" placeholder="Search shipments..." value=""/>
+</div>
+</label>
+<div class="flex gap-2">
+<button class="flex items-center justify-center rounded-lg h-10 bg-surface-container-high text-white w-10">
+<span class="material-symbols-outlined" style="font-size: 20px;">notifications</span>
+</button>
+<button class="flex items-center justify-center rounded-lg h-10 bg-surface-container-high text-white w-10">
+<span class="material-symbols-outlined" style="font-size: 20px;">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Sidebar Nav (Left) -->
+<aside class="w-64 border-r border-outline-variant bg-surface-container-low flex flex-col p-4 gap-6 shrink-0">
+<div class="flex flex-col">
+<h1 class="text-white text-base font-medium">Driver Console</h1>
+<p class="text-outline text-sm">ID: 4492-BX</p>
+</div>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-outline hover:bg-surface-container-highest hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-container text-white" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">forum</span>
+<span class="text-sm font-medium">Assistant</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-outline hover:bg-surface-container-highest hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">local_shipping</span>
+<span class="text-sm font-medium">Shipments</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-outline hover:bg-surface-container-highest hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">map</span>
+<span class="text-sm font-medium">Route Planner</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-outline hover:bg-surface-container-highest hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-cover bg-center" data-alt="A professional close-up portrait of a truck driver in a modern uniform, featuring a calm and focused expression. The background shows the interior of a high-tech vehicle cabin with soft blue LED accent lighting. The overall style is modern, cinematic, and clean, fitting a professional logistics application." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCEaY7alMDwOrmtZ_pEbjjuT2EaoKKV2cdrHuEczwjPnzrbVG8t-UYy5rIYxSX7AuWUKMqrnQaBDjvyM5Fvb_JnbDXzhEzYio02ETOEPqjeMLGtoWsT8zaJh_FRUiWGo7JDLd2Nzs4sOOQatMJWZJyTuCUHebMWQYlK8xq7NhOzcMLLc3bRtVVessYhjnXWBHuR_05cV7JQKsxBduaJuxQN9cMZE92WXthHwaLv1FKX0ObVg1fBN3KMcA')"></div>
+<div class="flex flex-col">
+<span class="text-white text-sm font-medium">Alex Rivera</span>
+<span class="text-secondary text-xs font-semibold uppercase tracking-wider">On Route</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Chat Interface (Center) -->
+<section class="flex-1 flex flex-col relative bg-background">
+<!-- Background Subtle Animation -->
+<webgl-shader class="absolute inset-0 opacity-20 pointer-events-none" src="{{DATA:ANIMATION:ANIMATION_1}}"></webgl-shader>
+<!-- Chat History -->
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar relative z-10">
+<!-- Date Indicator -->
+<div class="flex justify-center">
+<span class="text-xs text-outline bg-surface-container px-3 py-1 rounded-full uppercase tracking-widest font-bold">Today</span>
+</div>
+<!-- System Message -->
+<div class="flex flex-col gap-2 max-w-[80%]">
+<div class="flex items-center gap-2">
+<div class="size-6 rounded-full bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary" style="font-size: 16px;">bolt</span>
+</div>
+<span class="text-xs font-bold text-primary uppercase tracking-tight">SetuHaul AI</span>
+</div>
+<div class="ai-bubble p-4 rounded-2xl rounded-tl-none shadow-xl">
+<p class="text-on-background text-sm leading-relaxed">
+                                    Hello Alex. I've analyzed real-time traffic data for **I-80 West**. There's a major accident near Mile Marker 42.
+                                </p>
+<div class="mt-3 p-3 bg-surface-container-low rounded-lg border border-primary/20">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-secondary">route</span>
+<div>
+<p class="text-white text-sm font-medium">Route Optimization Suggestion</p>
+<p class="text-outline text-xs mt-1">
+                                                I've detected heavy congestion on your current route. I suggest a 15-minute delay bypass via **Route 22**. Would you like me to update your GPS?
+                                            </p>
+</div>
+</div>
+<div class="mt-3 flex gap-2">
+<button class="bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold px-4 py-2 rounded-lg transition-all">Accept Bypass</button>
+<button class="bg-surface-container-highest hover:bg-outline-variant text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Ignore</button>
+</div>
+</div>
+</div>
+<span class="text-[10px] text-outline ml-8">14:12 PM</span>
+</div>
+<!-- User Message -->
+<div class="flex flex-col gap-2 max-w-[80%] ml-auto items-end">
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-outline uppercase tracking-tight">You</span>
+</div>
+<div class="glass-bubble p-4 rounded-2xl rounded-tr-none shadow-lg text-white">
+<p class="text-sm">How will this affect my appointment at Midwest Hub?</p>
+</div>
+<span class="text-[10px] text-outline mr-2">14:13 PM</span>
+</div>
+<!-- AI Response (Context Aware) -->
+<div class="flex flex-col gap-2 max-w-[80%]">
+<div class="flex items-center gap-2">
+<div class="size-6 rounded-full bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary" style="font-size: 16px;">bolt</span>
+</div>
+<span class="text-xs font-bold text-primary uppercase tracking-tight">SetuHaul AI</span>
+</div>
+<div class="ai-bubble p-4 rounded-2xl rounded-tl-none shadow-xl">
+<p class="text-on-background text-sm leading-relaxed">
+                                    Even with the bypass, your new ETA is **14:45**. Your current appointment is at **14:30**. 
+                                </p>
+<p class="text-on-background text-sm leading-relaxed mt-2">
+                                    I recommend requesting a **15-minute slot shift**. Midwest Hub currently has availability for late arrivals in Dock 4. Should I initiate the request?
+                                </p>
+</div>
+<span class="text-[10px] text-outline ml-8">14:13 PM</span>
+</div>
+</div>
+<!-- Chat Input Area -->
+<div class="p-6 pt-0 z-10">
+<div class="glass-bubble rounded-2xl p-2 shadow-2xl flex flex-col gap-2 border border-white/5">
+<div class="flex items-center gap-1 px-2">
+<button class="p-2 text-outline hover:text-white transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<button class="p-2 text-outline hover:text-white transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="p-2 text-outline hover:text-white transition-colors">
+<span class="material-symbols-outlined">image</span>
+</button>
+<div class="h-4 w-px bg-outline-variant mx-1"></div>
+<div class="flex gap-2">
+<span class="text-[10px] bg-secondary/10 text-secondary border border-secondary/20 px-2 py-0.5 rounded font-bold uppercase">GPS Syncing</span>
+<span class="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-bold uppercase">Midwest Hub Facility</span>
+</div>
+</div>
+<div class="flex items-center gap-3 px-2 pb-2">
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-outline text-sm" placeholder="Ask SetuHaul about routes, cargo, or facility access..." type="text"/>
+<button class="size-10 bg-primary text-on-primary rounded-xl flex items-center justify-center hover:scale-105 transition-transform active:scale-95 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined">arrow_upward</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Context Sidebar (Right) -->
+<aside class="w-80 border-l border-outline-variant bg-surface-container flex flex-col p-5 gap-6 shrink-0 custom-scrollbar overflow-y-auto">
+<!-- Section: Active Context -->
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<h3 class="text-white text-xs font-bold uppercase tracking-wider">Active Context</h3>
+<span class="size-2 rounded-full bg-secondary animate-pulse"></span>
+</div>
+<!-- Shipment Card -->
+<div class="bg-surface-container-high rounded-xl p-4 border border-outline-variant">
+<div class="flex justify-between items-start mb-3">
+<div>
+<p class="text-outline text-[10px] font-bold uppercase">Shipment ID</p>
+<p class="text-white text-lg font-bold font-headline-lg">#SH-8924</p>
+</div>
+<span class="bg-primary/20 text-primary text-[10px] px-2 py-1 rounded font-bold">In Transit</span>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline" style="font-size: 18px;">schedule</span>
+<span class="text-outline text-xs">Current ETA</span>
+</div>
+<span class="text-error text-sm font-bold">14:45 (Delayed)</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline" style="font-size: 18px;">location_on</span>
+<span class="text-outline text-xs">Facility</span>
+</div>
+<span class="text-white text-sm font-medium">Midwest Hub</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline" style="font-size: 18px;">event_available</span>
+<span class="text-outline text-xs">Appointment</span>
+</div>
+<span class="text-white text-sm font-medium">14:30 CST</span>
+</div>
+</div>
+</div>
+<!-- Facility Map Preview -->
+<div class="relative rounded-xl overflow-hidden aspect-video group cursor-pointer border border-outline-variant">
+<div class="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110" data-alt="A highly detailed satellite view of a large logistics hub facility in the American Midwest. The map shows organized rows of loading docks, several white semi-trucks parked in designated slots, and clear entry and exit markings. Overlaid on the image are glowing digital UI elements including green lane highlights and blue waypoint markers, creating a futuristic logistics interface aesthetic." data-location="Chicago" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDPKLqcg-n0C-QsY6htzOqQbST5QLIn4EObd92gVyDJ4inxNzJTfhWH3Wvr7XC1rjc45eLT2g551EjY2bPgqJlYChDBvlQqGBNfmeutKv6WeVwNm2oKybIKySbvF2jwyKvdqtD8LBqjoSAEEysZc516_JswYdnl7nl_S2FK5uhxWoRr22xpJrK5D_CJcvID--jLN1oQ7wowUewYJo0BmcdiWvlwJwW854ClGzO86NlOP7XJ-eSWr7ersw')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+<div class="absolute bottom-3 left-3 flex flex-col">
+<span class="text-white text-xs font-bold">Midwest Hub Facility</span>
+<span class="text-outline text-[10px]">Tap to expand map</span>
+</div>
+</div>
+</div>
+<!-- Section: Quick Actions -->
+<div class="flex flex-col gap-4">
+<h3 class="text-white text-xs font-bold uppercase tracking-wider">Quick Actions</h3>
+<div class="flex flex-col gap-2">
+<button class="flex items-center gap-3 w-full p-3 bg-surface-container-highest hover:bg-outline-variant rounded-xl text-white transition-colors">
+<div class="size-8 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-size: 20px;">update</span>
+</div>
+<span class="text-sm font-medium">Update ETA</span>
+</button>
+<button class="flex items-center gap-3 w-full p-3 bg-surface-container-highest hover:bg-outline-variant rounded-xl text-white transition-colors">
+<div class="size-8 rounded-lg bg-surface-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-size: 20px;">map</span>
+</div>
+<span class="text-sm font-medium">View Facility Map</span>
+</button>
+<button class="flex items-center gap-3 w-full p-3 bg-primary/10 border border-primary/30 hover:bg-primary/20 rounded-xl text-primary transition-colors">
+<div class="size-8 rounded-lg bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-size: 20px;">calendar_today</span>
+</div>
+<span class="text-sm font-bold">Request New Slot</span>
+</button>
+</div>
+</div>
+<!-- Section: Live Telemetry -->
+<div class="mt-auto p-4 bg-surface-container-lowest rounded-xl border border-outline-variant/30">
+<div class="flex items-center gap-3 mb-3">
+<span class="material-symbols-outlined text-secondary" style="font-size: 20px;">speed</span>
+<span class="text-white text-xs font-bold uppercase">Vehicle Stats</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-outline text-[10px]">Fuel Level</p>
+<p class="text-white text-sm font-bold">78%</p>
+<div class="w-full bg-outline-variant h-1 rounded-full mt-1">
+<div class="bg-secondary h-1 rounded-full" style="width: 78%"></div>
+</div>
+</div>
+<div>
+<p class="text-outline text-[10px]">Tire PSI</p>
+<p class="text-secondary text-sm font-bold">Optimal</p>
+<p class="text-white text-[10px] mt-1">Avg. 104 PSI</p>
+</div>
+</div>
+</div>
+</aside>
+</main>
+</div>
+</div>
+<!-- Micro-interaction Scripts -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatInput = document.querySelector('input[type="text"]');
+            const chatContainer = document.querySelector('.custom-scrollbar');
+
+            // Simulate typing indicator or smooth scroll
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+                    const message = chatInput.value;
+                    chatInput.value = '';
+                    
+                    // Simple logic to scroll to bottom on new message simulation
+                    setTimeout(() => {
+                        chatContainer.scrollTo({
+                            top: chatContainer.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }, 100);
+                }
+            });
+
+            // Hover effects for cards
+            const actionButtons = document.querySelectorAll('button');
+            actionButtons.forEach(btn => {
+                btn.addEventListener('mouseenter', () => {
+                    btn.classList.add('scale-[1.02]');
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.classList.remove('scale-[1.02]');
+                });
+            });
+        });
+    </script>
+</body></html>

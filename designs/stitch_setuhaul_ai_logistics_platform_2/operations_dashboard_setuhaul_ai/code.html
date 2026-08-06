@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Operations Dashboard - SetuHaul AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-surface-variant": "#c3c6d7",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "surface-container-low": "#131b2e",
+                      "on-secondary": "#003824",
+                      "secondary-fixed": "#6ffbbe",
+                      "surface-dim": "#0b1326",
+                      "primary-container": "#2563eb",
+                      "on-tertiary": "#581e00",
+                      "on-background": "#dae2fd",
+                      "on-tertiary-container": "#ffede6",
+                      "error-container": "#93000a",
+                      "surface": "#0b1326",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "inverse-surface": "#dae2fd",
+                      "surface-bright": "#31394d",
+                      "outline": "#8d90a0",
+                      "secondary-container": "#00a572",
+                      "surface-container-high": "#222a3d",
+                      "background": "#0b1326",
+                      "on-primary": "#002a78",
+                      "surface-container": "#171f33",
+                      "secondary": "#4edea3",
+                      "on-secondary-fixed-variant": "#005236",
+                      "surface-tint": "#b4c5ff",
+                      "on-error-container": "#ffdad6",
+                      "tertiary-fixed": "#ffdbcd",
+                      "tertiary-container": "#bc4800",
+                      "surface-variant": "#2d3449",
+                      "primary": "#b4c5ff",
+                      "tertiary": "#ffb596",
+                      "secondary-fixed-dim": "#4edea3",
+                      "on-primary-fixed": "#00174b",
+                      "surface-container-lowest": "#060e20",
+                      "primary-fixed": "#dbe1ff",
+                      "outline-variant": "#434655",
+                      "on-tertiary-fixed": "#360f00",
+                      "on-surface": "#dae2fd",
+                      "error": "#ffb4ab",
+                      "surface-container-highest": "#2d3449",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "inverse-on-surface": "#283044",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "on-primary-container": "#eeefff",
+                      "on-error": "#690005",
+                      "inverse-primary": "#0053db",
+                      "on-secondary-container": "#00311f",
+                      "on-secondary-fixed": "#002113"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "md": "16px",
+                      "base": "4px",
+                      "xl": "48px",
+                      "sm": "8px",
+                      "container-max": "1280px",
+                      "gutter": "24px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "title-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.02em",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full flex flex-col pt-24 pb-8 docked left-0 h-screen w-64 bg-slate-900/70 dark:bg-surface-container-low/70 backdrop-blur-xl border-r border-white/5 shadow-lg z-40 hidden md:flex">
+<div class="px-md mb-xl flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<div>
+<div class="font-headline-lg text-[20px] font-bold text-primary dark:text-primary-fixed leading-tight">SetuHaul AI</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant opacity-70">Enterprise Logistics</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-xs px-sm">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="smart_toy">smart_toy</span>
+<span class="font-body-md text-body-md">AI Assistant</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-primary border-l-2 border-primary bg-primary/10 hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="hub">hub</span>
+<span class="font-body-md text-body-md">Operations</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="local_shipping">local_shipping</span>
+<span class="font-body-md text-body-md">Shipments</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="conveyor_belt">conveyor_belt</span>
+<span class="font-body-md text-body-md">Fleet</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="analytics">analytics</span>
+<span class="font-body-md text-body-md">Analytics</span>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-xs px-sm">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help">help</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all cursor-pointer active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="logout">logout</span>
+<span class="font-body-md text-body-md">Sign Out</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 md:ml-64 relative">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md docked full-width top-0 bg-slate-900/70 dark:bg-surface-container/70 backdrop-blur-xl border-b border-white/10 shadow-sm md:w-[calc(100%-16rem)]">
+<div class="flex items-center gap-md w-full max-w-md">
+<!-- Mobile Menu Toggle -->
+<button class="md:hidden text-on-surface-variant hover:text-primary transition-colors duration-200">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<!-- Title for Mobile, Hidden on Desktop where Sidebar handles it -->
+<div class="text-title-md font-headline-lg font-bold text-primary dark:text-primary-fixed md:hidden">SetuHaul AI</div>
+<!-- Search -->
+<div class="relative w-full hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]" data-icon="search">search</span>
+<input class="w-full bg-surface-container-high border border-outline-variant/30 rounded-full py-1.5 pl-10 pr-4 text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all placeholder:text-on-surface-variant/50" placeholder="Search operations, loads, or assets..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors duration-200 hover:bg-white/5 scale-95 active:opacity-80 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors duration-200 hover:bg-white/5 scale-95 active:opacity-80">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden ml-2 border border-white/10 cursor-pointer hover:border-primary/50 transition-colors">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A detailed headshot of a professional operations manager in a high-tech logistics control room, softly lit by blue monitor screens, wearing a headset, looking focused and competent. Dark cinematic lighting, hyper-realistic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4bRVpBxVM5LUG2YsTDSgdnFMHhcx_GZd1GOptvtNyF7XbWdGWU1YekBv6EULc5voGoJjeJrYkHWfZA3ervoulKLtXHh3Ah7ZOktSrF_4FJtSBEJB_gjpOZA231Oc_yeqyFMaGi5vKX3u0Syahoh30FbIJHtFFXbxa39dxR6IzgxBcQwDN8_kxUEYFaX69VG_pdg4kybmsVeug0mHD7XpgxcRL4UeWfFNt9ejaxQT7P73i-SH02a5Fpw"/>
+</div>
+</div>
+</header>
+<!-- Sub-tabs -->
+<div class="pt-20 px-lg pb-md border-b border-white/5 bg-surface-container-low/30 sticky top-0 z-30 backdrop-blur-md">
+<div class="flex items-center justify-between">
+<div>
+<h1 class="font-headline-lg text-[28px] font-bold text-on-surface tracking-tight mb-1">Operations Control</h1>
+<p class="font-body-md text-on-surface-variant opacity-80">Real-time network visibility and asset allocation.</p>
+</div>
+<div class="flex gap-sm">
+<button class="bg-surface-container-high border border-outline-variant/30 text-on-surface px-md py-1.5 rounded-lg font-label-sm hover:bg-surface-container-highest transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="calendar_today">calendar_today</span>
+                        Today
+                    </button>
+<button class="bg-primary-container text-white px-md py-1.5 rounded-lg font-label-sm hover:bg-inverse-primary transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.3)]">
+<span class="material-symbols-outlined text-[16px]" data-icon="add">add</span>
+                        New Load
+                    </button>
+</div>
+</div>
+<div class="flex gap-lg mt-md">
+<button class="font-label-sm text-primary border-b-2 border-primary pb-2 px-1">Dashboard</button>
+<button class="font-label-sm text-on-surface-variant hover:text-on-surface pb-2 px-1 transition-colors">Active Shipments</button>
+<button class="font-label-sm text-on-surface-variant hover:text-on-surface pb-2 px-1 transition-colors">Network Map</button>
+<button class="font-label-sm text-on-surface-variant hover:text-on-surface pb-2 px-1 transition-colors">Exceptions</button>
+</div>
+</div>
+<!-- Dashboard Content Canvas -->
+<div class="p-lg flex-1 overflow-y-auto">
+<!-- KPI Cards Bento -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-md mb-lg">
+<!-- KPI 1 -->
+<div class="bg-surface-container-high/50 border border-white/5 rounded-xl p-md flex flex-col justify-between hover:bg-surface-container-high transition-colors group relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex justify-between items-start mb-2 relative z-10">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Active Shipments</span>
+<span class="material-symbols-outlined text-primary text-[18px]" data-icon="local_shipping">local_shipping</span>
+</div>
+<div class="font-headline-lg text-on-surface relative z-10">1,248</div>
+<div class="font-label-sm text-secondary flex items-center gap-1 mt-1 relative z-10">
+<span class="material-symbols-outlined text-[14px]" data-icon="trending_up">trending_up</span>
+                        +12% vs yesterday
+                    </div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface-container-high/50 border border-white/5 rounded-xl p-md flex flex-col justify-between hover:bg-surface-container-high transition-colors group relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-error/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex justify-between items-start mb-2 relative z-10">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Delayed</span>
+<span class="material-symbols-outlined text-error text-[18px]" data-icon="warning">warning</span>
+</div>
+<div class="font-headline-lg text-error relative z-10">42</div>
+<div class="font-label-sm text-error/80 flex items-center gap-1 mt-1 relative z-10">
+<span class="material-symbols-outlined text-[14px]" data-icon="priority_high">priority_high</span>
+                        Needs attention
+                    </div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface-container-high/50 border border-white/5 rounded-xl p-md flex flex-col justify-between hover:bg-surface-container-high transition-colors group relative overflow-hidden">
+<div class="flex justify-between items-start mb-2 relative z-10">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Waiting Trucks</span>
+<span class="material-symbols-outlined text-tertiary text-[18px]" data-icon="rv_hookup">rv_hookup</span>
+</div>
+<div class="font-headline-lg text-on-surface relative z-10">18</div>
+<div class="font-label-sm text-on-surface-variant/70 flex items-center gap-1 mt-1 relative z-10">
+                        Across 3 facilities
+                    </div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-surface-container-high/50 border border-white/5 rounded-xl p-md flex flex-col justify-between hover:bg-surface-container-high transition-colors group relative overflow-hidden">
+<div class="flex justify-between items-start mb-2 relative z-10">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Available Docks</span>
+<span class="material-symbols-outlined text-secondary text-[18px]" data-icon="garage">garage</span>
+</div>
+<div class="flex items-end gap-2 relative z-10">
+<span class="font-headline-lg text-on-surface">6</span>
+<span class="font-title-md text-on-surface-variant pb-1">/24</span>
+</div>
+<div class="w-full bg-surface-container-lowest h-1.5 rounded-full mt-2 relative z-10 overflow-hidden">
+<div class="bg-secondary h-full rounded-full w-[25%]"></div>
+</div>
+</div>
+<!-- KPI 5 -->
+<div class="bg-surface-container-high/50 border border-white/5 rounded-xl p-md flex flex-col justify-between hover:bg-surface-container-high transition-colors group relative overflow-hidden">
+<div class="flex justify-between items-start mb-2 relative z-10">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Avg Delay</span>
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-[18px]" data-icon="schedule">schedule</span>
+</div>
+<div class="font-headline-lg text-on-surface relative z-10">1.2h</div>
+<div class="font-label-sm text-secondary flex items-center gap-1 mt-1 relative z-10">
+<span class="material-symbols-outlined text-[14px]" data-icon="trending_down">trending_down</span>
+                        -0.4h vs avg
+                    </div>
+</div>
+</div>
+<!-- Main Dashboard Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<!-- Left/Center Column (Wider) -->
+<div class="lg:col-span-2 flex flex-col gap-lg">
+<!-- Network Topology Chart Area (Mockup) -->
+<div class="bg-surface-container-high/40 border border-white/5 rounded-2xl p-md flex flex-col h-[400px] relative overflow-hidden">
+<div class="flex justify-between items-center mb-md z-10">
+<h2 class="font-title-md text-on-surface">Network Topology &amp; Flow</h2>
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<!-- Placeholder for visual graph -->
+<div class="flex-1 bg-surface-container-lowest/50 rounded-xl border border-white/5 relative flex items-center justify-center overflow-hidden">
+<!-- Abstract connection lines using raw svg placeholder -->
+<svg class="absolute inset-0 w-full h-full opacity-30" preserveaspectratio="none" viewbox="0 0 100 100">
+<path class="animate-pulse" d="M10,50 Q30,20 50,50 T90,50" fill="none" stroke="#2563eb" stroke-width="0.5"></path>
+<path d="M20,80 Q40,40 70,60 T95,30" fill="none" stroke="#4edea3" stroke-width="0.3"></path>
+<circle cx="10" cy="50" fill="#b4c5ff" r="1"></circle>
+<circle cx="50" cy="50" fill="#2563eb" r="1.5"></circle>
+<circle cx="90" cy="50" fill="#b4c5ff" r="1"></circle>
+<circle cx="20" cy="80" fill="#4edea3" r="1"></circle>
+<circle cx="70" cy="60" fill="#b4c5ff" r="1"></circle>
+<circle cx="95" cy="30" fill="#00a572" r="1.5"></circle>
+</svg>
+<div class="text-on-surface-variant/50 font-label-sm text-center">Interactive Graph Render Region<br/>(Live Flow Data)</div>
+</div>
+</div>
+<!-- Recent Activity Table -->
+<div class="bg-surface-container-high/40 border border-white/5 rounded-2xl p-md flex flex-col">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-title-md text-on-surface">Recent Activity</h2>
+<button class="text-primary font-label-sm hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-white/5">
+<th class="py-2 px-3 font-label-sm text-on-surface-variant uppercase tracking-wider w-1/4">Load ID</th>
+<th class="py-2 px-3 font-label-sm text-on-surface-variant uppercase tracking-wider w-1/4">Origin / Dest</th>
+<th class="py-2 px-3 font-label-sm text-on-surface-variant uppercase tracking-wider w-1/4">Status</th>
+<th class="py-2 px-3 font-label-sm text-on-surface-variant uppercase tracking-wider w-1/4 text-right">Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-3 px-3 font-body-md text-on-surface font-medium group-hover:text-primary transition-colors">LD-8892-CHI</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant">Chicago → Dallas</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-secondary/10 text-secondary font-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Arrived
+                                            </span>
+</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant text-right">10:42 AM</td>
+</tr>
+<tr class="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-3 px-3 font-body-md text-on-surface font-medium group-hover:text-primary transition-colors">LD-8891-NY</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant">New York → Atlanta</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/10 text-primary font-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> Loading
+                                            </span>
+</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant text-right">10:15 AM</td>
+</tr>
+<tr class="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-3 px-3 font-body-md text-on-surface font-medium group-hover:text-primary transition-colors">LD-8890-LA</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant">Los Angeles → Phoenix</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-error/10 text-error font-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> Delayed
+                                            </span>
+</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant text-right">09:30 AM</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-3 px-3 font-body-md text-on-surface font-medium group-hover:text-primary transition-colors">LD-8889-SEA</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant">Seattle → Denver</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-outline-variant/30 text-on-surface-variant font-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span> In Transit
+                                            </span>
+</td>
+<td class="py-3 px-3 font-body-md text-on-surface-variant text-right">08:45 AM</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Right Column (Side Panel & Utilization) -->
+<div class="flex flex-col gap-lg">
+<!-- Active Exceptions Feed -->
+<div class="bg-surface-container-high/40 border border-white/5 rounded-2xl flex flex-col h-[350px]">
+<div class="p-md border-b border-white/5 flex justify-between items-center">
+<h2 class="font-title-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+                                Active Exceptions
+                            </h2>
+<span class="bg-error/20 text-error text-xs font-bold px-2 py-0.5 rounded-full">3</span>
+</div>
+<div class="flex-1 overflow-y-auto p-2 space-y-2">
+<!-- Exception Item 1 -->
+<div class="p-3 bg-surface-container-highest/50 rounded-lg border-l-2 border-error hover:bg-surface-container-highest transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<div class="font-label-sm text-error font-bold">Weather Delay</div>
+<div class="text-[10px] text-on-surface-variant">12m ago</div>
+</div>
+<div class="font-body-md text-on-surface text-sm mb-2">Severe snowstorm on I-80 routing LD-7721. Est delay: 4hrs.</div>
+<div class="flex gap-2">
+<button class="text-[11px] bg-white/5 px-2 py-1 rounded text-on-surface hover:bg-white/10 transition-colors">Reroute</button>
+<button class="text-[11px] bg-white/5 px-2 py-1 rounded text-on-surface hover:bg-white/10 transition-colors">Notify Cust</button>
+</div>
+</div>
+<!-- Exception Item 2 -->
+<div class="p-3 bg-surface-container-highest/50 rounded-lg border-l-2 border-tertiary hover:bg-surface-container-highest transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<div class="font-label-sm text-tertiary font-bold">Equipment Failure</div>
+<div class="text-[10px] text-on-surface-variant">45m ago</div>
+</div>
+<div class="font-body-md text-on-surface text-sm mb-2">Reefer temp drop on LD-8002. Currently at 38°F (Target 34°F).</div>
+<div class="flex gap-2">
+<button class="text-[11px] bg-tertiary/20 text-tertiary px-2 py-1 rounded hover:bg-tertiary/30 transition-colors">Ping Driver</button>
+</div>
+</div>
+<!-- Exception Item 3 -->
+<div class="p-3 bg-surface-container-highest/50 rounded-lg border-l-2 border-primary hover:bg-surface-container-highest transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<div class="font-label-sm text-primary font-bold">Dock Congestion</div>
+<div class="text-[10px] text-on-surface-variant">1h ago</div>
+</div>
+<div class="font-body-md text-on-surface text-sm">Facility CHI-01 experiencing heavy volume. Wait times &gt;2hrs.</div>
+</div>
+</div>
+</div>
+<!-- Dock Utilization Chart -->
+<div class="bg-surface-container-high/40 border border-white/5 rounded-2xl p-md flex flex-col flex-1 min-h-[250px]">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-title-md text-on-surface">Dock Utilization</h2>
+<span class="font-label-sm text-on-surface-variant">CHI-01 Hub</span>
+</div>
+<div class="flex-1 flex items-end gap-2 pt-4 relative">
+<!-- Y-axis labels -->
+<div class="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[10px] text-on-surface-variant/50 pb-6 pr-2">
+<span>100%</span>
+<span>50%</span>
+<span>0%</span>
+</div>
+<!-- Bars area (shifted right to accommodate labels) -->
+<div class="flex-1 flex items-end gap-2 h-full ml-8 pb-6 border-b border-white/5 relative">
+<!-- Bar 1 -->
+<div class="flex-1 bg-surface-container-highest rounded-t-sm h-full relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-primary/80 rounded-t-sm transition-all duration-500 h-[85%] group-hover:bg-primary"></div>
+<div class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-on-surface-variant">08:00</div>
+</div>
+<!-- Bar 2 -->
+<div class="flex-1 bg-surface-container-highest rounded-t-sm h-full relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-primary/80 rounded-t-sm transition-all duration-500 h-[92%] group-hover:bg-primary"></div>
+<div class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-on-surface-variant">10:00</div>
+</div>
+<!-- Bar 3 -->
+<div class="flex-1 bg-surface-container-highest rounded-t-sm h-full relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-error/80 rounded-t-sm transition-all duration-500 h-[100%] group-hover:bg-error"></div>
+<div class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-on-surface-variant">12:00</div>
+</div>
+<!-- Bar 4 -->
+<div class="flex-1 bg-surface-container-highest rounded-t-sm h-full relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-primary/80 rounded-t-sm transition-all duration-500 h-[75%] group-hover:bg-primary"></div>
+<div class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-on-surface-variant">14:00</div>
+</div>
+<!-- Bar 5 (Current) -->
+<div class="flex-1 bg-surface-container-highest rounded-t-sm h-full relative group">
+<div class="absolute bottom-0 left-0 right-0 bg-secondary/80 rounded-t-sm transition-all duration-500 h-[45%] group-hover:bg-secondary"></div>
+<div class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-on-surface-variant font-bold text-on-surface">Now</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Enterprise Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#c3c6d7",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "surface-container-low": "#131b2e",
+                        "on-secondary": "#003824",
+                        "secondary-fixed": "#6ffbbe",
+                        "surface-dim": "#0b1326",
+                        "primary-container": "#2563eb",
+                        "on-tertiary": "#581e00",
+                        "on-background": "#dae2fd",
+                        "on-tertiary-container": "#ffede6",
+                        "error-container": "#93000a",
+                        "surface": "#0b1326",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "inverse-surface": "#dae2fd",
+                        "surface-bright": "#31394d",
+                        "outline": "#8d90a0",
+                        "secondary-container": "#00a572",
+                        "surface-container-high": "#222a3d",
+                        "background": "#0b1326",
+                        "on-primary": "#002a78",
+                        "surface-container": "#171f33",
+                        "secondary": "#4edea3",
+                        "on-secondary-fixed-variant": "#005236",
+                        "surface-tint": "#b4c5ff",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#ffdbcd",
+                        "tertiary-container": "#bc4800",
+                        "surface-variant": "#2d3449",
+                        "primary": "#b4c5ff",
+                        "tertiary": "#ffb596",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-primary-fixed": "#00174b",
+                        "surface-container-lowest": "#060e20",
+                        "primary-fixed": "#dbe1ff",
+                        "outline-variant": "#434655",
+                        "on-tertiary-fixed": "#360f00",
+                        "on-surface": "#dae2fd",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#2d3449",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "inverse-on-surface": "#283044",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-primary-container": "#eeefff",
+                        "on-error": "#690005",
+                        "inverse-primary": "#0053db",
+                        "on-secondary-container": "#00311f",
+                        "on-secondary-fixed": "#002113"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "16px",
+                        "base": "4px",
+                        "xl": "48px",
+                        "sm": "8px",
+                        "container-max": "1280px",
+                        "gutter": "24px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "title-md": ["Hanken Grotesk"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex items-center justify-center font-body-md selection:bg-primary-container selection:text-white">
+<main class="w-full min-h-screen grid grid-cols-1 md:grid-cols-2 relative">
+<!-- Left Side: Login Form -->
+<section class="flex flex-col justify-center items-center px-lg md:px-xl py-xl bg-surface relative z-10">
+<div class="w-full max-w-[400px]">
+<!-- Brand Anchor -->
+<div class="mb-12">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">hub</span>
+<h1 class="font-headline-lg text-headline-lg md:font-headline-lg md:text-headline-lg font-bold tracking-tight text-on-surface">SetuHaul AI</h1>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Enterprise Logistics Platform</p>
+</div>
+<!-- Form -->
+<form class="space-y-6">
+<div class="space-y-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider" for="email">Corporate Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">mail</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-3 pl-10 pr-4 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container focus:border-transparent transition-all font-body-md text-body-md placeholder:text-outline" id="email" placeholder="admin@enterprise.com" type="email"/>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between items-center">
+<label class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider" for="password">Access Token</label>
+<a class="font-label-sm text-label-sm text-primary hover:text-primary-fixed transition-colors" href="#">Recover Access</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">key</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-3 pl-10 pr-4 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container focus:border-transparent transition-all font-body-md text-body-md placeholder:text-outline" id="password" placeholder="••••••••" type="password"/>
+</div>
+</div>
+<div class="flex items-center">
+<input class="w-4 h-4 rounded border-outline-variant bg-surface-container-low text-primary-container focus:ring-primary-container focus:ring-offset-surface" id="remember" type="checkbox"/>
+<label class="ml-2 font-body-md text-body-md text-on-surface-variant" for="remember">Maintain active session</label>
+</div>
+<button class="w-full bg-primary-container text-white font-title-md text-title-md rounded-lg py-3 px-4 hover:bg-inverse-primary transition-colors flex items-center justify-center gap-2 group" type="button">
+                        Initialize Session
+                        <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</form>
+<div class="mt-12 pt-8 border-t border-outline-variant/30 text-center">
+<p class="font-label-sm text-label-sm text-outline">Protected by Enterprise Grade Encryption</p>
+</div>
+</div>
+</section>
+<!-- Right Side: Atmospheric Visuals -->
+<section class="hidden md:block relative bg-surface-container overflow-hidden">
+<!-- Background Image -->
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Professional enterprise background illustration for a logistics AI platform. Abstract 3D composition of modern warehouses, sleek semi-trucks, and glowing AI neural network nodes. Minimalist, clean white space, high-key lighting, soft blue and emerald accents. Vercel/Linear aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida/AP1WRLvHA9YAb6J6wFP0o2X3flYfGrB3jwiw2cOD5hc66vQM7YrG1BLBYuP2ikc4ILcXm5EyUU_10S5jx3P_9E8nBurlzOEwS3hg3HupKhyUoWRQUyeVclZQ1GbQ1bWs2yI7K0G4k2KqUK5OinlJIdHO3pBT9_rp9HhPMcX-Q5QlCFgLAHrE7u3sxjMjO2UgfmaurPcUIi2LkOHko3jKCpTc78WiKYqEhD_p4YZOvok_26Tr0SYjOu4WZA6-zSI');">
+<!-- Overlay gradient to ensure text readability if needed -->
+<div class="absolute inset-0 bg-gradient-to-l from-transparent to-surface/80"></div>
+</div>
+<!-- Glassmorphic Overlay Cards -->
+<div class="absolute inset-0 flex flex-col justify-center items-end p-xl pr-24 gap-6 pointer-events-none">
+<!-- Metric Card 1 -->
+<div class="glass-panel p-md rounded-xl w-64 shadow-lg transform translate-x-0 transition-transform duration-700 ease-out hover:-translate-x-2 pointer-events-auto">
+<div class="flex items-center gap-3 mb-2">
+<div class="p-2 rounded-lg bg-secondary/10">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">speed</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Network Efficiency</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-on-surface">98.4%</span>
+<span class="font-label-sm text-label-sm text-secondary flex items-center">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+                            +1.2%
+                        </span>
+</div>
+</div>
+<!-- Metric Card 2 -->
+<div class="glass-panel p-md rounded-xl w-64 shadow-lg transform translate-x-8 transition-transform duration-700 ease-out hover:translate-x-6 pointer-events-auto">
+<div class="flex items-center gap-3 mb-2">
+<div class="p-2 rounded-lg bg-primary/10">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Active Fleet</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-on-surface">2,419</span>
+<span class="font-label-sm text-label-sm text-outline">units online</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body></html>
