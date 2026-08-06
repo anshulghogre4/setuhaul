@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Integrated Login System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#867461",
+                        "on-tertiary-fixed": "#261818",
+                        "surface-bright": "#fff8f7",
+                        "surface-tint": "#855300",
+                        "tertiary": "#6d5a59",
+                        "on-background": "#231918",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#d8c3ad",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "surface-container-high": "#f7e4e2",
+                        "tertiary-fixed-dim": "#dac1c0",
+                        "primary-container": "#f59e0b",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#f1dedc",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#ffb95f",
+                        "surface-variant": "#f1dedc",
+                        "primary": "#855300",
+                        "on-primary-container": "#613b00",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#40000c",
+                        "on-tertiary-container": "#513f3f",
+                        "surface": "#fff8f7",
+                        "on-primary-fixed": "#2a1700",
+                        "surface-container": "#fdeae8",
+                        "on-secondary-container": "#fffbff",
+                        "on-surface-variant": "#534434",
+                        "secondary": "#ba0035",
+                        "inverse-surface": "#392e2d",
+                        "surface-container-low": "#fff0ef",
+                        "background": "#fff8f7",
+                        "secondary-fixed": "#ffdada",
+                        "on-primary-fixed-variant": "#653e00",
+                        "tertiary-container": "#c4abab",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#e8d6d4",
+                        "on-tertiary-fixed-variant": "#554242",
+                        "inverse-on-surface": "#ffedeb",
+                        "primary-fixed-dim": "#ffb95f",
+                        "on-surface": "#231918",
+                        "primary-fixed": "#ffddb8",
+                        "on-secondary-fixed-variant": "#920028",
+                        "tertiary-fixed": "#f7dcdc",
+                        "secondary-container": "#e21e49"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "2xl": "1rem"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "unit": "4px",
+                        "margin-desktop": "40px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "gutter": "24px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Geist"],
+                        "mono-sm": ["Geist Mono"],
+                        "body-lg": ["Geist"],
+                        "body-md": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "label-md": ["Geist"],
+                        "display-lg": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+                        "mono-sm": ["13px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel-dark {
+            background: rgba(43, 30, 30, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(245, 158, 11, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(45, 30, 30, 0.37);
+        }
+        .bg-obsidian-terracotta {
+            background-color: #1A1212;
+        }
+        .btn-primary-dark {
+            background-color: #E11D48;
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+        .btn-primary-dark:hover {
+            box-shadow: 0 0 12px rgba(225, 29, 72, 0.5);
+            transform: translateY(-1px);
+        }
+        .input-dark {
+            background-color: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(216, 195, 173, 0.2);
+            color: #ffffff;
+        }
+        .input-dark:focus {
+            border-color: #F59E0B;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-obsidian-terracotta text-on-surface h-screen flex overflow-hidden antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Split Screen Layout -->
+<div class="flex w-full h-full">
+<!-- Left Side: Image/Map -->
+<div class="hidden lg:flex w-1/2 relative bg-surface-container-low overflow-hidden">
+<img class="absolute inset-0 w-full h-full object-cover opacity-90" data-alt="A sophisticated, high-tech digital logistics map displayed on a transparent glass interface in a modern, luxurious executive office. The map is rendered in warm terracotta and gold neon lines, showing global supply chain routes, warehouse nodes, and data widgets floating above the dark wood desk. The lighting is cinematic, warm, and atmospheric, embodying an elite enterprise intelligence aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtiTFsGWxRCYFYlP-vrDYp-jG38Z5O4wllKlKF9SkV4EgG8ERS1uv-_YgIQ13ge1yS1b6ihxUZOMlf5cgQszYz3W_zddP2Pj7VtwaHCJZif7TcrLdJJhJdGPH5pwYEwODZZshuWomGnB7JvbVcw6DkZrgnGurs_G5Lk-bqDK8-weNLhu_7Tb5f6lJF2XJJ4VawQahTQf0V73Yk_Wt3QItCiN8-P7JFQ5m_fA9bzRz3sciFxB34wgJUmA"/>
+<!-- Ambient Gradient Overlay for depth -->
+<div class="absolute inset-0 bg-gradient-to-r from-transparent to-[#1A1212] opacity-80 pointer-events-none"></div>
+</div>
+<!-- Right Side: Login Panel -->
+<div class="w-full lg:w-1/2 flex flex-col justify-center items-center px-margin-mobile md:px-margin-desktop relative z-10">
+<div class="w-full max-w-md glass-panel-dark rounded-2xl p-stack-lg relative overflow-hidden">
+<!-- Decorative subtle inner glow -->
+<div class="absolute inset-0 pointer-events-none rounded-2xl ring-1 ring-inset ring-white/5"></div>
+<!-- Header -->
+<div class="mb-stack-lg text-center">
+<h1 class="font-headline-lg text-headline-lg text-white mb-unit tracking-tight">SetuHaul AI</h1>
+<p class="font-label-md text-label-md text-outline-variant">Enterprise Logistics Intelligence</p>
+</div>
+<!-- Login Form -->
+<form class="space-y-stack-md relative z-10" onsubmit="event.preventDefault();">
+<div>
+<label class="block font-label-md text-label-md text-outline-variant mb-unit" for="email">Corporate ID</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-tertiary-fixed-dim" style="font-variation-settings: 'FILL' 0;">badge</span>
+<input class="w-full pl-10 pr-4 py-3 rounded-lg input-dark font-body-md text-body-md transition-all duration-200" id="email" name="email" placeholder="operator@setuhaul.com" required="" type="email"/>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-unit">
+<label class="block font-label-md text-label-md text-outline-variant" for="password">Access Code</label>
+<a class="font-label-md text-label-md text-primary-fixed-dim hover:text-inverse-primary transition-colors" href="#">Recover</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-tertiary-fixed-dim" style="font-variation-settings: 'FILL' 0;">key</span>
+<input class="w-full pl-10 pr-4 py-3 rounded-lg input-dark font-body-md text-body-md transition-all duration-200" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+</div>
+</div>
+<div class="pt-stack-sm">
+<button class="w-full py-3 px-4 rounded-lg btn-primary-dark font-label-md text-label-md font-semibold flex items-center justify-center gap-2" type="submit">
+<span>Initialize Session</span>
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">arrow_forward</span>
+</button>
+</div>
+<div class="relative flex items-center py-stack-sm">
+<div class="flex-grow border-t border-outline/20"></div>
+<span class="flex-shrink-0 mx-4 text-tertiary font-mono-sm text-mono-sm">OR</span>
+<div class="flex-grow border-t border-outline/20"></div>
+</div>
+<button class="w-full py-3 px-4 rounded-lg border border-outline-variant/30 hover:bg-white/5 transition-colors flex items-center justify-center gap-3 text-white font-label-md text-label-md" type="button">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">fingerprint</span>
+<span>Biometric Verification</span>
+</button>
+</form>
+<!-- Footer Text -->
+<div class="mt-stack-lg text-center border-t border-outline/20 pt-stack-md">
+<p class="font-mono-sm text-mono-sm text-tertiary-fixed-dim">
+                        Powered by Google Gemini | Built with LangGraph
+                    </p>
+</div>
+</div>
+</div>
+</div>
+</body></html>
