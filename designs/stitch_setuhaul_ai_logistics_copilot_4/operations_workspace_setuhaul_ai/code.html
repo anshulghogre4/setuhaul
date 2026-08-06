@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Operations Workspace - SETUHAUL AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error": "#ba1a1a",
+                    "surface-tint": "#1953d5",
+                    "tertiary-fixed-dim": "#b9c6e7",
+                    "background": "#f8f9ff",
+                    "on-primary-container": "#fefbff",
+                    "outline": "#737686",
+                    "surface": "#f8f9ff",
+                    "on-secondary-fixed-variant": "#4918c8",
+                    "tertiary-container": "#687592",
+                    "on-tertiary": "#ffffff",
+                    "primary-fixed": "#dbe1ff",
+                    "on-surface": "#121c2a",
+                    "primary": "#1351d3",
+                    "inverse-surface": "#27313f",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary-fixed": "#d7e2ff",
+                    "surface-bright": "#f8f9ff",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#3a4761",
+                    "on-primary-fixed-variant": "#003dab",
+                    "secondary-fixed-dim": "#cabeff",
+                    "tertiary": "#4f5c78",
+                    "on-secondary-container": "#fffbff",
+                    "surface-container": "#e6eeff",
+                    "surface-container-high": "#dee9fc",
+                    "primary-container": "#3b6bed",
+                    "primary-fixed-dim": "#b5c4ff",
+                    "inverse-primary": "#b5c4ff",
+                    "outline-variant": "#c3c5d7",
+                    "surface-variant": "#d9e3f6",
+                    "on-error": "#ffffff",
+                    "surface-container-highest": "#d9e3f6",
+                    "on-secondary": "#ffffff",
+                    "secondary": "#5f3add",
+                    "on-background": "#121c2a",
+                    "surface-container-low": "#eff4ff",
+                    "on-tertiary-fixed": "#0d1b34",
+                    "on-secondary-fixed": "#1c0062",
+                    "secondary-container": "#7857f8",
+                    "secondary-fixed": "#e6deff",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-container": "#fefcff",
+                    "on-surface-variant": "#434654",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d0dbed",
+                    "on-primary-fixed": "#00174d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-desktop": "32px",
+                    "md": "16px",
+                    "margin-mobile": "16px",
+                    "xl": "32px",
+                    "container-max": "1440px",
+                    "gutter": "24px",
+                    "base": "4px",
+                    "lg": "24px",
+                    "xxl": "48px",
+                    "xs": "4px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "headline-lg-mobile": [
+                            "Inter"
+                    ],
+                    "code": [
+                            "jetbrainsMono"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "code": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #EEF2F7;
+        }
+        
+        /* Glassmorphism utility */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 20px -2px rgba(45, 58, 84, 0.05);
+        }
+        
+        .glass-card:hover {
+            box-shadow: 0 12px 40px -4px rgba(45, 58, 84, 0.12);
+            transition: all 0.3s ease;
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #1351d3, #5f3add);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Ambient subtle grid background */
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(0,0,0,0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.02) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md bg-grid min-h-screen flex antialiased">
+<!-- Background Animation Layer -->
+<div class="fixed inset-0 z-[-1] pointer-events-none opacity-40 mix-blend-multiply">
+<!-- STITCH_SHADER_START:ANIMATION_1 class="absolute inset-0 w-full h-full" -->
+<div class="absolute inset-0 w-full h-full" style="display:block;">
+<canvas id="shader-canvas-ANIMATION_1" style="display:block;width:100%;height:100%"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_1');
+
+  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.
+  // This fires on initial layout and whenever the element is resized.
+  function syncSize() {
+    const w = canvas.clientWidth  || 1280;
+    const h = canvas.clientHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+varying vec2 v_texCoord;
+
+float grid(vec2 uv, float res) {
+    vec2 grid = fract(uv * res);
+    return 1.0 - smoothstep(0.0, 0.02, min(grid.x, grid.y));
+}
+
+float network(vec2 uv, float t) {
+    float n = 0.0;
+    for(int i = 0; i < 5; i++) {
+        float fi = float(i);
+        vec2 p = sin(vec2(1.2, 1.5) * t * (0.1 + fi * 0.1) + fi * 2.0) * 0.5 + 0.5;
+        float d = distance(uv, p);
+        n += smoothstep(0.2, 0.0, d) * 0.3;
+    }
+    return n;
+}
+
+void main() {
+    vec2 uv = v_texCoord;
+    vec2 center = uv - 0.5;
+    center.x *= u_resolution.x / u_resolution.y;
+
+    // Base sophisticated slate-blue gradient
+    vec3 color1 = vec3(0.933, 0.949, 0.969); // #EEF2F7
+    vec3 color2 = vec3(0.973, 0.98, 0.988);  // #F8FAFC
+    vec3 color = mix(color1, color2, uv.y + sin(u_time * 0.2) * 0.1);
+
+    // Subtle grid texture
+    float g = grid(uv, 40.0) * 0.02;
+    color += g;
+
+    // AI Neural Network patterns (very subtle)
+    float net = network(uv, u_time * 0.5);
+    color = mix(color, vec3(0.31, 0.49, 1.0), net * 0.03); // Primary #4F7DFF tint
+
+    // Soft glowing particles/blobs
+    float blob = smoothstep(0.8, 0.0, length(center - sin(u_time * 0.1) * 0.2));
+    color += blob * vec3(0.486, 0.361, 0.988) * 0.02; // Secondary #7C5CFC tint
+
+    gl_FragColor = vec4(color, 1.0);
+}`;
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).
+  // Shaders that need normalized coords should use: u_mouse / u_resolution.
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  window.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      mouse.x = nx * canvas.width;
+      mouse.y = ny * canvas.height;
+    }
+  });
+
+  function render(t) {
+    if (typeof ResizeObserver === 'undefined') syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+</script>
+</div>
+<!-- STITCH_SHADER_END:ANIMATION_1 -->
+</div>
+<!-- SideNavBar (JSON Component) -->
+<nav class="h-full w-64 fixed left-0 top-0 bg-inverse-surface shadow-md flex flex-col h-full p-lg overflow-y-auto z-50">
+<!-- Brand Logo -->
+<div class="flex items-center gap-3 mb-10 mt-2">
+<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">hexagon</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary-fixed text-white tracking-tight">Prism Logic</h1>
+<p class="font-label-md text-label-md text-surface-variant/70 uppercase tracking-widest mt-0.5">Enterprise Logistics</p>
+</div>
+</div>
+<!-- CTA -->
+<button class="w-full mb-8 py-3 px-4 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-label-md text-label-md shadow-md hover:shadow-lg transition-all duration-200 ease-in-out hover:scale-[1.02] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+            New Shipment
+        </button>
+<!-- Main Navigation -->
+<div class="flex-1 space-y-2">
+<p class="font-label-md text-label-md text-surface-variant/50 uppercase tracking-wider mb-4 px-2">Workspaces</p>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+                AI Copilot
+            </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-primary-fixed bg-primary-container/20 font-bold transition-all duration-200 ease-in-out hover:scale-[1.02]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">conveyor_belt</span>
+                Operations
+            </a>
+</div>
+<!-- Footer Navigation -->
+<div class="mt-auto space-y-1 pt-6 border-t border-white/10">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined">help</span>
+                Support
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 flex flex-col min-h-screen relative">
+<!-- TopNavBar (JSON Component) -->
+<header class="docked full-width top-0 sticky z-40 bg-surface/70 backdrop-blur-xl border-b border-white/20 shadow-sm flex justify-between items-center w-full px-margin-desktop h-16">
+<div class="flex items-center gap-6">
+<!-- Search Bar -->
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">search</span>
+<input class="w-80 pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-sm font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search shipments, drivers, locations..." type="text"/>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="hidden lg:flex items-center gap-8">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-body-md text-body-md mt-1" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors font-body-md text-body-md mt-1" href="#">Analytics</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors font-body-md text-body-md mt-1" href="#">Fleet</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors font-body-md text-body-md mt-1" href="#">History</a>
+</nav>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-variant/30 transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-variant/30 transition-colors">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<div class="w-9 h-9 rounded-full bg-primary-container overflow-hidden ml-2 cursor-pointer border border-primary/20 shadow-sm">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a logistics manager in a high-tech control room environment. Soft, modern lighting, sharp focus, corporate tech aesthetic, clean and bright." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKxFwspaVZHy3rODEAJkV9p3r1-b7e4hZzpR3jzmhIhUMin0eunncI3zwKtQ3OrEephvfGZvSIWxKMfVxPfM1oRTv2eCgOSimEsmr5gWprhmvKdeCxTOxeIcdM2rfAYeLkfc21YzwMP52r8YSq1awhtz3WiEU7snyf3gw5eZzMswtW4KslW3029M17EQzL8fvXuN4GiFt9IP9DxGYie8JAunVX9cjzOfKVUbnVjUKrbrcUXSz9-ZYG"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-margin-desktop flex-1 space-y-gutter w-full max-w-container-max mx-auto">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-xl">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tight mb-1">Operations Workspace</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Real-time logistics overview and active anomalies.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface-container border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+                        Today
+                    </button>
+<button class="px-4 py-2 bg-white border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                        Filters
+                    </button>
+</div>
+</div>
+<!-- Contextual Tabs -->
+<div class="flex gap-2 border-b border-outline-variant/30 mb-lg">
+<button class="px-4 py-3 font-body-md text-body-md font-semibold text-primary border-b-2 border-primary">Dashboard Overview</button>
+<button class="px-4 py-3 font-body-md text-body-md font-medium text-on-surface-variant hover:text-on-surface transition-colors">Active Shipments</button>
+<button class="px-4 py-3 font-body-md text-body-md font-medium text-on-surface-variant hover:text-on-surface transition-colors">Appointments</button>
+<button class="px-4 py-3 font-body-md text-body-md font-medium text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+                    Driver Exceptions
+                    <span class="bg-error/10 text-error px-2 py-0.5 rounded-full font-label-md text-[10px]">3</span>
+</button>
+</div>
+<!-- KPI Cards Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-xl">
+<!-- KPI 1 -->
+<div class="glass-card rounded-[24px] p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">local_shipping</span>
+</div>
+<span class="flex items-center text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-xs mr-1">trending_up</span> +12%
+                        </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-1">Active Shipments</p>
+<h3 class="font-display-lg text-display-lg text-on-surface tracking-tight">1,284</h3>
+</div>
+<!-- KPI 2 -->
+<div class="glass-card rounded-[24px] p-6 relative overflow-hidden group border-error/20">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-error/5 rounded-full blur-2xl group-hover:bg-error/10 transition-colors"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-error/10 flex items-center justify-center text-error">
+<span class="material-symbols-outlined">warning</span>
+</div>
+<span class="flex items-center text-sm font-medium text-error bg-error/10 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-xs mr-1">trending_up</span> +3
+                        </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-1">Delayed Shipments</p>
+<h3 class="font-display-lg text-display-lg text-error tracking-tight">24</h3>
+</div>
+<!-- KPI 3 -->
+<div class="glass-card rounded-[24px] p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-secondary/5 rounded-full blur-2xl group-hover:bg-secondary/10 transition-colors"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">hourglass_empty</span>
+</div>
+<span class="flex items-center text-sm font-medium text-on-surface-variant bg-surface-variant px-2 py-1 rounded-md">
+                            Normal
+                        </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-1">Waiting Trucks</p>
+<h3 class="font-display-lg text-display-lg text-on-surface tracking-tight">8</h3>
+</div>
+<!-- KPI 4 -->
+<div class="glass-card rounded-[24px] p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-tertiary/5 rounded-full blur-2xl group-hover:bg-tertiary/10 transition-colors"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">warehouse</span>
+</div>
+<div class="w-16 h-2 bg-surface-variant rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-tertiary w-[82%]"></div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-1">Dock Utilization</p>
+<h3 class="font-display-lg text-display-lg text-on-surface tracking-tight">82%</h3>
+</div>
+</div>
+<!-- Main Data Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Chart Area (Spans 2 columns) -->
+<div class="lg:col-span-2 glass-card rounded-[24px] p-6 flex flex-col min-h-[400px]">
+<div class="flex justify-between items-center mb-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">ETA Accuracy Trend</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Predicted vs Actual arrival times across network.</p>
+</div>
+<button class="p-2 hover:bg-surface-variant/50 rounded-lg text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<!-- Faux Chart Area - Using CSS gradients to simulate data lines -->
+<div class="flex-1 relative border-l border-b border-outline-variant/30 mt-4 ml-6 pb-6 pt-4 px-2">
+<!-- Y-Axis Labels -->
+<div class="absolute -left-8 bottom-6 text-xs text-on-surface-variant">0</div>
+<div class="absolute -left-10 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant">50%</div>
+<div class="absolute -left-10 top-4 text-xs text-on-surface-variant">100%</div>
+<!-- Grid lines -->
+<div class="absolute left-0 right-0 top-1/2 border-t border-dashed border-outline-variant/20"></div>
+<div class="absolute left-0 right-0 top-4 border-t border-dashed border-outline-variant/20"></div>
+<!-- Data Visualization -->
+<div class="absolute bottom-6 left-0 right-0 top-4 flex items-end px-4 gap-2">
+<!-- SVG for smooth line chart simulation -->
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Predictive Line (AI) -->
+<path class="opacity-70" d="M0,80 Q20,60 40,70 T80,40 T100,20" fill="none" stroke="#5f3add" stroke-dasharray="4,4" stroke-width="3"></path>
+<!-- Actual Line -->
+<path d="M0,85 Q25,75 50,50 T75,45 T100,30" fill="none" stroke="#1351d3" stroke-linecap="round" stroke-width="4"></path>
+<!-- Data points -->
+<circle class="shadow-sm" cx="50" cy="50" fill="#1351d3" r="4"></circle>
+<circle class="shadow-sm" cx="75" cy="45" fill="#1351d3" r="4"></circle>
+<circle class="shadow-sm" cx="100" cy="30" fill="#1351d3" r="4"></circle>
+<!-- Tooltip area simulation -->
+<line stroke="#c3c5d7" stroke-dasharray="2,2" stroke-width="1" x1="75" x2="75" y1="45" y2="100"></line>
+</svg>
+</div>
+<!-- X-Axis Labels -->
+<div class="absolute -bottom-6 left-4 text-xs text-on-surface-variant">Mon</div>
+<div class="absolute -bottom-6 left-1/4 text-xs text-on-surface-variant">Tue</div>
+<div class="absolute -bottom-6 left-2/4 text-xs text-on-surface-variant">Wed</div>
+<div class="absolute -bottom-6 left-3/4 text-xs text-on-surface-variant">Thu</div>
+<div class="absolute -bottom-6 right-4 text-xs text-on-surface-variant">Fri</div>
+</div>
+<!-- Legend -->
+<div class="flex items-center justify-center gap-6 mt-8">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">Actual ETA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-secondary opacity-70 border border-secondary border-dashed"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">AI Prediction</span>
+</div>
+</div>
+</div>
+<!-- Recent Activities List -->
+<div class="glass-card rounded-[24px] p-6 flex flex-col h-[400px]">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md text-on-surface">Recent Activity</h3>
+<a class="font-label-md text-label-md text-primary hover:underline" href="#">View All</a>
+</div>
+<div class="flex-1 overflow-y-auto pr-2 space-y-4">
+<!-- Activity Item 1 -->
+<div class="flex gap-4 p-3 hover:bg-surface-variant/30 rounded-xl transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-full bg-error/10 flex flex-shrink-0 items-center justify-center text-error mt-1">
+<span class="material-symbols-outlined text-sm">warning</span>
+</div>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface font-medium group-hover:text-primary transition-colors">Route Deviation Alert</p>
+<p class="font-body-sm text-[13px] text-on-surface-variant line-clamp-1">Truck #8492 deviated from optimal route. ETA adjusted by +45m.</p>
+<p class="font-label-md text-[11px] text-outline mt-1">2 mins ago</p>
+</div>
+</div>
+<!-- Activity Item 2 -->
+<div class="flex gap-4 p-3 hover:bg-surface-variant/30 rounded-xl transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex flex-shrink-0 items-center justify-center text-primary mt-1">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+</div>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface font-medium group-hover:text-primary transition-colors">Booking Confirmed</p>
+<p class="font-body-sm text-[13px] text-on-surface-variant line-clamp-1">PO-99238 confirmed for pickup at Chicago Hub.</p>
+<p class="font-label-md text-[11px] text-outline mt-1">14 mins ago</p>
+</div>
+</div>
+<!-- Activity Item 3 -->
+<div class="flex gap-4 p-3 hover:bg-surface-variant/30 rounded-xl transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-full bg-secondary/10 flex flex-shrink-0 items-center justify-center text-secondary mt-1">
+<span class="material-symbols-outlined text-sm">update</span>
+</div>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface font-medium group-hover:text-primary transition-colors">ETA Update: Early Arrival</p>
+<p class="font-body-sm text-[13px] text-on-surface-variant line-clamp-1">Shipment SHP-001 arriving 2 hours ahead of schedule.</p>
+<p class="font-label-md text-[11px] text-outline mt-1">1 hour ago</p>
+</div>
+</div>
+<!-- Activity Item 4 -->
+<div class="flex gap-4 p-3 hover:bg-surface-variant/30 rounded-xl transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-full bg-tertiary/10 flex flex-shrink-0 items-center justify-center text-tertiary mt-1">
+<span class="material-symbols-outlined text-sm">person</span>
+</div>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface font-medium group-hover:text-primary transition-colors">Driver Reassigned</p>
+<p class="font-body-sm text-[13px] text-on-surface-variant line-clamp-1">Mike T. reassigned to route NY-BOS due to hours of service.</p>
+<p class="font-label-md text-[11px] text-outline mt-1">2 hours ago</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
