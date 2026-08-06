@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline": "#8d90a0",
+                      "error": "#ffb4ab",
+                      "on-tertiary": "#581e00",
+                      "surface-container-lowest": "#000e22",
+                      "surface-bright": "#2b3a50",
+                      "surface": "#041428",
+                      "secondary-fixed": "#6ffbbe",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "on-secondary": "#003824",
+                      "on-secondary-fixed": "#002113",
+                      "primary": "#b4c5ff",
+                      "inverse-surface": "#d4e3ff",
+                      "inverse-primary": "#0053db",
+                      "inverse-on-surface": "#223146",
+                      "background": "#041428",
+                      "on-primary-fixed": "#00174b",
+                      "on-error-container": "#ffdad6",
+                      "secondary": "#4edea3",
+                      "on-tertiary-container": "#ffede6",
+                      "outline-variant": "#434655",
+                      "on-primary-container": "#eeefff",
+                      "on-surface": "#d4e3ff",
+                      "on-background": "#d4e3ff",
+                      "surface-container-high": "#1b2b40",
+                      "surface-tint": "#b4c5ff",
+                      "on-primary": "#002a78",
+                      "secondary-container": "#00a572",
+                      "primary-container": "#2563eb",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "error-container": "#93000a",
+                      "surface-container-low": "#0c1c30",
+                      "primary-fixed": "#dbe1ff",
+                      "tertiary": "#ffb596",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "tertiary-fixed": "#ffdbcd",
+                      "tertiary-container": "#bc4800",
+                      "on-secondary-container": "#00311f",
+                      "surface-container": "#112035",
+                      "surface-variant": "#27354b",
+                      "surface-container-highest": "#27354b",
+                      "on-surface-variant": "#c3c6d7",
+                      "on-tertiary-fixed": "#360f00",
+                      "on-secondary-fixed-variant": "#005236",
+                      "surface-dim": "#041428",
+                      "secondary-fixed-dim": "#4edea3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "0.5rem",
+                      "unit": "4px",
+                      "sm": "1rem",
+                      "margin-desktop": "40px",
+                      "md": "1.5rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "margin-mobile": "16px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-sm": [
+                              "Hanken Grotesk"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-sm": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-md": [
+                              "13px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #041428;
+            color: #d4e3ff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .glass-panel {
+            background: rgba(0, 20, 43, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+        .input-inset {
+            background: #000e22;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .input-inset:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.2);
+            outline: none;
+        }
+        .btn-glow {
+            transition: all 0.3s ease;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
+        }
+        .ai-glow-text {
+            text-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 md:p-0">
+<div class="w-full max-w-[1440px] h-auto min-h-screen md:h-screen flex flex-col md:flex-row overflow-hidden relative z-10">
+<!-- Left Column: Login Form -->
+<div class="w-full md:w-1/2 lg:w-[45%] xl:w-[40%] flex flex-col justify-center p-8 md:p-16 lg:p-24 relative z-20 bg-background">
+<div class="max-w-md w-full mx-auto">
+<!-- Header -->
+<div class="mb-12">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-primary-container text-4xl" style="font-variation-settings: 'FILL' 1;">
+                            precision_manufacturing
+                        </span>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">SetuHaul AI</h1>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2">Command Access</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Authenticate to enter the logistics command center.</p>
+</div>
+<!-- Form -->
+<form action="#" class="space-y-6" method="POST">
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="email">OPERATOR ID / EMAIL</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 transform -translate-y-1/2 text-outline-variant">
+                                person
+                            </span>
+<input class="input-inset w-full rounded-lg py-3 pl-12 pr-4 font-label-md text-label-md text-on-surface placeholder:text-outline-variant focus:ring-0" id="email" name="email" placeholder="operator@setuhaul.ai" required="" type="email"/>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="password">SECURITY KEY</label>
+<a class="font-label-sm text-label-sm text-primary hover:text-primary-container transition-colors" href="#">FORGOT KEY?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 transform -translate-y-1/2 text-outline-variant">
+                                lock
+                            </span>
+<input class="input-inset w-full rounded-lg py-3 pl-12 pr-4 font-label-md text-label-md text-on-surface placeholder:text-outline-variant focus:ring-0" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+</div>
+</div>
+<div class="flex items-center justify-between mt-6">
+<div class="flex items-center">
+<input class="h-4 w-4 rounded border-outline-variant bg-surface-container-lowest text-primary-container focus:ring-primary-container focus:ring-offset-background" id="remember-me" name="remember-me" type="checkbox"/>
+<label class="ml-2 block font-body-sm text-body-sm text-on-surface-variant" for="remember-me">
+                                Maintain Secure Connection
+                            </label>
+</div>
+</div>
+<button class="w-full btn-glow bg-primary-container text-white rounded-lg py-3 px-4 font-headline-sm text-headline-sm flex justify-center items-center gap-2 mt-8" type="submit">
+                        Initialize Session
+                        <span class="material-symbols-outlined">
+                            arrow_forward
+                        </span>
+</button>
+</form>
+<div class="mt-8 text-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                        Secure connection via SetuHaul AI Core v4.2
+                    </p>
+</div>
+</div>
+</div>
+<!-- Right Column: 3D Illustration & AI Insights -->
+<div class="hidden md:flex md:w-1/2 lg:w-[55%] xl:w-[60%] relative bg-surface-container-lowest items-center justify-center p-12 overflow-hidden">
+<!-- Background Image -->
+<div class="absolute inset-0 z-0">
+<img alt="" class="w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida/AP1WRLvHA9YAb6J6wFP0o2X3flYfGrB3jwiw2cOD5hc66vQM7YrG1BLBYuP2ikc4ILcXm5EyUU_10S5jx3P_9E8nBurlzOEwS3hg3HupKhyUoWRQUyeVclZQ1GbQ1bWs2yI7K0G4k2KqUK5OinlJIdHO3pBT9_rp9HhPMcX-Q5QlCFgLAHrE7u3sxjMjO2UgfmaurPcUIi2LkOHko3jKCpTc78WiKYqEhD_p4YZOvok_26Tr0SYjOu4WZA6-zSI"/>
+<!-- Gradient Overlay for depth -->
+<div class="absolute inset-0 bg-gradient-to-r from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80"></div>
+</div>
+<!-- AI Insight Overlay Cards (Glassmorphism) -->
+<div class="relative z-10 w-full max-w-2xl grid grid-cols-2 gap-6">
+<!-- Insight Card 1 -->
+<div class="glass-panel rounded-xl p-6 col-span-2 md:col-span-1 transform translate-y-8">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-8 h-8 rounded-full bg-secondary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">
+                                trending_up
+                            </span>
+</div>
+<h3 class="font-label-md text-label-md text-secondary tracking-widest">NETWORK EFFICIENCY</h3>
+</div>
+<div class="font-display-lg text-display-lg text-on-surface mb-1">98.4%</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Routing optimization running optimally. Predictive models anticipate zero delays across NA logistics grid.</p>
+</div>
+<!-- Insight Card 2 -->
+<div class="glass-panel rounded-xl p-6 col-span-2 md:col-span-1 transform -translate-y-4">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">
+                                local_shipping
+                            </span>
+</div>
+<h3 class="font-label-md text-label-md text-primary tracking-widest">ACTIVE FLEET</h3>
+</div>
+<div class="font-display-lg text-display-lg text-on-surface mb-1">2,419</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Autonomous units deployed. Real-time telemetry connection stable.</p>
+</div>
+<!-- Insight Card 3 (Wide) -->
+<div class="glass-panel rounded-xl p-6 col-span-2 mt-4 relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary-fixed-dim">
+                                memory
+                            </span>
+<span class="font-label-md text-label-md text-on-surface-variant">AI CORE STATUS</span>
+</div>
+<span class="px-2 py-1 rounded text-[10px] font-bold bg-secondary-container/20 text-secondary border border-secondary/20">ONLINE</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface">Neural routing matrix updated 2s ago. Ready for command input.</p>
+</div>
+</div>
+</div>
+</div>
+</body></html>

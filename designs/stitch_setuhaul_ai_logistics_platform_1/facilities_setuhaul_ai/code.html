@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SetuHaul AI - Facilities Network</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline": "#8d90a0",
+                      "error": "#ffb4ab",
+                      "on-tertiary": "#581e00",
+                      "surface-container-lowest": "#000e22",
+                      "surface-bright": "#2b3a50",
+                      "surface": "#041428",
+                      "secondary-fixed": "#6ffbbe",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "on-secondary": "#003824",
+                      "on-secondary-fixed": "#002113",
+                      "primary": "#b4c5ff",
+                      "inverse-surface": "#d4e3ff",
+                      "inverse-primary": "#0053db",
+                      "inverse-on-surface": "#223146",
+                      "background": "#041428",
+                      "on-primary-fixed": "#00174b",
+                      "on-error-container": "#ffdad6",
+                      "secondary": "#4edea3",
+                      "on-tertiary-container": "#ffede6",
+                      "outline-variant": "#434655",
+                      "on-primary-container": "#eeefff",
+                      "on-surface": "#d4e3ff",
+                      "on-background": "#d4e3ff",
+                      "surface-container-high": "#1b2b40",
+                      "surface-tint": "#b4c5ff",
+                      "on-primary": "#002a78",
+                      "secondary-container": "#00a572",
+                      "primary-container": "#2563eb",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "error-container": "#93000a",
+                      "surface-container-low": "#0c1c30",
+                      "primary-fixed": "#dbe1ff",
+                      "tertiary": "#ffb596",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "tertiary-fixed": "#ffdbcd",
+                      "tertiary-container": "#bc4800",
+                      "on-secondary-container": "#00311f",
+                      "surface-container": "#112035",
+                      "surface-variant": "#27354b",
+                      "surface-container-highest": "#27354b",
+                      "on-surface-variant": "#c3c6d7",
+                      "on-tertiary-fixed": "#360f00",
+                      "on-secondary-fixed-variant": "#005236",
+                      "surface-dim": "#041428",
+                      "secondary-fixed-dim": "#4edea3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "0.5rem",
+                      "unit": "4px",
+                      "sm": "1rem",
+                      "margin-desktop": "40px",
+                      "md": "1.5rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "margin-mobile": "16px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "body-sm": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "headline-sm": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "label-md": [
+                              "JetBrains Mono", "monospace"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk", "sans-serif"
+                      ],
+                      "label-sm": [
+                              "JetBrains Mono", "monospace"
+                      ],
+                      "body-lg": [
+                              "Hanken Grotesk", "sans-serif"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-md": [
+                              "13px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #041428;
+            color: #d4e3ff;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        .glass-card {
+            background-color: #00142b;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .luminescence {
+            box-shadow: 0 0 40px rgba(37, 99, 235, 0.15);
+        }
+        
+        .glow-text {
+            text-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+        }
+
+        .map-container {
+            position: relative;
+            background: radial-gradient(circle at center, #0c1c30 0%, #000e22 100%);
+            overflow: hidden;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+        }
+
+        /* Hub Node Animations */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            80% { transform: scale(2.5); opacity: 0; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+        
+        .hub-node {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #4edea3;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(78, 222, 163, 0.6);
+            z-index: 10;
+        }
+        
+        .hub-node::before {
+            content: '';
+            position: absolute;
+            left: -100%;
+            top: -100%;
+            width: 300%;
+            height: 300%;
+            border-radius: 50%;
+            background-color: rgba(78, 222, 163, 0.4);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        .hub-node.capacity {
+            background-color: #ffb4ab;
+            box-shadow: 0 0 15px rgba(255, 180, 171, 0.6);
+        }
+        
+        .hub-node.capacity::before {
+            background-color: rgba(255, 180, 171, 0.4);
+        }
+        
+        .hub-node.warning {
+            background-color: #ffb596;
+            box-shadow: 0 0 15px rgba(255, 181, 150, 0.6);
+        }
+        
+        .hub-node.warning::before {
+            background-color: rgba(255, 181, 150, 0.4);
+        }
+
+        /* Connecting Lines */
+        .svg-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .route-line {
+            fill: none;
+            stroke: rgba(37, 99, 235, 0.3);
+            stroke-width: 1.5;
+            stroke-dasharray: 4, 4;
+            animation: dash 20s linear infinite;
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: -1000; }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+<!-- Side Navigation Shell -->
+<nav class="fixed left-0 top-0 h-full w-64 z-40 border-r border-white/5 bg-surface dark:bg-surface flex flex-col py-6 gap-2">
+<div class="px-margin-desktop mb-8">
+<h1 class="font-headline-sm text-headline-sm font-black text-primary">SetuHaul AI</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">Logistics Command</p>
+</div>
+<div class="px-4 mb-4">
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-3 rounded-lg hover:bg-white/10 transition-colors shadow-[0_0_20px_rgba(37,99,235,0.2)]">
+                New Shipment
+            </button>
+</div>
+<div class="flex-1 overflow-y-auto">
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+                AI Assistant
+            </a>
+<a class="flex items-center gap-3 bg-primary-container text-on-primary-container font-bold rounded-lg px-4 py-3 mx-2 font-label-md text-label-md shadow-[0_0_20px_rgba(37,99,235,0.15)]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">precision_manufacturing</span>
+                Operations
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">local_shipping</span>
+                Shipments
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">forklift</span>
+                Fleet
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                Analytics
+            </a>
+</div>
+<div class="mt-auto">
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">support_agent</span>
+                Support
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface px-4 py-3 mx-2 hover:bg-surface-variant/50 transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Sign Out
+            </a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-64 flex flex-col h-full bg-surface-container-lowest">
+<!-- Top App Bar equivalent for Canvas -->
+<header class="h-16 border-b border-white/5 flex items-center justify-between px-gutter backdrop-blur-xl bg-surface/50 z-30">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Global Network</h2>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 text-on-surface-variant bg-surface-container-high px-3 py-1.5 rounded-full border border-white/5">
+<span class="material-symbols-outlined text-secondary text-[18px]">cell_tower</span>
+<span class="font-label-sm text-label-sm">Network Status: Nominal</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-white/5 p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<!-- Content Area: Map and Side Panel -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Map Visualization Canvas -->
+<div class="flex-1 map-container relative">
+<div class="grid-overlay"></div>
+<!-- Base Map Image -->
+<img class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen" data-alt="A highly detailed, futuristic dark-mode stylized world map suitable for a high-end logistics dashboard. The map is primarily deep navy and obsidian black (#000e22 to #041428) with subtle, ethereal glowing cyan and blue outlines defining the continents. The visual style is modern, technical, and data-driven, lacking generic geographical textures in favor of clean, vector-like precision with a glassmorphism overlay effect." data-location="Global" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjWZAtNUFTbGw-Jg-Ueg3L7rj5GMaJ1sxFiPTrZcs2OP8pVGB-P9TBYg9dPC6TxTb0MPWELl4j-jW_U92skKyDN8rN1pRcfhRHwP1oFbHvteTLtxqs-h8H7P7YV1JVZfXqi-zIOnTjl8UDnbha0lyrikd54-OYeoTyI3ykUKixD1R3xJOmkiszIBcSVgmjl5dSmi8GYlP921WtRfpb1-Y87I6hiGJiAB1Khe0DszDFEN_sg3eTAyNheA"/>
+<!-- SVG layer for connection lines -->
+<svg class="svg-lines" preserveaspectratio="none" viewbox="0 0 1000 600">
+<!-- Frankfurt to Singapore -->
+<path class="route-line" d="M 520 230 Q 650 300 780 380"></path>
+<!-- Frankfurt to New York -->
+<path class="route-line" d="M 520 230 Q 380 200 250 250"></path>
+<!-- Singapore to Tokyo -->
+<path class="route-line" d="M 780 380 Q 840 320 890 280"></path>
+</svg>
+<!-- Hub Nodes -->
+<!-- Frankfurt (Central Europe) -->
+<div class="hub-node" style="top: 38%; left: 52%;" title="Frankfurt Hub">
+<div class="absolute top-4 left-4 glass-card px-3 py-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="font-label-sm text-label-sm text-on-surface block">FRA-01</span>
+</div>
+</div>
+<!-- Singapore (SE Asia) -->
+<div class="hub-node capacity" style="top: 63%; left: 78%;" title="Singapore Hub"></div>
+<!-- New York (US East) -->
+<div class="hub-node" style="top: 41%; left: 25%;" title="New York Hub"></div>
+<!-- Tokyo (East Asia) -->
+<div class="hub-node warning" style="top: 46%; left: 89%;" title="Tokyo Hub"></div>
+<!-- Floating Overlay Controls -->
+<div class="absolute bottom-gutter left-gutter glass-card p-4 flex gap-4 backdrop-blur-md">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary shadow-[0_0_10px_rgba(78,222,163,0.5)]"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Active</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-tertiary shadow-[0_0_10px_rgba(255,181,150,0.5)]"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Elevated Load</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-error shadow-[0_0_10px_rgba(255,180,171,0.5)]"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">At Capacity</span>
+</div>
+</div>
+</div>
+<!-- Right Panel: Facility Cards -->
+<aside class="w-96 border-l border-white/5 bg-surface-container-low flex flex-col h-full z-20">
+<div class="p-gutter border-b border-white/5 bg-surface-container-high/50">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Facility Status</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Real-time network telemetrics</p>
+<div class="mt-4 relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest border border-white/10 rounded-lg pl-10 pr-4 py-2 font-body-sm text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:shadow-[0_0_15px_rgba(37,99,235,0.2)] transition-all" placeholder="Search hubs..." type="text"/>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-gutter space-y-4">
+<!-- Card 1: Singapore (At Capacity) -->
+<div class="glass-card p-5 relative overflow-hidden luminescence border-error/30">
+<div class="absolute top-0 right-0 w-24 h-24 bg-error/10 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
+<div class="flex justify-between items-start mb-4">
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+                                    Singapore
+                                    <span class="material-symbols-outlined text-[16px] text-error" style="font-variation-settings: 'FILL' 1;">warning</span>
+</h4>
+<span class="font-label-sm text-label-sm text-outline">SIN-HUB-01</span>
+</div>
+<span class="px-2.5 py-1 rounded-sm bg-error/10 text-error font-label-sm text-label-sm border border-error/20">At Capacity</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Storage Util.</span>
+<div class="flex items-end gap-2">
+<span class="font-label-md text-label-md text-error">98%</span>
+<div class="flex-1 h-1 bg-surface-variant rounded-full mb-1">
+<div class="h-full bg-error rounded-full" style="width: 98%"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Dock Occ.</span>
+<span class="font-label-md text-label-md text-on-surface">42/42</span>
+</div>
+</div>
+<div class="pt-4 border-t border-white/5 flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover border border-white/10" data-alt="A small, professional headshot portrait of an Asian male logistics manager in his 40s, wearing a smart casual dark navy shirt. The lighting is studio quality, slightly moody, fitting a dark-mode enterprise UI. Clean dark background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCyhyh96-CaxB-br_pcPDA3DRFbZgF-kw555nQcDOYcOSSN9S7PCZxSrLsAdtdydlZJrEZAN1K5fYvMGfn_dPHVQ5N4hBZKwqzN3h2OqAYh06YegjtrQXdbUQrA8UIKelQMkoHMFp99mLLC4VOGd28L9RfNIlJRiJ7zpzHft1vqD7MRj6H7bSdpgASqiHwH08Q7zVf1XrZ8gvkHkOe3FZx10A7zS-1qekgW9_tKJs8gvw0ASSfymR34g"/>
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface">Chen Wei</span>
+<span class="block font-label-sm text-label-sm text-outline-variant text-[10px]">Facility Director</span>
+</div>
+<button class="ml-auto text-primary hover:bg-primary/10 p-1.5 rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+</button>
+</div>
+</div>
+<!-- Card 2: Frankfurt (Active) -->
+<div class="glass-card p-5 relative overflow-hidden">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+                                    Frankfurt
+                                </h4>
+<span class="font-label-sm text-label-sm text-outline">FRA-HUB-04</span>
+</div>
+<span class="px-2.5 py-1 rounded-sm bg-secondary/10 text-secondary font-label-sm text-label-sm border border-secondary/20">Active</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Storage Util.</span>
+<div class="flex items-end gap-2">
+<span class="font-label-md text-label-md text-on-surface">64%</span>
+<div class="flex-1 h-1 bg-surface-variant rounded-full mb-1">
+<div class="h-full bg-secondary rounded-full" style="width: 64%"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Dock Occ.</span>
+<span class="font-label-md text-label-md text-on-surface">14/20</span>
+</div>
+</div>
+<div class="pt-4 border-t border-white/5 flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover border border-white/10" data-alt="A small, professional headshot portrait of a European female logistics manager in her 30s, wearing a modern dark grey blazer. The lighting is crisp and cool-toned, suitable for a dark-mode tech interface. Subtle dark background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBegwafYQ8YtCnPQSTsn_FmBZ58Kjx-I-xrMwEEGIxyrXEYIFBThz_gPHogOWH9MFZzUQBjF5nGDR8G7HH-HFmtLK_1F06QVUskR0gL56H3lbxFxpASJPANQwX1Wm7fSG4kZ_NgYxctCJgOCy5sthWajifYHBkWBad0qD5aTkAg1z3PmYx0ywJKUpHc3_kBACB8Lu1gVF7TdSshHszXW46ZsSBY59GnXvZSOj6j8gKsBDk7IxLwmAFrEw"/>
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface">Klara Weber</span>
+<span class="block font-label-sm text-label-sm text-outline-variant text-[10px]">Operations Lead</span>
+</div>
+<button class="ml-auto text-primary hover:bg-primary/10 p-1.5 rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+</button>
+</div>
+</div>
+<!-- Card 3: Tokyo (Warning) -->
+<div class="glass-card p-5 relative overflow-hidden">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+                                    Tokyo
+                                </h4>
+<span class="font-label-sm text-label-sm text-outline">TYO-HUB-02</span>
+</div>
+<span class="px-2.5 py-1 rounded-sm bg-tertiary/10 text-tertiary font-label-sm text-label-sm border border-tertiary/20">Elevated Load</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Storage Util.</span>
+<div class="flex items-end gap-2">
+<span class="font-label-md text-label-md text-tertiary">87%</span>
+<div class="flex-1 h-1 bg-surface-variant rounded-full mb-1">
+<div class="h-full bg-tertiary rounded-full" style="width: 87%"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded border border-white/5">
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Dock Occ.</span>
+<span class="font-label-md text-label-md text-on-surface">28/30</span>
+</div>
+</div>
+<div class="pt-4 border-t border-white/5 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center border border-white/10">
+<span class="font-label-md text-label-md text-on-surface-variant">YK</span>
+</div>
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface">Yuto Tanaka</span>
+<span class="block font-label-sm text-label-sm text-outline-variant text-[10px]">Acting Manager</span>
+</div>
+<button class="ml-auto text-primary hover:bg-primary/10 p-1.5 rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</main>
+</body></html>
