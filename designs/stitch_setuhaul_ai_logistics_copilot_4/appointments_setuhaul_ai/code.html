@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SETUHAUL AI - Timeline Scheduler</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "background": "#f8f9ff",
+                      "on-primary": "#ffffff",
+                      "on-primary-fixed": "#00174d",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#434654",
+                      "outline": "#737686",
+                      "on-secondary-fixed": "#1c0062",
+                      "primary-fixed-dim": "#b5c4ff",
+                      "surface-container-low": "#eff4ff",
+                      "on-tertiary-fixed-variant": "#3a4761",
+                      "on-secondary-fixed-variant": "#4918c8",
+                      "on-secondary-container": "#fffbff",
+                      "on-tertiary": "#ffffff",
+                      "secondary": "#5f3add",
+                      "inverse-primary": "#b5c4ff",
+                      "surface-container-high": "#dee9fc",
+                      "tertiary-fixed": "#d7e2ff",
+                      "on-error-container": "#93000a",
+                      "on-error": "#ffffff",
+                      "surface": "#f8f9ff",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed": "#dbe1ff",
+                      "surface-dim": "#d0dbed",
+                      "surface-container-highest": "#d9e3f6",
+                      "surface-bright": "#f8f9ff",
+                      "tertiary": "#4f5c78",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-variant": "#d9e3f6",
+                      "error": "#ba1a1a",
+                      "on-tertiary-container": "#fefcff",
+                      "primary": "#1351d3",
+                      "outline-variant": "#c3c5d7",
+                      "surface-container": "#e6eeff",
+                      "tertiary-fixed-dim": "#b9c6e7",
+                      "surface-tint": "#1953d5",
+                      "primary-container": "#3b6bed",
+                      "on-primary-fixed-variant": "#003dab",
+                      "on-primary-container": "#fefbff",
+                      "tertiary-container": "#687592",
+                      "on-tertiary-fixed": "#0d1b34",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary-container": "#7857f8",
+                      "on-background": "#121c2a",
+                      "secondary-fixed-dim": "#cabeff",
+                      "on-surface": "#121c2a",
+                      "secondary-fixed": "#e6deff",
+                      "inverse-surface": "#27313f",
+                      "ai-accent": "#7C5CFC"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "lg": "24px",
+                      "gutter": "24px",
+                      "xs": "4px",
+                      "xl": "32px",
+                      "xxl": "48px",
+                      "sm": "8px",
+                      "container-max": "1440px",
+                      "md": "16px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "code": [
+                              "jetbrainsMono"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "code": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .shadow-level-1 { box-shadow: 0 4px 20px -2px rgba(45, 58, 84, 0.05); }
+        .shadow-level-2 { box-shadow: 0 12px 40px -4px rgba(45, 58, 84, 0.12); }
+        .gradient-btn { background: linear-gradient(135deg, #4F7DFF 0%, #7C5CFC 100%); }
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: 200px repeat(12, minmax(100px, 1fr));
+            gap: 1px;
+            background-color: theme('colors.surface-variant');
+        }
+        .timeline-header, .timeline-cell, .timeline-row-header {
+            background-color: theme('colors.surface-container-lowest');
+        }
+        
+        /* Drag and Drop Visuals */
+        .draggable-item { cursor: grab; }
+        .draggable-item:active { cursor: grabbing; }
+        .drop-target-active { background-color: theme('colors.surface-container-low') !important; border: 2px dashed theme('colors.primary') !important; }
+      </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<nav class="h-full w-64 fixed left-0 top-0 bg-inverse-surface dark:bg-inverse-surface shadow-md flex flex-col h-full p-lg overflow-y-auto z-50">
+<div class="flex items-center gap-md mb-xl">
+<img alt="Enterprise Logistics Logo" class="w-10 h-10 rounded-lg object-cover" data-alt="A clean, minimalist 3D rendering of an enterprise logistics logo, featuring geometric shapes in shades of deep blue and pristine white, set against a bright, modern light-mode background. The design is sleek, forward-leaning, and professional, embodying a premium AI-first aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUELA45p0wbkR_-Mcx_6YeZxLHoIL4Mkcfdi3_sXeIOnSvu50ngWuN4dDnnxHi_PXpSkb4NENKvxwD09LOQ6nxCGhJczpCx3kS03rdGzqwApSGQoB8z8LV7_1kOzEcFex3WWo4Sn9SSXDZYX1llCJNaY4iE5XUyWA272L0czVgyzxqrYfCvoHfqe-sO6o3ACpY4s074a3MiEUmD8A3lcb2A6j8gT2EWEWSZvNjQqrQLX19I1W0DsVS"/>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary-fixed">Prism Logic</h1>
+<p class="font-label-md text-label-md text-primary-fixed dark:text-primary-fixed-dim">Enterprise Logistics</p>
+</div>
+</div>
+<button class="gradient-btn text-on-primary font-label-md text-label-md rounded-lg py-sm px-md mb-xl shadow-level-1 transition-all duration-200 ease-in-out hover:scale-[1.02] flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+            New Shipment
+        </button>
+<ul class="flex flex-col gap-sm flex-grow">
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg transition-all duration-200 ease-in-out hover:scale-[1.02] text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-md text-label-md">AI Copilot</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md transition-all duration-200 ease-in-out hover:scale-[1.02] text-on-primary-fixed bg-primary-container/20 rounded-lg font-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">conveyor_belt</span>
+<span class="font-label-md text-label-md">Operations</span>
+</a>
+</li>
+</ul>
+<div class="mt-auto pt-xl border-t border-surface-variant/20">
+<ul class="flex flex-col gap-sm">
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg transition-all duration-200 ease-in-out hover:scale-[1.02] text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg transition-all duration-200 ease-in-out hover:scale-[1.02] text-surface-variant font-medium hover:bg-surface-variant/10 hover:text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 ml-64 flex flex-col h-full bg-background relative z-10">
+<!-- TopNavBar (Shared Component) -->
+<header class="docked full-width top-0 sticky z-40 backdrop-blur-xl border-b border-white/20 shadow-sm bg-surface/70 dark:bg-surface-container/70 flex justify-between items-center w-full px-margin-desktop h-16">
+<div class="flex items-center gap-xl">
+<h2 class="font-headline-md text-headline-md font-bold text-primary dark:text-on-surface">Operations Workspace</h2>
+<nav class="hidden md:flex gap-lg">
+<a class="font-label-md text-label-md text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="font-label-md text-label-md text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Analytics</a>
+<a class="font-label-md text-label-md text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Fleet</a>
+<a class="font-label-md text-label-md text-primary font-bold border-b-2 border-primary pb-1" href="#">History</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<!-- Search Bar (on_left configuration usually implies left of trailing actions) -->
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="bg-surface-container-low border border-outline-variant rounded-full py-xs pl-xl pr-md text-body-sm focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none w-64 transition-all glass-panel" placeholder="Search operations..." type="text"/>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-xs">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-xs">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border border-outline-variant ml-sm">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A close-up, brightly lit portrait of a professional individual in a modern office setting. The lighting is soft and even, highlighting a friendly expression. The background is a slightly blurred, minimalist architectural space in light mode tones, conveying a premium and reliable brand personality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCL7pJu4BcQTcmUwKk5xORh6WPx9zAuNg46GGLU4rt3-oItXdkE2W2bt_H4_bFCGj1D7L-h187DMBRNYRtGYWysmw3tVCVsj83OVO1Vm5wb2wxGGsfphBBGyvO5B-0CpfdWmzbORc-Utf1ycphFfZx_Hoopvolnaid1HLl3ttdccjakJZWZeb-s_g-XVHPcZbcq8o6VVINfu6Ul2u-q8kzaa1nALGse5PDMPhwPcLwcGgQqr5dTJt56"/>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 flex overflow-hidden p-margin-desktop gap-lg">
+<!-- Timeline Main View -->
+<section class="flex-1 bg-surface-container-lowest rounded-xl shadow-level-1 border border-outline-variant/30 flex flex-col overflow-hidden">
+<!-- Timeline Header Actions -->
+<div class="p-md border-b border-surface-variant flex justify-between items-center bg-surface-container-low/50">
+<div class="flex items-center gap-sm">
+<button class="p-xs rounded-lg hover:bg-surface-variant/50 text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Today, Oct 24</h3>
+<button class="p-xs rounded-lg hover:bg-surface-variant/50 text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex items-center gap-xs">
+<div class="w-3 h-3 rounded-full bg-surface-variant"></div>
+<span class="font-label-md text-label-md text-on-surface-variant">Available</span>
+</div>
+<div class="flex items-center gap-xs">
+<div class="w-3 h-3 rounded-full bg-secondary"></div>
+<span class="font-label-md text-label-md text-on-surface-variant">Occupied</span>
+</div>
+<div class="flex items-center gap-xs">
+<div class="w-3 h-3 rounded-full bg-ai-accent"></div>
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+                                AI Suggested
+                            </span>
+</div>
+<div class="h-6 w-px bg-outline-variant mx-sm"></div>
+<select class="bg-surface-container border border-outline-variant rounded-lg py-xs px-sm text-body-sm font-medium focus:ring-primary/50 focus:border-primary outline-none">
+<option>Dock View</option>
+<option>Fleet View</option>
+</select>
+</div>
+</div>
+<!-- Scrollable Timeline Grid -->
+<div class="flex-1 overflow-auto bg-surface-container-lowest">
+<div class="timeline-grid min-w-[1200px]">
+<!-- Time Header Row -->
+<div class="timeline-header p-sm sticky left-0 z-20 border-r border-surface-variant flex items-end">
+<span class="font-label-md text-label-md text-outline">Docks / Time</span>
+</div>
+<!-- Hours 08:00 to 19:00 -->
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">08:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">09:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">10:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">11:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">12:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">13:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">14:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">15:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">16:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">17:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">18:00</div>
+<div class="timeline-header p-sm border-b border-surface-variant text-center font-label-md text-label-md text-on-surface-variant">19:00</div>
+<!-- Dock 1 Row -->
+<div class="timeline-row-header p-md sticky left-0 z-10 border-r border-surface-variant border-b flex items-center justify-between">
+<span class="font-body-sm font-semibold text-on-surface">Dock Alpha</span>
+<span class="material-symbols-outlined text-surface-tint text-[18px]">local_shipping</span>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target">
+<!-- Occupied Slot spanning 2 hours -->
+<div class="absolute inset-y-1 left-1 w-[calc(200%+1px)] bg-secondary rounded-md shadow-sm border border-secondary-container flex items-center p-xs z-10 overflow-hidden group">
+<div class="w-1 h-full bg-secondary-container rounded-full mr-xs"></div>
+<div class="flex-1 truncate">
+<p class="font-label-md text-label-md text-on-secondary truncate">TRK-8922</p>
+<p class="text-[10px] text-secondary-fixed-dim truncate">Unloading</p>
+</div>
+</div>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target">
+<!-- AI Suggested Slot spanning 1 hour -->
+<div class="absolute inset-y-1 left-1 right-1 bg-ai-accent/10 border border-ai-accent/30 rounded-md flex items-center justify-center p-xs z-0 border-dashed group hover:bg-ai-accent/20 transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-ai-accent text-[16px] mr-1">auto_awesome</span>
+<span class="text-[10px] font-semibold text-ai-accent">Suggested</span>
+</div>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<!-- Dock 2 Row -->
+<div class="timeline-row-header p-md sticky left-0 z-10 border-r border-surface-variant border-b flex items-center justify-between">
+<span class="font-body-sm font-semibold text-on-surface">Dock Bravo</span>
+<span class="material-symbols-outlined text-surface-tint text-[18px]">local_shipping</span>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target">
+<!-- Occupied Slot spanning 1.5 hours -->
+<div class="absolute inset-y-1 left-1 w-[calc(150%+1px)] bg-surface-variant rounded-md shadow-sm border border-outline-variant flex items-center p-xs z-10 overflow-hidden">
+<div class="w-1 h-full bg-outline rounded-full mr-xs"></div>
+<div class="flex-1 truncate">
+<p class="font-label-md text-label-md text-on-surface-variant truncate">Maint-A</p>
+<p class="text-[10px] text-outline truncate">Inspection</p>
+</div>
+</div>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target">
+<!-- AI Suggested Slot spanning 2 hour -->
+<div class="absolute inset-y-1 left-1 w-[calc(200%+1px)] bg-ai-accent/10 border border-ai-accent/30 rounded-md flex items-center justify-center p-xs z-0 border-dashed group hover:bg-ai-accent/20 transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-ai-accent text-[16px] mr-1">auto_awesome</span>
+<span class="text-[10px] font-semibold text-ai-accent">Suggested Fit for TRK-991</span>
+</div>
+</div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+<div class="timeline-cell border-b border-surface-variant relative p-xs drop-target"></div>
+</div>
+</div>
+</section>
+<!-- Side Panel: Pending Appointments -->
+<aside class="w-80 bg-surface-container-lowest rounded-xl shadow-level-1 border border-outline-variant/30 flex flex-col overflow-hidden">
+<div class="p-md border-b border-surface-variant flex items-center justify-between bg-surface-container-low/50">
+<h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Pending</h3>
+<span class="bg-primary/10 text-primary font-label-md text-label-md px-2 py-1 rounded-full">3</span>
+</div>
+<!-- AI Insight Banner -->
+<div class="m-md p-sm rounded-lg bg-surface-container-high border border-outline-variant/50 flex items-start gap-sm">
+<span class="material-symbols-outlined text-ai-accent mt-0.5">lightbulb</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-tight">
+<strong class="text-on-surface font-semibold">AI Insight:</strong> Drag items to highlighted areas for optimal dock utilization and reduced idle time.
+                    </p>
+</div>
+<div class="flex-1 overflow-y-auto p-md flex flex-col gap-sm" id="pending-list">
+<!-- Pending Item 1 -->
+<div class="draggable-item bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-sm hover:shadow-level-1 hover:border-primary/50 transition-all group" draggable="true">
+<div class="flex justify-between items-start mb-xs">
+<span class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">TRK-991 (Loading)</span>
+<span class="material-symbols-outlined text-outline text-[16px] cursor-grab">drag_indicator</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant mb-sm">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-body-sm text-[12px]">Est. 2h 00m</span>
+</div>
+<div class="flex gap-xs">
+<span class="bg-surface-container py-0.5 px-2 rounded-full text-[10px] font-semibold text-tertiary">Fragile</span>
+<span class="bg-ai-accent/10 text-ai-accent py-0.5 px-2 rounded-full text-[10px] font-semibold flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[10px]">auto_awesome</span> Best fit: 14:00
+                            </span>
+</div>
+</div>
+<!-- Pending Item 2 -->
+<div class="draggable-item bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-sm hover:shadow-level-1 hover:border-primary/50 transition-all group" draggable="true">
+<div class="flex justify-between items-start mb-xs">
+<span class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">VNL-404 (Unloading)</span>
+<span class="material-symbols-outlined text-outline text-[16px] cursor-grab">drag_indicator</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant mb-sm">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-body-sm text-[12px]">Est. 1h 30m</span>
+</div>
+<div class="flex gap-xs">
+<span class="bg-surface-container py-0.5 px-2 rounded-full text-[10px] font-semibold text-tertiary">Standard</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const draggables = document.querySelectorAll('.draggable-item');
+            const dropTargets = document.querySelectorAll('.drop-target');
+
+            draggables.forEach(draggable => {
+                draggable.addEventListener('dragstart', () => {
+                    draggable.classList.add('opacity-50');
+                    // Highlight suggested slots
+                    document.querySelectorAll('.border-dashed').forEach(el => el.classList.add('bg-ai-accent/20'));
+                });
+
+                draggable.addEventListener('dragend', () => {
+                    draggable.classList.remove('opacity-50');
+                    document.querySelectorAll('.border-dashed').forEach(el => el.classList.remove('bg-ai-accent/20'));
+                    dropTargets.forEach(target => target.classList.remove('drop-target-active'));
+                });
+            });
+
+            dropTargets.forEach(target => {
+                target.addEventListener('dragover', e => {
+                    e.preventDefault(); // Necessary to allow dropping
+                    target.classList.add('drop-target-active');
+                });
+
+                target.addEventListener('dragleave', () => {
+                    target.classList.remove('drop-target-active');
+                });
+
+                target.addEventListener('drop', e => {
+                    e.preventDefault();
+                    target.classList.remove('drop-target-active');
+                    // In a real app, logic to handle the drop (move element or update data) would go here
+                    // For visual demo, we can just log
+                    console.log('Item dropped on cell');
+                });
+            });
+        });
+    </script>
+</body></html>
