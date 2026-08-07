@@ -1,0 +1,35 @@
+# Secrets and local agent memory
+.agent-memory/
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python
+backend/.venv/
+.venv/
+backend/**/__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Generated / local scratch
+tmp/
+graphify-out/
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor / IDE noise (keep shared Cursor rules via explicit adds if needed)
+.idea/
+*.swp
+*.swo

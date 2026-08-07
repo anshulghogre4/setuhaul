@@ -1,0 +1,13 @@
+---
+description: SetuHaul repository workflow and writeback rules
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# SetuHaul Cursor instructions
+
+Treat the root `AGENTS.md` as the canonical repository policy. Before material work, complete its required startup sequence, report Living sprint status from `plans/implementation-master-plan.md`, and read the task-specific source of truth.
+
+At the end of every user prompt, run the root context-sync check. Before answering a prompt that changed files or durable project context, atomically append `CHANGELOG.md`, update affected LLMWiki pages plus `wiki/handoff.md` and `wiki/log.md`, sync Memory MCP, and—when sprint progress changed—update the master-plan Living checklist with dated strikethrough evidence. Record unavailable memory in the handoff. Pure no-op conversation does not create empty entries.
+
+Preserve unrelated teammate changes, report verification honestly, and never commit secrets or MCP credentials.

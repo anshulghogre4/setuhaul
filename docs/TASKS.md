@@ -211,7 +211,7 @@ Dashboard Cache
 
 Slot Cache
 
-Redis Checkpointer
+LangChain Conversation History
 
 TTL Management
 
@@ -223,13 +223,13 @@ TTL Management
 
 ---
 
-# Phase 6 - LangGraph
+# Phase 6 - LangChain chat (LLM invoke)
 
 ## Goal
 
-Create AI workflow.
+Create the LangChain chat path (`ChatOpenAI` + `bind_tools` + manual bounded invoke loop). Do not use `create_agent`, AgentExecutor, or create_react_agent.
 
-## Build Graph
+## Build Agent Run
 
 START
 
@@ -261,13 +261,13 @@ END
 
 Conversation Memory
 
-Redis Checkpoint
+Upstash Redis Conversation History
 
 Thread State
 
 ## Deliverables
 
-✔ LangGraph working
+✔ LangChain agent and tool calling working
 
 ✔ Memory working
 
@@ -655,7 +655,7 @@ The application must support
 
 ✔ Redis Cache
 
-✔ LangGraph Memory
+✔ LangChain Redis Conversation Memory
 
 ✔ Docker Deployment
 

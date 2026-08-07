@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory@2025.11.25"],
+      "env": {
+        "MEMORY_FILE_PATH": ".agent-memory/memory.jsonl"
+      },
+      "timeout": 30000,
+      "trust": false
+    }
+  }
+}

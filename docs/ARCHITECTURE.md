@@ -49,14 +49,14 @@ This document does not define API contracts or database schemas. Those are docum
    Authentication         AI Assistant          Operations APIs
        |                       |                       |
        |                       |                       |
-       |                LangChain Agent               |
+       |         LangChain LLM invoke (ChatOpenAI)     |
        |                       |                       |
-       |             Tool Calling Layer               |
+       |     Prompt + verified FastAPI context         |
        |                       |                       |
        |       +---------------+---------------+
        |       |               |               |
        |       |               |               |
-   PostgreSQL      Redis Cache        Gemini LLM
+   PostgreSQL      Redis Cache        ChatOpenAI
        |
        |
 Supabase PostgreSQL
@@ -120,7 +120,7 @@ Alembic
 
 LangChain
 
-Google Gemini
+OpenAI (ChatOpenAI via LangChain)
 
 LangSmith, CloudWatch, AgentCore
 
@@ -235,7 +235,7 @@ routers/
 
 services/
 
-agents/
+ai/runtime/
 
 tools/
 
@@ -357,7 +357,7 @@ Return Response
 
 ---
 
-# LangChain Agent Flows
+# LangChain LLM Invoke Flows
 
 ```
 START
@@ -537,9 +537,11 @@ TTL: 24 hours
 
 ---
 
-## LangChain Checkpoint
+## LangChain Conversation Memory
 
-Persist graph execution state.
+Persist bounded conversation history and session context in Upstash Redis with a 24-hour TTL.
+
+The assistant uses `ChatOpenAI.bind_tools(role_scoped_tools)` plus a custom bounded invoke loop per request (`invoke` → tool_calls → service-backed ToolMessages → final text). Do not use `create_agent`, `AgentExecutor`, or `create_react_agent`. Tools call FastAPI application services only (no SQL); PostgreSQL remains SoT; the LLM never invents operational facts.
 
 ---
 
@@ -662,7 +664,7 @@ backend/
 
 │ ├── auth/
 
-│ ├── agents/
+│ ├── ai/runtime/
 
 │ ├── services/
 

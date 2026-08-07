@@ -1,0 +1,1 @@
+"""SetuHaul FastAPI application package."""

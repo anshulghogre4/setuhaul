@@ -10,11 +10,11 @@ Version: 1.0
 
 This document defines every AI Agent used in SetuHaul AI.
 
-The goal is to keep the LLM responsible only for conversation, reasoning and orchestration.
+The goal is to keep the LLM responsible for conversation and orchestration of typed tools. Runtime shape: LangChain `ChatOpenAI` + `bind_tools(...)` + a custom bounded invoke loop (not `create_agent` / `AgentExecutor` / `create_react_agent`). Explicit: bind_tools + manual loop != create_agent.
 
-The LLM must never directly modify the database.
+The LLM must never directly modify the database or execute SQL. Tools call FastAPI application services only.
 
-Every business action must be executed through backend tools.
+Every business mutation must go through authorized application services (and/or explicit REST commands) with trusted `ExecutionContext`.
 
 ---
 
@@ -23,20 +23,18 @@ Every business action must be executed through backend tools.
 The application uses
 
 - LangChain
-- Google Gemini
-- Redis Checkpointer
-- FastAPI Tools
-- Monitoring with LangSmith, AgentCore, CloudWatch
+- ChatOpenAI + bind_tools + manual invoke loop (not create_agent / AgentExecutor)
+- Upstash Redis Conversation Memory (24h TTL, non-authoritative; Sprint 2+)
+- FastAPI application services / typed tools
+- Monitoring with LangSmith
 
-The graph is event driven.
-
-The graph must maintain conversation state across multiple messages.
+Conversation state is maintained across messages via Redis (24h TTL); business facts always refresh from PostgreSQL.
 
 ---
 
-# Primary Agent
+# Primary Assistant
 
-There is only ONE conversational agent.
+There is only ONE conversational assistant (LLM invoke, not a LangChain agent).
 
 Name
 
@@ -702,9 +700,9 @@ The implementation should use
 
 LangChain
 
-Redis Checkpointer
+Upstash Redis Conversation History
 
-Structured Tool Calling
+ChatOpenAI + bind_tools + manual bounded invoke loop (not create_agent / AgentExecutor / create_react_agent)
 
 Pydantic Models
 
@@ -712,8 +710,8 @@ Dependency Injection
 
 Async FastAPI
 
-All agent logic must remain modular and separated from API routes.
+All AI invoke/tool-dispatch logic must remain modular and separated from API routes.
 
 Business logic must remain inside services.
 
-The AI layer should only orchestrate conversations and invoke backend tools.
+The AI layer orchestrates typed tools that call FastAPI application services; tools never contain SQL.
