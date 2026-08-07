@@ -422,3 +422,50 @@ button:disabled {
   border-radius: 8px;
   background: var(--panel-high);
 }
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 10px;
+}
+
+.chip-btn,
+.secondary-btn {
+  background: transparent;
+  border: 1px solid var(--outline);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip-btn:hover,
+.secondary-btn:hover {
+  border-color: var(--primary);
+}
+
+.confirm-banner {
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(78, 222, 163, 0.35);
+  background: rgba(78, 222, 163, 0.08);
+}
+
+.confirm-banner p {
+  margin: 0 0 10px;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ops-hero-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}

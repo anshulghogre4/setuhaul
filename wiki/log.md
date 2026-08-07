@@ -8,6 +8,32 @@ last_updated: 2026-08-07
 
 # Wiki log
 
+## 2026-08-07 20:25 IST | verify | Gemini live PASS
+
+- Google key saved gitignored; `gemini-2.5-flash` invoke PASS via `ChatGoogleGenerativeAI`. All three providers live-verified. Updated [[handoff]], [[current-state]], CHANGELOG, Memory.
+
+## 2026-08-07 20:20 IST | verify | OpenAI+OpenRouter smoke; Gemini native class
+
+- Live invoke: OpenAI PASS, OpenRouter PASS; Gemini key was OpenAI-shaped (FAIL). Switched Gemini to `ChatGoogleGenerativeAI`. Unit 20 passed. Updated [[handoff]], [[ai-system]], [[current-state]], CHANGELOG, Memory.
+
+## 2026-08-07 20:00 IST | ingest | README + multi-provider LLM
+
+- README Quick start for Sprint 1–2 POC; demo login emails + password env-var names (passwords OOB).
+- `assistant/llm.py` ChatOpenAI factory (`auto` OpenAI → OpenRouter → Gemini); settings + `.env.example` extended.
+- Unit 18 passed; OpenRouter/Gemini live smoke pending keys. Updated [[handoff]], [[current-state]], [[ai-system]], CHANGELOG, Memory MCP.
+
+## 2026-08-07 19:35 IST | ingest | Sprint 2 exit gate COMPLETE
+
+- Struck Sprint 2 Living §7 build + exit gate with API `DEMO_PATH_PASS` and browser localhost:5173 evidence.
+- Fixed write path (`UPDATE_ETA`, `DELAY`, JWT leeway, tzdata, env BOM, stale uvicorn). Credentials remain gitignored; rotation recommended in [[handoff]].
+- Updated [[handoff]], [[current-state]], [[implementation]], [[ai-system]], master plan, root CHANGELOG, Memory MCP.
+
+## 2026-08-07 19:26 IST | verify | Sprint 2 Living re-baseline
+
+- Inspected dirty-tree Sprint 2 code + live smoke. Struck only verified §7 items (repair/ETA distinction; services+tools; role allowlists; bind_tools loop).
+- Blocker recorded: confirmed ETA write 500 on audit `ETA_UPDATE` vs `UPDATE_ETA`.
+- Living → Sprint 2 ACTIVE / IN PROGRESS; exit gate open. Updated [[handoff]], [[current-state]], [[implementation]], master plan, root CHANGELOG, Memory MCP.
+
 ## 2026-08-07 18:36 IST | ingest | .gitignore noise reduction
 
 - Ignored `graphify-out/` and common generated/OS/editor artifacts. Secrets/tmp/venv unchanged. Updated [[handoff]], root CHANGELOG.

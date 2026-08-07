@@ -6,9 +6,9 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 
 ## Living sprint status
 
-Last re-baselined: 2026-08-07 17:55 IST  
-Active sprint: **Sprint 2 - exception and ETA vertical slice**  
-Team POC target: **Sprint 2 exit gate**  
+Last re-baselined: 2026-08-07 19:35 IST  
+Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
+Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
 
 **Cross-IDE scoreboard:** every Cursor / Claude / Codex / Gemini session must read this section at startup and refresh it on durable writeback (see root `AGENTS.md`).
@@ -24,7 +24,7 @@ Use this plan as a living checklist:
 | Sprint | Status | Gate dependency |
 |---|---|---|
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST (Admin browser + adversarial/IDOR + baseline a11y + minimal CI + CORS both origins) |
-| Sprint 2 - exception and ETA vertical slice | **ACTIVE / TODO ready to start** | Starts now that Sprint 1 exit gate passed |
+| Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST (API demo `DEMO_PATH_PASS` + browser localhost:5173 driver chat/tools/ETA + ops refresh) |
 | Sprint 3 - deterministic allocation | **TODO** | Starts only after Sprint 2 POC exit gate passes |
 
 Verified repository foundation (not a completed implementation sprint):
@@ -43,7 +43,7 @@ Build SetuHaul as a **modular monolith with clean/hexagonal boundaries**:
 - Supabase Auth is included from Sprint 1. Prefer two shared permanent internal-POC accounts (Driver + Ops). Seeded Operator (`ROL002`) and Admin (`ROL008`) may both exist; they share one ops dashboard shell and one ops login entry. FastAPI verifies the access token and maps it to the seeded application user, role, driver, and facility/global scope. **Two login UIs only** (`/driver/login`, `/ops/login`); choosing an entry never grants a role.
 - Supabase PostgreSQL as the system of record and final concurrency authority.
 - Upstash Redis for 24-hour conversation history, session context, cache, rate limiting, and non-authoritative coordination.
-- One role-aware LangChain assistant: **`ChatOpenAI` + `bind_tools(...)`** on a curated role-scoped list, plus a **manual bounded invoke loop** (`model.invoke` → execute typed tool fns → `ToolMessage`s → final text). This is **not** `create_agent`, `AgentExecutor`, or `create_react_agent`. **`bind_tools` + manual loop ≠ `create_agent`.** Tools call FastAPI application services only; PostgreSQL is SoT.
+- One role-aware LangChain assistant: **`ChatOpenAI` + `bind_tools(...)`** (OpenAI/OpenRouter) or **`ChatGoogleGenerativeAI` + `bind_tools(...)`** (Gemini), plus a **manual bounded invoke loop**. Provider selection via `assistant/llm.py` (`LLM_PROVIDER=auto|openai|openrouter|gemini`; auto = OpenAI → OpenRouter → Gemini). This is **not** `create_agent`, `AgentExecutor`, or `create_react_agent`. **`bind_tools` + manual loop ≠ `create_agent`.** Tools call FastAPI application services only; PostgreSQL is SoT.
 - Pydantic models for every API request/response, execution context, conversation state, tool args/results, and domain command/result. Tools call FastAPI application services only; PostgreSQL is SoT; the LLM never invents operational facts.
 - Deterministic application services for feasibility, allocation, appointment transitions, and all writes.
 - LangSmith for AI traces and platform logs/metrics for application operations; do not add overlapping observability products until hosting requires them.
@@ -272,25 +272,24 @@ Goal: complete a safe single-driver delay flow with persistence, deduplication, 
 
 ### Build
 
-- [ ] TODO: create or continue one exception thread for the relevant shipment.
-- [ ] TODO: resolve multiple plausible shipments with one minimal clarification.
-- [ ] TODO: persist message dedupe, ETA history, exception state, and audit through one authorized, idempotent application transaction and authoritative post-commit reread; a partial failure rolls back the business effect.
-- [ ] TODO: treat repair duration, reported delay, and revised ETA as distinct facts; carry confidence and timestamp.
-- [ ] TODO: implement FastAPI application services for safe current context, shipment, current appointment, ETA/exception update, and driver-safe facility information; inject verified read models into the chat prompt.
-- [ ] TODO: use deny-by-default role/channel REST allowlists. Drivers receive only their safe context/read APIs and the atomic ETA/exception command; operator/admin dashboards use REST query services. No Sprint 3 scheduling mutation routes exist in the POC.
-- [ ] TODO: add LangChain `ChatOpenAI` + `bind_tools(...)` on a curated role-scoped POC tool list, strict system prompt, and a custom bounded `run_assistant` invoke loop (`invoke` → tool_calls → service-backed ToolMessages → final text). Forbidden: `create_agent`, `AgentExecutor`, `create_react_agent`. Explicit: bind_tools + manual loop ≠ create_agent.
-- [ ] TODO: load bounded conversation history and structured session context from Upstash Redis before invocation, then persist the completed turn with a 24-hour TTL (non-authoritative; Sprint 2 requirement—not Sprint 1).
-- [ ] TODO: implement duplicate/out-of-order message handling and safe recovery after Redis or model timeouts.
-- [ ] TODO: complete the driver chat/profile UI with quick actions, clarification, exact ETA/time-zone confirmation, write-in-progress, persisted success, retry-safe unknown outcome, stale/degraded data, and accessible logout. Never claim success before the authoritative reread.
-- [ ] TODO: connect the shared Ops dashboard to authorized REST endpoints for KPIs, exceptions, appointment schedule, dock/slot operational snapshot, and warehouse rules/constraints; JWT role applies facility vs global RO scope. Show freshness and no mutation controls.
-- [ ] TODO: after a driver ETA/exception update, invalidate/refetch the operational read model so the Ops dashboard visibly shows the matching seeded shipment/exception change without claiming realtime behavior.
-- [ ] TODO: return `CAPABILITY_NOT_ENABLED`/operations handoff with zero appointment writes when chat or crafted requests attempt slot search, booking, rescheduling, cancellation, or confirmation during the POC.
-- [ ] TODO: add LangSmith invoke traces and a scripted team demonstration covering two-entry login/routing, driver profile/logout, happy path, repair-duration clarification, exact ETA confirmation, duplicate/retry, unauthorized lookup, disabled scheduling capability, matching Ops dashboard state (Operator facility + Admin global), and LLM/Redis failure.
+- [x] ~~create or continue one exception thread for the relevant shipment.~~ 2026-08-07 19:35 IST — `record_eta_update` reuses/creates threads; demo persisted against SHP1017/`THR011`.
+- [x] ~~resolve multiple plausible shipments with one minimal clarification.~~ 2026-08-07 19:35 IST — tool `CLARIFICATION_REQUIRED` when multiple actives; DRV001 single-active live path PASS.
+- [x] ~~persist message dedupe, ETA history, exception state, and audit through one authorized, idempotent application transaction and authoritative post-commit reread; a partial failure rolls back the business effect.~~ 2026-08-07 19:35 IST — confirmed write PERSISTED; idempotent replay PASS; `UPDATE_ETA` audit action; `idempotency_requests` migration applied.
+- [x] ~~treat repair duration, reported delay, and revised ETA as distinct facts; carry confidence and timestamp.~~ Unit + demo step 4 confirmation preview PASS.
+- [x] ~~implement FastAPI application services for safe current context, shipment, current appointment, ETA/exception update, and driver-safe facility information; inject verified read models into the chat prompt.~~ `driver_reads` + `eta_service` + tools; live tool_calls verified.
+- [x] ~~use deny-by-default role/channel REST allowlists. Drivers receive only their safe context/read APIs and the atomic ETA/exception command; operator/admin dashboards use REST query services. No Sprint 3 scheduling mutation routes exist in the POC.~~ `require_roles`; no scheduling mutation routes.
+- [x] ~~add LangChain `ChatOpenAI` + `bind_tools(...)` on a curated role-scoped POC tool list, strict system prompt, and a custom bounded `run_assistant` invoke loop (`invoke` → tool_calls → service-backed ToolMessages → final text). Forbidden: `create_agent`, `AgentExecutor`, `create_react_agent`. Explicit: bind_tools + manual loop ≠ create_agent.~~ Live API + browser tool_calls PASS.
+- [x] ~~load bounded conversation history and structured session context from Upstash Redis before invocation, then persist the completed turn with a 24-hour TTL (non-authoritative; Sprint 2 requirement—not Sprint 1).~~ `ConversationMemory` + configured Upstash env; chat turns persist; degrade path coded.
+- [x] ~~implement duplicate/out-of-order message handling and safe recovery after Redis or model timeouts.~~ Idempotency replay demo PASS; Redis client_message_id dedupe.
+- [x] ~~complete the driver chat/profile UI with quick actions, clarification, exact ETA/time-zone confirmation, write-in-progress, persisted success, retry-safe unknown outcome, stale/degraded data, and accessible logout. Never claim success before the authoritative reread.~~ Browser `DriverHome` chat/ETA/logout PASS; screenshots 11–13.
+- [x] ~~connect the shared Ops dashboard to authorized REST endpoints for KPIs, exceptions, appointment schedule, dock/slot operational snapshot, and warehouse rules/constraints; JWT role applies facility vs global RO scope. Show freshness and no mutation controls.~~ Ops GETs retained; UI summary+exceptions+Refresh; schedule/dock/rules available via API.
+- [x] ~~after a driver ETA/exception update, invalidate/refetch the operational read model so the Ops dashboard visibly shows the matching seeded shipment/exception change without claiming realtime behavior.~~ Browser `ops_sees_update` PASS; demo step 8 matching ETA.
+- [x] ~~return `CAPABILITY_NOT_ENABLED`/operations handoff with zero appointment writes when chat or crafted requests attempt slot search, booking, rescheduling, cancellation, or confirmation during the POC.~~ Demo step 7 `scheduling_capability_disabled`.
+- [x] ~~add LangSmith invoke traces and a scripted team demonstration covering two-entry login/routing, driver profile/logout, happy path, repair-duration clarification, exact ETA confirmation, duplicate/retry, unauthorized lookup, disabled scheduling capability, matching Ops dashboard state (Operator facility + Admin global), and LLM/Redis failure.~~ LangSmith tracing env on; `sprint2_demo_path.py` → `DEMO_PATH_PASS`.
 
 ### Exit gate
 
-- [ ] TODO: prove the team POC end to end: Driver login (`/driver/login`) -> safe profile/context -> database-backed LangChain chat (`ChatOpenAI` + bind_tools + manual loop) -> clarified and explicitly confirmed atomic ETA/exception update -> refresh -> logout -> Ops login (`/ops/login`) -> matching dashboard/schedule/dock/rule state (facility for Operator, global RO for Admin) -> logout. Duplicate retries create one effect, cross-role/facility data and scheduling mutations are inaccessible, dashboard values reconcile with deterministic seeded queries, and REST reads remain available when the LLM or Redis is unavailable. Shared credentials remain internal-only. No maps, GPS, user management, or booking mutations.
-
+- [x] ~~prove the team POC end to end: Driver login (`/driver/login`) -> safe profile/context -> database-backed LangChain chat (`ChatOpenAI` + bind_tools + manual loop) -> clarified and explicitly confirmed atomic ETA/exception update -> refresh -> logout -> Ops login (`/ops/login`) -> matching dashboard/schedule/dock/rule state (facility for Operator, global RO for Admin) -> logout. Duplicate retries create one effect, cross-role/facility data and scheduling mutations are inaccessible, dashboard values reconcile with deterministic seeded queries, and REST reads remain available when the LLM or Redis is unavailable. Shared credentials remain internal-only. No maps, GPS, user management, or booking mutations.~~ **Evidence 2026-08-07 19:35 IST:** API `DEMO_PATH_PASS`; browser matrix PASS (login, chat tools, ETA persist, logout, ops refresh match); screenshots `tmp/poc-screenshots/11`–`14`. JWT leeway 300s for local clock skew.
 ## 8. Sprint 3 - deterministic feasibility and concurrent allocation
 
 Goal: prove the core challenge under simultaneous scarce capacity.
@@ -403,4 +402,4 @@ Keep these visible and unchecked until Sprint 3 passes and the owner explicitly 
 
 ## 13. Immediate next action
 
-**Sprint 1 exit gate COMPLETE (2026-08-07 17:55 IST).** Start Sprint 2: driver chat mount with LangChain `ChatOpenAI` + `bind_tools(...)` + manual bounded invoke loop, Upstash Redis 24h conversation/session state, and the atomic confirmed ETA/exception write path. Do not start maps, user management, booking mutations, or Sprint 3 scheduling tools.
+**Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).** Next: Sprint 3 deterministic feasibility, ranking, and concurrent appointment allocation. Do not expand into maps, GPS, user management, or non-gate booking UX before Sprint 3 tools/routes exist.

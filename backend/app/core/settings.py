@@ -23,6 +23,10 @@ class Settings(BaseSettings):
 
     # Sprint 2+ — declared so .env.example keys do not break settings load
     openai_api_key: str = ""
+    openrouter_api_key: str = ""
+    google_api_key: str = ""
+    llm_provider: str = "auto"  # auto | openai | openrouter | gemini
+    llm_model: str = ""  # optional override; defaults per provider
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
     langsmith_api_key: str = ""
@@ -49,6 +53,23 @@ class Settings(BaseSettings):
     @property
     def ready_auth(self) -> bool:
         return bool(self.supabase_url)
+
+    @property
+    def ready_openai(self) -> bool:
+        """Backward-compatible alias: True if any ChatOpenAI-compatible key is set."""
+        return self.ready_llm
+
+    @property
+    def ready_llm(self) -> bool:
+        return bool(
+            (self.openai_api_key or "").strip()
+            or (self.openrouter_api_key or "").strip()
+            or (self.google_api_key or "").strip()
+        )
+
+    @property
+    def ready_upstash(self) -> bool:
+        return bool(self.upstash_redis_rest_url and self.upstash_redis_rest_token)
 
 
 @lru_cache

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiGet } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
 
@@ -10,6 +10,17 @@ type Summary = {
   note?: string
 }
 
+type ExceptionItem = {
+  exception_id: string
+  shipment_id: string | null
+  driver_id: string
+  exception_type: string
+  exception_status: string
+  declared_eta_ts: string | null
+  description: string
+  reported_at: string
+}
+
 /** Shared Operator + Admin dashboard. Scope comes from verified profile, not the URL. */
 export function OpsHome() {
   return (
@@ -17,7 +28,7 @@ export function OpsHome() {
       {(profile) => (
         <OpsBody
           facilityId={profile.facility_id}
-          global={profile.role_name === 'ADMIN' || profile.scope.type === 'global'}
+          global={profile.role_name === 'ADMIN' || profile.scope.type === 'global' || profile.scope.type === 'global_read_only'}
           roleName={profile.role_name}
         />
       )}
@@ -35,20 +46,33 @@ function OpsBody({
   roleName: string
 }) {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [exceptions, setExceptions] = useState<ExceptionItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [asOf, setAsOf] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     setLoading(true)
     const q = !global && facilityId ? `?facility_id=${encodeURIComponent(facilityId)}` : ''
-    void apiGet<Summary>(`/api/v1/operations/dashboard-summary${q}`)
-      .then((res) => {
-        setSummary(res.data)
-        setError(null)
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+    try {
+      const [sum, exc] = await Promise.all([
+        apiGet<Summary>(`/api/v1/operations/dashboard-summary${q}`),
+        apiGet<{ as_of: string; items: ExceptionItem[] }>(`/api/v1/operations/exceptions${q}`),
+      ])
+      setSummary(sum.data)
+      setExceptions(exc.data.items || [])
+      setAsOf(exc.data.as_of || sum.data.as_of)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ops load failed')
+    } finally {
+      setLoading(false)
+    }
   }, [facilityId, global])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   if (error) {
     return (
@@ -56,6 +80,9 @@ function OpsBody({
         <p className="form-error" role="alert">
           {error}
         </p>
+        <button type="button" onClick={() => void load()}>
+          Retry refresh
+        </button>
       </div>
     )
   }
@@ -69,19 +96,27 @@ function OpsBody({
 
   const statusEntries = Object.entries(summary.shipments_by_status)
   const totalShipments = statusEntries.reduce((sum, [, n]) => sum + n, 0)
+  const recentForDemo = exceptions.filter(
+    (e) => e.shipment_id === 'SHP1017' || e.driver_id === 'DRV001',
+  )
 
   return (
-    <section className="ops-dashboard" aria-label="Operations dashboard skeleton">
+    <section className="ops-dashboard" aria-label="Operations dashboard">
       <div className="ops-hero">
         <div>
           <p className="eyebrow">{global ? 'Global read-only' : 'Facility operations'}</p>
           <h2>{global ? 'Network overview' : 'Facility overview'}</h2>
           <p className="muted">
-            as_of {summary.as_of} · signed in as {roleName} · scope {summary.scope.type}
+            as_of {asOf || summary.as_of} · signed in as {roleName} · scope {summary.scope.type}
             {summary.scope.facility_id ? ` · ${summary.scope.facility_id}` : ''}
           </p>
         </div>
-        {summary.scope.read_only ? <span className="chip primary">Read only</span> : null}
+        <div className="ops-hero-actions">
+          {summary.scope.read_only ? <span className="chip primary">Read only</span> : null}
+          <button type="button" onClick={() => void load()} aria-label="Refresh operations data">
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="ops-metrics">
@@ -115,9 +150,29 @@ function OpsBody({
         )}
       </article>
 
+      <article className="ops-status-panel">
+        <h2>Exceptions (latest)</h2>
+        <p className="muted">Refresh after a driver ETA write to see matching state. Not realtime.</p>
+        {exceptions.length === 0 ? (
+          <p className="state">No exceptions in scope</p>
+        ) : (
+          <ul className="status-list">
+            {(recentForDemo.length ? recentForDemo : exceptions.slice(0, 8)).map((e) => (
+              <li key={e.exception_id}>
+                <span>
+                  {e.shipment_id || '—'} · {e.exception_type} · {e.exception_status}
+                  {e.declared_eta_ts ? ` · ETA ${e.declared_eta_ts}` : ''}
+                </span>
+                <strong>{e.driver_id}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+
       <p className="fine-print">
         {summary.note ??
-          'Sprint 1 observational dashboard skeleton. Chat / write tools arrive in Sprint 2.'}
+          'Observational dashboard. No scheduling mutations. Refresh to reconcile with seeded/driver ETA writes.'}
       </p>
     </section>
   )

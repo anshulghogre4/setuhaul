@@ -13,7 +13,13 @@ from app.core.settings import Settings, get_settings
 from app.db.session import db
 
 ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
-    RoleName.DRIVER: ["driver:read_self", "shipment:read_own", "appointment:read_own"],
+    RoleName.DRIVER: [
+        "driver:read_self",
+        "shipment:read_own",
+        "appointment:read_own",
+        "eta:write_own",
+        "chat:own",
+    ],
     RoleName.OPERATIONS_EXECUTIVE: [
         "operations:read_facility",
         "shipment:read_facility",
@@ -31,6 +37,10 @@ ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
         "rules:read_global",
     ],
 }
+
+
+def get_settings_dep() -> Settings:
+    return get_settings()
 
 
 def get_request_id(request: Request) -> str:

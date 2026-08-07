@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { apiGet } from '../../core/http/api'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { apiGet, apiPost } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
 
 type DriverContext = {
@@ -9,6 +9,38 @@ type DriverContext = {
   current_appointment: Record<string, unknown> | null
   facility: Record<string, unknown> | null
   latest_eta: Record<string, unknown> | null
+}
+
+type ChatMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+type ChatResponse = {
+  thread_id: string
+  response: string
+  tool_calls: Array<{ name: string; args: Record<string, unknown> }>
+  memory_degraded: boolean
+  memory_degrade_reason: string | null
+  ux_state: string
+  confirmation?: {
+    shipment_id?: string
+    declared_eta_ts?: string
+    display_eta?: string
+    code?: string
+  } | null
+  duplicate?: boolean
+}
+
+type EtaWriteResult = {
+  status: string
+  display_eta?: string
+  shipment?: Record<string, unknown>
+  eta_update?: Record<string, unknown>
+  exception?: Record<string, unknown>
+  declared_eta_ts?: string
+  requires_confirmation?: boolean
 }
 
 export function DriverHome() {
@@ -34,30 +66,156 @@ function DriverBody({
   driverName: string
   driverId: string | null
 }) {
+  const statusId = useId()
   const [ctx, setCtx] = useState<DriverContext | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
-  const [composerNote, setComposerNote] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: `Hello ${driverName}. Ask about your shipment, appointment, facility, or report a revised ETA. I only use verified database facts.`,
+    },
+  ])
+  const [threadId, setThreadId] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const [uxState, setUxState] = useState<string>('ready')
+  const [pendingConfirm, setPendingConfirm] = useState<ChatResponse['confirmation']>(null)
+  const [memoryNote, setMemoryNote] = useState<string | null>(null)
+  const [lastTools, setLastTools] = useState<string[]>([])
+
+  async function refreshContext() {
+    setLoading(true)
+    try {
+      const res = await apiGet<DriverContext>('/api/v1/driver/context')
+      setCtx(res.data)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Context failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    setLoading(true)
-    void apiGet<DriverContext>('/api/v1/driver/context')
-      .then((res) => {
-        setCtx(res.data)
-        setError(null)
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+    void refreshContext()
   }, [userId])
+
+  async function sendChat(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed || sending) return
+    setSending(true)
+    setUxState('write_in_progress')
+    const clientMessageId = crypto.randomUUID()
+    setMessages((prev) => [...prev, { id: clientMessageId, role: 'user', content: trimmed }])
+    setDraft('')
+    try {
+      const res = await apiPost<ChatResponse>('/api/v1/chat', {
+        message: trimmed,
+        thread_id: threadId,
+        client_message_id: clientMessageId,
+      })
+      setThreadId(res.data.thread_id)
+      setUxState(res.data.ux_state || 'answered')
+      setPendingConfirm(res.data.confirmation ?? null)
+      setLastTools((res.data.tool_calls || []).map((t) => t.name))
+      if (res.data.memory_degraded) {
+        setMemoryNote(
+          `Conversation memory degraded (${res.data.memory_degrade_reason || 'unknown'}). REST still works.`,
+        )
+      } else {
+        setMemoryNote(null)
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${clientMessageId}-asst`,
+          role: 'assistant',
+          content: res.data.response,
+        },
+      ])
+      if (res.data.ux_state === 'persisted_success') {
+        await refreshContext()
+      }
+    } catch (err) {
+      setUxState('error')
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${clientMessageId}-err`,
+          role: 'system',
+          content: err instanceof Error ? err.message : 'Chat failed',
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
+  }
 
   function onComposerSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!draft.trim()) return
-    setComposerNote(
-      'Chat is a Sprint 1 shell only. Sprint 2 wires ChatOpenAI.bind_tools + a manual invoke loop.',
-    )
-    setDraft('')
+    void sendChat(draft)
+  }
+
+  async function confirmEtaWrite() {
+    if (!pendingConfirm?.shipment_id || !pendingConfirm.declared_eta_ts) return
+    setSending(true)
+    setUxState('write_in_progress')
+    const key = crypto.randomUUID()
+    try {
+      const res = await apiPost<EtaWriteResult>(
+        `/api/v1/shipments/${pendingConfirm.shipment_id}/eta-updates`,
+        {
+          declared_eta_ts: pendingConfirm.declared_eta_ts,
+          confirmation_eta_ts: pendingConfirm.declared_eta_ts,
+          confirmed: true,
+          confidence_code: 'HIGH',
+          delay_reason_code: 'TRAFFIC',
+          note: 'Driver confirmed via chat confirmation UX',
+          thread_id: threadId,
+          client_message_id: key,
+        },
+        { idempotencyKey: key },
+      )
+      if (res.data.status === 'PERSISTED') {
+        setUxState('persisted_success')
+        setPendingConfirm(null)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `eta-${key}`,
+            role: 'assistant',
+            content: `ETA persisted: ${res.data.display_eta || pendingConfirm.display_eta}. Ops can refresh to see the matching exception/ETA.`,
+          },
+        ])
+        await refreshContext()
+      } else {
+        setUxState('confirmation_required')
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `eta-pending-${key}`,
+            role: 'system',
+            content: 'Still awaiting confirmation of the exact ETA.',
+          },
+        ])
+      }
+    } catch (err) {
+      setUxState('retry_safe_unknown')
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `eta-err-${key}`,
+          role: 'system',
+          content:
+            (err instanceof Error ? err.message : 'ETA write failed') +
+            ' — if the network dropped after commit, retry with the same Idempotency-Key is safe.',
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
   }
 
   const displayName = ctx?.driver.driver_name ?? driverName
@@ -68,59 +226,100 @@ function DriverBody({
       : typeof ctx?.facility?.facility_id === 'string'
         ? ctx.facility.facility_id
         : 'Facility context'
+  const shipmentId =
+    typeof ctx?.primary_shipment?.shipment_id === 'string'
+      ? ctx.primary_shipment.shipment_id
+      : null
 
   return (
     <div className="driver-workspace">
-      <section className="chat-shell" aria-label="Driver AI assistant skeleton">
+      <section className="chat-shell" aria-label="Driver AI assistant">
         <div className="chat-history">
           <div className="chat-day">Today</div>
-          <div className="chat-row ai">
-            <div className="chat-meta">
-              <span className="chat-avatar" aria-hidden="true">
-                AI
-              </span>
-              <span>SetuHaul AI</span>
+          {messages.map((m) => (
+            <div key={m.id} className={`chat-row ${m.role === 'user' ? 'user' : 'ai'}`}>
+              <div className="chat-meta">
+                {m.role !== 'user' ? (
+                  <span className="chat-avatar" aria-hidden="true">
+                    AI
+                  </span>
+                ) : null}
+                <span>{m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'SetuHaul AI'}</span>
+              </div>
+              <div className={`chat-bubble ${m.role === 'user' ? 'glass-bubble' : 'ai-bubble'}`}>
+                <p>{m.content}</p>
+              </div>
             </div>
-            <div className="chat-bubble ai-bubble">
-              <p>
-                Hello {displayName}. This is your driver assistant shell for the Sprint 1 POC. Live
-                shipment, appointment, and ETA context appears beside this panel when available.
-              </p>
-              <p className="muted">
-                Agent replies arrive in Sprint 2. No invented operational advice is shown here.
-              </p>
-            </div>
-          </div>
-          <div className="chat-row user">
-            <div className="chat-meta">
-              <span>You</span>
-            </div>
-            <div className="chat-bubble glass-bubble">
-              <p>Show my current shipment and appointment status.</p>
-            </div>
-          </div>
-          <div className="chat-row ai">
-            <div className="chat-meta">
-              <span className="chat-avatar" aria-hidden="true">
-                AI
-              </span>
-              <span>SetuHaul AI</span>
-            </div>
-            <div className="chat-bubble ai-bubble">
-              <p>
-                Observational context loads from the API. Use the cards on the right — chat tools are
-                not connected yet.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
 
-        <form className="chat-composer" onSubmit={onComposerSubmit}>
-          <div className="composer-chips">
-            <span className="chip secondary">{status}</span>
-            <span className="chip primary">{facilityLabel}</span>
-            {driverId ? <span className="chip primary">{driverId}</span> : null}
+        <div className="composer-chips" style={{ padding: '0 16px' }}>
+          <span className="chip secondary">{status}</span>
+          <span className="chip primary">{facilityLabel}</span>
+          {driverId ? <span className="chip primary">{driverId}</span> : null}
+          <span className="chip secondary" id={statusId}>
+            UX: {uxState}
+          </span>
+        </div>
+
+        <div className="quick-actions" aria-label="Quick actions">
+          <button
+            type="button"
+            className="chip-btn"
+            disabled={sending}
+            onClick={() => void sendChat('Show my current shipment and appointment status.')}
+          >
+            View appointment
+          </button>
+          <button
+            type="button"
+            className="chip-btn"
+            disabled={sending}
+            onClick={() => void sendChat('What are my facility details?')}
+          >
+            Facility details
+          </button>
+          <button
+            type="button"
+            className="chip-btn"
+            disabled={sending}
+            onClick={() =>
+              void sendChat(
+                shipmentId
+                  ? `I need to update the ETA for ${shipmentId}. I will be late due to traffic.`
+                  : 'I need to update my ETA. I will be late.',
+              )
+            }
+          >
+            Update ETA
+          </button>
+        </div>
+
+        {pendingConfirm?.display_eta ? (
+          <div className="confirm-banner" role="region" aria-label="ETA confirmation">
+            <p>
+              Confirm exact ETA: <strong>{pendingConfirm.display_eta}</strong>
+            </p>
+            <div className="confirm-actions">
+              <button type="button" disabled={sending} onClick={() => void confirmEtaWrite()}>
+                Confirm &amp; write ETA
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={sending}
+                onClick={() => {
+                  setPendingConfirm(null)
+                  setUxState('ready')
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+        ) : null}
+
+        <form className="chat-composer" onSubmit={onComposerSubmit}>
           <div className="composer-row">
             <input
               type="text"
@@ -128,20 +327,19 @@ function DriverBody({
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Ask SetuHaul about routes, cargo, or facility access…"
               aria-label="Message SetuHaul AI"
+              disabled={sending}
             />
-            <button type="submit" aria-label="Send message (shell only)">
-              Send
+            <button type="submit" aria-label="Send message" disabled={sending || !draft.trim()}>
+              {sending ? '…' : 'Send'}
             </button>
           </div>
-          {composerNote ? (
-            <p className="fine-print" role="status">
-              {composerNote}
-            </p>
-          ) : (
-            <p className="fine-print">
-              Composer is a Stitch-inspired shell. Sprint 2 connects ChatOpenAI + bind_tools.
-            </p>
-          )}
+          <p className="fine-print" role="status" aria-live="polite">
+            {memoryNote
+              ? memoryNote
+              : lastTools.length
+                ? `Last tools: ${lastTools.join(', ')}`
+                : 'Live ChatOpenAI.bind_tools + manual invoke loop. Writes require explicit ETA confirmation.'}
+          </p>
         </form>
       </section>
 
@@ -160,8 +358,11 @@ function DriverBody({
               <h2>Operational context</h2>
               <p className="muted">as_of {ctx.as_of}</p>
               <p>
-                {ctx.driver.driver_name} · {ctx.driver.driver_id} · {ctx.driver.driver_status}
+                {displayName} · {ctx.driver.driver_id} · {ctx.driver.driver_status}
               </p>
+              <button type="button" className="secondary-btn" onClick={() => void refreshContext()}>
+                Refresh context
+              </button>
             </article>
             <article>
               <h2>Primary shipment</h2>
@@ -169,6 +370,14 @@ function DriverBody({
                 <pre>{JSON.stringify(ctx.primary_shipment, null, 2)}</pre>
               ) : (
                 <p className="state">No active shipment</p>
+              )}
+            </article>
+            <article>
+              <h2>Latest ETA</h2>
+              {ctx.latest_eta ? (
+                <pre>{JSON.stringify(ctx.latest_eta, null, 2)}</pre>
+              ) : (
+                <p className="state">No ETA row</p>
               )}
             </article>
             <article>

@@ -2,6 +2,48 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-07 20:25 IST - Gemini live PASS (ChatGoogleGenerativeAI + gemini-2.5-flash)
+
+- Saved owner Google/Gemini key to gitignored `.env` only (never printed). Live `ChatGoogleGenerativeAI` invoke **PASS** after default model bump: `gemini-2.0-flash` → **`gemini-2.5-flash`** (2.0 shut down June 2026).
+- Full provider live smoke now: OpenAI PASS, OpenRouter PASS, Gemini PASS. Unit **20 passed**.
+- Recommend rotating chat-pasted keys after POC. Agent/surface: Cursor (Composer).
+
+- Live smoke (keys in gitignored `.env` only; values not logged): **OpenAI PASS**, **OpenRouter PASS**, **Gemini FAIL** — pasted “Gemini” value was an OpenAI `sk-proj` key (works as OpenAI; rejected by Google).
+- Switched Gemini path to native LangChain **`ChatGoogleGenerativeAI`** (`langchain-google-genai`); OpenAI/OpenRouter remain `ChatOpenAI`. Factory rejects OpenAI-shaped keys in `GOOGLE_API_KEY` with a clear 503.
+- Deps: `langchain-google-genai` in `requirements.txt` / `pyproject.toml`. README + `.env.example` note Google AI Studio (`AIza…`) keys.
+- Verification: unit **20 passed** (factory + gemini class/key-shape tests). Gemini live invoke still blocked until a real Google key is provided. Recommend rotating chat-pasted keys after POC.
+- Agent/surface: Cursor (Composer). No secrets committed.
+
+## 2026-08-07 20:00 IST - README team guide + multi-provider LLM factory
+
+- Rewrote [README.md](README.md) Quick start for Sprint 1–2 POC: run steps, env table, demo login (emails + password env-var names; passwords stay OOB), demo script, LLM provider notes.
+- Extended [.env.example](.env.example): `LLM_PROVIDER`/`LLM_MODEL`, `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `SETUHAUL_POC_*` placeholders.
+- Added `backend/app/assistant/llm.py` ChatOpenAI factory: `auto` → OpenAI → OpenRouter → Gemini; explicit providers; same `bind_tools` path via `run_assistant`.
+- Settings: `openrouter_api_key`, `google_api_key`, `llm_provider`, `llm_model`; `ready_llm` (+ `ready_openai` alias).
+- Verification: backend unit **18 passed** (8 new factory tests). Live OpenRouter/Gemini smoke **not run** (keys unset in local `.env`; OpenAI key present for auto). Browser chat **not re-run** this turn.
+- Skills: none material beyond repo policy. Agent/surface: Cursor (Composer). No secrets committed.
+
+## 2026-08-07 19:35 IST - Sprint 2 exit gate COMPLETE
+
+- Closed Sprint 2 vertical slice: atomic ETA/exception write, `ChatOpenAI.bind_tools` + manual `run_assistant`, Upstash 24h memory, DriverHome live chat, Ops refresh match, LangSmith env tracing, scripted demo.
+- Fixes during proof: JWT `leeway=300` (local clock skew / immature `iat`); audit `action_type`=`UPDATE_ETA`; exception_type=`DELAY`; `tzdata` for Windows ZoneInfo; stripped UTF-8 BOM from gitignored env files after credential paste; killed stale multi-uvicorn listeners on :8000.
+- Credentials saved only to gitignored root `.env` / `.env.local` (OpenAI, Upstash, LangSmith). **Never printed.** Handoff recommends rotating keys pasted in chat after POC if the repo is shared.
+- Verification: backend unit **8 passed**; `docs/scripts/sprint2_demo_path.py` → **DEMO_PATH_PASS** (chat tools, confirmation gate, PERSISTED write, idempotent replay, `scheduling_capability_disabled`, ops matching ETA); browser localhost:5173 matrix PASS (driver login→LLM tools→ETA persist→logout→ops refresh match→logout). Screenshots `tmp/poc-screenshots/11`–`14` (gitignored).
+- Living status: Sprint 2 **COMPLETE**; Sprint 3 TODO next. Migration `20260807184700_sprint2_idempotency_requests.sql` applied via Supabase MCP.
+- Skills: supabase + postgres best practices for migration; playwright for browser proof.
+- Agent/surface: Cursor subagent (Composer). Dirty tree preserved (no commit; no secrets committed).
+
+## 2026-08-07 19:26 IST - Sprint 2 status re-baseline (honest verified vs incomplete)
+
+- Assessed dirty-tree Sprint 2 slice against Living §7 with runtime evidence. Living status → **Sprint 2 ACTIVE / IN PROGRESS** (exit gate remains open).
+- **Verified DONE (struck):** repair vs ETA distinction (unit + demo preview); FastAPI read/write services + tool injection; deny-by-default role REST allowlists; `ChatOpenAI.bind_tools` + `run_assistant` manual loop (live chat tool_calls on `SHP1017`).
+- **PARTIAL / IN PROGRESS (not struck):** exception thread + multi-shipment clarification (code only); atomic ETA/exception/idempotency write (code + migration applied live, but confirmed write **FAIL**); Upstash 24h memory (code + env present, round-trip not asserted); duplicate/replay; driver live chat UI (wired, browser chat not re-smoked); Ops UI (summary+exceptions only — schedule/dock/rules not wired); CAPABILITY_NOT_ENABLED (tool present, live denial not reached); LangSmith + demo script (script FAIL at write).
+- **Blocker:** `POST /api/v1/shipments/{id}/eta-updates` with `confirmed=true` → HTTP 500 `CheckViolationError` on `audit_logs_action_type_check` because code inserts `ETA_UPDATE` while DB allows `UPDATE_ETA`.
+- Credentials (lengths only, no secrets): `OPENAI_API_KEY` set; `UPSTASH_REDIS_REST_URL`/`TOKEN` set; `LANGSMITH_API_KEY` + tracing set.
+- Verification: `/health/live`+`/health/ready` PASS; backend unit **8 passed**; `sprint2_demo_path.py` steps 1–4 PASS, step 5 FAIL; Vite :5173 up; idempotency migration indexes present via Supabase MCP. Browser exit-gate chat UX **not run**. Dirty tree preserved (no commit).
+- Writeback: master plan Living + §7; wiki handoff/current-state/implementation/log; Memory MCP.
+- Agent/surface: Cursor subagent (Composer).
+
 ## 2026-08-07 18:36 IST - Tighten .gitignore to reduce commit noise
 
 - Expanded root `.gitignore`: `graphify-out/`, coverage/mypy/ruff caches, logs, `.DS_Store`/`Thumbs.db`, `.idea/`, root `.venv/`, broader `__pycache__`.

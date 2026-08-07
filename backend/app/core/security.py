@@ -40,6 +40,7 @@ class JwtVerifier:
                 algorithms=["ES256", "RS256", "HS256"],
                 audience=self._settings.supabase_jwt_audience,
                 issuer=self._settings.supabase_issuer,
+                leeway=300,
                 options={"require": ["exp", "sub", "aud"]},
             )
         except AppError:
