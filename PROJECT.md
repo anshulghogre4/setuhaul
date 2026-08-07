@@ -254,7 +254,7 @@ Redis with UpStash
 Redis should be used for
 
 - Session Cache
-- LangChain Checkpointer
+- LangChain conversation history in Upstash Redis
 - Frequently Used Queries
 - AI Conversation State
 

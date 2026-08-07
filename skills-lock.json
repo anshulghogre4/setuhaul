@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "software-architecture-design": {
+      "source": "vasilyu1983/ai-agents-public",
+      "sourceType": "github",
+      "skillPath": "frameworks/shared-skills/skills/software-architecture-design/SKILL.md",
+      "computedHash": "489a330442d0df096555d13a4d3c4e9ffa0511311b758d779e7eb277dc2cfad3"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

@@ -72,7 +72,7 @@ Port
 
 Redis is responsible for
 
-- LangChain checkpointing
+- LangChain conversation history
 - Session storage
 - Conversation cache
 - Frequently accessed operational data
@@ -317,13 +317,13 @@ Redis must automatically reconnect if the connection drops.
 
 ---
 
-# LangChain Checkpointer
+# LangChain Redis Conversation Memory
 
 Conversation state should be stored inside Redis.
 
 Every conversation thread should persist.
 
-Checkpoint key
+Conversation key
 
 ```
 thread_id

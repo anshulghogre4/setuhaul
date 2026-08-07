@@ -456,7 +456,7 @@ Conversation Memory
 
 Session Cache
 
-LangChain Checkpoints
+LangChain Conversation History
 
 Frequently Used Queries
 
