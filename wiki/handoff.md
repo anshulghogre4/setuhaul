@@ -10,6 +10,8 @@ last_updated: 2026-08-07
 
 ## Latest work
 
+- **2026-08-08 13:45 IST:** Renamed `web/` → `frontend/`; CI/README/gitignore/package name updated; `npm run build` PASS.
+- **2026-08-08 13:35 IST:** Added `GET /` root alive health ping (no more 404 on `:8000/`). README note; `/health/live` + `/health/ready` unchanged.
 - **2026-08-07 20:25 IST:** Gemini live **PASS** with `ChatGoogleGenerativeAI` + default `gemini-2.5-flash` (2.0 retired). OpenAI + OpenRouter + Gemini all live-verified.
 - **2026-08-07 20:20 IST:** Provider smoke + Gemini native LangChain class (Gemini blocked until real Google key + model bump).
 - **2026-08-07 20:00 IST:** README team Quick start + multi-provider LLM factory shipped.

@@ -33,7 +33,7 @@ Use **`http://localhost:5173`** for the UI (CORS allows both localhost and 127.0
 # 1) Env (never commit real secrets)
 cp .env.example .env
 # Fill Supabase, DATABASE_URL, at least one LLM key, Upstash, and POC passwords.
-# Frontend Vite vars also go in web/.env.local (see table below).
+# Frontend Vite vars also go in frontend/.env.local (see table below).
 
 # 2) Backend
 cd backend
@@ -44,19 +44,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 # 3) Frontend (second terminal)
-cd web
+cd frontend
 npm install
 npm run dev
 ```
 
-API: `http://127.0.0.1:8000` · UI: `http://localhost:5173`
+API: `http://127.0.0.1:8000` (root `/` is an alive health ping; also `/health/live`, `/health/ready`, `/docs`) · UI: `http://localhost:5173`
 
 ### Environment variables
 
 | Variable | Where | Purpose |
 |---|---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | root `.env` | Auth / JWKS |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` | `web/.env.local` | Browser client |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` | `frontend/.env.local` | Browser client |
 | `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` | root `.env` only | Backend DB / admin (never in browser) |
 | `LLM_PROVIDER`, `LLM_MODEL` | root `.env` | `auto` \| `openai` \| `openrouter` \| `gemini` |
 | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `GOOGLE_API_KEY` | root `.env` | LLM (`auto` = OpenAI → OpenRouter → Gemini) |
@@ -158,7 +158,7 @@ AI package: `backend/app/assistant/` (`llm.py` factory, `run_assistant.py`, tool
 ```
 SetuHaul/
 ├── backend/app/          # FastAPI API + assistant + services
-├── web/                  # React 19 frontend
+├── frontend/             # React 19 frontend
 ├── supabase/migrations/  # SQL migrations
 ├── plans/                # Living master plan + branch plans
 ├── wiki/                 # LLMWiki (handoff, current-state, …)

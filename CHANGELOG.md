@@ -2,6 +2,18 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-08 13:45 IST - Rename `web/` → `frontend/`
+
+- Renamed React app directory `web/` to `frontend/` (stopped Vite lock first). Package name `frontend`; CI working-directory + lockfile cache path updated; `.gitignore` ignores `frontend/node_modules` + `frontend/dist` (kept legacy `web/` ignore lines).
+- Updated README Quick start, `.env.example` under frontend, master-plan scaffold wording, `plans/branches/full-stack.md`. Historical changelog/wiki log lines that said `web/` left as past evidence.
+- Verification: `npm run build` in `frontend/` **PASS**. Agent/surface: Cursor (Composer).
+
+## 2026-08-08 13:35 IST - Root GET / health ping
+
+- Added `GET /` on FastAPI (`backend/app/main.py`) returning alive JSON (`status: ok` + links to `/health/live`, `/health/ready`, `/docs`) so opening `:8000/` is not 404.
+- README Quick start notes root is a health ping; UI remains `localhost:5173`.
+- Verification: TestClient `GET /` → 200; `/health/live` → 200; `/health/ready` → 200 (unchanged semantics). Agent/surface: Cursor (Composer).
+
 ## 2026-08-07 20:25 IST - Gemini live PASS (ChatGoogleGenerativeAI + gemini-2.5-flash)
 
 - Saved owner Google/Gemini key to gitignored `.env` only (never printed). Live `ChatGoogleGenerativeAI` invoke **PASS** after default model bump: `gemini-2.0-flash` → **`gemini-2.5-flash`** (2.0 shut down June 2026).

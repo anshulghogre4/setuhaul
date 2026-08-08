@@ -8,6 +8,14 @@ last_updated: 2026-08-07
 
 # Wiki log
 
+## 2026-08-08 13:45 IST | ingest | Rename web → frontend
+
+- Directory `web/` renamed to `frontend/`; CI/README/package updated; build PASS. Updated [[handoff]], CHANGELOG, master-plan scaffold wording.
+
+## 2026-08-08 13:35 IST | ingest | Root GET / health ping
+
+- FastAPI `GET /` returns alive JSON; README Quick start note. Smoke PASS. Updated [[handoff]], CHANGELOG.
+
 ## 2026-08-07 20:25 IST | verify | Gemini live PASS
 
 - Google key saved gitignored; `gemini-2.5-flash` invoke PASS via `ChatGoogleGenerativeAI`. All three providers live-verified. Updated [[handoff]], [[current-state]], CHANGELOG, Memory.

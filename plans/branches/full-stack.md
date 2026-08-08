@@ -19,7 +19,7 @@ tests/
 ## Frontend shape
 
 ```text
-web/src/
+frontend/src/
   app/
   core/auth/ core/http/ core/guards/
   shared/ui/ shared/models/

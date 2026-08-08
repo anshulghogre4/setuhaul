@@ -43,6 +43,17 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(Exception, unhandled_error_handler)
 
+    @app.get("/", tags=["health"])
+    async def root() -> dict[str, str]:
+        """Lightweight alive ping so opening :8000/ is not a 404."""
+        return {
+            "status": "ok",
+            "service": "SetuHaul API",
+            "health_live": "/health/live",
+            "health_ready": "/health/ready",
+            "docs": "/docs",
+        }
+
     app.include_router(health_auth.router)
     app.include_router(driver.router)
     app.include_router(operations.router)

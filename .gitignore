@@ -21,6 +21,8 @@ htmlcov/
 # Frontend
 web/node_modules/
 web/dist/
+frontend/node_modules/
+frontend/dist/
 
 # Generated / local scratch
 tmp/

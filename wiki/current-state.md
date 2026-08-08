@@ -12,7 +12,7 @@ last_verified: 2026-08-07
 
 - Sprint 1 exit gate COMPLETE (2026-08-07 17:55 IST).
 - **Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).**
-- React 19 web + FastAPI + Supabase PG SoT + Upstash 24h chat memory + LangChain `ChatOpenAI.bind_tools` manual loop.
+- React 19 `frontend/` (renamed from `web/` 2026-08-08) + FastAPI + Supabase PG SoT + Upstash 24h chat memory + LangChain `ChatOpenAI.bind_tools` manual loop.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI` default `gemini-2.5-flash`.
 - Unit tests: **20 passed**.
 

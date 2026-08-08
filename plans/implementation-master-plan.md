@@ -32,7 +32,7 @@ Verified repository foundation (not a completed implementation sprint):
 - [x] ~~Supabase baseline migration and seed files are present.~~ Verified by repository inspection on 2026-08-07; migration execution was not rerun.
 - [x] ~~Two database SQL test files are present.~~ Verified by repository inspection on 2026-08-07; tests were not run in this re-baseline.
 - [x] ~~Stitch design resources are present.~~ Four supplied design sets were found on 2026-08-07; the current POC selection remains set 2 pending any explicit design-decision revision.
-- [x] ~~Scaffold application runtime trees for `backend/` and `web/`.~~ Verified by repository inspection on 2026-08-07 15:45 IST. Auth users mapped; JWT/JWKS + `/auth/me` PASS 2026-08-07 16:35 IST; browser smoke PASS 16:53 IST.
+- [x] ~~Scaffold application runtime trees for `backend/` and `frontend/` (formerly `web/`).~~ Verified by repository inspection on 2026-08-07 15:45 IST. Auth users mapped; JWT/JWKS + `/auth/me` PASS 2026-08-07 16:35 IST; browser smoke PASS 16:53 IST. Renamed `web/` → `frontend/` 2026-08-08.
 
 ## 1. Executive decision
 
@@ -241,7 +241,7 @@ Goal: prove provider-neutral execution context, role scoping, data access, and a
 ### Build
 
 - [x] ~~Ratify ADRs 001-012, especially Supabase user mapping and additive control tables.~~ Evidence: `docs/adrs/SPRINT1_ADRS.md` (2026-08-07); Admin global RO closed.
-- [x] ~~Scaffold `web/` + `backend/` + root `.env.example`.~~ Evidence: trees present 2026-08-07 15:45 IST. Worker/Docker Compose remain TODO (DEFERRED); minimal CI added 2026-08-07 17:55 IST.
+- [x] ~~Scaffold `frontend/` (formerly `web/`) + `backend/` + root `.env.example`.~~ Evidence: trees present 2026-08-07 15:45 IST. Worker/Docker Compose remain TODO (DEFERRED); minimal CI added 2026-08-07 17:55 IST. Renamed 2026-08-08.
 - [x] ~~Add settings, DI, request IDs, response/error envelope, liveness, and readiness.~~ Evidence: `backend/app/core/*`, `GET /health/live|ready` (unit tests for envelope/context run 2026-08-07; live HTTP not run).
 - [x] ~~Create Supabase Auth users for the internal POC mapped to seeded Driver (`ROL001` / USR001) and Ops (facility-scoped Operator `ROL002` / USR101 and Admin `ROL008` / USR999).~~ Verified 2026-08-07 via MCP: `auth.users=3`, all three `auth_user_id` mapped. Passwords OOB in gitignored `.env.local`. Anon + `DATABASE_URL` + service role populated locally (gitignored) after Dashboard save.
 - [x] ~~Consolidated to `/driver/login` and `/ops/login` using one shared login form and Supabase email/password client.~~ Legacy `/operator/login` + `/admin/login` redirect to `/ops/login`. Browser smoke PASS 2026-08-07 16:53 IST on `http://localhost:5173`.
@@ -250,7 +250,7 @@ Goal: prove provider-neutral execution context, role scoping, data access, and a
 - [x] ~~Map verified Supabase subject via `public.users.auth_user_id`; refuse unmapped/disabled; ignore client ownership IDs.~~ Code + hosted column/index verified; USR001/USR101/USR999 mapped (MCP 2026-08-07).
 - [x] ~~`GET /api/v1/auth/me` safe profile DTO.~~ Live HTTP **PASS** 2026-08-07 16:35 IST: USR001 DRIVER facility; USR101 OPERATIONS_EXECUTIVE facility; USR999 ADMIN global_read_only. `/health/ready` PASS (`database_reachable=true`).
 - [x] ~~Profile menus and logout for Driver and Ops (Operator/Admin share ops shell).~~ Browser smoke: driver logout PASS → `/driver/login`; ops shell profile/logout present. Redis-thread detach N/A until Sprint 2.
-- [x] ~~POC backend-only secrets: service role never in browser; `.env.example` placeholders only.~~ Verified by file review 2026-08-07; `web/.env.local` is VITE-only.
+- [x] ~~POC backend-only secrets: service role never in browser; `.env.example` placeholders only.~~ Verified by file review 2026-08-07; `frontend/.env.local` is VITE-only.
 - [ ] TODO (DEFERRED until Sprint 2+): deepen async SQLAlchemy repositories beyond Sprint 1 inline SQL reads (current routers use parameterized SQLAlchemy `text()` against frozen baseline). Exit gate does not require the full repository refactor.
 - [x] ~~Ratify endpoint × role × scope matrix including Admin global read-only.~~ Evidence: ADR 005 + matrix in `docs/adrs/SPRINT1_ADRS.md`.
 - [x] ~~Implement Sprint 1 observational read APIs (driver context, shipment, current appointment, ops summary/exceptions/schedule/dock/constraints).~~ Live JWT reads PASS after asyncpg `statement_cache_size=0` pooler fix (2026-08-07 16:53 IST): `/api/v1/driver/context` + ops `dashboard-summary`. Formal integration test suite still TODO.
