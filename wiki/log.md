@@ -273,3 +273,11 @@ last_updated: 2026-08-07
 - Confirmed Sprint 3-relevant live state: open/blocked slot inventory, current confirmed and pending-confirmation appointments, active exceptions, and allocation guard indexes `ux_active_appointment_per_slot` + `ux_current_active_appointment_per_shipment`.
 - No schema, data, grant, RLS, or migration changes were made. Supabase changelog checked; Data API public-table auto-exposure change does not affect this direct Postgres inspection.
 - Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 20:35 IST | verification | Live same-slot concurrency proof
+
+- Added `backend/tests/integration/test_live_scheduling_concurrency.py`, guarded by `DATABASE_URL` and `SETUHAUL_RUN_LIVE_DB_TESTS=1`.
+- The test creates temporary live Supabase `CODX` shipment/slot fixtures, runs two independent async sessions through the real `request_slot` service against the same slot, and verifies exactly one `SLOT_REQUESTED` winner plus one `SLOT_CONFLICT_REFRESH_REQUIRED` loser.
+- Verified one active appointment on the contested slot, one booking audit row, two idempotency rows, and zero leftover `CODX` idempotency/appointment/slot/shipment rows after cleanup.
+- Added `pytest-asyncio` to `backend/pyproject.toml` and kept generated `backend/uv.lock` for reproducible async integration testing.
+- Verification: default backend tests PASS, 41 passed and 1 live integration skipped; explicit live concurrency proof PASS, 1 passed. Supabase changelog checked; no schema/RLS/Data API change made.
+- Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.

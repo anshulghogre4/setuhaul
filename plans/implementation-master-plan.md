@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-10 20:16 IST (deterministic slot ranking now returns tunable score/factors; live concurrency gate still open)
+Last refreshed: 2026-08-10 20:35 IST (live same-slot contention proof added; Sprint 3 exit gate still open for remaining lifecycle/escalation flows)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -302,16 +302,16 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 - [ ] **IN PROGRESS:** implement a pure feasibility engine and versioned deterministic ranking policy. 2026-08-10 20:16 IST evidence: `backend/app/scheduling/feasibility.py` computes DB-backed candidate feasibility and now returns explicit `rank_score` plus ranking factors for priority, lateness, ETA wait, fit slack, dock match, disruption, and stable tie-break. `backend/app/scheduling/constraints.json` owns `priority_scores` and `score_weights`; backend unit tests pass. Live authenticated DB smoke and full allocator proof remain TODO.
 - [ ] **IN PROGRESS:** deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists. `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` are registered for Driver LangChain tools; `get_conversation_memory` is registered as infrastructure memory context, not a business-data tool. Remaining Sprint 3 tools are TODO.
 - [ ] **IN PROGRESS:** return fresh, explainable, non-reserved options with snapshot metadata. `find_feasible_slots` returns `DISPLAYED_NOT_RESERVED` options, policy version, `as_of`, checked constraints, and no-slot escalation payloads; live authenticated DB smoke not run because local env files are absent and pasted secrets were not persisted.
-- [ ] **IN PROGRESS:** implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows. 2026-08-10 19:50 IST evidence: `request_slot` transactionally revalidates an exact selected slot, writes `PENDING_CONFIRMATION`, audit, and idempotency, maps PostgreSQL allocation unique-index races to HTTP 409 conflict refresh with zero appointment writes, and `get_appointment_request_status` reads pending/confirmed/closed request state without mutation; reschedule/confirm/cancel/reject/expire and live concurrency proof remain TODO.
+- [ ] **IN PROGRESS:** implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows. 2026-08-10 20:35 IST evidence: `request_slot` transactionally revalidates an exact selected slot, writes `PENDING_CONFIRMATION`, audit, and idempotency, maps same-slot contention to conflict refresh, and `get_appointment_request_status` reads pending/confirmed/closed request state without mutation. Live same-slot proof PASS via `backend/tests/integration/test_live_scheduling_concurrency.py`; reschedule/confirm/cancel/reject/expire remain TODO.
 - [ ] TODO: invalidate/recompute options on ETA correction, dock closure, capacity change, appointment cancellation, check-in, or unload overrun.
 - [ ] TODO: add human escalation records/queue for no-slot, contradictory, regulated, emergency, or approval-required cases.
 - [ ] TODO: add the operations exception queue and appointment/dock/queue views needed for takeover.
-- [ ] **IN PROGRESS:** add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot. 2026-08-10 19:50 IST evidence: unit coverage verifies app-level mapping of the two PostgreSQL partial unique allocation guards; real parallel database contention test remains TODO.
+- [ ] **IN PROGRESS:** add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot. 2026-08-10 20:35 IST evidence: `backend/tests/integration/test_live_scheduling_concurrency.py` runs two independent async sessions against live Supabase for the same temporary slot and verifies exactly one `SLOT_REQUESTED` winner, one `SLOT_CONFLICT_REFRESH_REQUIRED` loser, one active appointment, audit/idempotency evidence, and zero leftover `CODX` rows. Broader 10-driver/3-4-slot load test remains TODO.
 - [ ] TODO: add end-to-end demonstrations for stale choice, losing a race, cancellation releasing capacity, and no feasible slot.
 
 ### Exit gate
 
-- [ ] TODO: prove exactly one same-slot contender succeeds; every loser receives a conflict-safe refreshed response; no invalid option is confirmed; all transitions have a complete audit trail; and a no-feasible-slot case escalates safely.
+- [ ] TODO: complete the remaining exit-gate proof: same-slot two-client contention has live evidence (2026-08-10 20:35 IST), but broader contention/load, no invalid confirmed option across stale choices, complete transition audit trail, and no-feasible-slot safe escalation still need objective evidence.
 
 ## 9. Edge-case test catalogue
 

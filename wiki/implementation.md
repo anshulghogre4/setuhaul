@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 20:16 IST):** `find_feasible_slots` now returns explicit deterministic ranking scores/factors driven by editable constraints-registry weights, `request_slot` is implemented as the first transactional pending-confirmation path, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and allocation unique-index races map to HTTP 409 conflict refresh. No Sprint 3 exit gate item was struck; live authenticated smoke, real same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
+**Living status refresh (2026-08-10 20:35 IST):** `find_feasible_slots` returns explicit deterministic ranking scores/factors, `request_slot` is implemented as the first transactional pending-confirmation path, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and live same-slot contention now proves one winner plus one conflict-safe refreshed loser. The Sprint 3 exit gate remains open because reschedule/confirm/cancel/reject/expire flows, broader load proof, and no-slot escalation demo remain TODO.
 
 ## Challenge brief analysis
 
@@ -41,7 +41,7 @@ The brief's expected demonstration requires: driver delay clarification, later-s
 
 On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards and proportional status bars; the app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
 
-Immediate action: live-smoke `find_feasible_slots`, `request_slot`, and `get_appointment_request_status`, then add same-slot concurrency tests and the reschedule/confirm/cancel flows.
+Immediate action: live-smoke authenticated API/chat paths for `find_feasible_slots`, `request_slot`, and `get_appointment_request_status`, then add reschedule/confirm/cancel/reject/expire flows and the no-slot escalation demo.
 
 ## Redis Conversation Memory Tool
 
@@ -70,6 +70,8 @@ On 2026-08-10, `backend/app/scheduling/allocation.py` added `request_slot` as th
 The REST route is `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request`, and the Driver LangChain allowlist includes `request_slot` for exact selected slot IDs. This is still not final confirmation; reschedule, cancellation, and confirmation remain separate TODO flows.
 
 On 2026-08-10, `request_slot` was hardened for residual allocation races. If PostgreSQL rejects an insert through `ux_active_appointment_per_slot` or `ux_current_active_appointment_per_shipment`, the service rolls back, recomputes options, records the 409 idempotency response, and returns `SLOT_CONFLICT_REFRESH_REQUIRED` with zero appointment writes. The HTTP route now returns 409 for this conflict outcome while preserving refreshed options in the response body.
+
+On 2026-08-10 20:35 IST, `backend/tests/integration/test_live_scheduling_concurrency.py` added an opt-in live Supabase proof for two independent async sessions requesting the same temporary slot. The proof verifies exactly one `SLOT_REQUESTED` result, one `SLOT_CONFLICT_REFRESH_REQUIRED` result, one active appointment on the slot, one booking audit row, two idempotency rows, and zero leftover temporary `CODX` rows after cleanup. The test is skipped by default unless `DATABASE_URL` and `SETUHAUL_RUN_LIVE_DB_TESTS=1` are set.
 
 ## Sprint 3 Appointment Request Status
 

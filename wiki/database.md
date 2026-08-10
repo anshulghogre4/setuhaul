@@ -25,7 +25,7 @@ The baseline keeps PostgreSQL as the final allocation authority through partial 
 - `ux_active_appointment_per_slot` prevents more than one active `PENDING_CONFIRMATION`, `CONFIRMED`, or `IN_PROGRESS` appointment per slot.
 - `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
 
-As of 2026-08-10 19:50 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. No schema or RLS change was made; real parallel transaction proof is still required before the Sprint 3 exit gate can close.
+As of 2026-08-10 20:35 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. `backend/tests/integration/test_live_scheduling_concurrency.py` proves two independent live Supabase sessions competing for the same temporary slot yield exactly one winner and one conflict refresh, then cleans all temporary rows. No schema or RLS change was made; broader load proof and remaining lifecycle transitions are still required before the Sprint 3 exit gate can close.
 
 ## Live catalog inspection (2026-08-10 20:23 IST)
 
