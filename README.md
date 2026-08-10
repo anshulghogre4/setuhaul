@@ -73,11 +73,11 @@ Passwords are **not** in git. Owner shares them privately; put them in local `.e
 
 | Portal | URL | Email | Role | Password env var |
 |---|---|---|---|---|
-| Driver | `http://localhost:5173/driver/login` | `ravi.kumar@setuhaul.com` | DRIVER (`USR001`) | `SETUHAUL_POC_DRIVER_PASSWORD` |
-| Ops (Operator) | `http://localhost:5173/ops/login` | `priya.mehta@setuhaul.com` | OPERATIONS_EXECUTIVE (`USR101`) | `SETUHAUL_POC_OPERATOR_PASSWORD` |
-| Ops (Admin) | `http://localhost:5173/ops/login` | `admin@setuhaul.com` | ADMIN (`USR999`) | `SETUHAUL_POC_ADMIN_PASSWORD` |
+| Driver | `http://localhost:5173/driver/login` | `ravi.kumar@setuhaul.com` (also amit.singh, vikas.sharma) | DRIVER | `SETUHAUL_POC_DRIVER_PASSWORD` |
+| Ops | `http://localhost:5173/ops/login` | `priya.mehta@setuhaul.com` (also kavita.rao, arvind.nair, rahul.verma, anjali.kapoor, deepak.joshi) | facility ops roles | `SETUHAUL_POC_OPERATOR_PASSWORD` |
+| Ops | `http://localhost:5173/ops/login` | `admin@setuhaul.com` (also meera.iyer, suresh.menon, sanjay.gupta, neha.bansal) | global ops / admin roles | `SETUHAUL_POC_ADMIN_PASSWORD` |
 
-These emails are seeded in Supabase Auth and mapped via `users.auth_user_id`.
+These emails are seeded in Supabase Auth and mapped via `users.auth_user_id`. Same password per bucket.
 
 ### Demo script (happy path)
 

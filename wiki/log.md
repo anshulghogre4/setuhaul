@@ -8,6 +8,24 @@ last_updated: 2026-08-07
 
 # Wiki log
 
+## 2026-08-10 23:21 IST | query | Login preflight hang
+
+- Stuck `/api/v1/auth/me` preflight was caused by dead/crashed backend venv, not duplicate frontend auth calls.
+- Backend restarted healthy; CORS OPTIONS verified. Sprint status unchanged.
+
+## 2026-08-10 23:12 IST | ingest | POC roster moved to local share file
+
+- Team share file: gitignored `POC_TEAM_ACCOUNTS.local.md` (all 8 roles × 14 users + 3 shared passwords).
+- Cleared POC credentials from `.env` / `.env.local`. No passwords in wiki.
+- Sprint status unchanged.
+
+## 2026-08-10 23:05 IST | ingest | Full Auth inventory + remove reset script
+
+- Created Auth for USR102–USR106 using existing role-shared `.env.local` passwords; live `auth.users=14` all mapped.
+- Expanded ops portal/permissions for deferred roles; deleted `docs/scripts/create_poc_auth_users.py`.
+- Updated [[database]] full inventory table. No passwords in wiki.
+- Verification: password-grant PASS; execution_context unit tests PASS (6). Sprint 3 status unchanged.
+
 ## 2026-08-10 22:39 IST | configuration | Local Gemini key and Flash Latest default
 
 - Stored the provided Gemini key in gitignored `.env.local`, selected `LLM_PROVIDER=gemini`, and set `LLM_MODEL=gemini-flash-latest`.

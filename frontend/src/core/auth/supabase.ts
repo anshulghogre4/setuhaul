@@ -22,9 +22,19 @@ export const portalLogin: Record<Portal, string> = {
   ops: '/ops/login',
 }
 
+const OPS_PORTAL_ROLES = new Set([
+  'OPERATIONS_EXECUTIVE',
+  'WAREHOUSE_PLANNER',
+  'OPERATIONS_MANAGER',
+  'FACILITY_MANAGER',
+  'TRANSPORT_MANAGER',
+  'REGIONAL_OPERATIONS_HEAD',
+  'ADMIN',
+])
+
 export function roleToPortal(roleName: string): Portal | null {
   if (roleName === 'DRIVER') return 'driver'
-  if (roleName === 'OPERATIONS_EXECUTIVE' || roleName === 'ADMIN') return 'ops'
+  if (OPS_PORTAL_ROLES.has(roleName)) return 'ops'
   return null
 }
 
