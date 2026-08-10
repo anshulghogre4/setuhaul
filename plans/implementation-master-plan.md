@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-10 23:01 IST (Redis chat memory is now scoped by authenticated user + browser session + thread; Sprint 3 exit gate still open for remaining lifecycle/escalation/load flows)
+Last refreshed: 2026-08-10 23:24 IST (LLM env loading is launch-directory safe and Driver welcome uses verified context; Sprint 3 exit gate still open for remaining lifecycle/escalation/load flows)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -41,6 +41,7 @@ Latest verified deltas since Sprint 2 gate:
 - [x] ~~Clarify project memory architecture as Redis-only application runtime memory; remove project Memory MCP configs from active agent setup.~~ Evidence 2026-08-10 22:20 IST: checked-in instructions/tooling docs updated; Redis remains non-authoritative 24-hour conversation/session state.
 - [x] ~~Configure current Gemini provider default to a model available for the provided key without committing secrets.~~ Evidence 2026-08-10 22:39 IST: gitignored `.env.local` set locally, `backend/app/assistant/llm.py` defaults Gemini to `gemini-flash-latest`, LLM factory tests PASS, direct Google REST smoke PASS. Current LangChain Gemini invoke must be rechecked after dev environment restart.
 - [x] ~~Scope Redis conversation memory and client-message dedupe by authenticated user, browser session id, and thread id.~~ Evidence 2026-08-10 23:01 IST: `/chat` accepts `session_id`, Driver UI creates a stable `sessionStorage` id, Redis key parts are normalized, and backend tests prove same-user/same-thread session isolation.
+- [x] ~~Make backend env loading robust so local `.env.local` keys are found from repo root, backend, or tool-specific launch directories.~~ Evidence 2026-08-10 23:24 IST: `Settings()` reports `ready_llm=True`, `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-flash-latest`, and `ready_upstash=True` from both repo root and `backend/` without printing secrets.
 
 ## 1. Executive decision
 

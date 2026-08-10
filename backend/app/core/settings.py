@@ -1,12 +1,22 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+REPO_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Prefer repo-root env files when API is started from backend/
-        env_file=(".env", ".env.local", "../.env", "../.env.local"),
+        # Load gitignored local env consistently whether API starts from repo root,
+        # backend/, or a tool-specific working directory.
+        env_file=(
+            BACKEND_DIR / ".env",
+            BACKEND_DIR / ".env.local",
+            REPO_DIR / ".env",
+            REPO_DIR / ".env.local",
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )

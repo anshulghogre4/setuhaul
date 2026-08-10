@@ -2,6 +2,15 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-10 23:24 IST - Fix local Driver chat LLM env and greeting mismatch
+
+- Hardened `backend/app/core/settings.py` so backend/repo `.env` and `.env.local` files are resolved from source-relative paths instead of depending on the process working directory. This fixes the local Driver chat `No LLM API key configured` failure after restarting the API.
+- Updated `frontend/src/features/driver/DriverHome.tsx` so the initial SetuHaul AI welcome renders from the verified live driver context display name instead of freezing the auth-profile name and drifting from the console header.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: env smoke from both `backend/` and repo root reported `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-flash-latest`, `ready_llm=True`, and `ready_upstash=True` without printing secrets; focused backend tests PASS (`14 passed`); full backend tests PASS (`43 passed, 1 skipped`); frontend `npm run lint` PASS; frontend `npm run build` PASS; `git diff --check` run after writeback.
+- Runtime note: stale backend process on port 8000 was stopped, but local command policy blocked hidden process restart via `Start-Process`; restart the backend manually before browser retest.
+- Agent/surface: Codex.
+
 ## 2026-08-10 23:01 IST - Scope Redis chat memory by browser session
 
 - Added `session_id` to the Driver chat request/response path so Redis memory is scoped by authenticated user, browser session, and thread instead of user/thread only.

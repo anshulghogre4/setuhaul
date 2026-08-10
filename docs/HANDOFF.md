@@ -16,6 +16,7 @@ The canonical LLMWiki handoff is now `wiki/handoff.md`. This file remains as a c
 
 - 2026-08-10 22:46 IST: reconciled the master implementation plan from project beginning through latest work, striking completed items with evidence and listing remaining/deferred next work.
 - 2026-08-10 23:01 IST: scoped Redis chat memory by authenticated user, browser session id, and thread id; backend/frontend tests passed.
+- 2026-08-10 23:24 IST: fixed local Driver chat LLM env loading and stale welcome-name rendering; backend process on port 8000 was stopped, but hidden restart was blocked by local policy.
 - 2026-08-10: completed UI polish, individual POC Auth account expansion, Redis-only architecture correction, Gemini default refresh, and Sprint 3 scheduling/concurrency groundwork.
 
 ## Decisions and cautions
@@ -33,4 +34,4 @@ The canonical LLMWiki handoff is now `wiki/handoff.md`. This file remains as a c
 
 ## Next safe action
 
-Follow section 13 of `plans/implementation-master-plan.md`: recheck live LangChain Gemini after dev restart, live-smoke authenticated scheduling/chat paths, then implement appointment lifecycle transitions and escalation/takeover proof.
+Start/restart the backend, then follow section 13 of `plans/implementation-master-plan.md`: recheck live LangChain Gemini, live-smoke authenticated scheduling/chat paths, then implement appointment lifecycle transitions and escalation/takeover proof.

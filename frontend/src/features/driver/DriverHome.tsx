@@ -111,13 +111,7 @@ function DriverBody({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hello ${driverName}. Ask about your shipment, appointment, facility, or report a revised ETA. I only use verified database facts.`,
-    },
-  ])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [threadId, setThreadId] = useState<string | null>(null)
   const [sessionId] = useState(() => getDriverSessionId(userId))
   const [sending, setSending] = useState(false)
@@ -288,6 +282,20 @@ function DriverBody({
         </div>
         <div className="chat-history">
           <div className="chat-day">Today</div>
+          <div className="chat-row ai">
+            <div className="chat-meta">
+              <span className="chat-avatar" aria-hidden="true">
+                AI
+              </span>
+              <span>SetuHaul AI</span>
+            </div>
+            <div className="chat-bubble ai-bubble">
+              <p>
+                Hello {displayName}. Ask about your shipment, appointment, facility, or report a
+                revised ETA. I only use verified database facts.
+              </p>
+            </div>
+          </div>
           {messages.map((m) => (
             <div key={m.id} className={`chat-row ${m.role === 'user' ? 'user' : 'ai'}`}>
               <div className="chat-meta">

@@ -51,6 +51,8 @@ This is application memory for chat continuity. It must never be treated as Post
 
 On 2026-08-10 23:01 IST, Redis chat memory was tightened to include a browser `session_id` namespace in addition to authenticated `user_id` and `thread_id`. The Driver UI now creates a stable per-tab/browser-session id in `sessionStorage` and sends it to `/api/v1/chat`; `ConversationMemory` normalizes Redis key parts and scopes history, structured session state, and client-message dedupe to `user_id + session_id + thread_id`. This prevents two active sessions that reuse a thread id from reading each other's Redis memory. The session id is not an authorization source; Supabase JWT and server-side profile mapping remain authoritative.
 
+On 2026-08-10 23:24 IST, backend settings were hardened to load gitignored backend/repo `.env` and `.env.local` files through source-relative paths, fixing the local `No LLM API key configured` chat error after a backend restart. Driver chat welcome copy now renders from the verified live driver context so it cannot show a stale auth-profile name while the header shows a different driver.
+
 ## Sprint 3 constraints registry
 
 On 2026-08-10, Sprint 3 started with an editable deterministic constraints registry at `backend/app/scheduling/constraints.json`. The file centralizes the project constraints that must shape implementation: PostgreSQL authority, LangChain-only typed orchestration, Redis as 24-hour non-authoritative state, no invented operational data, feasibility hard constraints, deterministic ranking, appointment lifecycle semantics, option invalidation triggers, no-slot escalation payloads, and required write-safety controls.

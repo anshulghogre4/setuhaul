@@ -318,3 +318,10 @@ last_updated: 2026-08-07
 - Updated the Driver UI to create a stable `sessionStorage` session id and send it with chat turns; the id is not an authorization source.
 - Updated [[ai-system]], [[implementation]], [[current-state]], [[testing]], [[handoff]], the Living sprint scoreboard, and root CHANGELOG.
 - Verification: focused backend tests PASS, 18 passed; full backend tests PASS, 43 passed and 1 skipped; frontend lint PASS; frontend build PASS; `git diff --check` run after writeback.
+
+## 2026-08-10 23:24 IST | implementation | Driver chat env and greeting fix
+
+- Hardened `backend/app/core/settings.py` so `.env` and `.env.local` load from source-relative backend/repo paths, fixing the local chat `No LLM API key configured` state after backend restart.
+- Changed Driver chat welcome rendering so it uses the verified live driver context name instead of a stale initial auth-profile name.
+- Updated [[current-state]], [[implementation]], [[testing]], [[handoff]], the Living sprint scoreboard, and root CHANGELOG.
+- Verification: env smoke PASS from both repo root and `backend/` with `ready_llm=True`/Gemini model visible and no secrets printed; focused backend tests PASS, 14 passed; full backend tests PASS, 43 passed and 1 skipped; frontend lint PASS; frontend build PASS. Stale port-8000 backend process was stopped; local policy blocked hidden restart, so manual backend restart is required before browser retest.
