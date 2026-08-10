@@ -20,6 +20,7 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 - Driver LangChain tools now include `find_feasible_slots` (2026-08-10), which calls the deterministic feasibility service and returns non-reserved options or escalation. Appointment mutation intents still use `scheduling_capability_disabled` until transaction-safe allocation services exist.
 - Driver LangChain tools now also include `request_slot` (2026-08-10), which can request an exact selected `slot_id` and create `PENDING_CONFIRMATION` through deterministic backend code. It does not confirm appointments; reschedule/cancel/confirm intents remain disabled until their services exist.
 - Driver LangChain tools now also include `get_appointment_request_status` (2026-08-10), which reads the authoritative appointment request lifecycle after `request_slot` and reports pending/confirmed/closed/no-request states without mutating appointments.
+- Driver LangChain tools now also include `get_conversation_memory` (2026-08-10), which reads bounded current-thread Upstash Redis chat/session context. It is infrastructure memory only, 24-hour TTL, non-authoritative, and never replaces PostgreSQL-backed operational tools.
 
 ## Tool count and sprint placement
 
@@ -29,13 +30,13 @@ Matrix in `plans/implementation-master-plan.md` §5.2: **26** named capabilities
 |---|---|
 | Sprint 1 | Observational **services/REST** for ~9 read capabilities. No chat mount; no model tool registration; **Upstash not required**. |
 | Sprint 2 | Register POC tools via `bind_tools`; add ETA/exception tools; **Upstash required** (24h non-authoritative conversation/session memory). **COMPLETE** 2026-08-07 19:35 IST. |
-| Sprint 3 | `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` registered 2026-08-10. Remaining scheduling/search/report tools require deterministic services before registration. |
+| Sprint 3 | `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` registered 2026-08-10. `get_conversation_memory` registered as infrastructure memory context. Remaining scheduling/search/report tools require deterministic services before registration. |
 
 Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are internal—not direct model registration. Infra (history, audit, authz, idempotency, redaction) is not model-selectable.
 
 ## Memory layers
 
-- **Application memory:** Upstash Redis conversation history/session context with a **24-hour TTL**, non-authoritative. PostgreSQL refreshes business facts. Implemented in `ConversationMemory` (`backend/app/services/redis_memory.py`).
+- **Application memory:** Upstash Redis conversation history/session context with a **24-hour TTL**, non-authoritative. PostgreSQL refreshes business facts. Implemented in `ConversationMemory` (`backend/app/services/redis_memory.py`); `get_conversation_memory` exposes a bounded current-thread snapshot to the Driver LangChain tool loop.
 - **Coding-agent memory:** project Memory MCP knowledge graph in ignored `.agent-memory/memory.jsonl`.
 - **Repository memory:** checked-in LLMWiki, changelog, plans, and source files.
 

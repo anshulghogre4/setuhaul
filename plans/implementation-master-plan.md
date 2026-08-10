@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-10 19:50 IST (`request_slot` now maps PostgreSQL allocation unique-index races to HTTP 409 conflict refresh; live concurrency gate still open)
+Last refreshed: 2026-08-10 19:59 IST (`get_conversation_memory` Redis tool added; live concurrency gate still open)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -300,7 +300,7 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 - [ ] TODO: replace shared POC credentials with individual Supabase users before production so audit records identify the responsible teammate/user.
 - [ ] TODO: add session revocation, password-rotation, disabled-user, and stale-role-claim hardening, then repeat all role/IDOR tests.
 - [ ] **IN PROGRESS:** implement a pure feasibility engine and versioned deterministic ranking policy. 2026-08-10 19:12 IST evidence: `backend/app/scheduling/feasibility.py` computes DB-backed candidate feasibility and deterministic ranking for `find_feasible_slots`; unit tests pass. Transactional allocator is not yet implemented.
-- [ ] **IN PROGRESS:** deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists. `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` are registered for Driver LangChain tools; remaining Sprint 3 tools are TODO.
+- [ ] **IN PROGRESS:** deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists. `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` are registered for Driver LangChain tools; `get_conversation_memory` is registered as infrastructure memory context, not a business-data tool. Remaining Sprint 3 tools are TODO.
 - [ ] **IN PROGRESS:** return fresh, explainable, non-reserved options with snapshot metadata. `find_feasible_slots` returns `DISPLAYED_NOT_RESERVED` options, policy version, `as_of`, checked constraints, and no-slot escalation payloads; live authenticated DB smoke not run because local env files are absent and pasted secrets were not persisted.
 - [ ] **IN PROGRESS:** implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows. 2026-08-10 19:50 IST evidence: `request_slot` transactionally revalidates an exact selected slot, writes `PENDING_CONFIRMATION`, audit, and idempotency, maps PostgreSQL allocation unique-index races to HTTP 409 conflict refresh with zero appointment writes, and `get_appointment_request_status` reads pending/confirmed/closed request state without mutation; reschedule/confirm/cancel/reject/expire and live concurrency proof remain TODO.
 - [ ] TODO: invalidate/recompute options on ETA correction, dock closure, capacity change, appointment cancellation, check-in, or unload overrun.

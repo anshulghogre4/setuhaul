@@ -43,6 +43,12 @@ On 2026-08-10, the React frontend was aesthetically tightened without expanding 
 
 Immediate action: live-smoke `find_feasible_slots`, `request_slot`, and `get_appointment_request_status`, then add same-slot concurrency tests and the reschedule/confirm/cancel flows.
 
+## Redis Conversation Memory Tool
+
+On 2026-08-10, the Driver LangChain allowlist gained `get_conversation_memory`, backed by `ConversationMemory.snapshot(...)` in `backend/app/services/redis_memory.py`. The tool reads only the authenticated user and current thread's bounded Upstash Redis history/session context, returns 24-hour TTL/degraded-state metadata, and labels the result as non-authoritative.
+
+This is application memory for chat continuity. It does not replace the coding-agent Memory MCP and must never be treated as PostgreSQL business truth for shipments, ETA, appointments, docks, or facilities.
+
 ## Sprint 3 constraints registry
 
 On 2026-08-10, Sprint 3 started with an editable deterministic constraints registry at `backend/app/scheduling/constraints.json`. The file centralizes the project constraints that must shape implementation: PostgreSQL authority, LangChain-only typed orchestration, Redis as 24-hour non-authoritative state, no invented operational data, feasibility hard constraints, deterministic ranking, appointment lifecycle semantics, option invalidation triggers, no-slot escalation payloads, and required write-safety controls.

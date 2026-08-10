@@ -78,6 +78,7 @@ def test_driver_tool_allowlist_includes_request_slot():
     tools = build_driver_tools(session=None, ctx=_driver_ctx(), thread_id="THR-TEST")  # type: ignore[arg-type]
     names = {tool.name for tool in tools}
 
+    assert "get_conversation_memory" in names
     assert "find_feasible_slots" in names
     assert "request_slot" in names
     assert "get_appointment_request_status" in names

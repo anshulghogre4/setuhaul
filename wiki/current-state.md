@@ -20,8 +20,9 @@ last_verified: 2026-08-07
 - Sprint 3 transactional request path started: `backend/app/scheduling/allocation.py` implements `request_slot`, which requires idempotency, locks/revalidates shipment and slot state, inserts `PENDING_CONFIRMATION` appointments, writes audit logs, and returns conflict-safe refreshed options. `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request` and the Driver LangChain `request_slot` tool are wired. Verified 2026-08-10 19:31 IST with backend unit tests and FastAPI import smoke.
 - Sprint 3 appointment request status read path started: `backend/app/scheduling/allocation.py` implements `get_appointment_request_status`, `GET /api/v1/shipments/{shipment_id}/appointment-request/status` exposes it, and Driver LangChain tool `get_appointment_request_status` reports pending/confirmed/closed/no-request lifecycle state without mutating appointments. Verified 2026-08-10 19:38 IST with backend unit tests and FastAPI import smoke.
 - Sprint 3 allocation race handling is hardened: `request_slot` now recognizes the existing PostgreSQL partial unique indexes `ux_active_appointment_per_slot` and `ux_current_active_appointment_per_shipment` if a residual race reaches the database, rolls back, returns conflict-safe refreshed options, and surfaces HTTP 409 from the route. Verified 2026-08-10 19:50 IST with backend unit tests and FastAPI import smoke; live parallel contention remains unverified.
+- Application Redis memory tool added: Driver LangChain allowlist now includes `get_conversation_memory`, backed by `ConversationMemory.snapshot(...)`, returning bounded current-thread Upstash session/history context with explicit 24-hour TTL, degraded state, and non-authoritative labeling. Verified 2026-08-10 19:59 IST with backend unit tests and FastAPI import smoke; live Upstash smoke not run because Redis env values are not configured/persisted.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI` default `gemini-2.5-flash`.
-- Unit tests: **38 passed**.
+- Unit tests: **40 passed**.
 
 ## Verify before claiming
 

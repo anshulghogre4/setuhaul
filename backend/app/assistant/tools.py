@@ -13,6 +13,7 @@ from app.scheduling.allocation import RequestSlotCommand, get_appointment_reques
 from app.scheduling.feasibility import find_feasible_slots
 from app.services import driver_reads
 from app.services.eta_service import EtaUpdateCommand, confirmation_preview, record_eta_update
+from app.services.redis_memory import ConversationMemory
 
 
 class EmptyArgs(BaseModel):
@@ -90,6 +91,13 @@ class AppointmentRequestStatusArgs(BaseModel):
     )
 
 
+class ConversationMemoryArgs(BaseModel):
+    include_recent_messages: bool = Field(
+        default=True,
+        description="Whether to include bounded recent chat snippets from Redis.",
+    )
+
+
 def _json(data: Any) -> str:
     return json.dumps(data, default=str)
 
@@ -99,6 +107,7 @@ def build_driver_tools(
     session: AsyncSession,
     ctx: ExecutionContext,
     thread_id: str,
+    memory: ConversationMemory | None = None,
 ) -> list[StructuredTool]:
     """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist)."""
 
@@ -113,6 +122,29 @@ def build_driver_tools(
                 "facility_id": ctx.facility_id,
                 "permissions": ctx.permissions,
             }
+        )
+
+    async def get_conversation_memory(args: ConversationMemoryArgs) -> str:
+        if memory is None:
+            return _json(
+                {
+                    "code": "REDIS_MEMORY_UNAVAILABLE",
+                    "source": "upstash_redis",
+                    "thread_id": thread_id,
+                    "recent_messages": [],
+                    "session": {},
+                    "ttl_seconds": 24 * 60 * 60,
+                    "non_authoritative": True,
+                    "degraded": True,
+                    "degrade_reason": "MEMORY_NOT_ATTACHED_TO_TOOL",
+                }
+            )
+        return _json(
+            memory.snapshot(
+                user_id=ctx.user_id,
+                thread_id=thread_id,
+                include_recent_messages=args.include_recent_messages,
+            )
         )
 
     async def get_driver_operational_context(_: EmptyArgs | None = None) -> str:
@@ -321,6 +353,16 @@ def build_driver_tools(
             name="get_current_user_context",
             description="Return verified authenticated user/role/driver mapping.",
             args_schema=EmptyArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_conversation_memory,
+            name="get_conversation_memory",
+            description=(
+                "Return bounded Upstash Redis conversation/session memory for this authenticated "
+                "user and current thread. This is ephemeral, 24-hour, non-authoritative context only; "
+                "never use it as shipment, ETA, appointment, dock, or facility truth."
+            ),
+            args_schema=ConversationMemoryArgs,
         ),
         StructuredTool.from_function(
             coroutine=get_driver_operational_context,

@@ -249,3 +249,11 @@ last_updated: 2026-08-07
 - Added unit coverage for allocation unique-constraint translation and updated [[current-state]], [[implementation]], [[database]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
 - Verification: backend unit tests PASS, 38 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and real parallel contention tests not run because local env files are absent and pasted secrets were not persisted.
 - Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 19:59 IST | implementation | Redis conversation memory tool
+
+- Added `ConversationMemory.snapshot(...)` for bounded current-thread Upstash Redis session/history snapshots with explicit 24-hour TTL, non-authoritative status, and degraded-state reporting.
+- Registered Driver LangChain `get_conversation_memory` and passed the existing assistant memory instance into the tool builder.
+- Updated the assistant prompt to use Redis only for chat/session continuity and to verify operational facts through PostgreSQL-backed tools.
+- Updated [[current-state]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
+- Verification: backend unit tests PASS, 40 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live Upstash smoke not run because Redis env values are not configured/persisted.
+- Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.

@@ -112,3 +112,50 @@ class ConversationMemory:
     def seen_client_message(self, *, user_id: str, thread_id: str, client_message_id: str) -> bool:
         history = self.load_history(user_id=user_id, thread_id=thread_id)
         return any(m.get("client_message_id") == client_message_id for m in history)
+
+    def snapshot(
+        self,
+        *,
+        user_id: str,
+        thread_id: str,
+        include_recent_messages: bool = True,
+        recent_limit: int = 8,
+    ) -> dict[str, Any]:
+        if self._client is None:
+            return {
+                "code": "REDIS_MEMORY_UNAVAILABLE",
+                "source": "upstash_redis",
+                "freshness": "unavailable",
+                "thread_id": thread_id,
+                "history_count": 0,
+                "recent_messages": [],
+                "session": {},
+                "ttl_seconds": TTL_SECONDS,
+                "non_authoritative": True,
+                "degraded": True,
+                "degrade_reason": self.degrade_reason or "UPSTASH_NOT_CONFIGURED",
+            }
+
+        history = self.load_history(user_id=user_id, thread_id=thread_id)
+        session = self.load_session(user_id=user_id, thread_id=thread_id)
+        recent = history[-max(1, min(recent_limit, HISTORY_LIMIT)) :] if include_recent_messages else []
+        return {
+            "code": "REDIS_MEMORY_LOADED",
+            "source": "upstash_redis",
+            "freshness": "ephemeral_24h",
+            "thread_id": thread_id,
+            "history_count": len(history),
+            "recent_messages": [
+                {
+                    "role": item.get("role"),
+                    "content": str(item.get("content") or "")[:500],
+                    "client_message_id": item.get("client_message_id"),
+                }
+                for item in recent
+            ],
+            "session": session,
+            "ttl_seconds": TTL_SECONDS,
+            "non_authoritative": True,
+            "degraded": self.degraded,
+            "degrade_reason": self.degrade_reason,
+        }

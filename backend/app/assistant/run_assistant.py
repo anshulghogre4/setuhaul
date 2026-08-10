@@ -72,7 +72,7 @@ async def run_assistant(
     history = memory.load_history(user_id=ctx.user_id, thread_id=tid)
     session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid)
 
-    tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid)
+    tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid, memory=memory)
     tool_map = {t.name: t for t in tools}
 
     llm = build_chat_model(settings).bind_tools(tools)
