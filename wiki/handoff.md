@@ -3,13 +3,15 @@ title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-07
+last_updated: 2026-08-10
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-10 20:23 IST:** Connected to live Supabase PostgreSQL through a direct read-only asyncpg session and inspected public schema + seeded operational counts. Verified PostgreSQL 17.6, `auth.users=3`, public schema 23 tables + 4 views, seeded `shipments=21`, `appointment_slots=106`, `appointments=22`, `driver_exceptions=12`, and live scheduling guard indexes. No writes/schema changes. Supabase Data API auto-exposure changelog checked but not applicable to direct Postgres inspection. Coding-agent Memory MCP remains unavailable.
+- **2026-08-10 20:16 IST:** Upgraded scheduling from earliest feasible slot ordering to deterministic score-based ranking. `find_feasible_slots` now returns `rank_score` plus `ranking_factors` for priority, lateness, ETA wait, fit slack, dock match, disruption, and stable tie-break; editable weights live in `backend/app/scheduling/constraints.json`. Verified backend unit tests: 41 passed; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and real same-slot concurrency proof remain pending. Coding-agent Memory MCP remains unavailable.
 - **2026-08-10 19:59 IST:** Added Redis-backed Driver LangChain tool `get_conversation_memory`. `ConversationMemory.snapshot(...)` now returns bounded current-thread Upstash history/session context with 24-hour TTL metadata, non-authoritative labeling, and degraded Redis state. `run_assistant` passes its existing memory instance into the tool builder, and the prompt requires PostgreSQL-backed verification for operational facts. Verified backend unit tests: 40 passed; FastAPI import smoke PASS. Live Upstash smoke not run because Redis env values are not configured/persisted. Coding-agent Memory MCP remains unavailable.
 - **2026-08-10 19:50 IST:** Hardened `request_slot` against residual PostgreSQL allocation races. `backend/app/scheduling/allocation.py` now recognizes `ux_active_appointment_per_slot` and `ux_current_active_appointment_per_shipment` `IntegrityError`s, rolls back, recomputes options, stores a 409 idempotency response, and returns `SLOT_CONFLICT_REFRESH_REQUIRED` with zero appointment writes. The scheduling route now returns HTTP 409 for conflict-refresh outcomes. Verified backend unit tests: 38 passed; FastAPI import smoke PASS. Real parallel same-slot contention still not run.
 - **2026-08-10 19:38 IST:** Implemented `get_appointment_request_status` as the next Sprint 3 read-only scheduling tool after `request_slot`. Added status/result models and scope-safe SQL reads in `backend/app/scheduling/allocation.py`, exposed `GET /api/v1/shipments/{shipment_id}/appointment-request/status`, and registered Driver LangChain tool `get_appointment_request_status`. It reports pending/confirmed/closed/no-request state with zero appointment writes and keeps pending confirmation distinct from booking confirmation. Verified backend unit tests: 35 passed; FastAPI import smoke PASS. Live authenticated smoke and same-slot concurrency proof not run.
@@ -31,7 +33,7 @@ last_updated: 2026-08-07
 
 ## Current state
 
-See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is IN PROGRESS with constraints registry, `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, allocation unique-index race mapping, and Redis memory tool context in place. **OpenAI + OpenRouter + Gemini live invoke verified.**
+See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is IN PROGRESS with constraints registry, scored `find_feasible_slots` ranking, `request_slot`, `get_appointment_request_status`, allocation unique-index race mapping, and Redis memory tool context in place. **OpenAI + OpenRouter + Gemini live invoke verified.**
 
 ## Decisions and blockers
 
@@ -39,7 +41,7 @@ See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is I
 - JWT verify uses `leeway=300` for local clock skew vs Supabase `iat`.
 - **Security:** keys pasted in chat → rotate after POC; never commit. README emails only; passwords OOB.
 - Sprint 3 constraints are centralized in `backend/app/scheduling/constraints.json`; change this file when policy wording changes, then keep deterministic services/tests aligned.
-- `find_feasible_slots` may show explainable non-reserved options. Appointment writes still require future transactional allocation services and concurrency proof.
+- `find_feasible_slots` may show explainable non-reserved options with deterministic `rank_score`/`ranking_factors`. Ranking policy weights are editable in `constraints.json`; appointment writes still require transactional allocation services and concurrency proof.
 - `request_slot` may create `PENDING_CONFIRMATION` after exact slot selection and transactional revalidation. It is not a confirmed booking; same-slot race proof remains pending.
 - `get_appointment_request_status` may answer pending/confirmed/closed/no-request status from PostgreSQL with zero appointment writes; use it instead of inferring confirmation from chat history.
 - If a residual race reaches PostgreSQL, `request_slot` now maps the existing allocation partial unique indexes to a conflict refresh. This is not a substitute for running real parallel contention tests.
@@ -48,7 +50,8 @@ See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is I
 ## Verification
 
 - Role-specific login heroes: generated `frontend/src/assets/setuhaul-driver-eta-hero.png`, reused `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops, `npm run lint` PASS, `npm run build` PASS, screenshots visually spot-checked.
-- Backend scheduling/LangChain allocation/memory path: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/` PASS: 40 passed, 1 pytest config warning (`asyncio_mode` unknown without `pytest-asyncio` in ephemeral env). FastAPI import smoke PASS with 11 routes.
+- Live DB catalog/seed inspection: direct read-only asyncpg PASS on 2026-08-10 20:23 IST; public schema 23 tables + 4 views, `auth.users=3`, seeded Sprint 3 scheduling data and guard indexes present.
+- Backend scheduling/LangChain allocation/memory path: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/` PASS: 41 passed, 1 pytest config warning (`asyncio_mode` unknown without `pytest-asyncio` in ephemeral env). FastAPI import smoke PASS with 11 routes.
 - Login hero refinement: generated image asset copied into `frontend/src/assets/setuhaul-dock-command-hero.png`; `npm run lint` PASS; `npm run build` PASS; screenshot `tmp/ui-polish/driver-login-dock-hero.png` visually spot-checked.
 - Frontend UI: `npm run lint` PASS; `npm run build` PASS; Vite running on `http://127.0.0.1:5173`; unauthenticated login screenshots visually spot-checked. Authenticated driver/ops data screens not smoke-tested this turn because `.env`/`.env.local` files are absent and chat-pasted secrets were not written to disk.
 - PDF analysis: text extracted from all 20 pages with `pdfplumber`; representative pages 1, 10, and 18 rendered with Poppler and visually spot-checked. No application tests run because this was document analysis only.
@@ -59,10 +62,11 @@ See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is I
 
 ## Next action
 
-1. Live-smoke `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and `get_conversation_memory` once local env is provided without committing secrets.
+1. Live-smoke scored `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and `get_conversation_memory` once local env is provided without committing secrets.
 2. Add real same-slot contention tests proving one `request_slot` winner and refreshed conflict response for losers.
-3. Add reschedule/confirm/cancel services after request-slot race proof.
-4. Optionally rotate chat-pasted API keys after POC sharing risk review.
+3. Add capacity/queue-aware ranking refinements only after live smoke validates the current deterministic scoring inputs.
+4. Add reschedule/confirm/cancel services after request-slot race proof.
+5. Optionally rotate chat-pasted API keys after POC sharing risk review.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

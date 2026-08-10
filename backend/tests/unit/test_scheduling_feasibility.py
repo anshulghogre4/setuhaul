@@ -8,6 +8,8 @@ from app.scheduling.feasibility import evaluate_candidate_slot
 def _shipment(**overrides):
     data = {
         "shipment_id": "SHP1017",
+        "priority_code": "NORMAL",
+        "original_eta_ts": "2026-08-04T11:30:00+05:30",
         "required_dock_type": "STANDARD",
         "temperature_control_required": 0,
         "load_weight_kg": 11500,
@@ -61,6 +63,10 @@ def test_candidate_slot_is_feasible_when_eta_and_dock_rules_fit():
     assert option is not None
     assert option.option_status == "DISPLAYED_NOT_RESERVED"
     assert option.feasible_end_ts == "2026-08-04T12:55:00+05:30"
+    assert option.rank_score > 0
+    assert option.ranking_factors["priority_code"] == "NORMAL"
+    assert option.ranking_factors["lateness_minutes"] == 35
+    assert option.ranking_factors["wait_after_eta_minutes"] == 0
 
 
 def test_candidate_slot_rejects_stale_eta_that_cannot_unload_inside_window():
@@ -103,6 +109,34 @@ def test_candidate_slot_rejects_incompatible_reefer_requirement():
     assert option is None
     assert reason is not None
     assert reason.failure_code in {"DOCK_INCOMPATIBLE_VEHICLE", "DOCK_INCOMPATIBLE_LOAD"}
+
+
+def test_candidate_slot_score_penalizes_wait_after_eta():
+    early, early_reason = evaluate_candidate_slot(
+        shipment=_shipment(priority_code="HIGH"),
+        facility=_facility(),
+        eta_dt=datetime.fromisoformat("2026-08-04T12:00:00+05:30"),
+        candidate=_candidate(slot_id="SLOT-EARLY", slot_start_ts="2026-08-04T12:00:00+05:30"),
+        checked_constraints=[],
+    )
+    late, late_reason = evaluate_candidate_slot(
+        shipment=_shipment(priority_code="HIGH"),
+        facility=_facility(),
+        eta_dt=datetime.fromisoformat("2026-08-04T12:00:00+05:30"),
+        candidate=_candidate(
+            slot_id="SLOT-LATE",
+            slot_start_ts="2026-08-04T13:00:00+05:30",
+            slot_end_ts="2026-08-04T14:00:00+05:30",
+        ),
+        checked_constraints=[],
+    )
+
+    assert early_reason is None
+    assert late_reason is None
+    assert early is not None
+    assert late is not None
+    assert early.rank_score > late.rank_score
+    assert late.ranking_factors["wait_after_eta_minutes"] == 60
 
 
 def test_driver_tool_allowlist_includes_feasible_slot_search():

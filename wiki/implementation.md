@@ -3,7 +3,7 @@ title: SetuHaul Implementation Flow
 type: topic
 status: compiled
 scope: delivery
-last_verified: 2026-08-07
+last_verified: 2026-08-10
 ---
 
 # Implementation
@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 19:50 IST):** `request_slot` is implemented as the first Sprint 3 transactional pending-confirmation path after `find_feasible_slots`, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and allocation unique-index races now map to HTTP 409 conflict refresh. No Sprint 3 exit gate item was struck; live authenticated smoke, real same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
+**Living status refresh (2026-08-10 20:16 IST):** `find_feasible_slots` now returns explicit deterministic ranking scores/factors driven by editable constraints-registry weights, `request_slot` is implemented as the first transactional pending-confirmation path, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and allocation unique-index races map to HTTP 409 conflict refresh. No Sprint 3 exit gate item was struck; live authenticated smoke, real same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
 
 ## Challenge brief analysis
 
@@ -60,6 +60,8 @@ The registry is loaded through `backend/app/scheduling/constraints.py` using str
 On 2026-08-10, the first end-to-end Sprint 3 LangChain read path was added. `backend/app/scheduling/feasibility.py` loads the constraints registry, verifies trusted user scope, reads latest ETA/facility/slot/dock/active appointment data from PostgreSQL, filters candidate slots, ranks options deterministically, and returns non-reserved options with explanations and snapshot metadata.
 
 `backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers `find_feasible_slots` in the driver LangChain allowlist. The system prompt now allows slot search but still forbids booking, holding, rescheduling, cancellation, or confirmation until transactional allocation services exist.
+
+On 2026-08-10 20:16 IST, ranking was upgraded from earliest-slot ordering to explicit deterministic scoring. Each feasible option now includes `rank_score` and `ranking_factors` for priority, lateness, wait after ETA, fit slack, dock match, operational disruption score, and stable shipment/slot tie-breaker. The editable weights live in `backend/app/scheduling/constraints.json` under `ranking_policy.priority_scores` and `ranking_policy.score_weights`.
 
 ## Sprint 3 Slot Request
 

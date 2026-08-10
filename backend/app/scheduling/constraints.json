@@ -113,6 +113,21 @@
       "least_operational_disruption",
       "stable_tiebreaker_by_shipment_id_then_slot_id"
     ],
+    "priority_scores": {
+      "CRITICAL": 4000,
+      "HIGH": 3000,
+      "NORMAL": 2000,
+      "LOW": 1000,
+      "UNKNOWN": 500
+    },
+    "score_weights": {
+      "lateness_per_minute": 4,
+      "wait_after_eta_per_minute": -6,
+      "fit_slack_per_minute": 1,
+      "compatible_but_not_exact_dock_penalty": -25,
+      "lateness_cap_minutes": 720,
+      "fit_slack_cap_minutes": 120
+    },
     "explainability_required": true,
     "randomness_allowed": false
   },
@@ -199,4 +214,3 @@
     "multi-tenant SaaS controls"
   ]
 }
-

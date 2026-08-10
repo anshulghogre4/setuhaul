@@ -3,7 +3,7 @@ title: SetuHaul Database
 type: topic
 status: compiled
 scope: database
-last_verified: 2026-08-07
+last_verified: 2026-08-10
 ---
 
 # Database
@@ -26,6 +26,50 @@ The baseline keeps PostgreSQL as the final allocation authority through partial 
 - `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
 
 As of 2026-08-10 19:50 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. No schema or RLS change was made; real parallel transaction proof is still required before the Sprint 3 exit gate can close.
+
+## Live catalog inspection (2026-08-10 20:23 IST)
+
+Direct read-only asyncpg inspection reached Supabase PostgreSQL 17.6. Public schema contains 23 tables and 4 views; all public tables report RLS enabled and no `pg_policies` rows were present in this inspection. The FastAPI server therefore continues to rely on server-side JWT/RBAC checks plus backend-only database access for application authorization unless/until RLS policies are added and tested.
+
+Seeded table counts:
+
+| Table | Rows |
+|---|---:|
+| api_logs | 3 |
+| appointment_slots | 106 |
+| appointments | 22 |
+| audit_logs | 9 |
+| carriers | 4 |
+| chat_messages | 22 |
+| chat_threads | 12 |
+| dock_status_events | 3 |
+| docks | 9 |
+| driver_exceptions | 12 |
+| drivers | 15 |
+| eta_updates | 14 |
+| facilities | 2 |
+| facility_checkins | 5 |
+| facility_contacts | 5 |
+| facility_rules | 6 |
+| idempotency_requests | 2 |
+| operational_messages | 6 |
+| roles | 8 |
+| shipments | 21 |
+| users | 10 |
+| vehicle_types | 5 |
+| vehicles | 15 |
+
+Public views: `v_current_facility_queue`, `v_inbound_operational_state`, `v_latest_eta`, and `v_slot_availability`.
+
+Scheduling seed distribution:
+
+- Shipments: 11 `IN_TRANSIT`, 3 `ASSIGNED`, 3 `WAITING`, 2 `CANCELLED`, 1 `COMPLETED`, 1 `IN_DOCK`.
+- Priorities: 9 `NORMAL`, 6 `HIGH`, 4 `LOW`, 2 `CRITICAL`.
+- Appointment states: 11 current `CONFIRMED`, 2 current `PENDING_CONFIRMATION`, 1 current `IN_PROGRESS`, 1 current `COMPLETED`, plus historical cancelled/no-show rows.
+- Slot inventory: Gurugram has 27 open slots; Jaipur has 72 open and 7 blocked slots.
+- Docks: Gurugram has 3 active docks; Jaipur has 6 active docks including standard, reefer, and heavy types.
+
+Sprint 3-critical indexes are live: `ux_active_appointment_per_slot`, `ux_current_active_appointment_per_shipment`, `ix_slots_facility_time`, `ix_shipments_destination_status`, and idempotency indexes. No writes or migration changes were made during the inspection.
 
 ## Supabase MCP diagnosis (2026-08-07 ~15:55 IST)
 

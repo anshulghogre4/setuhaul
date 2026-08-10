@@ -24,6 +24,8 @@ def test_sprint3_feasibility_rules_are_explicit_and_explainable():
 
     assert "slot_capacity_available" in constraints.hard_constraint_ids()
     assert "latest_eta_only" in constraints.hard_constraint_ids()
+    assert constraints.ranking_policy.priority_scores["CRITICAL"] > constraints.ranking_policy.priority_scores["LOW"]
+    assert constraints.ranking_policy.score_weights["wait_after_eta_per_minute"] < 0
     assert constraints.ranking_policy.explainability_required is True
     assert constraints.ranking_policy.randomness_allowed is False
     assert constraints.no_slot_escalation.required is True

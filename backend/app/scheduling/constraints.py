@@ -29,6 +29,8 @@ class DeliveryBoundary(BaseModel):
 class RankingPolicy(BaseModel):
     id: str
     ordered_factors: list[str]
+    priority_scores: dict[str, int] = Field(default_factory=dict)
+    score_weights: dict[str, int] = Field(default_factory=dict)
     explainability_required: bool
     randomness_allowed: bool
 
@@ -79,4 +81,3 @@ def load_scheduling_constraints() -> SchedulingConstraints:
     constraints_path = files("app.scheduling").joinpath("constraints.json")
     raw = constraints_path.read_text(encoding="utf-8")
     return SchedulingConstraints.model_validate(json.loads(raw))
-

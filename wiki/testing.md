@@ -3,7 +3,7 @@ title: SetuHaul Testing and Evidence
 type: topic
 status: compiled
 scope: testing
-last_verified: 2026-08-07
+last_verified: 2026-08-10
 ---
 
 # Testing
@@ -11,8 +11,9 @@ last_verified: 2026-08-07
 Current executable evidence:
 
 - Database tests under `supabase/tests/database/` (present; not executed this session).
-- Backend unit tests: **40 passed** (2026-08-10 19:59 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, feasibility checks, allocation command schema, appointment request status mapping, PostgreSQL allocation unique-constraint translation, Redis memory snapshot/degraded behavior, and Driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
-- FastAPI import smoke: **PASS** (2026-08-10 19:59 IST, `from app.main import create_app; app=create_app()` returned 11 routes).
+- Live Supabase catalog/seed inspection: **PASS** (2026-08-10 20:23 IST, direct read-only asyncpg). Verified PostgreSQL 17.6, `auth.users=3`, public schema 23 tables + 4 views, seeded operational counts, RLS enabled flags, and Sprint 3 scheduling guard indexes. No data or schema writes were made.
+- Backend unit tests: **41 passed** (2026-08-10 20:16 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, deterministic feasible-slot scoring/ranking factors, feasibility checks, allocation command schema, appointment request status mapping, PostgreSQL allocation unique-constraint translation, Redis memory snapshot/degraded behavior, and Driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
+- FastAPI import smoke: **PASS** (2026-08-10 20:16 IST, `from app.main import create_app; app=create_app()` returned 11 routes).
 - Frontend production build: **PASS** (`npm run build`, 2026-08-07 17:55 IST).
 - Minimal CI workflow: `.github/workflows/ci.yml` (backend unit + frontend build) — present; not yet observed on GitHub Actions runners.
 - Live Auth: MCP `auth.users=3`, USR001/USR101/USR999 mapped.

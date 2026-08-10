@@ -27,6 +27,8 @@ class FeasibleSlotOption(BaseModel):
     slot_end_ts: str
     feasible_start_ts: str
     feasible_end_ts: str
+    rank_score: int
+    ranking_factors: dict[str, Any]
     ranking_explanation: list[str]
     checked_constraints: list[str]
     option_status: str = "DISPLAYED_NOT_RESERVED"
@@ -92,12 +94,76 @@ def _dock_type_ok(required: str, actual: str) -> bool:
     return required == "ANY" or required == actual
 
 
-def _explain_option(*, shipment: dict[str, Any], eta_dt: datetime, option: dict[str, Any]) -> list[str]:
+def _minutes_between(start_dt: datetime, end_dt: datetime) -> int:
+    return int((end_dt.timestamp() - start_dt.timestamp()) // 60)
+
+
+def _rank_slot(
+    *,
+    shipment: dict[str, Any],
+    eta_dt: datetime,
+    candidate: dict[str, Any],
+    feasible_start: datetime,
+    feasible_end: datetime,
+    slot_end: datetime,
+) -> tuple[int, dict[str, Any]]:
+    ranking_policy = load_scheduling_constraints().ranking_policy
+    priority_scores = ranking_policy.priority_scores or {
+        "CRITICAL": 4000,
+        "HIGH": 3000,
+        "NORMAL": 2000,
+        "LOW": 1000,
+        "UNKNOWN": 500,
+    }
+    weights = ranking_policy.score_weights
+    priority_code = str(shipment.get("priority_code") or "NORMAL")
+    original_eta_raw = shipment.get("original_eta_ts")
+    original_eta_dt = _parse_timestamp(str(original_eta_raw)) if original_eta_raw else eta_dt
+    lateness_minutes = max(0, _minutes_between(original_eta_dt, eta_dt))
+    wait_after_eta_minutes = max(0, _minutes_between(eta_dt, feasible_start))
+    fit_slack_minutes = max(0, _minutes_between(feasible_end, slot_end))
+    exact_dock_type_match = str(shipment["required_dock_type"]) == str(candidate["dock_type"])
+    disruption_score = 0 if exact_dock_type_match else abs(weights.get("compatible_but_not_exact_dock_penalty", -25))
+    lateness_cap = weights.get("lateness_cap_minutes", 720)
+    fit_slack_cap = weights.get("fit_slack_cap_minutes", 120)
+
+    score = (
+        priority_scores.get(priority_code, priority_scores.get("UNKNOWN", 500))
+        + min(lateness_minutes, lateness_cap) * weights.get("lateness_per_minute", 4)
+        + wait_after_eta_minutes * weights.get("wait_after_eta_per_minute", -6)
+        + min(fit_slack_minutes, fit_slack_cap) * weights.get("fit_slack_per_minute", 1)
+        + (0 if exact_dock_type_match else weights.get("compatible_but_not_exact_dock_penalty", -25))
+    )
+    return score, {
+        "priority_code": priority_code,
+        "priority_score": priority_scores.get(priority_code, priority_scores.get("UNKNOWN", 500)),
+        "lateness_minutes": lateness_minutes,
+        "wait_after_eta_minutes": wait_after_eta_minutes,
+        "fit_slack_minutes": fit_slack_minutes,
+        "dock_match": "exact" if exact_dock_type_match else "compatible",
+        "operational_disruption_score": disruption_score,
+        "stable_tiebreaker": f"{shipment['shipment_id']}:{candidate['slot_id']}",
+    }
+
+
+def _explain_option(
+    *,
+    shipment: dict[str, Any],
+    eta_dt: datetime,
+    option: dict[str, Any],
+    ranking_factors: dict[str, Any],
+) -> list[str]:
     return [
         f"Latest authoritative ETA {eta_dt.isoformat()} fits inside this slot with unload duration.",
         f"Dock {option['dock_code']} is compatible with required dock type {shipment['required_dock_type']}.",
         "No active appointment currently occupies the slot.",
-        "Ranked by deterministic policy: earliest feasible fit, then stable slot id.",
+        (
+            "Ranked by deterministic policy: priority "
+            f"{ranking_factors['priority_code']}, lateness {ranking_factors['lateness_minutes']} min, "
+            f"wait after ETA {ranking_factors['wait_after_eta_minutes']} min, "
+            f"fit slack {ranking_factors['fit_slack_minutes']} min, "
+            f"dock match {ranking_factors['dock_match']}."
+        ),
     ]
 
 
@@ -178,6 +244,15 @@ def evaluate_candidate_slot(
             message="Slot falls outside facility operating hours.",
         )
 
+    rank_score, ranking_factors = _rank_slot(
+        shipment=shipment,
+        eta_dt=eta_dt,
+        candidate=candidate,
+        feasible_start=feasible_start,
+        feasible_end=feasible_end_dt,
+        slot_end=slot_end,
+    )
+
     return (
         FeasibleSlotOption(
             slot_id=slot_id,
@@ -189,7 +264,14 @@ def evaluate_candidate_slot(
             slot_end_ts=slot_end.isoformat(),
             feasible_start_ts=feasible_start.isoformat(),
             feasible_end_ts=feasible_end_dt.isoformat(),
-            ranking_explanation=_explain_option(shipment=shipment, eta_dt=eta_dt, option=candidate),
+            rank_score=rank_score,
+            ranking_factors=ranking_factors,
+            ranking_explanation=_explain_option(
+                shipment=shipment,
+                eta_dt=eta_dt,
+                option=candidate,
+                ranking_factors=ranking_factors,
+            ),
             checked_constraints=checked_constraints,
         ),
         None,
@@ -227,6 +309,7 @@ async def find_feasible_slots(
                 SELECT s.shipment_id, s.driver_id, s.vehicle_id, s.destination_facility_id,
                        s.priority_code, s.required_dock_type, s.temperature_control_required,
                        s.load_weight_kg, s.expected_unload_min, s.current_status,
+                       s.original_eta_ts, s.latest_eta_ts,
                        le.effective_eta_ts, le.eta_source, le.eta_confidence
                 FROM public.shipments s
                 JOIN public.v_latest_eta le ON le.shipment_id = s.shipment_id
@@ -331,8 +414,11 @@ async def find_feasible_slots(
 
     options.sort(
         key=lambda option: (
-            _parse_timestamp(option.slot_start_ts),
+            -option.rank_score,
             PRIORITY_RANK.get(str(shipment_data["priority_code"]), 9),
+            option.ranking_factors["wait_after_eta_minutes"],
+            option.ranking_factors["operational_disruption_score"],
+            _parse_timestamp(option.slot_start_ts),
             option.slot_id,
         )
     )
@@ -364,4 +450,3 @@ async def find_feasible_slots(
         escalation=escalation,
         current_active_appointment=dict(active_appt) if active_appt else None,
     )
-

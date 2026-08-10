@@ -257,3 +257,19 @@ last_updated: 2026-08-07
 - Updated [[current-state]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
 - Verification: backend unit tests PASS, 40 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live Upstash smoke not run because Redis env values are not configured/persisted.
 - Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 20:16 IST | implementation | Deterministic slot ranking algorithm
+
+- Upgraded `find_feasible_slots` from earliest feasible slot ordering to explicit deterministic scoring.
+- Added `rank_score` and `ranking_factors` for priority, lateness, wait after ETA, fit slack, dock match, operational disruption score, and stable shipment/slot tie-breaker.
+- Added editable `ranking_policy.priority_scores` and `ranking_policy.score_weights` to `backend/app/scheduling/constraints.json` so ranking behavior can change without scattering constants across services.
+- Updated scheduling feasibility/constraints unit coverage and synchronized [[current-state]], [[implementation]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
+- Verification: backend unit tests PASS, 41 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and real parallel contention tests not run.
+- Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 20:23 IST | verification | Live Supabase database catalog inspection
+
+- Connected to the live Supabase PostgreSQL database through direct read-only asyncpg and inspected public schema metadata plus seeded operational counts.
+- Verified PostgreSQL 17.6, `auth.users=3`, public schema 23 tables and 4 views.
+- Verified key seeded counts: `shipments=21`, `appointment_slots=106`, `appointments=22`, `driver_exceptions=12`, `eta_updates=14`, `docks=9`, `facilities=2`, `users=10`, `roles=8`, and `idempotency_requests=2`.
+- Confirmed Sprint 3-relevant live state: open/blocked slot inventory, current confirmed and pending-confirmation appointments, active exceptions, and allocation guard indexes `ux_active_appointment_per_slot` + `ux_current_active_appointment_per_shipment`.
+- No schema, data, grant, RLS, or migration changes were made. Supabase changelog checked; Data API public-table auto-exposure change does not affect this direct Postgres inspection.
+- Coding-agent Memory MCP remains unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
