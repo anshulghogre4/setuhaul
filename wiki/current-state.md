@@ -25,8 +25,9 @@ last_verified: 2026-08-10
 - Live Supabase database catalog inspection PASS on 2026-08-10 20:23 IST via read-only asyncpg: PostgreSQL 17.6, `auth.users=3`, public schema has 23 tables and 4 views, and seeded Sprint 3 operational data is present (`shipments=21`, `appointment_slots=106`, `appointments=22`, `driver_exceptions=12`). Scheduling guard indexes are present.
 - Live POC Auth account pool expanded on 2026-08-10 22:11 IST: extra Driver users `USR002`/`USR003`, Operations Executive users `USR107`/`USR108`, and Admin users `USR997`/`USR998` are mapped to Supabase Auth and password-grant verified. Auth now has the original 3 POC accounts plus these 6 extra accounts.
 - Application Redis memory tool added: Driver LangChain allowlist now includes `get_conversation_memory`, backed by `ConversationMemory.snapshot(...)`, returning bounded current-thread Upstash session/history context with explicit 24-hour TTL, degraded state, and non-authoritative labeling. Verified 2026-08-10 19:59 IST with backend unit tests and FastAPI import smoke; live Upstash Redis smoke later passed on 2026-08-10 22:11 IST after local env was configured.
+- Redis chat memory was tightened on 2026-08-10 23:01 IST: `/api/v1/chat` accepts a browser `session_id`, Driver UI sends a stable `sessionStorage` id, and `ConversationMemory` keys history/session/dedupe by authenticated `user_id` + normalized `session_id` + `thread_id`. Verified with backend session-isolation tests, full backend tests, frontend lint, and frontend build.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI`; current default is `gemini-flash-latest`, and direct REST smoke with the local Gemini key PASS on 2026-08-10.
-- Default backend tests: **41 passed, 1 live integration skipped**. Explicit live same-slot integration: **1 passed**.
+- Default backend tests: **43 passed, 1 live integration skipped**. Explicit live same-slot integration: **1 passed**.
 
 ## Verify before claiming
 

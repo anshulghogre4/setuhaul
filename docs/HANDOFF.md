@@ -7,7 +7,7 @@ The canonical LLMWiki handoff is now `wiki/handoff.md`. This file remains as a c
 ## Current state
 
 - `plans/implementation-master-plan.md` is the implementation source of truth. Sprint exit gates must be completed in order.
-- Sprint 1 and Sprint 2 are complete. Sprint 3 is in progress with deterministic feasibility/ranking, `request_slot`, request status, Redis memory tool context, live two-client same-slot proof, individual POC Auth users, and polished role-specific UI in place.
+- Sprint 1 and Sprint 2 are complete. Sprint 3 is in progress with deterministic feasibility/ranking, `request_slot`, request status, session-scoped Redis memory tool context, live two-client same-slot proof, individual POC Auth users, and polished role-specific UI in place.
 - Sprint 3 remains open for authenticated scheduling/chat smoke, reschedule/confirm/cancel/reject/expire, stale-choice invalidation, no-slot escalation, ops takeover views, broader load proof, enterprise auth hardening, and formal Playwright/CI.
 - React 19 remains the decided frontend under ADR 012.
 - Supabase PostgreSQL remains the business source of truth; Upstash Redis is non-authoritative 24-hour application conversation/session memory.
@@ -15,6 +15,7 @@ The canonical LLMWiki handoff is now `wiki/handoff.md`. This file remains as a c
 ## Recent work
 
 - 2026-08-10 22:46 IST: reconciled the master implementation plan from project beginning through latest work, striking completed items with evidence and listing remaining/deferred next work.
+- 2026-08-10 23:01 IST: scoped Redis chat memory by authenticated user, browser session id, and thread id; backend/frontend tests passed.
 - 2026-08-10: completed UI polish, individual POC Auth account expansion, Redis-only architecture correction, Gemini default refresh, and Sprint 3 scheduling/concurrency groundwork.
 
 ## Decisions and cautions

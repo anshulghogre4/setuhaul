@@ -19,6 +19,7 @@ type ChatMessage = {
 
 type ChatResponse = {
   thread_id: string
+  session_id: string
   response: string
   tool_calls: Array<{ name: string; args: Record<string, unknown> }>
   memory_degraded: boolean
@@ -54,6 +55,15 @@ function getField(record: Record<string, unknown> | null | undefined, keys: stri
     if (record[key] !== null && record[key] !== undefined && record[key] !== '') return record[key]
   }
   return null
+}
+
+function getDriverSessionId(userId: string) {
+  const key = `setuhaul:driver-session:${userId}`
+  const existing = window.sessionStorage.getItem(key)
+  if (existing) return existing
+  const next = `web-${crypto.randomUUID()}`
+  window.sessionStorage.setItem(key, next)
+  return next
 }
 
 function DataField({
@@ -109,6 +119,7 @@ function DriverBody({
     },
   ])
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [sessionId] = useState(() => getDriverSessionId(userId))
   const [sending, setSending] = useState(false)
   const [uxState, setUxState] = useState<string>('ready')
   const [pendingConfirm, setPendingConfirm] = useState<ChatResponse['confirmation']>(null)
@@ -144,6 +155,7 @@ function DriverBody({
       const res = await apiPost<ChatResponse>('/api/v1/chat', {
         message: trimmed,
         thread_id: threadId,
+        session_id: sessionId,
         client_message_id: clientMessageId,
       })
       setThreadId(res.data.thread_id)

@@ -2,6 +2,16 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-10 23:01 IST - Scope Redis chat memory by browser session
+
+- Added `session_id` to the Driver chat request/response path so Redis memory is scoped by authenticated user, browser session, and thread instead of user/thread only.
+- Updated `ConversationMemory` to normalize Redis key parts and key history, structured session state, snapshots, and duplicate `client_message_id` detection by `user_id + session_id + thread_id`.
+- Updated Driver UI to create a stable per-browser-session id in `sessionStorage` and send it on `/api/v1/chat` requests. The session id is memory namespacing only; Supabase JWT remains the authority.
+- Updated `backend/app/assistant/run_assistant.py`, `backend/app/api/v1/routers/chat.py`, `backend/app/assistant/tools.py`, `backend/app/assistant/prompts.py`, `backend/app/services/redis_memory.py`, `backend/tests/unit/test_redis_memory.py`, and `frontend/src/features/driver/DriverHome.tsx`.
+- Updated `plans/implementation-master-plan.md`, `wiki/ai-system.md`, `wiki/implementation.md`, `wiki/current-state.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: focused backend tests PASS (`18 passed`); full backend tests PASS (`43 passed, 1 skipped`); frontend `npm run lint` PASS; frontend `npm run build` PASS; `git diff --check` run after writeback.
+- Agent/surface: Codex.
+
 ## 2026-08-10 22:46 IST - Reconcile implementation master plan
 
 - Updated `plans/implementation-master-plan.md` from the beginning through the latest implementation state, striking only completed items with dated evidence and keeping the Sprint 3 exit gate open.

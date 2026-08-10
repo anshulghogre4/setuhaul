@@ -15,7 +15,7 @@ from app.assistant.tools import build_driver_tools
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.core.settings import Settings
-from app.services.redis_memory import ConversationMemory
+from app.services.redis_memory import ConversationMemory, normalize_memory_id
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ async def run_assistant(
     settings: Settings,
     message: str,
     thread_id: str | None = None,
+    session_id: str | None = None,
     client_message_id: str | None = None,
 ) -> dict[str, Any]:
     """Bounded ChatOpenAI.bind_tools invoke loop (NOT create_agent / AgentExecutor)."""
@@ -52,15 +53,20 @@ async def run_assistant(
 
     _configure_langsmith(settings)
     tid = thread_id or f"THR-LIVE-{ctx.driver_id}-{uuid4().hex[:8].upper()}"
+    sid = normalize_memory_id(session_id) if session_id else f"SES-LIVE-{uuid4().hex[:12].upper()}"
     memory = ConversationMemory(settings)
 
     if client_message_id and memory.seen_client_message(
-        user_id=ctx.user_id, thread_id=tid, client_message_id=client_message_id
+        user_id=ctx.user_id,
+        thread_id=tid,
+        session_id=sid,
+        client_message_id=client_message_id,
     ):
-        history = memory.load_history(user_id=ctx.user_id, thread_id=tid)
+        history = memory.load_history(user_id=ctx.user_id, thread_id=tid, session_id=sid)
         last_asst = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
         return {
             "thread_id": tid,
+            "session_id": sid,
             "response": (last_asst or {}).get("content") or "Duplicate message ignored.",
             "tool_calls": [],
             "memory_degraded": memory.degraded,
@@ -69,10 +75,10 @@ async def run_assistant(
             "ux_state": "duplicate_ignored",
         }
 
-    history = memory.load_history(user_id=ctx.user_id, thread_id=tid)
-    session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid)
+    history = memory.load_history(user_id=ctx.user_id, thread_id=tid, session_id=sid)
+    session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid, session_id=sid)
 
-    tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid, memory=memory)
+    tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid, session_id=sid, memory=memory)
     tool_map = {t.name: t for t in tools}
 
     llm = build_chat_model(settings).bind_tools(tools)
@@ -161,6 +167,7 @@ async def run_assistant(
         "driver_id": ctx.driver_id,
         "last_intent": observed_tools[-1]["name"] if observed_tools else "chat",
         "thread_id": tid,
+        "session_id": sid,
         "ux_state": ux_state,
     }
     if confirmation_payload and confirmation_payload.get("shipment_id"):
@@ -170,6 +177,7 @@ async def run_assistant(
     memory.append_turn(
         user_id=ctx.user_id,
         thread_id=tid,
+        session_id=sid,
         user_message=message,
         assistant_message=content,
         session=new_session,
@@ -178,6 +186,7 @@ async def run_assistant(
 
     return {
         "thread_id": tid,
+        "session_id": sid,
         "response": content,
         "tool_calls": [{"name": t["name"], "args": t["args"]} for t in observed_tools],
         "memory_degraded": memory.degraded,

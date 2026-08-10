@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-10 22:46 IST (plan reconciled from beginning through latest UI/auth/Redis/Gemini/scheduling work; Sprint 3 exit gate still open for remaining lifecycle/escalation/load flows)
+Last refreshed: 2026-08-10 23:01 IST (Redis chat memory is now scoped by authenticated user + browser session + thread; Sprint 3 exit gate still open for remaining lifecycle/escalation/load flows)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -26,7 +26,7 @@ Use this plan as a living checklist:
 |---|---|---|
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST (Admin browser + adversarial/IDOR + baseline a11y + minimal CI + CORS both origins) |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST (API demo `DEMO_PATH_PASS` + browser localhost:5173 driver chat/tools/ETA + ops refresh) |
-| Sprint 3 - deterministic allocation | **IN PROGRESS** | Feasibility/ranking, request/status tools, Redis memory tool, individual POC auth pool, and two-client same-slot proof are done; exit gate remains open |
+| Sprint 3 - deterministic allocation | **IN PROGRESS** | Feasibility/ranking, request/status tools, session-scoped Redis memory, individual POC auth pool, and two-client same-slot proof are done; exit gate remains open |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -40,6 +40,7 @@ Latest verified deltas since Sprint 2 gate:
 - [x] ~~Differentiate Driver and Ops login visuals with role-relevant project-local PNG assets and tighten the authenticated ops shell/dashboard.~~ Evidence 2026-08-10 18:29 and 22:31 IST: `npm run lint` PASS, `npm run build` PASS, login screenshots captured, live Arvind Nair ops login plus `/auth/me`, dashboard summary, and exceptions PASS.
 - [x] ~~Clarify project memory architecture as Redis-only application runtime memory; remove project Memory MCP configs from active agent setup.~~ Evidence 2026-08-10 22:20 IST: checked-in instructions/tooling docs updated; Redis remains non-authoritative 24-hour conversation/session state.
 - [x] ~~Configure current Gemini provider default to a model available for the provided key without committing secrets.~~ Evidence 2026-08-10 22:39 IST: gitignored `.env.local` set locally, `backend/app/assistant/llm.py` defaults Gemini to `gemini-flash-latest`, LLM factory tests PASS, direct Google REST smoke PASS. Current LangChain Gemini invoke must be rechecked after dev environment restart.
+- [x] ~~Scope Redis conversation memory and client-message dedupe by authenticated user, browser session id, and thread id.~~ Evidence 2026-08-10 23:01 IST: `/chat` accepts `session_id`, Driver UI creates a stable `sessionStorage` id, Redis key parts are normalized, and backend tests prove same-user/same-thread session isolation.
 
 ## 1. Executive decision
 
@@ -314,6 +315,7 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 - [ ] TODO: add the operations exception queue and appointment/dock/queue views needed for takeover.
 - [ ] **IN PROGRESS:** add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot. 2026-08-10 20:35 IST evidence: `backend/tests/integration/test_live_scheduling_concurrency.py` runs two independent async sessions against live Supabase for the same temporary slot and verifies exactly one `SLOT_REQUESTED` winner, one `SLOT_CONFLICT_REFRESH_REQUIRED` loser, one active appointment, audit/idempotency evidence, and zero leftover `CODX` rows. Broader 10-driver/3-4-slot load test remains TODO.
 - [x] ~~Add an objective losing-a-race proof for two clients selecting the same slot.~~ Evidence 2026-08-10 20:35 IST: live Supabase integration produced one winner and one conflict-refresh loser with cleanup.
+- [x] ~~Isolate Redis runtime chat/session memory by browser session in addition to authenticated user and thread.~~ Evidence 2026-08-10 23:01 IST: `ConversationMemory` keys now include normalized `session_id`, duplicate detection is session-scoped, `get_conversation_memory` returns the session id, and frontend `/chat` requests carry a stable session id from `sessionStorage`.
 - [ ] TODO: add end-to-end demonstrations for stale choice, cancellation releasing capacity, and no feasible slot.
 - [ ] TODO: live-smoke authenticated API/chat paths for `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and `get_conversation_memory` using the current local Supabase/Redis/Gemini env.
 

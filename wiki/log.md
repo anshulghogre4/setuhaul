@@ -310,3 +310,11 @@ last_updated: 2026-08-07
 - Kept Sprint 3 IN PROGRESS and the exit gate open for authenticated scheduling/chat smoke, lifecycle transitions, stale-choice invalidation, no-slot escalation, ops takeover views, broader load proof, enterprise auth hardening, and formal Playwright/CI.
 - Updated [[implementation]], [[current-state]], [[handoff]], and root CHANGELOG. No Memory MCP sync is expected; SetuHaul durable context is checked-in docs/source, and Redis is runtime app memory only.
 - Verification: documentation-only reconciliation; no application tests run. `git diff --check` run after writeback.
+
+## 2026-08-10 23:01 IST | implementation | Redis session-scoped chat memory
+
+- Added `/api/v1/chat` `session_id` support and returned the normalized session id from `run_assistant`.
+- Updated `ConversationMemory` so Upstash Redis history, structured session state, snapshots, and duplicate `client_message_id` checks are scoped by authenticated `user_id`, normalized browser `session_id`, and `thread_id`.
+- Updated the Driver UI to create a stable `sessionStorage` session id and send it with chat turns; the id is not an authorization source.
+- Updated [[ai-system]], [[implementation]], [[current-state]], [[testing]], [[handoff]], the Living sprint scoreboard, and root CHANGELOG.
+- Verification: focused backend tests PASS, 18 passed; full backend tests PASS, 43 passed and 1 skipped; frontend lint PASS; frontend build PASS; `git diff --check` run after writeback.

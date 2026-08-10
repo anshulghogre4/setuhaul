@@ -49,6 +49,8 @@ On 2026-08-10, the Driver LangChain allowlist gained `get_conversation_memory`, 
 
 This is application memory for chat continuity. It must never be treated as PostgreSQL business truth for shipments, ETA, appointments, docks, or facilities. SetuHaul does not use a project Memory MCP; durable project context stays in checked-in docs/source.
 
+On 2026-08-10 23:01 IST, Redis chat memory was tightened to include a browser `session_id` namespace in addition to authenticated `user_id` and `thread_id`. The Driver UI now creates a stable per-tab/browser-session id in `sessionStorage` and sends it to `/api/v1/chat`; `ConversationMemory` normalizes Redis key parts and scopes history, structured session state, and client-message dedupe to `user_id + session_id + thread_id`. This prevents two active sessions that reuse a thread id from reading each other's Redis memory. The session id is not an authorization source; Supabase JWT and server-side profile mapping remain authoritative.
+
 ## Sprint 3 constraints registry
 
 On 2026-08-10, Sprint 3 started with an editable deterministic constraints registry at `backend/app/scheduling/constraints.json`. The file centralizes the project constraints that must shape implementation: PostgreSQL authority, LangChain-only typed orchestration, Redis as 24-hour non-authoritative state, no invented operational data, feasibility hard constraints, deterministic ranking, appointment lifecycle semantics, option invalidation triggers, no-slot escalation payloads, and required write-safety controls.

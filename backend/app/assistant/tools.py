@@ -107,6 +107,7 @@ def build_driver_tools(
     session: AsyncSession,
     ctx: ExecutionContext,
     thread_id: str,
+    session_id: str | None = None,
     memory: ConversationMemory | None = None,
 ) -> list[StructuredTool]:
     """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist)."""
@@ -131,6 +132,7 @@ def build_driver_tools(
                     "code": "REDIS_MEMORY_UNAVAILABLE",
                     "source": "upstash_redis",
                     "thread_id": thread_id,
+                    "session_id": session_id,
                     "recent_messages": [],
                     "session": {},
                     "ttl_seconds": 24 * 60 * 60,
@@ -143,6 +145,7 @@ def build_driver_tools(
             memory.snapshot(
                 user_id=ctx.user_id,
                 thread_id=thread_id,
+                session_id=session_id,
                 include_recent_messages=args.include_recent_messages,
             )
         )
