@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from app.core.settings import Settings
+from app.core.tls import use_system_trust_store
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ConversationMemory:
             self.degrade_reason = "UPSTASH_NOT_CONFIGURED"
             return
         try:
+            use_system_trust_store()
             from upstash_redis import Redis
 
             self._client = Redis(url=url, token=token)

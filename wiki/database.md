@@ -16,7 +16,7 @@ Rules:
 - Apply migrations; never patch production schema manually.
 - RLS, privileges, constraints, transaction boundaries, and concurrency behavior require explicit tests.
 - Load the Supabase and Postgres best-practice skills before database changes.
-- Redis and Memory MCP are not database substitutes.
+- Redis is not a database substitute.
 
 ## Allocation constraints
 
@@ -26,6 +26,21 @@ The baseline keeps PostgreSQL as the final allocation authority through partial 
 - `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
 
 As of 2026-08-10 20:35 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. `backend/tests/integration/test_live_scheduling_concurrency.py` proves two independent live Supabase sessions competing for the same temporary slot yield exactly one winner and one conflict refresh, then cleans all temporary rows. No schema or RLS change was made; broader load proof and remaining lifecycle transitions are still required before the Sprint 3 exit gate can close.
+
+## Live POC Auth expansion (2026-08-10 22:11 IST)
+
+Six additional real-name Supabase Auth users were created and mapped to `public.users.auth_user_id` without schema changes:
+
+| user_id | email | role |
+|---|---|---|
+| USR002 | amit.singh@setuhaul.com | DRIVER |
+| USR003 | vikas.sharma@setuhaul.com | DRIVER |
+| USR107 | kavita.rao@setuhaul.com | OPERATIONS_EXECUTIVE |
+| USR108 | arvind.nair@setuhaul.com | OPERATIONS_EXECUTIVE |
+| USR997 | meera.iyer@setuhaul.com | ADMIN |
+| USR998 | suresh.menon@setuhaul.com | ADMIN |
+
+Drivers reused seeded app-user rows; Ops/Admin rows were inserted where missing. Supabase password-grant login returned `200` for each account, and each mapped app-user row has a non-null `auth_user_id`. Passwords are not recorded in checked-in docs.
 
 ## Live catalog inspection (2026-08-10 20:23 IST)
 

@@ -9,6 +9,7 @@ from jwt import PyJWKClient
 
 from app.core.errors import AppError
 from app.core.settings import Settings
+from app.core.tls import use_system_trust_store
 
 
 class JwtVerifier:
@@ -27,6 +28,7 @@ class JwtVerifier:
                     code="AUTH_MISCONFIGURED",
                     status_code=503,
                 )
+            use_system_trust_store()
             self._jwks_client = PyJWKClient(self._settings.supabase_jwks_url)
             self._jwks_fetched_at = time.time()
         return self._jwks_client

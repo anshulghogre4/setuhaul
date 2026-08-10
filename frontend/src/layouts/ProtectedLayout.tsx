@@ -73,15 +73,15 @@ export function ProtectedLayout({ portal, title, children }: Props) {
                 {profile.full_name}
               </summary>
               <div className="profile-panel">
-                <p>
-                  <strong>{profile.role_name}</strong>
+                <p className="profile-role">
+                  <strong>{profile.role_name.replaceAll('_', ' ')}</strong>
                 </p>
                 <p>{profile.email}</p>
                 <p>User {profile.user_id}</p>
                 {profile.facility_id ? <p>Facility {profile.facility_id}</p> : null}
                 {profile.driver_id ? <p>Driver {profile.driver_id}</p> : null}
                 <p className="scope">{profile.scope.type}</p>
-                <button type="button" onClick={() => void onLogout()}>
+                <button type="button" className="secondary-btn logout-btn" onClick={() => void onLogout()}>
                   Log out
                 </button>
               </div>

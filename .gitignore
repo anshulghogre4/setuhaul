@@ -1,5 +1,4 @@
-# Secrets and local agent memory
-.agent-memory/
+# Secrets
 .env
 .env.*
 !.env.example

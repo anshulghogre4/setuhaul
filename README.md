@@ -95,12 +95,12 @@ Runtime uses a bounded manual `run_assistant` loop with **`bind_tools`** (not `c
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` | `ChatOpenAI` |
 | OpenRouter | `OPENROUTER_API_KEY` | `ChatOpenAI` + OpenRouter base URL |
-| Gemini | `GOOGLE_API_KEY` (Google AI Studio / Gemini API) | `ChatGoogleGenerativeAI` (default `gemini-2.5-flash`) |
+| Gemini | `GOOGLE_API_KEY` (Google AI Studio / Gemini API) | `ChatGoogleGenerativeAI` (default `gemini-flash-latest`) |
 
 - `LLM_PROVIDER=auto` (default): first available among OpenAI → OpenRouter → Gemini
 - Explicit: set `LLM_PROVIDER=openai|openrouter|gemini` and that provider’s key
 - Optional `LLM_MODEL` overrides the default model for the chosen provider
-- Do **not** put an OpenAI `sk-` / `sk-proj-` key in `GOOGLE_API_KEY` (`gemini-2.0-flash` is shut down; default is `gemini-2.5-flash`)
+- Do **not** put an OpenAI `sk-` / `sk-proj-` key in `GOOGLE_API_KEY`; default Gemini model is `gemini-flash-latest`.
 
 ---
 

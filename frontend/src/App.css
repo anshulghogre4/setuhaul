@@ -299,12 +299,12 @@ button:disabled {
 }
 
 .app-shell {
-  margin: 16px auto;
-  width: min(1360px, calc(100% - 24px));
+  margin: 24px auto;
+  width: min(1280px, calc(100% - 48px));
   min-height: calc(100vh - 32px);
   padding: 0;
-  overflow: hidden;
-  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.32);
+  overflow: visible;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
 }
 
 .topbar {
@@ -312,40 +312,86 @@ button:disabled {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 8;
   margin-bottom: 0;
-  padding: 16px 20px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--outline);
-  background: rgba(19, 27, 46, 0.72);
+  border-radius: 12px 12px 0 0;
+  background: rgba(16, 24, 43, 0.92);
   backdrop-filter: blur(14px);
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.4rem;
+}
+
+.topbar-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.profile-menu {
+  position: relative;
 }
 
 .profile-menu summary {
   cursor: pointer;
   list-style: none;
+  min-width: 92px;
   padding: 8px 12px;
   border: 1px solid var(--outline);
   border-radius: 999px;
+  color: var(--text);
+  background: rgba(34, 42, 61, 0.58);
+  font-weight: 700;
+  text-align: center;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.profile-menu summary:hover {
+  border-color: rgba(180, 197, 255, 0.55);
+  background: rgba(34, 42, 61, 0.86);
 }
 
 .profile-panel {
   position: absolute;
   right: 0;
-  z-index: 4;
-  margin-top: 8px;
-  padding: 12px;
-  background: var(--panel-high);
+  top: calc(100% + 10px);
+  z-index: 20;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(34, 42, 61, 0.98), rgba(19, 27, 46, 0.98));
   border: 1px solid var(--outline);
-  border-radius: 10px;
-  min-width: 220px;
+  border-radius: 8px;
+  width: min(260px, calc(100vw - 32px));
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+}
+
+.profile-panel p {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.profile-panel .profile-role {
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.logout-btn {
+  width: 100%;
+  margin-top: 4px;
 }
 
 main {
-  padding: 18px;
+  padding: 18px 20px 22px;
 }
 
 .context-grid {
@@ -636,48 +682,72 @@ main {
 
 .ops-dashboard {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .ops-hero {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
   align-items: start;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--outline);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background:
+    linear-gradient(135deg, rgba(78, 222, 163, 0.09), transparent 38%),
+    linear-gradient(180deg, rgba(34, 42, 61, 0.74), rgba(19, 27, 46, 0.92));
 }
 
 .ops-hero h2 {
   margin: 0 0 6px;
+  font-size: 1.22rem;
+}
+
+.ops-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ops-meta-row span {
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--soft-outline);
+  border-radius: 6px;
+  background: rgba(6, 14, 32, 0.34);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .ops-metrics {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .metric-card,
 .ops-status-panel {
   border: 1px solid var(--outline);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background:
+    linear-gradient(180deg, rgba(34, 42, 61, 0.52), rgba(19, 27, 46, 0.92));
   padding: 16px;
 }
 
 .metric-card {
   position: relative;
   overflow: hidden;
+  min-height: 112px;
 }
 
 .metric-card::before {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
-  width: 3px;
+  width: 4px;
   background: var(--primary);
 }
 
@@ -692,20 +762,30 @@ main {
 .metric-label {
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .metric-value {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 .metric-note {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.ops-content-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1.22fr);
+  gap: 12px;
+  align-items: start;
 }
 
 .status-list {
@@ -723,7 +803,8 @@ main {
   gap: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--panel-high);
+  background: rgba(34, 42, 61, 0.58);
+  border: 1px solid var(--soft-outline);
 }
 
 .status-measure {
@@ -745,6 +826,77 @@ main {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--blue), var(--accent));
+}
+
+.exception-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.exception-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--soft-outline);
+  border-radius: 8px;
+  background: rgba(6, 14, 32, 0.28);
+}
+
+.exception-list strong,
+.exception-list span,
+.exception-list small,
+.exception-meta span {
+  display: block;
+}
+
+.exception-list strong {
+  font-size: 0.95rem;
+}
+
+.exception-list span {
+  margin-top: 4px;
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.exception-list small {
+  margin-top: 7px;
+  color: var(--muted);
+  line-height: 1.38;
+}
+
+.exception-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.empty-state {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(78, 222, 163, 0.24);
+  background: rgba(78, 222, 163, 0.08);
+}
+
+.empty-state strong {
+  color: var(--accent);
+}
+
+.empty-state span {
+  color: var(--muted);
 }
 
 .quick-actions {
@@ -811,6 +963,15 @@ main {
   .topbar {
     align-items: flex-start;
   }
+
+  .ops-metrics,
+  .ops-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-hero {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 620px) {
@@ -833,12 +994,29 @@ main {
     align-items: stretch;
   }
 
+  .topbar-actions,
+  .profile-menu summary {
+    width: 100%;
+  }
+
+  .profile-panel {
+    left: 0;
+    right: auto;
+    width: 100%;
+  }
+
   .chat-row {
     max-width: 100%;
   }
 
   .data-grid,
-  .status-measure {
+  .status-measure,
+  .exception-list li {
     grid-template-columns: 1fr;
+  }
+
+  .exception-meta {
+    justify-items: start;
+    white-space: normal;
   }
 }

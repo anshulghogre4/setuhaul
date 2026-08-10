@@ -17,8 +17,8 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
     "openrouter": "openai/gpt-4o-mini",
-    # gemini-2.0-flash shut down 2026-06-01; use current Flash for bind_tools POC
-    "gemini": "gemini-2.5-flash",
+    # Use the current Flash alias; older pinned Flash models may be unavailable to new keys.
+    "gemini": "gemini-flash-latest",
 }
 
 AUTO_ORDER = ("openai", "openrouter", "gemini")

@@ -2,6 +2,43 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-10 22:46 IST - Reconcile implementation master plan
+
+- Updated `plans/implementation-master-plan.md` from the beginning through the latest implementation state, striking only completed items with dated evidence and keeping the Sprint 3 exit gate open.
+- Marked completed evidence for role-specific UI PNG assets/authenticated Ops dashboard polish, Redis-only memory clarification, current Gemini default configuration, individual POC Supabase Auth users, deterministic feasibility/ranking, fresh non-reserved option metadata, and live two-client same-slot contention proof.
+- Added the ordered remaining Sprint 3/enterprise next list: live authenticated scheduling/chat smoke, appointment lifecycle transitions, stale-choice invalidation, no-slot escalation, ops takeover views, broader load proof, enterprise auth hardening, and formal Playwright/CI coverage.
+- Updated `wiki/implementation.md`, `wiki/current-state.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: documentation-only plan reconciliation; no application tests run. `git diff --check` run after writeback.
+- Skill: `software-architecture-design`. Agent/surface: Codex.
+
+## 2026-08-10 22:39 IST - Configure local Gemini key and update default model
+
+- Stored the provided Gemini API key only in gitignored `.env.local`, set `LLM_PROVIDER=gemini`, and set `LLM_MODEL=gemini-flash-latest`.
+- Updated the Gemini default model in `backend/app/assistant/llm.py` from `gemini-2.5-flash` to `gemini-flash-latest`; the provided key reached Google but returned 404 for older pinned Flash models, while `gemini-flash-latest`, `gemini-3.5-flash`, and `gemini-3.6-flash` returned 200 via Google REST.
+- Updated `backend/tests/unit/test_llm_factory.py`, `.env.example`, `README.md`, `wiki/ai-system.md`, `wiki/current-state.md`, and `wiki/handoff.md` to match the current Gemini default.
+- Verification: `backend/.venv/Scripts/python.exe -m pytest tests/unit/test_llm_factory.py -q` PASS, 10 passed; direct Google REST generateContent with `gemini-flash-latest` PASS and returned `SETUHAUL_GEMINI_OK`; model listing PASS. LangChain `ChatGoogleGenerativeAI.invoke` attempted twice but timed out in the local shell, so full LangChain live invoke remains to be rechecked after restarting the backend/dev environment. No key printed in checked-in docs.
+
+## 2026-08-10 22:31 IST - Polish authenticated ops dashboard UI
+
+- Refined the authenticated Operations dashboard from a debug-like summary into a tighter enterprise workspace: cleaner scope/freshness metadata, stronger metric hierarchy, two-column status/exception layout, improved empty state, formatted timestamps, and readable exception rows without inventing data.
+- Fixed the protected shell/profile dropdown presentation so the menu anchors to the topbar, avoids awkward dashboard overlap, formats role names, and uses the existing secondary button style for logout.
+- Updated `frontend/src/features/operator/OpsHomes.tsx`, `frontend/src/layouts/ProtectedLayout.tsx`, and `frontend/src/App.css`.
+- Verification: `npm run lint` PASS; `npm run build` PASS; local frontend `GET /ops/login` PASS 200; backend `GET /health/ready` PASS with database reachable; live Supabase password grant for `arvind.nair@setuhaul.com` PASS 200; running backend `/api/v1/auth/me`, `/operations/dashboard-summary?facility_id=FAC-GGN-01`, and `/operations/exceptions?facility_id=FAC-GGN-01` PASS 200. Headless screenshot capture was attempted but blocked by local command policy around Chrome process cleanup, so no new screenshot artifact was produced.
+
+## 2026-08-10 22:20 IST - Correct memory architecture to Redis-only
+
+- Corrected active agent/tooling instructions and wiki pages to remove the project Memory MCP workflow. SetuHaul memory is now documented as Upstash Redis only for application conversation/session state; durable project context remains in checked-in source, plans, changelog, and wiki files.
+- Removed Memory MCP server configuration files that only existed to launch `@modelcontextprotocol/server-memory`; deleted the stale Claude MCP approval file, removed `.agent-memory/` from `.gitignore`, and preserved `.cursor/mcp.json` with the Supabase MCP entry only.
+- Updated `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/setuhaul.mdc`, `docs/AI_TOOLING.md`, `docs/HANDOFF.md`, `wiki/AGENTS.md`, `wiki/ai-system.md`, `wiki/implementation.md`, `wiki/database.md`, `wiki/index.md`, `wiki/skills-and-mcp.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: documentation/config change only; no app tests run. `rg` used to locate active Memory MCP references. Agent/surface: Codex.
+
+## 2026-08-10 22:11 IST - Add extra live POC login accounts and Redis env
+
+- Created six additional live Supabase Auth POC accounts and mapped them to `public.users.auth_user_id`: Drivers `USR002` Amit Singh and `USR003` Vikas Sharma, Operations Executives `USR107` Kavita Rao and `USR108` Arvind Nair, and Admins `USR997` Meera Iyer and `USR998` Suresh Menon. Added new app-user rows only where missing for the extra Ops/Admin personas; seeded Driver rows were reused.
+- Added gitignored local env files `.env.local` and `frontend/.env.local` so the backend/frontend can run against the provided Supabase project. The backend env includes the Upstash Redis REST endpoint/token derived from the provided Redis URL; the frontend env includes only browser-safe Vite values.
+- Verified each new account with Supabase password-grant login status `200` and confirmed each `public.users` row has a non-null `auth_user_id`. Verified Upstash Redis REST connectivity with `/ping`, short-lived `set`, and `get`.
+- Verification: live Supabase Auth/Data API account create+mapping PASS for 6 accounts; Redis REST smoke PASS (`PONG`, `OK`, `ok`). `redis-cli` was not available in this sandbox, so Redis was verified through Upstash REST. No app tests run because this was live credential/data setup. Skills: `supabase`, `supabase-postgres-best-practices`. Coding-agent Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
 ## 2026-08-10 20:35 IST - Add live same-slot concurrency proof
 
 - Added `backend/tests/integration/test_live_scheduling_concurrency.py`, an opt-in live Supabase integration test for two simultaneous `request_slot` calls competing for the same temporary slot. The test creates temporary `CODX` shipment/slot fixtures, runs independent async sessions concurrently, asserts exactly one `SLOT_REQUESTED` winner and one `SLOT_CONFLICT_REFRESH_REQUIRED` loser, verifies one active appointment, one booking audit row, and two idempotency rows, then cleans up all temporary rows.

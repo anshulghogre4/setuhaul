@@ -12,7 +12,7 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 
 - LangChain **`ChatOpenAI`** with **`bind_tools(...)`** on a curated, role-scoped tool list.
 - Custom bounded `run_assistant` loop: `model.invoke` → on `tool_calls`, run typed Pydantic tool functions that call FastAPI application services → append `ToolMessage`s → final text.
-- Provider factory `backend/app/assistant/llm.py` (2026-08-07): `LLM_PROVIDER=auto|openai|openrouter|gemini`. **`auto`** uses first configured key **OpenAI → OpenRouter → Gemini**. OpenAI/OpenRouter use `ChatOpenAI` (OpenRouter via OpenAI-compatible base URL). **Gemini uses `ChatGoogleGenerativeAI`** (`langchain-google-genai`) with a Google AI Studio / Gemini API key — not an OpenAI `sk-`/`sk-proj-` token. Default Gemini model: **`gemini-2.5-flash`** (`gemini-2.0-flash` shut down 2026-06-01). Live invoke PASS for all three providers 2026-08-07 20:25 IST.
+- Provider factory `backend/app/assistant/llm.py` (updated 2026-08-10): `LLM_PROVIDER=auto|openai|openrouter|gemini`. **`auto`** uses first configured key **OpenAI → OpenRouter → Gemini**. OpenAI/OpenRouter use `ChatOpenAI` (OpenRouter via OpenAI-compatible base URL). **Gemini uses `ChatGoogleGenerativeAI`** (`langchain-google-genai`) with a Google AI Studio / Gemini API key — not an OpenAI `sk-`/`sk-proj-` token. Default Gemini model: **`gemini-flash-latest`** because the provided key rejected older pinned Flash models. Direct Gemini REST smoke PASS for `gemini-flash-latest` on 2026-08-10.
 - **Not** `create_agent`, `AgentExecutor`, or `create_react_agent`. Explicit: **`bind_tools` + manual invoke loop ≠ `create_agent`**.
 - Tools never contain SQL; PostgreSQL is SoT; LLM never invents operational facts.
 - Do not name private reference projects in SetuHaul docs.
@@ -37,8 +37,9 @@ Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are intern
 ## Memory layers
 
 - **Application memory:** Upstash Redis conversation history/session context with a **24-hour TTL**, non-authoritative. PostgreSQL refreshes business facts. Implemented in `ConversationMemory` (`backend/app/services/redis_memory.py`); `get_conversation_memory` exposes a bounded current-thread snapshot to the Driver LangChain tool loop.
-- **Coding-agent memory:** project Memory MCP knowledge graph in ignored `.agent-memory/memory.jsonl`.
 - **Repository memory:** checked-in LLMWiki, changelog, plans, and source files.
+
+There is no project Memory MCP workflow for SetuHaul. Redis is the only runtime memory service, and it is scoped to application chat/session continuity.
 
 LangSmith tracing is enabled when `LANGSMITH_TRACING=true` and the API key is set (gitignored env). Trace payloads must be sanitized.
 

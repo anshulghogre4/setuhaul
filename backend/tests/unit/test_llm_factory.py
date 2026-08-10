@@ -44,7 +44,7 @@ def test_auto_falls_back_to_gemini():
     s = _settings(google_api_key="AIza-fake-google")
     r = resolve_llm(s)
     assert r.provider == "gemini"
-    assert r.model == "gemini-2.5-flash"
+    assert r.model == "gemini-flash-latest"
     assert r.base_url is None
 
 
@@ -62,7 +62,7 @@ def test_explicit_openrouter_requires_key():
 
 
 def test_explicit_gemini_uses_google_key():
-    s = _settings(llm_provider="gemini", google_api_key="AIza-fake", llm_model="gemini-2.5-flash")
+    s = _settings(llm_provider="gemini", google_api_key="AIza-fake", llm_model="gemini-flash-latest")
     r = resolve_llm(s)
     assert r.provider == "gemini"
     assert r.api_key == "AIza-fake"

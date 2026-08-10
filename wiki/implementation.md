@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 20:35 IST):** `find_feasible_slots` returns explicit deterministic ranking scores/factors, `request_slot` is implemented as the first transactional pending-confirmation path, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and live same-slot contention now proves one winner plus one conflict-safe refreshed loser. The Sprint 3 exit gate remains open because reschedule/confirm/cancel/reject/expire flows, broader load proof, and no-slot escalation demo remain TODO.
+**Living status refresh (2026-08-10 22:46 IST):** `plans/implementation-master-plan.md` has been reconciled from the beginning through the latest UI/auth/Redis/Gemini/scheduling work. Sprint 1 and Sprint 2 remain COMPLETE. Sprint 3 remains IN PROGRESS with struck evidence for deterministic feasibility/ranking, fresh non-reserved option metadata, `request_slot`/status groundwork, live two-client same-slot proof, Redis memory tool context, individual POC Auth users, role-specific login visuals, and authenticated Ops dashboard polish. The exit gate remains open because live authenticated scheduling/chat smoke, reschedule/confirm/cancel/reject/expire flows, stale-choice invalidation, no-slot escalation, operations takeover views, broader 10-driver/3-4-slot load proof, enterprise auth hardening, and formal Playwright/CI coverage remain TODO.
 
 ## Challenge brief analysis
 
@@ -39,7 +39,7 @@ The brief's expected demonstration requires: driver delay clarification, later-s
 
 ## UI polish
 
-On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards and proportional status bars; the app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
+On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards, proportional status bars, compact scope/freshness metadata, a stronger status/exception split, improved empty states, and a better anchored profile menu. The app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
 
 Immediate action: live-smoke authenticated API/chat paths for `find_feasible_slots`, `request_slot`, and `get_appointment_request_status`, then add reschedule/confirm/cancel/reject/expire flows and the no-slot escalation demo.
 
@@ -47,7 +47,7 @@ Immediate action: live-smoke authenticated API/chat paths for `find_feasible_slo
 
 On 2026-08-10, the Driver LangChain allowlist gained `get_conversation_memory`, backed by `ConversationMemory.snapshot(...)` in `backend/app/services/redis_memory.py`. The tool reads only the authenticated user and current thread's bounded Upstash Redis history/session context, returns 24-hour TTL/degraded-state metadata, and labels the result as non-authoritative.
 
-This is application memory for chat continuity. It does not replace the coding-agent Memory MCP and must never be treated as PostgreSQL business truth for shipments, ETA, appointments, docks, or facilities.
+This is application memory for chat continuity. It must never be treated as PostgreSQL business truth for shipments, ETA, appointments, docks, or facilities. SetuHaul does not use a project Memory MCP; durable project context stays in checked-in docs/source.
 
 ## Sprint 3 constraints registry
 
