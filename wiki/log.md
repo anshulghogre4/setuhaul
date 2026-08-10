@@ -221,3 +221,10 @@ last_updated: 2026-08-07
 - Updated [[current-state]], [[implementation]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard. Sprint 3 is now IN PROGRESS; no exit gate or allocator item was struck because deterministic feasibility/allocation is not complete.
 - Verification: backend unit tests PASS, 25 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with only an existing CRLF warning on `CHANGELOG.md`.
 - Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 19:12 IST | implementation | LangChain feasible slot search
+
+- Added `backend/app/scheduling/feasibility.py` for deterministic Sprint 3 slot feasibility/ranking using checked constraints, latest ETA, facility hours, slot/dock compatibility, active appointments, dock events, and no-slot escalation payloads.
+- Added `backend/app/api/v1/routers/scheduling.py` with `GET /api/v1/shipments/{shipment_id}/slots/feasible`, wired the router into `backend/app/main.py`, and registered `find_feasible_slots` in `backend/app/assistant/tools.py`.
+- Updated the assistant prompt so slot search is enabled as informational non-reserved options while booking/hold/reschedule/cancel/confirm mutations remain disabled.
+- Verification: backend unit tests PASS, 30 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke not run because local env files are absent and pasted secrets were not persisted.
+- Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.

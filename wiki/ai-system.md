@@ -17,6 +17,7 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 - Tools never contain SQL; PostgreSQL is SoT; LLM never invents operational facts.
 - Do not name private reference projects in SetuHaul docs.
 - Sprint 3 scheduling policy constraints now live in `backend/app/scheduling/constraints.json` and are loaded by deterministic backend code. LangChain tools must call services that apply this policy; the model must not interpret the JSON as permission to mutate data or invent slot facts.
+- Driver LangChain tools now include `find_feasible_slots` (2026-08-10), which calls the deterministic feasibility service and returns non-reserved options or escalation. Appointment mutation intents still use `scheduling_capability_disabled` until transaction-safe allocation services exist.
 
 ## Tool count and sprint placement
 
@@ -26,7 +27,7 @@ Matrix in `plans/implementation-master-plan.md` §5.2: **26** named capabilities
 |---|---|
 | Sprint 1 | Observational **services/REST** for ~9 read capabilities. No chat mount; no model tool registration; **Upstash not required**. |
 | Sprint 2 | Register POC tools via `bind_tools`; add ETA/exception tools; **Upstash required** (24h non-authoritative conversation/session memory). **COMPLETE** 2026-08-07 19:35 IST. |
-| Sprint 3 | Register scheduling/search/report tools (~12 more) after deterministic feasibility/allocation services exist. Constraints registry added 2026-08-10; tools/routes still TODO. |
+| Sprint 3 | `find_feasible_slots` registered 2026-08-10. Remaining scheduling/search/report tools require deterministic services before registration. |
 
 Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are internal—not direct model registration. Infra (history, audit, authz, idempotency, redaction) is not model-selectable.
 

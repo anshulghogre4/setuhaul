@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.execution_context import ExecutionContext
+from app.scheduling.feasibility import find_feasible_slots
 from app.services import driver_reads
 from app.services.eta_service import EtaUpdateCommand, confirmation_preview, record_eta_update
 
@@ -60,6 +61,14 @@ class ReportDelayArgs(BaseModel):
 class SchedulingArgs(BaseModel):
     intent: str = Field(description="Requested scheduling action")
     shipment_id: str | None = None
+
+
+class FindFeasibleSlotsArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment to evaluate. Required when the driver has multiple active shipments.",
+    )
+    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of slot options to return")
 
 
 def _json(data: Any) -> str:
@@ -190,13 +199,44 @@ def build_driver_tools(
             code = getattr(exc, "code", "ETA_WRITE_FAILED")
             return _json({"code": code, "message": str(exc)})
 
+    async def find_feasible_slots_tool(args: FindFeasibleSlotsArgs) -> str:
+        context = await driver_reads.get_driver_operational_context(session, ctx)
+        active = context.get("active_shipments") or []
+        shipment_id = args.shipment_id
+        if not shipment_id:
+            if len(active) == 0:
+                return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
+            if len(active) > 1:
+                return _json(
+                    {
+                        "code": "CLARIFICATION_REQUIRED",
+                        "message": "Multiple active shipments. Ask which shipment_id to evaluate.",
+                        "candidates": [
+                            {"shipment_id": s["shipment_id"], "status": s["current_status"]}
+                            for s in active
+                        ],
+                    }
+                )
+            shipment_id = active[0]["shipment_id"]
+
+        try:
+            result = await find_feasible_slots(session, ctx, shipment_id, limit=args.limit)
+            payload = result.model_dump()
+            payload["code"] = "FEASIBLE_SLOTS_FOUND" if payload["options"] else "NO_FEASIBLE_SLOTS"
+            payload["appointment_writes"] = 0
+            return _json(payload)
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
+            code = getattr(exc, "code", "FEASIBILITY_FAILED")
+            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+
     async def scheduling_capability_disabled(args: SchedulingArgs) -> str:
         return _json(
             {
                 "code": "CAPABILITY_NOT_ENABLED",
                 "message": (
-                    "Slot search, booking, rescheduling, cancellation, and appointment "
-                    "confirmation are not enabled in the Sprint 2 POC. Operations handoff required."
+                    "Booking, rescheduling, cancellation, holds, and appointment confirmation are "
+                    "not enabled until Sprint 3 transactional allocation services are complete. "
+                    "Feasible slot search may be shown as informational options only."
                 ),
                 "intent": args.intent,
                 "shipment_id": args.shipment_id,
@@ -269,10 +309,19 @@ def build_driver_tools(
             args_schema=ReportDelayArgs,
         ),
         StructuredTool.from_function(
+            coroutine=find_feasible_slots_tool,
+            name="find_feasible_slots",
+            description=(
+                "Find fresh, explainable, non-reserved feasible replacement slot options for "
+                "an in-scope shipment. This never books, holds, reserves, confirms, or mutates appointments."
+            ),
+            args_schema=FindFeasibleSlotsArgs,
+        ),
+        StructuredTool.from_function(
             coroutine=scheduling_capability_disabled,
             name="scheduling_capability_disabled",
             description=(
-                "Return CAPABILITY_NOT_ENABLED for slot search/book/reschedule/cancel/confirm."
+                "Return CAPABILITY_NOT_ENABLED for booking/reschedule/cancel/hold/confirm mutations."
             ),
             args_schema=SchedulingArgs,
         ),

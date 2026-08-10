@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 18:55 IST):** Sprint 3 moved to **IN PROGRESS** after adding `backend/app/scheduling/constraints.json`, the typed constraints loader, and unit coverage. No Sprint 3 exit gate item was completed or struck; feasibility engine, mutation tools/routes, and concurrency proof remain TODO.
+**Living status refresh (2026-08-10 19:12 IST):** `find_feasible_slots` is implemented as the first Sprint 3 LangChain read path. The deterministic service reads PostgreSQL candidate data, applies policy-backed feasibility checks, returns explainable `DISPLAYED_NOT_RESERVED` options or no-slot escalation, and is registered in the driver tool allowlist. No Sprint 3 exit gate item was struck; mutation tools/routes, transaction-level allocation, live authenticated smoke, and concurrency proof remain TODO.
 
 ## Challenge brief analysis
 
@@ -41,12 +41,18 @@ The brief's expected demonstration requires: driver delay clarification, later-s
 
 On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards and proportional status bars; the app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
 
-Immediate action: build the pure feasibility engine against the constraints registry and PostgreSQL read models.
+Immediate action: add transactional request/hold and conflict-safe allocation services after live-smoke verifying the read-only slot-search path.
 
 ## Sprint 3 constraints registry
 
 On 2026-08-10, Sprint 3 started with an editable deterministic constraints registry at `backend/app/scheduling/constraints.json`. The file centralizes the project constraints that must shape implementation: PostgreSQL authority, LangChain-only typed orchestration, Redis as 24-hour non-authoritative state, no invented operational data, feasibility hard constraints, deterministic ranking, appointment lifecycle semantics, option invalidation triggers, no-slot escalation payloads, and required write-safety controls.
 
 The registry is loaded through `backend/app/scheduling/constraints.py` using strict Pydantic models. This is a foundation for the pure feasibility engine; it does not yet expose scheduling mutation routes or claim appointment capacity.
+
+## Sprint 3 LangChain slot search
+
+On 2026-08-10, the first end-to-end Sprint 3 LangChain read path was added. `backend/app/scheduling/feasibility.py` loads the constraints registry, verifies trusted user scope, reads latest ETA/facility/slot/dock/active appointment data from PostgreSQL, filters candidate slots, ranks options deterministically, and returns non-reserved options with explanations and snapshot metadata.
+
+`backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers `find_feasible_slots` in the driver LangChain allowlist. The system prompt now allows slot search but still forbids booking, holding, rescheduling, cancellation, or confirmation until transactional allocation services exist.
 
 Related: [[current-state]], [[architecture]], [[testing]], [[ai-system]].
