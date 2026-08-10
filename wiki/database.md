@@ -18,6 +18,15 @@ Rules:
 - Load the Supabase and Postgres best-practice skills before database changes.
 - Redis and Memory MCP are not database substitutes.
 
+## Allocation constraints
+
+The baseline keeps PostgreSQL as the final allocation authority through partial unique indexes:
+
+- `ux_active_appointment_per_slot` prevents more than one active `PENDING_CONFIRMATION`, `CONFIRMED`, or `IN_PROGRESS` appointment per slot.
+- `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
+
+As of 2026-08-10 19:50 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. No schema or RLS change was made; real parallel transaction proof is still required before the Sprint 3 exit gate can close.
+
 ## Supabase MCP diagnosis (2026-08-07 ~15:55 IST)
 
 `.cursor/mcp.json` declares a remote server key named `supabase` (project_ref `kujffzgqjmqphkmrbawy`; no secrets in this file). Cursor exposes that server to agents as **`project-0-Setuhaul-supabase`**, not bare `supabase`.

@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 19:38 IST):** `request_slot` is implemented as the first Sprint 3 transactional pending-confirmation path after `find_feasible_slots`, and `get_appointment_request_status` now reports the authoritative pending/confirmed/closed/no-request lifecycle state with zero appointment writes. No Sprint 3 exit gate item was struck; live authenticated smoke, same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
+**Living status refresh (2026-08-10 19:50 IST):** `request_slot` is implemented as the first Sprint 3 transactional pending-confirmation path after `find_feasible_slots`, `get_appointment_request_status` reports authoritative pending/confirmed/closed/no-request lifecycle state, and allocation unique-index races now map to HTTP 409 conflict refresh. No Sprint 3 exit gate item was struck; live authenticated smoke, real same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
 
 ## Challenge brief analysis
 
@@ -60,6 +60,8 @@ On 2026-08-10, the first end-to-end Sprint 3 LangChain read path was added. `bac
 On 2026-08-10, `backend/app/scheduling/allocation.py` added `request_slot` as the first transactional scheduling command. It requires an `Idempotency-Key`, verifies the driver owns the shipment, locks shipment and slot rows, checks current active appointments and slot occupancy, reuses the feasibility evaluator, inserts a `PENDING_CONFIRMATION` appointment only after revalidation, writes `BOOK_APPOINTMENT` audit, stores the idempotent response, commits, and rereads the appointment.
 
 The REST route is `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request`, and the Driver LangChain allowlist includes `request_slot` for exact selected slot IDs. This is still not final confirmation; reschedule, cancellation, and confirmation remain separate TODO flows.
+
+On 2026-08-10, `request_slot` was hardened for residual allocation races. If PostgreSQL rejects an insert through `ux_active_appointment_per_slot` or `ux_current_active_appointment_per_shipment`, the service rolls back, recomputes options, records the 409 idempotency response, and returns `SLOT_CONFLICT_REFRESH_REQUIRED` with zero appointment writes. The HTTP route now returns 409 for this conflict outcome while preserving refreshed options in the response body.
 
 ## Sprint 3 Appointment Request Status
 

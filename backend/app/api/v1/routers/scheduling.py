@@ -1,6 +1,7 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db_session, get_execution_context, get_request_id, require_roles
@@ -61,7 +62,12 @@ async def request_shipment_slot(
         if result.code == "SLOT_REQUESTED"
         else "Selected slot is no longer available; refreshed options returned."
     )
-    return ok(result.model_dump(), get_request_id(request), message=message)
+    body = ok(result.model_dump(), get_request_id(request), message=message)
+    if result.code == "SLOT_CONFLICT_REFRESH_REQUIRED":
+        body["success"] = False
+        body["errors"] = [{"code": result.code, "detail": message, "field": None}]
+        return JSONResponse(status_code=409, content=body)
+    return body
 
 
 @router.get("/shipments/{shipment_id}/appointment-request/status")

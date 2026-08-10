@@ -11,8 +11,8 @@ last_verified: 2026-08-07
 Current executable evidence:
 
 - Database tests under `supabase/tests/database/` (present; not executed this session).
-- Backend unit tests: **35 passed** (2026-08-10 19:38 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, feasibility checks, allocation command schema, appointment request status mapping, and Driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
-- FastAPI import smoke: **PASS** (2026-08-10 19:38 IST, `from app.main import create_app; app=create_app()` returned 11 routes).
+- Backend unit tests: **38 passed** (2026-08-10 19:50 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, feasibility checks, allocation command schema, appointment request status mapping, PostgreSQL allocation unique-constraint translation, and Driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
+- FastAPI import smoke: **PASS** (2026-08-10 19:50 IST, `from app.main import create_app; app=create_app()` returned 11 routes).
 - Frontend production build: **PASS** (`npm run build`, 2026-08-07 17:55 IST).
 - Minimal CI workflow: `.github/workflows/ci.yml` (backend unit + frontend build) — present; not yet observed on GitHub Actions runners.
 - Live Auth: MCP `auth.users=3`, USR001/USR101/USR999 mapped.
@@ -35,7 +35,7 @@ Current executable evidence:
 
 Required layers:
 
-- Database parity, constraints, RLS, and concurrency tests.
+- Database parity, constraints, RLS, and real parallel concurrency tests. Current allocation race coverage maps expected PostgreSQL unique-constraint errors, but does not yet execute simultaneous database transactions.
 - FastAPI unit/integration/API tests for auth, scope, validation, idempotency, and failures.
 - Frontend component/type checks and accessibility states beyond baseline.
 - Playwright E2E in CI for login-to-context and later ETA/allocation flows.

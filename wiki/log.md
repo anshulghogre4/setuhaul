@@ -242,3 +242,10 @@ last_updated: 2026-08-07
 - Updated the assistant prompt so pending confirmation remains distinct from confirmed booking, and updated [[current-state]], [[implementation]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
 - Verification: backend unit tests PASS, 35 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and concurrency tests not run because local env files are absent and pasted secrets were not persisted.
 - Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 19:50 IST | implementation | Allocation race conflict mapping
+
+- Hardened `request_slot` so PostgreSQL allocation partial unique violations for `ux_active_appointment_per_slot` and `ux_current_active_appointment_per_shipment` return `SLOT_CONFLICT_REFRESH_REQUIRED` instead of raw database errors.
+- Updated the scheduling route to return HTTP 409 for conflict-refresh outcomes while preserving refreshed options in the response body.
+- Added unit coverage for allocation unique-constraint translation and updated [[current-state]], [[implementation]], [[database]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
+- Verification: backend unit tests PASS, 38 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and real parallel contention tests not run because local env files are absent and pasted secrets were not persisted.
+- Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.

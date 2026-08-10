@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
@@ -17,6 +18,12 @@ from app.services.ids import new_id
 
 AUDIT_ACTION_BOOK_APPOINTMENT = "BOOK_APPOINTMENT"
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+ALLOCATION_UNIQUE_CONSTRAINTS = frozenset(
+    {
+        "ux_active_appointment_per_slot",
+        "ux_current_active_appointment_per_shipment",
+    }
+)
 
 
 class RequestSlotCommand(BaseModel):
@@ -110,6 +117,18 @@ def appointment_request_status_code(status: str | None) -> tuple[str, bool]:
     if normalized == "NO_SHOW":
         return "APPOINTMENT_NO_SHOW", False
     return "APPOINTMENT_STATUS_UNKNOWN", False
+
+
+def allocation_unique_constraint_name(exc: IntegrityError) -> str | None:
+    orig = getattr(exc, "orig", None)
+    constraint_name = getattr(orig, "constraint_name", None)
+    if constraint_name in ALLOCATION_UNIQUE_CONSTRAINTS:
+        return str(constraint_name)
+    message = str(exc)
+    for name in ALLOCATION_UNIQUE_CONSTRAINTS:
+        if name in message:
+            return name
+    return None
 
 
 async def _reread_appointment(session: AsyncSession, appointment_id: str) -> dict[str, Any] | None:
@@ -464,60 +483,90 @@ async def request_slot(
 
     appointment_id = new_id("APT")
     audit_id = new_id("AUD")
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.appointments (
-              appointment_id, shipment_id, slot_id, appointment_status, booking_source,
-              is_current, booked_at, confirmed_at, cancelled_at, cancellation_reason,
-              replaced_appointment_id, warehouse_confirmation_ref, updated_at
-            ) VALUES (
-              :appointment_id, :shipment_id, :slot_id, 'PENDING_CONFIRMATION', 'DRIVER_CHAT',
-              1, :booked_at, NULL, NULL, NULL, NULL, NULL, :updated_at
-            )
-            """
-        ),
-        {
-            "appointment_id": appointment_id,
-            "shipment_id": shipment_id,
-            "slot_id": slot_id,
-            "booked_at": now,
-            "updated_at": now,
-        },
-    )
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id,
-              old_value_json, new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
-              NULL, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": audit_id,
-            "user_id": ctx.user_id,
-            "action_type": AUDIT_ACTION_BOOK_APPOINTMENT,
-            "entity_id": appointment_id,
-            "new_value_json": json.dumps(
-                {
-                    "shipment_id": shipment_id,
-                    "slot_id": slot_id,
-                    "status": "PENDING_CONFIRMATION",
-                    "policy_version": constraints.policy_version,
-                    "displayed_policy_version": command.displayed_policy_version,
-                    "note": command.note,
-                },
-                default=str,
+    try:
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.appointments (
+                  appointment_id, shipment_id, slot_id, appointment_status, booking_source,
+                  is_current, booked_at, confirmed_at, cancelled_at, cancellation_reason,
+                  replaced_appointment_id, warehouse_confirmation_ref, updated_at
+                ) VALUES (
+                  :appointment_id, :shipment_id, :slot_id, 'PENDING_CONFIRMATION', 'DRIVER_CHAT',
+                  1, :booked_at, NULL, NULL, NULL, NULL, NULL, :updated_at
+                )
+                """
             ),
-            "created_at": now,
-        },
-    )
+            {
+                "appointment_id": appointment_id,
+                "shipment_id": shipment_id,
+                "slot_id": slot_id,
+                "booked_at": now,
+                "updated_at": now,
+            },
+        )
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.audit_logs (
+                  audit_id, user_id, action_type, entity_name, entity_id,
+                  old_value_json, new_value_json, ip_address, user_agent, created_at
+                ) VALUES (
+                  :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+                  NULL, :new_value_json, NULL, NULL, :created_at
+                )
+                """
+            ),
+            {
+                "audit_id": audit_id,
+                "user_id": ctx.user_id,
+                "action_type": AUDIT_ACTION_BOOK_APPOINTMENT,
+                "entity_id": appointment_id,
+                "new_value_json": json.dumps(
+                    {
+                        "shipment_id": shipment_id,
+                        "slot_id": slot_id,
+                        "status": "PENDING_CONFIRMATION",
+                        "policy_version": constraints.policy_version,
+                        "displayed_policy_version": command.displayed_policy_version,
+                        "note": command.note,
+                    },
+                    default=str,
+                ),
+                "created_at": now,
+            },
+        )
+        await session.flush()
+    except IntegrityError as exc:
+        constraint_name = allocation_unique_constraint_name(exc)
+        if constraint_name is None:
+            raise
+        await session.rollback()
+        result = await _conflict_result(
+            session,
+            ctx,
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            policy_version=constraints.policy_version,
+            reason_code="POSTGRES_UNIQUE_ALLOCATION_CONFLICT",
+            message=(
+                "PostgreSQL rejected the appointment claim because another active appointment "
+                f"already satisfies {constraint_name}."
+            ),
+            idempotency_key=idempotency_key,
+        )
+        await store_idempotency(
+            session,
+            key=idempotency_key,
+            user_id=ctx.user_id,
+            route=route,
+            request_hash=req_hash,
+            response=result.model_dump(),
+            status_code=409,
+        )
+        await session.commit()
+        return result
 
-    await session.flush()
     appointment = await _reread_appointment(session, appointment_id)
     result = RequestSlotResult(
         as_of=_as_of(),

@@ -1,9 +1,19 @@
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.assistant.tools import build_driver_tools
 from app.core.execution_context import ExecutionContext, RoleName
-from app.scheduling.allocation import RequestSlotCommand, appointment_request_status_code
+from app.scheduling.allocation import (
+    RequestSlotCommand,
+    allocation_unique_constraint_name,
+    appointment_request_status_code,
+)
+
+
+class _DbOrig:
+    def __init__(self, constraint_name: str | None) -> None:
+        self.constraint_name = constraint_name
 
 
 def _driver_ctx() -> ExecutionContext:
@@ -46,6 +56,22 @@ def test_appointment_request_status_code_does_not_confirm_closed_states():
     assert appointment_request_status_code("CONFIRMED") == ("APPOINTMENT_CONFIRMED", False)
     assert appointment_request_status_code("REJECTED") == ("APPOINTMENT_REJECTED", False)
     assert appointment_request_status_code(None) == ("NO_APPOINTMENT_REQUEST", False)
+
+
+@pytest.mark.parametrize(
+    "constraint_name",
+    ["ux_active_appointment_per_slot", "ux_current_active_appointment_per_shipment"],
+)
+def test_allocation_unique_constraint_name_detects_postgres_allocation_guards(constraint_name):
+    exc = IntegrityError("insert appointments", {}, _DbOrig(constraint_name))
+
+    assert allocation_unique_constraint_name(exc) == constraint_name
+
+
+def test_allocation_unique_constraint_name_ignores_unrelated_integrity_errors():
+    exc = IntegrityError("insert appointments", {}, _DbOrig("appointments_pkey"))
+
+    assert allocation_unique_constraint_name(exc) is None
 
 
 def test_driver_tool_allowlist_includes_request_slot():
