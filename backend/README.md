@@ -16,7 +16,7 @@ uvicorn app.main:app --reload --port 8000
 ## Auth mapping
 
 1. Apply migration `supabase/migrations/20260807100550_add_users_auth_user_id.sql` (already applied on hosted project via MCP).
-2. Create/link POC Auth users with `docs/scripts/create_poc_auth_users.py` using service-role + private passwords in env (never commit).
+2. POC Auth users are mapped via `public.users.auth_user_id`. Shared demo passwords live only in gitignored `.env` / `.env.local` (`SETUHAUL_POC_*_PASSWORD`) and are shared out-of-band — never commit them.
 
 ## Endpoints (Sprint 1)
 

@@ -2,6 +2,28 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-10 23:21 IST - Fix hung login preflight (backend venv crash)
+
+- Diagnosed Driver login hang after successful Supabase `token?grant_type=password` 200: Network showed `/api/v1/auth/me` OPTIONS + GET both pending. Root cause was a crashed FastAPI worker (`ModuleNotFoundError: starlette`, then broken `greenlet`), not a frontend double-call bug.
+- Reinstalled broken `backend/.venv` packages (`starlette`, `greenlet`) and restarted uvicorn with `--reload-dir app` to avoid watching `.venv`.
+- Verification: `GET /health/live` PASS 200; `OPTIONS /api/v1/auth/me` PASS 200 with CORS allow-origin `http://localhost:5173`. The two `me` rows in DevTools are expected (preflight + request). Agent/surface: Cursor.
+
+## 2026-08-10 23:12 IST - Move POC account roster to local share file
+
+- Created gitignored `POC_TEAM_ACCOUNTS.local.md` with all 14 users across all 8 roles (name, email, role_id/role_name, facility/driver scope, portal, and the three role-shared passwords) for OOB team sharing.
+- Cleared `SETUHAUL_POC_*_EMAIL` / `SETUHAUL_POC_*_PASSWORD` values from gitignored `.env` and `.env.local` (left empty placeholders + pointer to the local roster file). Added `POC_TEAM_ACCOUNTS.local.md` to `.gitignore`.
+- Updated `.env.example` to point at the local roster file instead of storing passwords.
+- Verification: env files restored to valid multiline format after scrub; Supabase/service keys retained; POC password fields empty. Passwords not written to changelog/wiki. Agent/surface: Cursor.
+
+## 2026-08-10 23:05 IST - Authenticate remaining five users; remove Auth reset script
+
+- Created Supabase Auth for the five previously unmapped seeded users (USR102–USR106) and mapped `public.users.auth_user_id`. Live totals: `auth.users=14`, mapped=`14`, unmapped=`0`.
+- Kept the existing three role-shared passwords from gitignored `.env.local` (no new passwords). Grouping: Driver x3, Operations x6 (added Rahul/Anjali/Deepak), Admin x5 (added Sanjay/Neha).
+- Expanded ops portal mapping and permissions so deferred personas can use `/ops/login`: `roleToPortal`, `ExecutionContext.is_operator`/`is_admin`, `ROLE_PERMISSIONS`, and operations `require_roles`.
+- Deleted `docs/scripts/create_poc_auth_users.py` and local password helper artifacts; scrubbed `backend/README.md` and documented email buckets in `.env.example` (placeholders only).
+- Updated `wiki/database.md`, `wiki/handoff.md`, `wiki/log.md`, `wiki/current-state.md`. Passwords not written to checked-in docs.
+- Verification: password-grant PASS for eight sample accounts across all three buckets including all five new users; `python -m pytest tests/unit/test_execution_context.py -q` PASS (6). Skills: `supabase`. Agent/surface: Cursor.
+
 ## 2026-08-10 23:01 IST - Scope Redis chat memory by browser session
 
 - Added `session_id` to the Driver chat request/response path so Redis memory is scoped by authenticated user, browser session, and thread instead of user/thread only.

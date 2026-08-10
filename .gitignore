@@ -3,6 +3,8 @@
 .env.*
 !.env.example
 !**/.env.example
+POC_TEAM_ACCOUNTS.local.md
+*.credentials.local.md
 
 # Python
 backend/.venv/

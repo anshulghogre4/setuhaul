@@ -51,6 +51,8 @@ export function OpsHome() {
           facilityId={profile.facility_id}
           global={
             profile.role_name === 'ADMIN' ||
+            profile.role_name === 'TRANSPORT_MANAGER' ||
+            profile.role_name === 'REGIONAL_OPERATIONS_HEAD' ||
             profile.scope.type === 'global' ||
             profile.scope.type === 'global_read_only'
           }

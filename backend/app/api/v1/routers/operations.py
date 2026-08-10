@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db_session, get_request_id, require_roles
+from app.core.deps import OPS_PORTAL_ROLES, get_db_session, get_request_id, require_roles
 from app.core.envelope import ok
 from app.core.errors import AppError
-from app.core.execution_context import ExecutionContext, RoleName
+from app.core.execution_context import ExecutionContext
 
 router = APIRouter(prefix="/api/v1", tags=["operations"])
 
@@ -32,7 +32,7 @@ async def dashboard_summary(
     request: Request,
     ctx: Annotated[
         ExecutionContext,
-        Depends(require_roles(RoleName.OPERATIONS_EXECUTIVE, RoleName.ADMIN)),
+        Depends(require_roles(*OPS_PORTAL_ROLES)),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     facility_id: Annotated[str | None, Query()] = None,
@@ -101,7 +101,7 @@ async def list_exceptions(
     request: Request,
     ctx: Annotated[
         ExecutionContext,
-        Depends(require_roles(RoleName.OPERATIONS_EXECUTIVE, RoleName.ADMIN)),
+        Depends(require_roles(*OPS_PORTAL_ROLES)),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     facility_id: Annotated[str | None, Query()] = None,
@@ -149,7 +149,7 @@ async def appointment_schedule(
     request: Request,
     ctx: Annotated[
         ExecutionContext,
-        Depends(require_roles(RoleName.OPERATIONS_EXECUTIVE, RoleName.ADMIN)),
+        Depends(require_roles(*OPS_PORTAL_ROLES)),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     facility_id: Annotated[str | None, Query()] = None,
@@ -197,7 +197,7 @@ async def dock_snapshot(
     request: Request,
     ctx: Annotated[
         ExecutionContext,
-        Depends(require_roles(RoleName.OPERATIONS_EXECUTIVE, RoleName.ADMIN)),
+        Depends(require_roles(*OPS_PORTAL_ROLES)),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     facility_id: Annotated[str | None, Query()] = None,
@@ -260,7 +260,7 @@ async def facility_constraints(
     request: Request,
     ctx: Annotated[
         ExecutionContext,
-        Depends(require_roles(RoleName.OPERATIONS_EXECUTIVE, RoleName.ADMIN)),
+        Depends(require_roles(*OPS_PORTAL_ROLES)),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     facility_id: Annotated[str | None, Query()] = None,

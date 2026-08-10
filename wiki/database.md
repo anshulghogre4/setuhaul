@@ -42,6 +42,29 @@ Six additional real-name Supabase Auth users were created and mapped to `public.
 
 Drivers reused seeded app-user rows; Ops/Admin rows were inserted where missing. Supabase password-grant login returned `200` for each account, and each mapped app-user row has a non-null `auth_user_id`. Passwords are not recorded in checked-in docs.
 
+## Full Auth inventory (2026-08-10 23:05 IST)
+
+All 14 `public.users` rows now have Auth. Role-shared passwords stay in gitignored `.env` / `.env.local` only. The Auth create/reset script was removed from the repo.
+
+| Bucket | Password env | user_id / email | seed role | portal |
+|---|---|---|---|---|
+| Driver | `SETUHAUL_POC_DRIVER_PASSWORD` | USR001 ravi.kumar | DRIVER | driver |
+| Driver | same | USR002 amit.singh | DRIVER | driver |
+| Driver | same | USR003 vikas.sharma | DRIVER | driver |
+| Operations | `SETUHAUL_POC_OPERATOR_PASSWORD` | USR101 priya.mehta | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR107 kavita.rao | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR108 arvind.nair | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR102 rahul.verma | WAREHOUSE_PLANNER | ops |
+| Operations | same | USR103 anjali.kapoor | OPERATIONS_MANAGER | ops |
+| Operations | same | USR104 deepak.joshi | FACILITY_MANAGER | ops |
+| Admin | `SETUHAUL_POC_ADMIN_PASSWORD` | USR999 admin | ADMIN | ops |
+| Admin | same | USR997 meera.iyer | ADMIN | ops |
+| Admin | same | USR998 suresh.menon | ADMIN | ops |
+| Admin | same | USR105 sanjay.gupta | TRANSPORT_MANAGER | ops |
+| Admin | same | USR106 neha.bansal | REGIONAL_OPERATIONS_HEAD | ops |
+
+Proof: `auth.users=14`, mapped=`14`, unmapped=`0`. Password-grant PASS for samples across all three buckets including the five newly created accounts. Ops portal/API allowlists expanded so the five deferred personas can use `/ops/login` with facility (USR102–104) or global (USR105–106) scope. Team-share roster (with passwords) lives only in gitignored `POC_TEAM_ACCOUNTS.local.md`; `.env` / `.env.local` no longer store POC passwords.
+
 ## Live catalog inspection (2026-08-10 20:23 IST)
 
 Direct read-only asyncpg inspection reached Supabase PostgreSQL 17.6. Public schema contains 23 tables and 4 views; all public tables report RLS enabled and no `pg_policies` rows were present in this inspection. The FastAPI server therefore continues to rely on server-side JWT/RBAC checks plus backend-only database access for application authorization unless/until RLS policies are added and tested.
@@ -115,7 +138,7 @@ Sprint 3-critical indexes are live: `ux_active_appointment_per_slot`, `ux_curren
 
 Migrations applied: `setuhaul_baseline`, `add_users_auth_user_id`.
 
-POC app users (re-verified 2026-08-07 ~16:25 IST):
+POC app users (historical 2026-08-07 snapshot; superseded by [[#Full Auth inventory (2026-08-10 23:05 IST)]] above):
 
 | user_id | email | role | auth_user_id mapped? |
 |---|---|---|---|
@@ -123,9 +146,9 @@ POC app users (re-verified 2026-08-07 ~16:25 IST):
 | USR101 | priya.mehta@setuhaul.com | OPERATIONS_EXECUTIVE | yes |
 | USR999 | admin@setuhaul.com | ADMIN | yes |
 
-- `public.users.auth_user_id` exists (uuid, nullable) with unique partial index `users_auth_user_id_uidx`; **3** POC rows mapped.
-- `auth.users` total: **3** with matching email identities. Passwords OOB in gitignored `.env.local`. Anon keys populated locally via MCP; `DATABASE_URL` still empty → HTTP `/auth/me` blocked (`DB_UNAVAILABLE`).
+- `public.users.auth_user_id` exists (uuid, nullable) with unique partial index `users_auth_user_id_uidx`. Current live totals (2026-08-10 23:05 IST): **14** mapped, `auth.users=14`, unmapped=`0`.
+- Passwords OOB in gitignored `.env` / `.env.local` only; Auth create/reset script removed from repo.
 
-Evidence: live MCP SQL 2026-08-07; `supabase/migrations/20260807100550_add_users_auth_user_id.sql`; `docs/DATABASE.md`.
+Evidence: live MCP SQL 2026-08-10; `supabase/migrations/20260807100550_add_users_auth_user_id.sql`; `docs/DATABASE.md`.
 
 Related: [[architecture]], [[testing]], [[contradictions]], [[handoff]], [[skills-and-mcp]].
