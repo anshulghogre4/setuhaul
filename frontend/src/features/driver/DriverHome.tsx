@@ -43,6 +43,36 @@ type EtaWriteResult = {
   requires_confirmation?: boolean
 }
 
+function valueText(value: unknown, fallback = 'Unknown') {
+  if (value === null || value === undefined || value === '') return fallback
+  return String(value)
+}
+
+function getField(record: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!record) return null
+  for (const key of keys) {
+    if (record[key] !== null && record[key] !== undefined && record[key] !== '') return record[key]
+  }
+  return null
+}
+
+function DataField({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: unknown
+  tone?: 'good' | 'warn' | 'neutral'
+}) {
+  return (
+    <div className={`data-field ${tone ? `tone-${tone}` : ''}`}>
+      <span>{label}</span>
+      <strong>{valueText(value)}</strong>
+    </div>
+  )
+}
+
 export function DriverHome() {
   return (
     <ProtectedLayout portal="driver" title="Driver assistant">
@@ -234,6 +264,16 @@ function DriverBody({
   return (
     <div className="driver-workspace">
       <section className="chat-shell" aria-label="Driver AI assistant">
+        <div className="chat-panel-header">
+          <div>
+            <p className="eyebrow">Driver Console</p>
+            <h2>{displayName}</h2>
+          </div>
+          <div className="header-pills">
+            <span className="chip secondary">{status}</span>
+            <span className="chip primary">{shipmentId || 'Shipment pending'}</span>
+          </div>
+        </div>
         <div className="chat-history">
           <div className="chat-day">Today</div>
           {messages.map((m) => (
@@ -354,44 +394,103 @@ function DriverBody({
         </div>
         {ctx ? (
           <>
-            <article>
-              <h2>Operational context</h2>
+            <article className="context-card identity-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Active context</p>
+                  <h2>{displayName}</h2>
+                </div>
+                <span className="live-dot" aria-hidden="true" />
+              </div>
+              <div className="data-grid">
+                <DataField label="Driver" value={ctx.driver.driver_id} tone="good" />
+                <DataField label="Status" value={ctx.driver.driver_status} />
+                <DataField label="Shipment" value={shipmentId} tone="neutral" />
+                <DataField label="Facility" value={facilityLabel} />
+              </div>
               <p className="muted">as_of {ctx.as_of}</p>
-              <p>
-                {displayName} · {ctx.driver.driver_id} · {ctx.driver.driver_status}
-              </p>
               <button type="button" className="secondary-btn" onClick={() => void refreshContext()}>
                 Refresh context
               </button>
             </article>
-            <article>
+            <article className="context-card">
               <h2>Primary shipment</h2>
               {ctx.primary_shipment ? (
-                <pre>{JSON.stringify(ctx.primary_shipment, null, 2)}</pre>
+                <div className="data-grid">
+                  <DataField
+                    label="Shipment ID"
+                    value={getField(ctx.primary_shipment, ['shipment_id'])}
+                    tone="good"
+                  />
+                  <DataField
+                    label="Status"
+                    value={getField(ctx.primary_shipment, ['status', 'shipment_status'])}
+                  />
+                  <DataField label="Priority" value={getField(ctx.primary_shipment, ['priority'])} tone="warn" />
+                  <DataField label="Product" value={getField(ctx.primary_shipment, ['product_class'])} />
+                  <DataField label="Planned ETA" value={getField(ctx.primary_shipment, ['planned_eta'])} />
+                  <DataField
+                    label="Unload minutes"
+                    value={getField(ctx.primary_shipment, ['expected_unload_minutes'])}
+                  />
+                </div>
               ) : (
                 <p className="state">No active shipment</p>
               )}
             </article>
-            <article>
+            <article className="context-card">
               <h2>Latest ETA</h2>
               {ctx.latest_eta ? (
-                <pre>{JSON.stringify(ctx.latest_eta, null, 2)}</pre>
+                <div className="data-grid">
+                  <DataField
+                    label="Declared ETA"
+                    value={getField(ctx.latest_eta, ['declared_eta', 'declared_eta_ts'])}
+                    tone="good"
+                  />
+                  <DataField label="Source" value={getField(ctx.latest_eta, ['source_type'])} />
+                  <DataField label="Declared at" value={getField(ctx.latest_eta, ['declared_at'])} />
+                  <DataField label="Confidence" value={getField(ctx.latest_eta, ['confidence_note'])} />
+                </div>
               ) : (
                 <p className="state">No ETA row</p>
               )}
             </article>
-            <article>
+            <article className="context-card">
               <h2>Current appointment</h2>
               {ctx.current_appointment ? (
-                <pre>{JSON.stringify(ctx.current_appointment, null, 2)}</pre>
+                <div className="data-grid">
+                  <DataField
+                    label="Appointment"
+                    value={getField(ctx.current_appointment, ['appointment_id'])}
+                    tone="good"
+                  />
+                  <DataField
+                    label="Status"
+                    value={getField(ctx.current_appointment, ['status', 'appointment_status'])}
+                  />
+                  <DataField label="Dock" value={getField(ctx.current_appointment, ['dock_id', 'dock_name'])} />
+                  <DataField label="Slot" value={getField(ctx.current_appointment, ['slot_id'])} />
+                  <DataField label="Start" value={getField(ctx.current_appointment, ['start_time'])} />
+                  <DataField label="End" value={getField(ctx.current_appointment, ['end_time'])} />
+                </div>
               ) : (
                 <p className="state">No current appointment</p>
               )}
             </article>
-            <article>
+            <article className="context-card">
               <h2>Facility</h2>
               {ctx.facility ? (
-                <pre>{JSON.stringify(ctx.facility, null, 2)}</pre>
+                <div className="data-grid">
+                  <DataField
+                    label="Facility"
+                    value={getField(ctx.facility, ['facility_name', 'name', 'facility_id'])}
+                    tone="good"
+                  />
+                  <DataField label="City" value={getField(ctx.facility, ['city'])} />
+                  <DataField label="Timezone" value={getField(ctx.facility, ['timezone'])} />
+                  <DataField label="Open" value={getField(ctx.facility, ['open_time'])} />
+                  <DataField label="Close" value={getField(ctx.facility, ['close_time'])} />
+                </div>
               ) : (
                 <p className="state">No facility context</p>
               )}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { apiGet, type MeProfile } from '../core/http/api'
 import {
@@ -21,7 +21,7 @@ export function ProtectedLayout({ portal, title, children }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -44,11 +44,11 @@ export function ProtectedLayout({ portal, title, children }: Props) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [portal])
 
   useEffect(() => {
     void load()
-  }, [portal])
+  }, [load])
 
   if (!loading && !profile && !error) {
     return <Navigate to={portalLogin[portal]} replace />

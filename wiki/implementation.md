@@ -29,6 +29,18 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
+**Living status refresh (2026-08-10 18:29 IST):** status unchanged after frontend UI polish and role-specific login hero assets. No Sprint 3 deterministic allocation checklist item was completed or struck.
+
+## Challenge brief analysis
+
+Verified against `docs/SetuHaul_FDE_Challenge.pdf` on 2026-08-10: the classroom brief defines the core problem as driver exception chat plus simultaneous scarce dock-capacity coordination. It intentionally does not prescribe agent framework, tool list, storage design, concurrency mechanism, allocation algorithm, or deployment pattern.
+
+The brief's expected demonstration requires: driver delay clarification, later-slot comparison, several requests against the same facility schedule, at least two requests competing for the same capacity, stale/disappearing option handling, and at least one no-feasible-slot escalation. This confirms the master plan's sequencing: Sprint 1-2 POC is valid as an internal ETA/exception/read-model proof, but FDE challenge readiness depends on Sprint 3 feasibility, allocation semantics, idempotent concurrency, conflict recovery, and escalation evidence.
+
+## UI polish
+
+On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards and proportional status bars; the app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
+
 Immediate action: begin Sprint 3 feasibility/ranking/concurrent allocation when the owner starts that slice.
 
 Related: [[current-state]], [[architecture]], [[testing]], [[ai-system]].

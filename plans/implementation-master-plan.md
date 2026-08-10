@@ -7,6 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
+Last refreshed: 2026-08-10 18:29 IST (role-specific login hero assets only; Sprint gate status unchanged)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**

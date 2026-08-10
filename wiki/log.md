@@ -8,6 +8,30 @@ last_updated: 2026-08-07
 
 # Wiki log
 
+## 2026-08-10 18:29 IST | ingest | Role-specific login hero assets
+
+- Added generated Driver portal hero `frontend/src/assets/setuhaul-driver-eta-hero.png` and updated `LoginForm` so Driver and Ops login screens use distinct imagery, copy, and metrics.
+- Ops continues to use `frontend/src/assets/setuhaul-dock-command-hero.png`; Driver now focuses on ETA/exception reporting and single-truck context.
+- Verification: `npm run lint` PASS; `npm run build` PASS; screenshots `tmp/ui-polish/driver-login-role-hero.png` and `tmp/ui-polish/ops-login-role-hero.png` visually spot-checked. Memory MCP unavailable; Sprint status unchanged.
+
+## 2026-08-10 18:22 IST | ingest | Generated login hero asset
+
+- Replaced the weak abstract/fake-map login right panel with a generated dock-command hero image saved as `frontend/src/assets/setuhaul-dock-command-hero.png`.
+- Updated `LoginForm` and `App.css` so the image carries the visual while overlay copy and classroom-scale metrics remain readable.
+- Verification: `npm run lint` PASS; `npm run build` PASS; `tmp/ui-polish/driver-login-dock-hero.png` visually spot-checked. Memory MCP unavailable; Sprint status unchanged.
+
+## 2026-08-10 18:12 IST | ingest | Frontend UI polish
+
+- Implemented UI polish in `frontend/src/App.css`, `frontend/src/index.css`, `frontend/src/features/auth/LoginForm.tsx`, `frontend/src/features/driver/DriverHome.tsx`, `frontend/src/features/operator/OpsHomes.tsx`, and `frontend/src/layouts/ProtectedLayout.tsx`.
+- Scope stayed within the two-portal POC: login aesthetics, structured driver context, ops metric/status presentation, typography, shell layout, and hook warning cleanup; no booking, map/GPS, user-management, or scheduling mutation behavior added.
+- Verification: `npm run lint` PASS; `npm run build` PASS; unauthenticated login screenshots captured and visually checked. Authenticated screens not live-smoked because local env files are absent and pasted secrets were not persisted. Memory MCP unavailable.
+
+## 2026-08-10 17:51 IST | query | FDE challenge PDF analysis
+
+- Analyzed `docs/SetuHaul_FDE_Challenge.pdf` across all 20 pages; rendered representative pages 1, 10, and 18.
+- Durable conclusion: the brief leaves implementation choices open, but FDE challenge readiness requires Sprint 3 evidence for deterministic feasibility, allocation semantics, same-slot competition, stale option handling, idempotent retries, and no-feasible-slot escalation.
+- Updated [[implementation]], [[current-state]], [[handoff]], and CHANGELOG. Memory MCP was unavailable in this Codex session, so checked-in context is authoritative until memory can be replayed.
+
 ## 2026-08-08 13:45 IST | ingest | Rename web → frontend
 
 - Directory `web/` renamed to `frontend/`; CI/README/package updated; build PASS. Updated [[handoff]], CHANGELOG, master-plan scaffold wording.

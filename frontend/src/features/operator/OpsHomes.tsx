@@ -21,6 +21,14 @@ type ExceptionItem = {
   reported_at: string
 }
 
+function prettyStatus(status: string) {
+  return status
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 /** Shared Operator + Admin dashboard. Scope comes from verified profile, not the URL. */
 export function OpsHome() {
   return (
@@ -96,6 +104,7 @@ function OpsBody({
 
   const statusEntries = Object.entries(summary.shipments_by_status)
   const totalShipments = statusEntries.reduce((sum, [, n]) => sum + n, 0)
+  const maxStatusCount = Math.max(...statusEntries.map(([, n]) => n), 1)
   const recentForDemo = exceptions.filter(
     (e) => e.shipment_id === 'SHP1017' || e.driver_id === 'DRV001',
   )
@@ -120,21 +129,24 @@ function OpsBody({
       </div>
 
       <div className="ops-metrics">
-        <article className="metric-card">
+        <article className="metric-card accent-blue">
           <p className="metric-label">Shipments in scope</p>
           <p className="metric-value">{totalShipments}</p>
+          <p className="metric-note">{global ? 'Network read model' : facilityId || 'Facility scope'}</p>
         </article>
-        <article className="metric-card">
+        <article className="metric-card accent-warn">
           <p className="metric-label">Open exceptions</p>
           <p className="metric-value">{summary.open_exceptions}</p>
+          <p className="metric-note">Requires coordinator attention</p>
         </article>
-        <article className="metric-card">
+        <article className="metric-card accent-green">
           <p className="metric-label">Status buckets</p>
           <p className="metric-value">{statusEntries.length}</p>
+          <p className="metric-note">Authorized aggregate only</p>
         </article>
       </div>
 
-      <article className="ops-status-panel">
+      <article className="ops-status-panel status-distribution">
         <h2>Shipments by status</h2>
         {statusEntries.length === 0 ? (
           <p className="state">No shipment status rows in current scope</p>
@@ -142,17 +154,27 @@ function OpsBody({
           <ul className="status-list">
             {statusEntries.map(([status, count]) => (
               <li key={status}>
-                <span>{status}</span>
-                <strong>{count}</strong>
+                <span>{prettyStatus(status)}</span>
+                <div className="status-measure">
+                  <span className="status-bar">
+                    <span style={{ width: `${Math.max((count / maxStatusCount) * 100, 8)}%` }} />
+                  </span>
+                  <strong>{count}</strong>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </article>
 
-      <article className="ops-status-panel">
-        <h2>Exceptions (latest)</h2>
-        <p className="muted">Refresh after a driver ETA write to see matching state. Not realtime.</p>
+      <article className="ops-status-panel exception-panel">
+        <div className="card-heading">
+          <div>
+            <h2>Exceptions (latest)</h2>
+            <p className="muted">Refresh after a driver ETA write to see matching state. Not realtime.</p>
+          </div>
+          <span className="chip secondary">{exceptions.length} rows</span>
+        </div>
         {exceptions.length === 0 ? (
           <p className="state">No exceptions in scope</p>
         ) : (
