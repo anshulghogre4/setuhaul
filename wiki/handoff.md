@@ -10,6 +10,7 @@ last_updated: 2026-08-07
 
 ## Latest work
 
+- **2026-08-10 18:55 IST:** Started Sprint 3 with a single editable deterministic scheduling constraints registry at `backend/app/scheduling/constraints.json`, plus typed loader `backend/app/scheduling/constraints.py` and unit tests `backend/tests/unit/test_scheduling_constraints.py`. Sprint 3 status is now IN PROGRESS; exit gate remains open because feasibility engine, mutation tools/routes, and concurrency proof are not built. Verified backend unit tests: 25 passed.
 - **2026-08-10 18:29 IST:** Differentiated login hero imagery by portal. Driver login now uses generated `frontend/src/assets/setuhaul-driver-eta-hero.png` with driver ETA/exception copy; Ops login keeps `frontend/src/assets/setuhaul-dock-command-hero.png` with command-center copy. Verified `npm run lint` PASS, `npm run build` PASS, and screenshots `tmp/ui-polish/driver-login-role-hero.png` + `tmp/ui-polish/ops-login-role-hero.png`.
 - **2026-08-10 18:22 IST:** Replaced the weak abstract/fake-map login visual with a generated project-local dock-command hero asset at `frontend/src/assets/setuhaul-dock-command-hero.png`; wired it into the login panel with readable overlay text/metrics. Verified `npm run lint` PASS, `npm run build` PASS, and screenshot `tmp/ui-polish/driver-login-dock-hero.png`.
 - **2026-08-10 18:12 IST:** Frontend UI polish implemented for login, driver assistant, ops dashboard, typography, and shell layout. Verified `npm run lint` PASS and `npm run build` PASS. Screenshots captured for `/driver/login` desktop and `/ops/login` mobile under `tmp/ui-polish/`. Protected authenticated screens not live-smoked because local env files are absent and pasted secrets were not persisted. User pasted live secrets in chat; rotate after POC.
@@ -25,17 +26,19 @@ last_updated: 2026-08-07
 
 ## Current state
 
-See [[current-state]]. Sprint 2 complete. **OpenAI + OpenRouter + Gemini live invoke verified.**
+See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is IN PROGRESS with the constraints registry foundation in place. **OpenAI + OpenRouter + Gemini live invoke verified.**
 
 ## Decisions and blockers
 
 - Product AI: `ChatOpenAI.bind_tools` for OpenAI/OpenRouter; **`ChatGoogleGenerativeAI`** for Gemini; same bind_tools manual loop. Default Gemini model **`gemini-2.5-flash`**.
 - JWT verify uses `leeway=300` for local clock skew vs Supabase `iat`.
 - **Security:** keys pasted in chat → rotate after POC; never commit. README emails only; passwords OOB.
+- Sprint 3 constraints are centralized in `backend/app/scheduling/constraints.json`; change this file when policy wording changes, then keep deterministic services/tests aligned.
 
 ## Verification
 
 - Role-specific login heroes: generated `frontend/src/assets/setuhaul-driver-eta-hero.png`, reused `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops, `npm run lint` PASS, `npm run build` PASS, screenshots visually spot-checked.
+- Backend scheduling constraints: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/` PASS: 25 passed, 1 pytest config warning (`asyncio_mode` unknown without `pytest-asyncio` in ephemeral env).
 - Login hero refinement: generated image asset copied into `frontend/src/assets/setuhaul-dock-command-hero.png`; `npm run lint` PASS; `npm run build` PASS; screenshot `tmp/ui-polish/driver-login-dock-hero.png` visually spot-checked.
 - Frontend UI: `npm run lint` PASS; `npm run build` PASS; Vite running on `http://127.0.0.1:5173`; unauthenticated login screenshots visually spot-checked. Authenticated driver/ops data screens not smoke-tested this turn because `.env`/`.env.local` files are absent and chat-pasted secrets were not written to disk.
 - PDF analysis: text extracted from all 20 pages with `pdfplumber`; representative pages 1, 10, and 18 rendered with Poppler and visually spot-checked. No application tests run because this was document analysis only.
@@ -46,8 +49,10 @@ See [[current-state]]. Sprint 2 complete. **OpenAI + OpenRouter + Gemini live in
 
 ## Next action
 
-1. Begin Sprint 3 only when ready: feasibility, ranking, concurrent allocation.
-2. Optionally rotate chat-pasted API keys after POC sharing risk review.
+1. Build the pure feasibility engine against `backend/app/scheduling/constraints.json` and PostgreSQL read models.
+2. Add transactional request/hold/reschedule/confirm/cancel services only after feasibility/ranking is testable.
+3. Add concurrency tests for same-slot contention and stale-option recovery.
+4. Optionally rotate chat-pasted API keys after POC sharing risk review.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

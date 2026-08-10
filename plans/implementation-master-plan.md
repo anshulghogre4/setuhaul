@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-10 18:29 IST (role-specific login hero assets only; Sprint gate status unchanged)
+Last refreshed: 2026-08-10 18:55 IST (Sprint 3 constraints registry added; feasibility/allocation gate still open)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -26,7 +26,7 @@ Use this plan as a living checklist:
 |---|---|---|
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST (Admin browser + adversarial/IDOR + baseline a11y + minimal CI + CORS both origins) |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST (API demo `DEMO_PATH_PASS` + browser localhost:5173 driver chat/tools/ETA + ops refresh) |
-| Sprint 3 - deterministic allocation | **TODO** | Starts only after Sprint 2 POC exit gate passes |
+| Sprint 3 - deterministic allocation | **IN PROGRESS** | Started after Sprint 2 gate; exit gate remains open |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -299,7 +299,7 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 
 - [ ] TODO: replace shared POC credentials with individual Supabase users before production so audit records identify the responsible teammate/user.
 - [ ] TODO: add session revocation, password-rotation, disabled-user, and stale-role-claim hardening, then repeat all role/IDOR tests.
-- [ ] TODO: implement a pure feasibility engine and versioned deterministic ranking policy.
+- [ ] **IN PROGRESS:** implement a pure feasibility engine and versioned deterministic ranking policy. 2026-08-10 18:55 IST evidence: editable policy registry `backend/app/scheduling/constraints.json` and typed loader/tests added; pure engine and allocator are not yet implemented.
 - [ ] TODO: deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists.
 - [ ] TODO: return fresh, explainable, non-reserved options with snapshot metadata.
 - [ ] TODO: implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows.

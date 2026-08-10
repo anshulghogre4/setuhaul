@@ -214,3 +214,10 @@ last_updated: 2026-08-07
 - Added [[index]], [[current-state]], [[source-map]], [[contradictions]], system topic pages, [[handoff]], and this operation log.
 - Added cross-client Memory MCP configuration with ignored local persistence.
 - Completed the initial Graphify build from 13 canonical wiki documents: 26 nodes, 41 edges, 4 labeled communities, plus HTML/report/JSON and incremental manifest.
+## 2026-08-10 18:55 IST | implementation | Sprint 3 constraints registry
+
+- Added `backend/app/scheduling/constraints.json` as the single editable scheduling policy source for authority boundaries, feasibility hard constraints, deterministic ranking, lifecycle semantics, option invalidation, no-slot escalation, Redis boundaries, and write-safety rules.
+- Added strict Pydantic loader `backend/app/scheduling/constraints.py` and unit coverage in `backend/tests/unit/test_scheduling_constraints.py`.
+- Updated [[current-state]], [[implementation]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard. Sprint 3 is now IN PROGRESS; no exit gate or allocator item was struck because deterministic feasibility/allocation is not complete.
+- Verification: backend unit tests PASS, 25 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with only an existing CRLF warning on `CHANGELOG.md`.
+- Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
