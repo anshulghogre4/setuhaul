@@ -2,6 +2,47 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-09 00:18 IST - AI Assistant System Prompt & Tool List Alignment for Scheduling
+
+- Updated `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` to enable scheduling tools (`find_feasible_slots`, `request_slot`, `reschedule_appointment`, `cancel_appointment`, `escalate_exception`).
+- Removed obsolete `scheduling_capability_disabled` tool from `backend/app/assistant/tools.py`.
+- Verification: 23 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Live driver chat prompt invocation verified (`POST /api/v1/chat` 200 OK returning ranked dock slot options `SLOT-JAI-001`, `SLOT-JAI-002`, `SLOT-JAI-003`).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-08 23:58 IST - Sprint 3 Scheduling & Deterministic Feasibility Engine Implementation
+
+- Implemented `backend/app/services/scheduling/feasibility.py` providing pure deterministic slot search with dock physical constraint matching (vehicle size, reefer/dry van, product class), operating calendars, driver ETA feasibility, and weighted scoring/ranking.
+- Implemented `backend/app/services/scheduling/booking.py` providing concurrency-safe slot requests, rescheduling, and cancellations with PostgreSQL row locking (`SELECT ... FOR UPDATE`), HTTP 409 conflict mapping, and idempotency key caching.
+- Implemented `backend/app/services/scheduling/escalation.py` providing human takeover escalation, driver exception tracking (`driver_exceptions`), and operational message dispatch.
+- Registered LangChain `@tool` functions in `backend/app/assistant/tools.py` (`find_feasible_slots`, `request_slot`, `reschedule_appointment`, `cancel_appointment`, `escalate_exception`).
+- Exposed REST API router `backend/app/api/v1/routers/scheduling.py` and registered with main FastAPI app in `backend/app/main.py`.
+- Created unit test suite `tests/unit/test_feasibility_engine.py`.
+- Verification: 23 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); frontend production build **PASS** (`npm run build`); Live HTTP end-to-end API tests verified (`POST /api/v1/scheduling/slots/search` 200 OK, `POST /api/v1/scheduling/appointments/request` 200 OK, `POST /api/v1/scheduling/appointments/reschedule` 200 OK, `POST /api/v1/scheduling/exceptions/escalate` 200 OK).
+- Memory MCP: unavailable in environment; recorded context in handoff/wiki.
+- Agent/surface: Google Antigravity.
+
+## 2026-08-08 18:28 IST - Supabase Environment Configuration & Live Database Readiness Verification
+
+- Updated `.env` and `frontend/.env.local` configuration to bind `SUPABASE_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY` to hosted project `https://kujffzgqjmqphkmrbawy.supabase.co`.
+- Restarted backend FastAPI service (`http://127.0.0.1:8000`, task-193) and frontend dev server (`http://localhost:5173`, task-203).
+- Verification: `/health/ready` endpoint returned `status: ready` with `database_reachable: true` (`200 OK`). Unit tests **20 passed**.
+- Memory MCP: unavailable in environment; operating from checked-in context and updating handoff/wiki.
+- Agent/surface: Google Antigravity.
+
+
+
+## 2026-08-08 17:45 IST - Run Project Environment Setup and Local Server Startup
+
+- Configured local Python virtualenv (`backend/.venv`), installed backend Python dependencies from `requirements.txt`.
+- Resolved Vite build compatibility issue with Node v20.17.0 in `frontend/package.json` by updating `vite` to `^6.4.3` and `@vitejs/plugin-react` to `^4.3.4`. Cleaned and built frontend bundle (`npm run build` PASS).
+- Initialized local environment templates (`.env` and `frontend/.env.local` copied from templates).
+- Started backend FastAPI application on `http://127.0.0.1:8000` (task-119) and verified health ping (`GET /` -> status ok).
+- Started frontend Vite dev server on `http://localhost:5173` (task-128) and verified page load.
+- Verification: backend unit tests **20 passed** (`PYTHONPATH=. pytest tests/unit`); frontend build **PASS** (`npm run build`); live HTTP endpoints verified (`http://127.0.0.1:8000/` and `http://localhost:5173/`).
+- Memory MCP: unavailable in environment; operating from checked-in context and updating handoff/wiki.
+- Agent/surface: Google Antigravity.
+
+
 ## 2026-08-08 13:45 IST - Rename `web/` → `frontend/`
 
 - Renamed React app directory `web/` to `frontend/` (stopped Vite lock first). Package name `frontend`; CI working-directory + lockfile cache path updated; `.gitignore` ignores `frontend/node_modules` + `frontend/dist` (kept legacy `web/` ignore lines).

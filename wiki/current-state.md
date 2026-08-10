@@ -3,7 +3,7 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-07
+last_verified: 2026-08-08
 ---
 
 # Current state
@@ -14,7 +14,9 @@ last_verified: 2026-08-07
 - **Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).**
 - React 19 `frontend/` (renamed from `web/` 2026-08-08) + FastAPI + Supabase PG SoT + Upstash 24h chat memory + LangChain `ChatOpenAI.bind_tools` manual loop.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI` default `gemini-2.5-flash`.
-- Unit tests: **20 passed**.
+- Unit tests: **20 passed** (`PYTHONPATH=. pytest tests/unit`).
+- Local application environment running: FastAPI backend (`http://127.0.0.1:8000`) and React frontend (`http://localhost:5173`).
+
 
 ## Verify before claiming
 

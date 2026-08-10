@@ -8,6 +8,14 @@ last_updated: 2026-08-07
 
 # Wiki log
 
+## 2026-08-09 00:18 IST | verify | AI Assistant Prompt Update for Scheduling Tools
+
+- Updated `SYSTEM_PROMPT` in `prompts.py` and removed `scheduling_capability_disabled` from `tools.py`. Verified live chat model invocation (`POST /api/v1/chat` 200 OK) returning real ranked slots `SLOT-JAI-001`, `SLOT-JAI-002`, `SLOT-JAI-003`. 23 unit tests passed.
+
+## 2026-08-08 23:58 IST | verify | Sprint 3 Scheduling & Deterministic Feasibility Engine
+
+- Implemented pure deterministic feasibility engine (`feasibility.py`), concurrency-safe booking engine with PostgreSQL row-locking (`booking.py`), human escalation takeover (`escalation.py`), assistant tool bindings (`assistant/tools.py`), and direct REST router (`api/v1/routers/scheduling.py`). 23 unit tests passed (`PYTHONPATH=. pytest tests/unit`). Live end-to-end API tests passed for search, request, reschedule, and escalate. Updated [[handoff]], [[current-state]], CHANGELOG, master plan.
+
 ## 2026-08-08 13:45 IST | ingest | Rename web → frontend
 
 - Directory `web/` renamed to `frontend/`; CI/README/package updated; build PASS. Updated [[handoff]], CHANGELOG, master-plan scaffold wording.
@@ -190,3 +198,30 @@ last_updated: 2026-08-07
 - Added [[index]], [[current-state]], [[source-map]], [[contradictions]], system topic pages, [[handoff]], and this operation log.
 - Added cross-client Memory MCP configuration with ignored local persistence.
 - Completed the initial Graphify build from 13 canonical wiki documents: 26 nodes, 41 edges, 4 labeled communities, plus HTML/report/JSON and incremental manifest.
+
+## 2026-08-08 17:45 IST | environment | Local dev servers setup & execution
+
+- Set up Python 3.13 virtual environment `.venv` under `backend/` and installed dependencies from `requirements.txt`.
+- Resolved Vite build & dev server issue with Node v20.17.0 by pinning `vite@^6.4.3` and `@vitejs/plugin-react@^4.3.4` in `frontend/package.json`.
+- Created local `.env` and `frontend/.env.local` configuration files.
+- Executed `PYTHONPATH=. pytest tests/unit` in `backend/`: **20 passed**. Executed `npm run build` in `frontend/`: **PASS**.
+- Launched FastAPI backend server on `http://127.0.0.1:8000` (task-119) and verified `GET /` ping.
+- Launched Vite React frontend dev server on `http://localhost:5173` (task-128) and verified page response.
+- Updated `CHANGELOG.md`, `wiki/handoff.md`, `wiki/current-state.md`, and `wiki/log.md`.
+- Memory MCP: unavailable in environment; recorded degradation in `wiki/handoff.md`.
+
+## 2026-08-08 18:28 IST | environment | Supabase URL Binding & Database Health Verification
+
+- Fixed `SUPABASE_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY` in `.env` and `frontend/.env.local` to point to `https://kujffzgqjmqphkmrbawy.supabase.co`.
+- Restarted backend FastAPI application (`task-193`) and Vite frontend dev server (`task-203`).
+- Verified `GET /health/ready` returns `database_reachable: true` (`200 OK`).
+- Verified unit tests: **20 passed**.
+
+## 2026-08-08 18:32 IST | environment | Application Services Restart
+
+- Cancelled previous backend (`task-193`) and frontend (`task-203`) tasks.
+- Restarted FastAPI backend server (`task-238`) on `http://127.0.0.1:8000` and Vite dev server (`task-241`) on `http://localhost:5173`.
+- Verified live readiness: `/health/ready` returned `status: ready` (`database_reachable: true`, `200 OK`).
+
+
+

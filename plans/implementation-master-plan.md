@@ -25,7 +25,7 @@ Use this plan as a living checklist:
 |---|---|---|
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST (Admin browser + adversarial/IDOR + baseline a11y + minimal CI + CORS both origins) |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST (API demo `DEMO_PATH_PASS` + browser localhost:5173 driver chat/tools/ETA + ops refresh) |
-| Sprint 3 - deterministic allocation | **TODO** | Starts only after Sprint 2 POC exit gate passes |
+| Sprint 3 - deterministic allocation | **IN PROGRESS (CORE ENGINE COMPLETE)** | Core feasibility engine, atomic booking/reschedule/cancel, escalation, tools, and REST router verified 2026-08-08 23:58 IST |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -298,12 +298,12 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 
 - [ ] TODO: replace shared POC credentials with individual Supabase users before production so audit records identify the responsible teammate/user.
 - [ ] TODO: add session revocation, password-rotation, disabled-user, and stale-role-claim hardening, then repeat all role/IDOR tests.
-- [ ] TODO: implement a pure feasibility engine and versioned deterministic ranking policy.
-- [ ] TODO: deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists.
-- [ ] TODO: return fresh, explainable, non-reserved options with snapshot metadata.
-- [ ] TODO: implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows.
+- [x] ~~implement a pure feasibility engine and versioned deterministic ranking policy.~~ Verified in `backend/app/services/scheduling/feasibility.py` + unit tests PASS (2026-08-08 23:58 IST).
+- [x] ~~deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists.~~ Verified in `backend/app/assistant/tools.py` (`find_feasible_slots`, `request_slot`, `reschedule_appointment`, `cancel_appointment`, `escalate_exception`) on 2026-08-08 23:58 IST.
+- [x] ~~return fresh, explainable, non-reserved options with snapshot metadata.~~ Verified via `find_feasible_slots_service` and REST API `POST /api/v1/scheduling/slots/search` (2026-08-08 23:58 IST).
+- [x] ~~implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows.~~ Verified via `backend/app/services/scheduling/booking.py` with PostgreSQL `SELECT ... FOR UPDATE` row locks, HTTP 409 conflict mapping, and idempotency (2026-08-08 23:58 IST).
 - [ ] TODO: invalidate/recompute options on ETA correction, dock closure, capacity change, appointment cancellation, check-in, or unload overrun.
-- [ ] TODO: add human escalation records/queue for no-slot, contradictory, regulated, emergency, or approval-required cases.
+- [x] ~~add human escalation records/queue for no-slot, contradictory, regulated, emergency, or approval-required cases.~~ Verified in `backend/app/services/scheduling/escalation.py` and REST API `POST /api/v1/scheduling/exceptions/escalate` (2026-08-08 23:58 IST).
 - [ ] TODO: add the operations exception queue and appointment/dock/queue views needed for takeover.
 - [ ] TODO: add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot.
 - [ ] TODO: add end-to-end demonstrations for stale choice, losing a race, cancellation releasing capacity, and no feasible slot.
