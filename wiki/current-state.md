@@ -17,14 +17,16 @@ last_verified: 2026-08-07
 - Frontend UI polish landed 2026-08-10: premium two-portal login surface with role-specific generated Driver ETA and Ops dock-command hero assets, composed driver context rail, denser ops dashboard metrics/status bars, Inter body font, and hook-dependency cleanup. Verified with `npm run lint`, `npm run build`, and unauthenticated login screenshots.
 - Sprint 3 has started with a deterministic scheduling constraints registry: `backend/app/scheduling/constraints.json` is the single editable policy source for authority boundaries, feasibility hard constraints, ranking policy, lifecycle meanings, Redis limits, no-slot escalation, and write-safety requirements. `backend/app/scheduling/constraints.py` validates/loads it for backend services. Verified 2026-08-10 18:55 IST with backend unit tests.
 - Sprint 3 LangChain read path started: `backend/app/scheduling/feasibility.py` implements the first `find_feasible_slots` service, `backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers the `find_feasible_slots` tool while appointment mutation intents still route to `CAPABILITY_NOT_ENABLED`. Verified 2026-08-10 19:12 IST with backend unit tests.
+- Sprint 3 transactional request path started: `backend/app/scheduling/allocation.py` implements `request_slot`, which requires idempotency, locks/revalidates shipment and slot state, inserts `PENDING_CONFIRMATION` appointments, writes audit logs, and returns conflict-safe refreshed options. `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request` and the Driver LangChain `request_slot` tool are wired. Verified 2026-08-10 19:31 IST with backend unit tests and FastAPI import smoke.
+- Sprint 3 appointment request status read path started: `backend/app/scheduling/allocation.py` implements `get_appointment_request_status`, `GET /api/v1/shipments/{shipment_id}/appointment-request/status` exposes it, and Driver LangChain tool `get_appointment_request_status` reports pending/confirmed/closed/no-request lifecycle state without mutating appointments. Verified 2026-08-10 19:38 IST with backend unit tests and FastAPI import smoke.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI` default `gemini-2.5-flash`.
-- Unit tests: **30 passed**.
+- Unit tests: **35 passed**.
 
 ## Verify before claiming
 
 - Formal Playwright suite in CI (local one-shot smoke only).
 - LangSmith UI trace inspection (env tracing enabled; UI not opened this session).
 - Live chat with OpenRouter or Gemini (keys not set locally as of 20:00 IST).
-- Sprint 3 mutation tools/routes, transaction-level allocation, live authenticated slot-search smoke, and concurrency tests remain incomplete.
+- Sprint 3 reschedule/confirm/cancel/reject/expire tools, live authenticated scheduling smoke, and same-slot concurrency tests remain incomplete.
 
 Related: [[implementation]], [[testing]], [[handoff]], [[ai-system]], [[database]].

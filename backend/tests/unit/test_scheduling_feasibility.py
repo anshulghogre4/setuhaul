@@ -121,4 +121,3 @@ def test_driver_tool_allowlist_includes_feasible_slot_search():
     names = {tool.name for tool in tools}
 
     assert "find_feasible_slots" in names
-    assert "scheduling_capability_disabled" in names

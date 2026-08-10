@@ -18,6 +18,8 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 - Do not name private reference projects in SetuHaul docs.
 - Sprint 3 scheduling policy constraints now live in `backend/app/scheduling/constraints.json` and are loaded by deterministic backend code. LangChain tools must call services that apply this policy; the model must not interpret the JSON as permission to mutate data or invent slot facts.
 - Driver LangChain tools now include `find_feasible_slots` (2026-08-10), which calls the deterministic feasibility service and returns non-reserved options or escalation. Appointment mutation intents still use `scheduling_capability_disabled` until transaction-safe allocation services exist.
+- Driver LangChain tools now also include `request_slot` (2026-08-10), which can request an exact selected `slot_id` and create `PENDING_CONFIRMATION` through deterministic backend code. It does not confirm appointments; reschedule/cancel/confirm intents remain disabled until their services exist.
+- Driver LangChain tools now also include `get_appointment_request_status` (2026-08-10), which reads the authoritative appointment request lifecycle after `request_slot` and reports pending/confirmed/closed/no-request states without mutating appointments.
 
 ## Tool count and sprint placement
 
@@ -27,7 +29,7 @@ Matrix in `plans/implementation-master-plan.md` §5.2: **26** named capabilities
 |---|---|
 | Sprint 1 | Observational **services/REST** for ~9 read capabilities. No chat mount; no model tool registration; **Upstash not required**. |
 | Sprint 2 | Register POC tools via `bind_tools`; add ETA/exception tools; **Upstash required** (24h non-authoritative conversation/session memory). **COMPLETE** 2026-08-07 19:35 IST. |
-| Sprint 3 | `find_feasible_slots` registered 2026-08-10. Remaining scheduling/search/report tools require deterministic services before registration. |
+| Sprint 3 | `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` registered 2026-08-10. Remaining scheduling/search/report tools require deterministic services before registration. |
 
 Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are internal—not direct model registration. Infra (history, audit, authz, idempotency, redaction) is not model-selectable.
 

@@ -11,7 +11,8 @@ last_verified: 2026-08-07
 Current executable evidence:
 
 - Database tests under `supabase/tests/database/` (present; not executed this session).
-- Backend unit tests: **30 passed** (2026-08-10 19:12 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, feasibility checks, and driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
+- Backend unit tests: **35 passed** (2026-08-10 19:38 IST, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`). This includes scheduling constraints, feasibility checks, allocation command schema, appointment request status mapping, and Driver LangChain tool allowlist coverage. Warning observed: pytest reported unknown `asyncio_mode` because `pytest-asyncio` was not included in the ephemeral test environment.
+- FastAPI import smoke: **PASS** (2026-08-10 19:38 IST, `from app.main import create_app; app=create_app()` returned 11 routes).
 - Frontend production build: **PASS** (`npm run build`, 2026-08-07 17:55 IST).
 - Minimal CI workflow: `.github/workflows/ci.yml` (backend unit + frontend build) — present; not yet observed on GitHub Actions runners.
 - Live Auth: MCP `auth.users=3`, USR001/USR101/USR999 mapped.

@@ -228,3 +228,17 @@ last_updated: 2026-08-07
 - Updated the assistant prompt so slot search is enabled as informational non-reserved options while booking/hold/reschedule/cancel/confirm mutations remain disabled.
 - Verification: backend unit tests PASS, 30 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke not run because local env files are absent and pasted secrets were not persisted.
 - Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 19:31 IST | implementation | Transactional request_slot flow
+
+- Added `backend/app/scheduling/allocation.py` with `request_slot`: idempotency lookup/store, driver ownership checks, row locks, slot revalidation, `PENDING_CONFIRMATION` insert, `BOOK_APPOINTMENT` audit, commit, and authoritative reread.
+- Extended `backend/app/api/v1/routers/scheduling.py` with `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request` requiring `Idempotency-Key`, and registered the Driver LangChain `request_slot` tool.
+- Updated the assistant prompt so exact selected slot requests are enabled as pending confirmation only; reschedule/cancel/confirm remain disabled.
+- Verification: backend unit tests PASS, 33 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and concurrency tests not run because local env files are absent and pasted secrets were not persisted.
+- Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.
+## 2026-08-10 19:38 IST | implementation | Appointment request status read path
+
+- Added `get_appointment_request_status` in `backend/app/scheduling/allocation.py` for scope-safe, read-only status checks after `request_slot`.
+- Exposed `GET /api/v1/shipments/{shipment_id}/appointment-request/status` and registered the Driver LangChain `get_appointment_request_status` tool.
+- Updated the assistant prompt so pending confirmation remains distinct from confirmed booking, and updated [[current-state]], [[implementation]], [[ai-system]], [[testing]], [[handoff]], root CHANGELOG, and the Living sprint scoreboard.
+- Verification: backend unit tests PASS, 35 passed, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated smoke and concurrency tests not run because local env files are absent and pasted secrets were not persisted.
+- Memory MCP unavailable in this Codex session; checked-in context synchronized and memory replay remains pending.

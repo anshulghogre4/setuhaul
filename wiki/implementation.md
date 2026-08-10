@@ -29,7 +29,7 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 19:12 IST):** `find_feasible_slots` is implemented as the first Sprint 3 LangChain read path. The deterministic service reads PostgreSQL candidate data, applies policy-backed feasibility checks, returns explainable `DISPLAYED_NOT_RESERVED` options or no-slot escalation, and is registered in the driver tool allowlist. No Sprint 3 exit gate item was struck; mutation tools/routes, transaction-level allocation, live authenticated smoke, and concurrency proof remain TODO.
+**Living status refresh (2026-08-10 19:38 IST):** `request_slot` is implemented as the first Sprint 3 transactional pending-confirmation path after `find_feasible_slots`, and `get_appointment_request_status` now reports the authoritative pending/confirmed/closed/no-request lifecycle state with zero appointment writes. No Sprint 3 exit gate item was struck; live authenticated smoke, same-slot concurrency proof, and reschedule/confirm/cancel/reject/expire flows remain TODO.
 
 ## Challenge brief analysis
 
@@ -41,7 +41,7 @@ The brief's expected demonstration requires: driver delay clarification, later-s
 
 On 2026-08-10, the React frontend was aesthetically tightened without expanding POC scope: the login screens gained role-specific generated hero assets (`frontend/src/assets/setuhaul-driver-eta-hero.png` for Driver and `frontend/src/assets/setuhaul-dock-command-hero.png` for Ops) plus security badges; the driver assistant gained a console header and structured context fields instead of raw JSON; the ops dashboard gained accented metric cards and proportional status bars; the app shell and typography were aligned with the selected Stitch design set. This did not add booking, map/GPS, user-management, or scheduling mutation behavior.
 
-Immediate action: add transactional request/hold and conflict-safe allocation services after live-smoke verifying the read-only slot-search path.
+Immediate action: live-smoke `find_feasible_slots`, `request_slot`, and `get_appointment_request_status`, then add same-slot concurrency tests and the reschedule/confirm/cancel flows.
 
 ## Sprint 3 constraints registry
 
@@ -54,5 +54,17 @@ The registry is loaded through `backend/app/scheduling/constraints.py` using str
 On 2026-08-10, the first end-to-end Sprint 3 LangChain read path was added. `backend/app/scheduling/feasibility.py` loads the constraints registry, verifies trusted user scope, reads latest ETA/facility/slot/dock/active appointment data from PostgreSQL, filters candidate slots, ranks options deterministically, and returns non-reserved options with explanations and snapshot metadata.
 
 `backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers `find_feasible_slots` in the driver LangChain allowlist. The system prompt now allows slot search but still forbids booking, holding, rescheduling, cancellation, or confirmation until transactional allocation services exist.
+
+## Sprint 3 Slot Request
+
+On 2026-08-10, `backend/app/scheduling/allocation.py` added `request_slot` as the first transactional scheduling command. It requires an `Idempotency-Key`, verifies the driver owns the shipment, locks shipment and slot rows, checks current active appointments and slot occupancy, reuses the feasibility evaluator, inserts a `PENDING_CONFIRMATION` appointment only after revalidation, writes `BOOK_APPOINTMENT` audit, stores the idempotent response, commits, and rereads the appointment.
+
+The REST route is `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request`, and the Driver LangChain allowlist includes `request_slot` for exact selected slot IDs. This is still not final confirmation; reschedule, cancellation, and confirmation remain separate TODO flows.
+
+## Sprint 3 Appointment Request Status
+
+On 2026-08-10, `backend/app/scheduling/allocation.py` added `get_appointment_request_status` as a read-only companion to `request_slot`. It verifies trusted driver/operator/admin scope, reads the authoritative appointment request row and recent appointment history from PostgreSQL, maps lifecycle states to stable codes, and explicitly marks `PENDING_CONFIRMATION` as still requiring human/warehouse confirmation.
+
+The REST route is `GET /api/v1/shipments/{shipment_id}/appointment-request/status` with optional `appointment_id`, and the Driver LangChain allowlist includes `get_appointment_request_status`. The tool never mutates appointment state and should be used for “is my requested slot confirmed yet?” questions instead of relying on conversation memory.
 
 Related: [[current-state]], [[architecture]], [[testing]], [[ai-system]].
