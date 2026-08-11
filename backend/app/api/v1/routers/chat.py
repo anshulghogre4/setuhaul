@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     thread_id: str | None = None
+    session_id: str | None = Field(default=None, max_length=128)
     client_message_id: str | None = None
 
 
@@ -33,6 +34,7 @@ async def chat(
         settings=settings,
         message=body.message.strip(),
         thread_id=body.thread_id,
+        session_id=body.session_id,
         client_message_id=body.client_message_id,
     )
     return ok(result, get_request_id(request), message="Assistant response ready.")

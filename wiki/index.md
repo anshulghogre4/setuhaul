@@ -24,7 +24,7 @@ Start every session with [[handoff]], then route through this index.
 - [[ai-system]] — ChatOpenAI LLM invoke, Upstash memory, LangSmith
 - [[implementation]] — sprint order, gates, and active slice
 - [[testing]] — verification strategy and current evidence
-- [[skills-and-mcp]] — agent skills, Memory MCP, Graphify, and client setup
+- [[skills-and-mcp]] — agent skills, Redis memory boundary, Graphify, and client setup
 
 ## Operations
 

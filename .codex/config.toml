@@ -1,7 +1,0 @@
-[mcp_servers.memory]
-command = "cmd"
-args = ["/c", "npx", "-y", "@modelcontextprotocol/server-memory@2025.11.25"]
-startup_timeout_sec = 30
-
-[mcp_servers.memory.env]
-MEMORY_FILE_PATH = ".agent-memory/memory.jsonl"

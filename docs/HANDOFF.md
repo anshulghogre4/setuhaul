@@ -1,36 +1,37 @@
 # SetuHaul session handoff compatibility note
 
-Last updated: 2026-08-07
+Last updated: 2026-08-10
 
 The canonical LLMWiki handoff is now `wiki/handoff.md`. This file remains as a compatibility pointer for earlier documentation and should not receive independent session history.
 
 ## Current state
 
-- Planning and database-baseline work exists; broad application implementation has not started.
 - `plans/implementation-master-plan.md` is the implementation source of truth. Sprint exit gates must be completed in order.
-- React 19 remains the decided frontend under ADR 012. The first build target is the Sprint 1 trusted walking skeleton, not the full dashboard or broad chatbot.
-- Supabase migrations, seed data, and database tests already exist under `supabase/`.
-- Root instruction adapters now cover Codex (`AGENTS.md`), Claude Code (`CLAUDE.md`), Gemini/Google Antigravity (`GEMINI.md`), and Cursor (`.cursor/rules/setuhaul.mdc`).
+- Sprint 1 and Sprint 2 are complete. Sprint 3 is in progress with deterministic feasibility/ranking, `request_slot`, request status, session-scoped Redis memory tool context, live two-client same-slot proof, individual POC Auth users, and polished role-specific UI in place.
+- Sprint 3 remains open for authenticated scheduling/chat smoke, reschedule/confirm/cancel/reject/expire, stale-choice invalidation, no-slot escalation, ops takeover views, broader load proof, enterprise auth hardening, and formal Playwright/CI.
+- React 19 remains the decided frontend under ADR 012.
+- Supabase PostgreSQL remains the business source of truth; Upstash Redis is non-authoritative 24-hour application conversation/session memory.
 
 ## Recent work
 
-- Established a shared startup and writeback protocol based on the proven Slicematic FullStack pattern.
-- Added an append-only project changelog and this handoff file.
-- Documented skill routing and staged MCP adoption without committing credentials or activating infrastructure prematurely.
+- 2026-08-10 22:46 IST: reconciled the master implementation plan from project beginning through latest work, striking completed items with evidence and listing remaining/deferred next work.
+- 2026-08-10 23:01 IST: scoped Redis chat memory by authenticated user, browser session id, and thread id; backend/frontend tests passed.
+- 2026-08-10 23:24 IST: fixed local Driver chat LLM env loading and stale welcome-name rendering; backend process on port 8000 was stopped, but hidden restart was blocked by local policy.
+- 2026-08-10: completed UI polish, individual POC Auth account expansion, Redis-only architecture correction, Gemini default refresh, and Sprint 3 scheduling/concurrency groundwork.
 
 ## Decisions and cautions
 
 - Do not duplicate policies independently across agent files; `AGENTS.md` is canonical and the native files import it.
 - `docs/AGENTS.md` describes the runtime SetuHaul logistics assistant. Root `AGENTS.md` governs coding agents. Keep those responsibilities distinct.
-- Upstash application memory is non-authoritative and expires after 24 hours; PostgreSQL remains the business source of truth.
-- Upstash and LangSmith MCPs are optional developer tooling. They are not runtime dependencies and must not receive committed credentials.
+- Upstash Redis application memory is non-authoritative and expires after 24 hours; PostgreSQL remains the business source of truth.
+- SetuHaul does not use a project Memory MCP. Upstash/Redis diagnostics and LangSmith MCPs are optional developer tooling, not runtime dependencies, and must not receive committed credentials.
 - Existing uncommitted planning and documentation changes predate this initialization work; preserve them.
 
 ## Verification
 
-- Documentation-only initialization: application tests not run.
-- Before the first build, verify each client reports the expected root instruction file and confirm local skills/MCP availability.
+- Latest plan reconciliation was documentation-only; application tests were not run for that edit.
+- See `wiki/handoff.md` and `wiki/current-state.md` for latest verified test evidence.
 
 ## Next safe action
 
-Run the architecture decision session identified in section 13 of `plans/implementation-master-plan.md`, then implement Sprint 1's shared Supabase demo-login current-driver-context vertical slice.
+Start/restart the backend, then follow section 13 of `plans/implementation-master-plan.md`: recheck live LangChain Gemini, live-smoke authenticated scheduling/chat paths, then implement appointment lifecycle transitions and escalation/takeover proof.

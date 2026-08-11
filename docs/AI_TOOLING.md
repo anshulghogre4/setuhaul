@@ -20,7 +20,7 @@ The correct filenames are uppercase `CLAUDE.md`, `GEMINI.md`, and `AGENTS.md`. E
 3. Verify: run checks proportional to risk and record failures or skipped tests honestly.
 4. Write back: append `CHANGELOG.md`, refresh `docs/HANDOFF.md`, and update affected source-of-truth documents.
 
-This is repository memory. Runtime conversation memory belongs to the SetuHaul application and uses bounded Upstash Redis state; the two must not be mixed.
+Durable project context lives in checked-in source, plans, changelog, and wiki files. Runtime conversation memory belongs to the SetuHaul application and uses bounded Upstash Redis state.
 
 ## Required skill baseline
 
@@ -46,7 +46,7 @@ Use Graphify when the repository has enough implementation content to benefit fr
 
 ## MCP adoption sequence
 
-### 1. Documentation and local project context
+### 1. Documentation and live project context
 
 Prefer official documentation tools/connectors already available in each client. Add MCP only when it provides live data that repository files cannot.
 
@@ -54,7 +54,7 @@ LangChain can consume MCP tools through `langchain-mcp-adapters`, but this is an
 
 ### 2. Upstash
 
-Upstash's official guidance prefers its agent skill and `@upstash/cli` for most management workflows; its MCP server is useful for cross-client resource inspection and debugging.
+Upstash Redis is the only memory service for SetuHaul application conversation/session state. Upstash's official guidance prefers its agent skill and `@upstash/cli` for most management workflows; any MCP use is optional diagnostic tooling, not project memory.
 
 When adopted:
 
@@ -81,17 +81,15 @@ Enable only after a useful graph exists. Point each client at the absolute local
 After cloning or changing instructions:
 
 - Codex: start a new session and ask it to list loaded instruction sources.
-- Claude Code: use its memory/instruction inspection command and confirm `CLAUDE.md` imports `AGENTS.md`.
-- Gemini CLI/Antigravity: run `/memory show` or `/memory list`; use `/memory refresh` after edits.
+- Claude Code: confirm `CLAUDE.md` imports `AGENTS.md`.
+- Gemini CLI/Antigravity: confirm `GEMINI.md` imports `AGENTS.md`.
 - Cursor: inspect active project rules and confirm `.cursor/rules/setuhaul.mdc` is always applied.
-- Cursor MCP: run `cursor-agent mcp list` and confirm `memory` from `.cursor/mcp.json` is connected.
-- Google Antigravity MCP: open `/mcp` or MCP Servers and confirm `memory` from `.agents/mcp_config.json` is connected.
+- Cursor MCP: run `cursor-agent mcp list` only when you need live Supabase or other configured project MCP tools.
 - Confirm no MCP secrets appear in `git diff`, logs, screenshots, or changelog entries.
 
 ## References
 
 - Codex `AGENTS.md`: <https://learn.chatgpt.com/docs/agent-configuration/agents-md.md>
-- Claude Code memory: <https://docs.anthropic.com/en/docs/claude-code/memory>
 - Gemini context files: <https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html>
 - LangChain MCP adapters: <https://docs.langchain.com/oss/python/langchain/mcp>
 - LangSmith MCP server: <https://docs.langchain.com/langsmith/langsmith-mcp-server>

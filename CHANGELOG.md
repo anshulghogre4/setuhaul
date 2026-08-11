@@ -2,6 +2,180 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-10 23:21 IST - Fix hung login preflight (backend venv crash)
+
+- Diagnosed Driver login hang after successful Supabase `token?grant_type=password` 200: Network showed `/api/v1/auth/me` OPTIONS + GET both pending. Root cause was a crashed FastAPI worker (`ModuleNotFoundError: starlette`, then broken `greenlet`), not a frontend double-call bug.
+- Reinstalled broken `backend/.venv` packages (`starlette`, `greenlet`) and restarted uvicorn with `--reload-dir app` to avoid watching `.venv`.
+- Verification: `GET /health/live` PASS 200; `OPTIONS /api/v1/auth/me` PASS 200 with CORS allow-origin `http://localhost:5173`. The two `me` rows in DevTools are expected (preflight + request). Agent/surface: Cursor.
+
+## 2026-08-10 23:12 IST - Move POC account roster to local share file
+
+- Created gitignored `POC_TEAM_ACCOUNTS.local.md` with all 14 users across all 8 roles (name, email, role_id/role_name, facility/driver scope, portal, and the three role-shared passwords) for OOB team sharing.
+- Cleared `SETUHAUL_POC_*_EMAIL` / `SETUHAUL_POC_*_PASSWORD` values from gitignored `.env` and `.env.local` (left empty placeholders + pointer to the local roster file). Added `POC_TEAM_ACCOUNTS.local.md` to `.gitignore`.
+- Updated `.env.example` to point at the local roster file instead of storing passwords.
+- Verification: env files restored to valid multiline format after scrub; Supabase/service keys retained; POC password fields empty. Passwords not written to changelog/wiki. Agent/surface: Cursor.
+
+## 2026-08-10 23:05 IST - Authenticate remaining five users; remove Auth reset script
+
+- Created Supabase Auth for the five previously unmapped seeded users (USR102–USR106) and mapped `public.users.auth_user_id`. Live totals: `auth.users=14`, mapped=`14`, unmapped=`0`.
+- Kept the existing three role-shared passwords from gitignored `.env.local` (no new passwords). Grouping: Driver x3, Operations x6 (added Rahul/Anjali/Deepak), Admin x5 (added Sanjay/Neha).
+- Expanded ops portal mapping and permissions so deferred personas can use `/ops/login`: `roleToPortal`, `ExecutionContext.is_operator`/`is_admin`, `ROLE_PERMISSIONS`, and operations `require_roles`.
+- Deleted `docs/scripts/create_poc_auth_users.py` and local password helper artifacts; scrubbed `backend/README.md` and documented email buckets in `.env.example` (placeholders only).
+- Updated `wiki/database.md`, `wiki/handoff.md`, `wiki/log.md`, `wiki/current-state.md`. Passwords not written to checked-in docs.
+- Verification: password-grant PASS for eight sample accounts across all three buckets including all five new users; `python -m pytest tests/unit/test_execution_context.py -q` PASS (6). Skills: `supabase`. Agent/surface: Cursor.
+
+## 2026-08-10 23:01 IST - Scope Redis chat memory by browser session
+
+- Added `session_id` to the Driver chat request/response path so Redis memory is scoped by authenticated user, browser session, and thread instead of user/thread only.
+- Updated `ConversationMemory` to normalize Redis key parts and key history, structured session state, snapshots, and duplicate `client_message_id` detection by `user_id + session_id + thread_id`.
+- Updated Driver UI to create a stable per-browser-session id in `sessionStorage` and send it on `/api/v1/chat` requests. The session id is memory namespacing only; Supabase JWT remains the authority.
+- Updated `backend/app/assistant/run_assistant.py`, `backend/app/api/v1/routers/chat.py`, `backend/app/assistant/tools.py`, `backend/app/assistant/prompts.py`, `backend/app/services/redis_memory.py`, `backend/tests/unit/test_redis_memory.py`, and `frontend/src/features/driver/DriverHome.tsx`.
+- Updated `plans/implementation-master-plan.md`, `wiki/ai-system.md`, `wiki/implementation.md`, `wiki/current-state.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: focused backend tests PASS (`18 passed`); full backend tests PASS (`43 passed, 1 skipped`); frontend `npm run lint` PASS; frontend `npm run build` PASS; `git diff --check` run after writeback.
+- Agent/surface: Codex.
+
+## 2026-08-10 22:46 IST - Reconcile implementation master plan
+
+- Updated `plans/implementation-master-plan.md` from the beginning through the latest implementation state, striking only completed items with dated evidence and keeping the Sprint 3 exit gate open.
+- Marked completed evidence for role-specific UI PNG assets/authenticated Ops dashboard polish, Redis-only memory clarification, current Gemini default configuration, individual POC Supabase Auth users, deterministic feasibility/ranking, fresh non-reserved option metadata, and live two-client same-slot contention proof.
+- Added the ordered remaining Sprint 3/enterprise next list: live authenticated scheduling/chat smoke, appointment lifecycle transitions, stale-choice invalidation, no-slot escalation, ops takeover views, broader load proof, enterprise auth hardening, and formal Playwright/CI coverage.
+- Updated `wiki/implementation.md`, `wiki/current-state.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: documentation-only plan reconciliation; no application tests run. `git diff --check` run after writeback.
+- Skill: `software-architecture-design`. Agent/surface: Codex.
+
+## 2026-08-10 22:39 IST - Configure local Gemini key and update default model
+
+- Stored the provided Gemini API key only in gitignored `.env.local`, set `LLM_PROVIDER=gemini`, and set `LLM_MODEL=gemini-flash-latest`.
+- Updated the Gemini default model in `backend/app/assistant/llm.py` from `gemini-2.5-flash` to `gemini-flash-latest`; the provided key reached Google but returned 404 for older pinned Flash models, while `gemini-flash-latest`, `gemini-3.5-flash`, and `gemini-3.6-flash` returned 200 via Google REST.
+- Updated `backend/tests/unit/test_llm_factory.py`, `.env.example`, `README.md`, `wiki/ai-system.md`, `wiki/current-state.md`, and `wiki/handoff.md` to match the current Gemini default.
+- Verification: `backend/.venv/Scripts/python.exe -m pytest tests/unit/test_llm_factory.py -q` PASS, 10 passed; direct Google REST generateContent with `gemini-flash-latest` PASS and returned `SETUHAUL_GEMINI_OK`; model listing PASS. LangChain `ChatGoogleGenerativeAI.invoke` attempted twice but timed out in the local shell, so full LangChain live invoke remains to be rechecked after restarting the backend/dev environment. No key printed in checked-in docs.
+
+## 2026-08-10 22:31 IST - Polish authenticated ops dashboard UI
+
+- Refined the authenticated Operations dashboard from a debug-like summary into a tighter enterprise workspace: cleaner scope/freshness metadata, stronger metric hierarchy, two-column status/exception layout, improved empty state, formatted timestamps, and readable exception rows without inventing data.
+- Fixed the protected shell/profile dropdown presentation so the menu anchors to the topbar, avoids awkward dashboard overlap, formats role names, and uses the existing secondary button style for logout.
+- Updated `frontend/src/features/operator/OpsHomes.tsx`, `frontend/src/layouts/ProtectedLayout.tsx`, and `frontend/src/App.css`.
+- Verification: `npm run lint` PASS; `npm run build` PASS; local frontend `GET /ops/login` PASS 200; backend `GET /health/ready` PASS with database reachable; live Supabase password grant for `arvind.nair@setuhaul.com` PASS 200; running backend `/api/v1/auth/me`, `/operations/dashboard-summary?facility_id=FAC-GGN-01`, and `/operations/exceptions?facility_id=FAC-GGN-01` PASS 200. Headless screenshot capture was attempted but blocked by local command policy around Chrome process cleanup, so no new screenshot artifact was produced.
+
+## 2026-08-10 22:20 IST - Correct memory architecture to Redis-only
+
+- Corrected active agent/tooling instructions and wiki pages to remove the project Memory MCP workflow. SetuHaul memory is now documented as Upstash Redis only for application conversation/session state; durable project context remains in checked-in source, plans, changelog, and wiki files.
+- Removed Memory MCP server configuration files that only existed to launch `@modelcontextprotocol/server-memory`; deleted the stale Claude MCP approval file, removed `.agent-memory/` from `.gitignore`, and preserved `.cursor/mcp.json` with the Supabase MCP entry only.
+- Updated `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/setuhaul.mdc`, `docs/AI_TOOLING.md`, `docs/HANDOFF.md`, `wiki/AGENTS.md`, `wiki/ai-system.md`, `wiki/implementation.md`, `wiki/database.md`, `wiki/index.md`, `wiki/skills-and-mcp.md`, `wiki/handoff.md`, and `wiki/log.md`.
+- Verification: documentation/config change only; no app tests run. `rg` used to locate active Memory MCP references. Agent/surface: Codex.
+
+## 2026-08-10 22:11 IST - Add extra live POC login accounts and Redis env
+
+- Created six additional live Supabase Auth POC accounts and mapped them to `public.users.auth_user_id`: Drivers `USR002` Amit Singh and `USR003` Vikas Sharma, Operations Executives `USR107` Kavita Rao and `USR108` Arvind Nair, and Admins `USR997` Meera Iyer and `USR998` Suresh Menon. Added new app-user rows only where missing for the extra Ops/Admin personas; seeded Driver rows were reused.
+- Added gitignored local env files `.env.local` and `frontend/.env.local` so the backend/frontend can run against the provided Supabase project. The backend env includes the Upstash Redis REST endpoint/token derived from the provided Redis URL; the frontend env includes only browser-safe Vite values.
+- Verified each new account with Supabase password-grant login status `200` and confirmed each `public.users` row has a non-null `auth_user_id`. Verified Upstash Redis REST connectivity with `/ping`, short-lived `set`, and `get`.
+- Verification: live Supabase Auth/Data API account create+mapping PASS for 6 accounts; Redis REST smoke PASS (`PONG`, `OK`, `ok`). `redis-cli` was not available in this sandbox, so Redis was verified through Upstash REST. No app tests run because this was live credential/data setup. Skills: `supabase`, `supabase-postgres-best-practices`. Coding-agent Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 20:35 IST - Add live same-slot concurrency proof
+
+- Added `backend/tests/integration/test_live_scheduling_concurrency.py`, an opt-in live Supabase integration test for two simultaneous `request_slot` calls competing for the same temporary slot. The test creates temporary `CODX` shipment/slot fixtures, runs independent async sessions concurrently, asserts exactly one `SLOT_REQUESTED` winner and one `SLOT_CONFLICT_REFRESH_REQUIRED` loser, verifies one active appointment, one booking audit row, and two idempotency rows, then cleans up all temporary rows.
+- Added `pytest-asyncio` to `backend/pyproject.toml` and kept generated `backend/uv.lock` so async integration testing is reproducible without pytest marker/config warnings.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/database.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. The real same-slot contention checklist now has live evidence, but the Sprint 3 exit gate remains open because reschedule/confirm/cancel/reject/expire flows and no-slot escalation demo are still incomplete.
+- Verification: default backend tests PASS, 41 passed and 1 live integration skipped, via `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests -q`; explicit live concurrency proof PASS, 1 passed, via `SETUHAUL_RUN_LIVE_DB_TESTS=1` with `DATABASE_URL`; post-run cleanup verification PASS with zero `CODX` idempotency, appointment, slot, or shipment rows. Supabase changelog checked; no schema/RLS/Data API change made. Skills: `supabase`, `supabase-postgres-best-practices`. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 20:23 IST - Inspect live Supabase database catalog
+
+- Connected to the live Supabase PostgreSQL database through a direct read-only Postgres session and inspected public schema metadata plus seeded operational counts. No schema, data, grant, RLS, or migration changes were made.
+- Verified PostgreSQL 17.6, `auth.users=3`, public schema has 23 tables and 4 views. Key seeded counts: `shipments=21`, `appointment_slots=106`, `appointments=22`, `driver_exceptions=12`, `eta_updates=14`, `docks=9`, `facilities=2`, `users=10`, `roles=8`, `idempotency_requests=2`.
+- Confirmed Sprint 3-relevant seed state: active/open slot inventory exists across Jaipur and Gurugram, two current `PENDING_CONFIRMATION` appointments exist, and scheduling guard indexes `ux_active_appointment_per_slot` plus `ux_current_active_appointment_per_shipment` are present.
+- Updated `wiki/database.md`, `wiki/current-state.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint status unchanged: Sprint 3 remains IN PROGRESS and live same-slot concurrency proof is still required.
+- Verification: read-only asyncpg catalog queries PASS. Supabase changelog checked; Data API auto-exposure change noted but not applicable to this direct Postgres inspection. Skills: `supabase`, `supabase-postgres-best-practices`. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 20:16 IST - Add deterministic slot ranking algorithm
+
+- Upgraded `backend/app/scheduling/feasibility.py` from earliest-slot ordering to an explicit deterministic slot-ranking algorithm. Feasible options now include `rank_score` and `ranking_factors` for priority, lateness, wait after ETA, fit slack, dock match, operational disruption score, and stable shipment/slot tie-breaker.
+- Moved ranking policy knobs into `backend/app/scheduling/constraints.json` via `priority_scores` and `score_weights`, and extended `backend/app/scheduling/constraints.py` so the scoring model remains centrally tunable from the constraints registry.
+- Updated ranking explanations returned by `find_feasible_slots` so the model/client can explain why an option was preferred without inventing scheduling logic.
+- Added unit coverage in `backend/tests/unit/test_scheduling_feasibility.py` for scoring factors and ETA-wait penalty, and extended `backend/tests/unit/test_scheduling_constraints.py` to guard the editable ranking weights.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; this strengthens ranking, but live authenticated smoke and real concurrency proof are still open.
+- Verification: backend unit tests PASS, 41 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Supabase changelog checked; no schema/RLS/Data API change made. Skills: `software-architecture-design`, `supabase`, `supabase-postgres-best-practices`. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 19:59 IST - Add Redis conversation memory tool
+
+- Added `ConversationMemory.snapshot(...)` in `backend/app/services/redis_memory.py` to return bounded Upstash Redis thread/session memory with 24-hour TTL metadata, non-authoritative labeling, recent message snippets, and degraded-state details when Redis is unavailable.
+- Registered Driver LangChain tool `get_conversation_memory` in `backend/app/assistant/tools.py` and passed the existing `ConversationMemory` instance from `backend/app/assistant/run_assistant.py`, scoped to the authenticated user and current thread.
+- Updated `backend/app/assistant/prompts.py` so the model may use Redis memory only as ephemeral chat/session context and must verify all operational facts through PostgreSQL-backed tools.
+- Added `backend/tests/unit/test_redis_memory.py` and extended tool allowlist coverage in `backend/tests/unit/test_scheduling_allocation.py`.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/ai-system.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; Memory MCP remains unavailable as a coding-agent connector, but application memory now exposes a Redis-backed LangChain tool.
+- Verification: backend unit tests PASS, 40 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live Upstash smoke not run because Redis env values were not configured/persisted. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 19:50 IST - Harden request_slot allocation race handling
+
+- Hardened `backend/app/scheduling/allocation.py` so residual PostgreSQL partial-unique allocation races are translated into the same conflict-safe `SLOT_CONFLICT_REFRESH_REQUIRED` response instead of leaking a raw `IntegrityError`. The translator recognizes `ux_active_appointment_per_slot` and `ux_current_active_appointment_per_shipment`, rolls back the failed transaction, refreshes feasible options, stores the 409 idempotency response, and returns zero appointment writes.
+- Updated `backend/app/api/v1/routers/scheduling.py` so slot-request conflicts return HTTP 409 while preserving refreshed options under the response `data`.
+- Added unit coverage in `backend/tests/unit/test_scheduling_allocation.py` for both allocation uniqueness guards and unrelated integrity errors.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/database.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; this is conflict mapping coverage, not a completed live same-slot concurrency proof.
+- Verification: backend unit tests PASS, 38 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated API/chat smoke and real parallel database contention were not run because local env files are absent and pasted secrets were not persisted. Skills: `supabase`, `supabase-postgres-best-practices`. Supabase changelog checked; no schema/RLS/Data API change made. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 19:38 IST - Add appointment request status read path
+
+- Added `get_appointment_request_status` in `backend/app/scheduling/allocation.py` as a read-only Sprint 3 status service for slot requests. It verifies driver/operator/admin scope, reads the authoritative appointment row plus recent shipment appointment history, maps lifecycle states to stable result codes, and always reports zero appointment writes.
+- Extended `backend/app/api/v1/routers/scheduling.py` with `GET /api/v1/shipments/{shipment_id}/appointment-request/status` and optional `appointment_id` query support.
+- Registered Driver LangChain tool `get_appointment_request_status` in `backend/app/assistant/tools.py` and updated `backend/app/assistant/prompts.py` so pending confirmation is never described as a confirmed booking.
+- Added unit coverage for appointment-status code mapping and Driver tool allowlist registration in `backend/tests/unit/test_scheduling_allocation.py`.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/ai-system.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; same-slot concurrency proof and transition flows are still open.
+- Verification: backend unit tests PASS, 35 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated API/chat smoke not run because local env files are absent and pasted secrets were not persisted. Skills: `supabase`, `supabase-postgres-best-practices`. Supabase changelog checked; no schema/RLS/Data API change made. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 19:31 IST - Add transactional request_slot flow
+
+- Added `backend/app/scheduling/allocation.py` with `request_slot`, the first Sprint 3 transactional scheduling command. It requires idempotency, verifies driver ownership, row-locks/revalidates shipment and slot state, checks active slot/shipment appointments, reuses feasibility evaluation, inserts `PENDING_CONFIRMATION`, writes `BOOK_APPOINTMENT` audit, stores the idempotent response, commits, and rereads the appointment.
+- Extended `backend/app/api/v1/routers/scheduling.py` with `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request` requiring `Idempotency-Key`.
+- Registered Driver LangChain tool `request_slot` in `backend/app/assistant/tools.py` and updated `backend/app/assistant/prompts.py` so exact selected slot requests are pending-confirmation only; reschedule, cancellation, and confirmation remain disabled.
+- Added `backend/tests/unit/test_scheduling_allocation.py` and adjusted `backend/tests/unit/test_scheduling_feasibility.py` for tool allowlist coverage.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/ai-system.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; same-slot concurrency proof and remaining transition flows are still open.
+- Verification: backend unit tests PASS, 33 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; FastAPI import smoke PASS; `git diff --check` PASS with line-ending warnings only. Live authenticated API/chat smoke not run because local env files are absent and pasted secrets were not persisted. Skills: `supabase`, `supabase-postgres-best-practices`. Supabase changelog checked; no schema/RLS/Data API change made. Agent/surface: Codex.
+
+## 2026-08-10 19:12 IST - Add LangChain feasible slot search path
+
+- Added `backend/app/scheduling/feasibility.py`, the first deterministic Sprint 3 feasibility service. It reads latest ETA, facility, slot, dock, active appointment, and dock-event data from PostgreSQL, applies policy-backed hard constraints, returns explainable `DISPLAYED_NOT_RESERVED` options, and emits no-slot escalation payloads when nothing is feasible.
+- Added `backend/app/api/v1/routers/scheduling.py` with `GET /api/v1/shipments/{shipment_id}/slots/feasible` and mounted it in `backend/app/main.py`.
+- Registered `find_feasible_slots` in `backend/app/assistant/tools.py` for Driver LangChain chat. Updated `backend/app/assistant/prompts.py` so slot search is allowed as informational only, while booking, holds, rescheduling, cancellation, and confirmation still return `CAPABILITY_NOT_ENABLED`.
+- Added `backend/tests/unit/test_scheduling_feasibility.py` covering core feasibility failures and LangChain tool allowlist registration.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/ai-system.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 remains IN PROGRESS; transactional allocation and concurrency proof are still open.
+- Verification: backend unit tests PASS, 30 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with line-ending warnings only. Live authenticated API/chat smoke not run because local env files are absent and pasted secrets were not persisted. Skill: `supabase`. Supabase changelog checked; no schema/RLS/Data API change made. Agent/surface: Codex.
+
+## 2026-08-10 18:55 IST - Start Sprint 3 constraints registry
+
+- Added `backend/app/scheduling/constraints.json` as the single editable scheduling constraints file for the Sprint 3 build: PostgreSQL authority, LangChain-only orchestration, Redis non-authoritative state, feasibility hard constraints, ranking policy, appointment lifecycle meanings, stale-option invalidation, no-slot escalation, write-safety, and deferred non-gate scope.
+- Added `backend/app/scheduling/constraints.py` with strict Pydantic loading/caching and `backend/tests/unit/test_scheduling_constraints.py` to guard the registry.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/ai-system.md`, `wiki/testing.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint 3 is now IN PROGRESS; exit gate remains open and no allocation checklist item was struck.
+- Verification: backend unit tests PASS, 25 passed, using `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\unit` from `backend/`; `git diff --check` PASS with a CRLF warning on pre-existing `CHANGELOG.md` line endings. Memory MCP unavailable in this Codex session. Skill: `software-architecture-design`. Agent/surface: Codex.
+
+## 2026-08-10 18:29 IST - Differentiate Driver and Ops login hero imagery
+
+- Generated a dedicated Driver portal hero image and saved it as `frontend/src/assets/setuhaul-driver-eta-hero.png`.
+- Updated `LoginForm` so Driver login uses the Driver ETA/exception image, copy, and metrics, while Ops login keeps `frontend/src/assets/setuhaul-dock-command-hero.png` with dock-command copy and metrics.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint status unchanged: Sprint 1 complete, Sprint 2 complete, Sprint 3 TODO/active next.
+- Verification: `npm run lint` PASS; `npm run build` PASS; screenshots `tmp/ui-polish/driver-login-role-hero.png` and `tmp/ui-polish/ops-login-role-hero.png` captured and visually spot-checked. Memory MCP unavailable in this Codex session. Skill: `imagegen`. Agent/surface: Codex.
+
+## 2026-08-10 18:22 IST - Replace login visual with generated dock-command hero
+
+- Generated a unique, relevant SetuHaul login hero image for warehouse dock coordination and saved it as `frontend/src/assets/setuhaul-dock-command-hero.png`.
+- Replaced the weak abstract/fake-map login visual with the generated image, dark readability overlays, tighter headline copy, and classroom-scale metrics.
+- Updated `plans/implementation-master-plan.md`, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint status unchanged: Sprint 1 complete, Sprint 2 complete, Sprint 3 TODO/active next.
+- Verification: `npm run lint` PASS; `npm run build` PASS; screenshot `tmp/ui-polish/driver-login-dock-hero.png` captured and visually spot-checked. Memory MCP unavailable in this Codex session. Skill: `imagegen`. Agent/surface: Codex.
+
+## 2026-08-10 18:12 IST - Frontend UI polish for POC portals
+
+- Polished the React UI while preserving the two-portal POC boundary: upgraded login composition with a Stitch-aligned operational visual, tightened the app shell, switched body typography to Inter, added a driver chat header, replaced raw driver context JSON with structured field cards, and improved ops metrics/status distribution presentation.
+- Fixed the existing `ProtectedLayout` hook dependency warning by memoizing the profile loader with `useCallback`.
+- Updated `plans/implementation-master-plan.md` Living status refresh note, `wiki/current-state.md`, `wiki/implementation.md`, `wiki/handoff.md`, and `wiki/log.md`. Sprint status unchanged: Sprint 1 complete, Sprint 2 complete, Sprint 3 TODO/active next; no Sprint 3 checklist item was struck.
+- Verification: `npm run lint` PASS; `npm run build` PASS; Vite served on `http://127.0.0.1:5173`; unauthenticated `/driver/login` desktop and `/ops/login` mobile screenshots captured under `tmp/ui-polish/` and visually spot-checked. Authenticated protected screens were not live-smoked because local env files are absent and pasted secrets were not persisted.
+- Security: live secrets were pasted in chat; they were not written to files or echoed in logs. Rotate after POC. Memory MCP unavailable in this Codex session. Agent/surface: Codex.
+
+## 2026-08-10 17:51 IST - Analyze FDE challenge brief
+
+- Analyzed `docs/SetuHaul_FDE_Challenge.pdf` (20 pages) against the current master plan and wiki context.
+- Outcome: the brief intentionally does not prescribe framework, tools, storage, concurrency, allocation algorithm, or deployment, but it does require challenge proof around driver exception chat, feasibility, allocation semantics, simultaneous scarce-capacity competition, stale/disappearing options, duplicate/retry handling, and no-feasible-slot escalation.
+- Updated `wiki/implementation.md`, `wiki/current-state.md`, `wiki/handoff.md`, and `wiki/log.md`. `plans/implementation-master-plan.md` Living status unchanged because no implementation progress changed: Sprint 1 complete, Sprint 2 complete, Sprint 3 TODO/active next.
+- Verification: text extracted from all 20 PDF pages with `pdfplumber`; representative pages 1, 10, and 18 rendered with Poppler and visually spot-checked. Application tests not run because this was document analysis only.
+- Memory MCP unavailable in this Codex session; checked-in context is synchronized and memory replay remains pending. Skill: `pdf`. Agent/surface: Codex.
+
 ## 2026-08-08 13:45 IST - Rename `web/` → `frontend/`
 
 - Renamed React app directory `web/` to `frontend/` (stopped Vite lock first). Package name `frontend`; CI working-directory + lockfile cache path updated; `.gitignore` ignores `frontend/node_modules` + `frontend/dist` (kept legacy `web/` ignore lines).

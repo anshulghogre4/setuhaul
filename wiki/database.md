@@ -3,7 +3,7 @@ title: SetuHaul Database
 type: topic
 status: compiled
 scope: database
-last_verified: 2026-08-07
+last_verified: 2026-08-10
 ---
 
 # Database
@@ -16,7 +16,98 @@ Rules:
 - Apply migrations; never patch production schema manually.
 - RLS, privileges, constraints, transaction boundaries, and concurrency behavior require explicit tests.
 - Load the Supabase and Postgres best-practice skills before database changes.
-- Redis and Memory MCP are not database substitutes.
+- Redis is not a database substitute.
+
+## Allocation constraints
+
+The baseline keeps PostgreSQL as the final allocation authority through partial unique indexes:
+
+- `ux_active_appointment_per_slot` prevents more than one active `PENDING_CONFIRMATION`, `CONFIRMED`, or `IN_PROGRESS` appointment per slot.
+- `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
+
+As of 2026-08-10 20:35 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. `backend/tests/integration/test_live_scheduling_concurrency.py` proves two independent live Supabase sessions competing for the same temporary slot yield exactly one winner and one conflict refresh, then cleans all temporary rows. No schema or RLS change was made; broader load proof and remaining lifecycle transitions are still required before the Sprint 3 exit gate can close.
+
+## Live POC Auth expansion (2026-08-10 22:11 IST)
+
+Six additional real-name Supabase Auth users were created and mapped to `public.users.auth_user_id` without schema changes:
+
+| user_id | email | role |
+|---|---|---|
+| USR002 | amit.singh@setuhaul.com | DRIVER |
+| USR003 | vikas.sharma@setuhaul.com | DRIVER |
+| USR107 | kavita.rao@setuhaul.com | OPERATIONS_EXECUTIVE |
+| USR108 | arvind.nair@setuhaul.com | OPERATIONS_EXECUTIVE |
+| USR997 | meera.iyer@setuhaul.com | ADMIN |
+| USR998 | suresh.menon@setuhaul.com | ADMIN |
+
+Drivers reused seeded app-user rows; Ops/Admin rows were inserted where missing. Supabase password-grant login returned `200` for each account, and each mapped app-user row has a non-null `auth_user_id`. Passwords are not recorded in checked-in docs.
+
+## Full Auth inventory (2026-08-10 23:05 IST)
+
+All 14 `public.users` rows now have Auth. Role-shared passwords stay in gitignored `.env` / `.env.local` only. The Auth create/reset script was removed from the repo.
+
+| Bucket | Password env | user_id / email | seed role | portal |
+|---|---|---|---|---|
+| Driver | `SETUHAUL_POC_DRIVER_PASSWORD` | USR001 ravi.kumar | DRIVER | driver |
+| Driver | same | USR002 amit.singh | DRIVER | driver |
+| Driver | same | USR003 vikas.sharma | DRIVER | driver |
+| Operations | `SETUHAUL_POC_OPERATOR_PASSWORD` | USR101 priya.mehta | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR107 kavita.rao | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR108 arvind.nair | OPERATIONS_EXECUTIVE | ops |
+| Operations | same | USR102 rahul.verma | WAREHOUSE_PLANNER | ops |
+| Operations | same | USR103 anjali.kapoor | OPERATIONS_MANAGER | ops |
+| Operations | same | USR104 deepak.joshi | FACILITY_MANAGER | ops |
+| Admin | `SETUHAUL_POC_ADMIN_PASSWORD` | USR999 admin | ADMIN | ops |
+| Admin | same | USR997 meera.iyer | ADMIN | ops |
+| Admin | same | USR998 suresh.menon | ADMIN | ops |
+| Admin | same | USR105 sanjay.gupta | TRANSPORT_MANAGER | ops |
+| Admin | same | USR106 neha.bansal | REGIONAL_OPERATIONS_HEAD | ops |
+
+Proof: `auth.users=14`, mapped=`14`, unmapped=`0`. Password-grant PASS for samples across all three buckets including the five newly created accounts. Ops portal/API allowlists expanded so the five deferred personas can use `/ops/login` with facility (USR102–104) or global (USR105–106) scope. Team-share roster (with passwords) lives only in gitignored `POC_TEAM_ACCOUNTS.local.md`; `.env` / `.env.local` no longer store POC passwords.
+
+## Live catalog inspection (2026-08-10 20:23 IST)
+
+Direct read-only asyncpg inspection reached Supabase PostgreSQL 17.6. Public schema contains 23 tables and 4 views; all public tables report RLS enabled and no `pg_policies` rows were present in this inspection. The FastAPI server therefore continues to rely on server-side JWT/RBAC checks plus backend-only database access for application authorization unless/until RLS policies are added and tested.
+
+Seeded table counts:
+
+| Table | Rows |
+|---|---:|
+| api_logs | 3 |
+| appointment_slots | 106 |
+| appointments | 22 |
+| audit_logs | 9 |
+| carriers | 4 |
+| chat_messages | 22 |
+| chat_threads | 12 |
+| dock_status_events | 3 |
+| docks | 9 |
+| driver_exceptions | 12 |
+| drivers | 15 |
+| eta_updates | 14 |
+| facilities | 2 |
+| facility_checkins | 5 |
+| facility_contacts | 5 |
+| facility_rules | 6 |
+| idempotency_requests | 2 |
+| operational_messages | 6 |
+| roles | 8 |
+| shipments | 21 |
+| users | 10 |
+| vehicle_types | 5 |
+| vehicles | 15 |
+
+Public views: `v_current_facility_queue`, `v_inbound_operational_state`, `v_latest_eta`, and `v_slot_availability`.
+
+Scheduling seed distribution:
+
+- Shipments: 11 `IN_TRANSIT`, 3 `ASSIGNED`, 3 `WAITING`, 2 `CANCELLED`, 1 `COMPLETED`, 1 `IN_DOCK`.
+- Priorities: 9 `NORMAL`, 6 `HIGH`, 4 `LOW`, 2 `CRITICAL`.
+- Appointment states: 11 current `CONFIRMED`, 2 current `PENDING_CONFIRMATION`, 1 current `IN_PROGRESS`, 1 current `COMPLETED`, plus historical cancelled/no-show rows.
+- Slot inventory: Gurugram has 27 open slots; Jaipur has 72 open and 7 blocked slots.
+- Docks: Gurugram has 3 active docks; Jaipur has 6 active docks including standard, reefer, and heavy types.
+
+Sprint 3-critical indexes are live: `ux_active_appointment_per_slot`, `ux_current_active_appointment_per_shipment`, `ix_slots_facility_time`, `ix_shipments_destination_status`, and idempotency indexes. No writes or migration changes were made during the inspection.
 
 ## Supabase MCP diagnosis (2026-08-07 ~15:55 IST)
 
@@ -47,7 +138,7 @@ Rules:
 
 Migrations applied: `setuhaul_baseline`, `add_users_auth_user_id`.
 
-POC app users (re-verified 2026-08-07 ~16:25 IST):
+POC app users (historical 2026-08-07 snapshot; superseded by [[#Full Auth inventory (2026-08-10 23:05 IST)]] above):
 
 | user_id | email | role | auth_user_id mapped? |
 |---|---|---|---|
@@ -55,9 +146,9 @@ POC app users (re-verified 2026-08-07 ~16:25 IST):
 | USR101 | priya.mehta@setuhaul.com | OPERATIONS_EXECUTIVE | yes |
 | USR999 | admin@setuhaul.com | ADMIN | yes |
 
-- `public.users.auth_user_id` exists (uuid, nullable) with unique partial index `users_auth_user_id_uidx`; **3** POC rows mapped.
-- `auth.users` total: **3** with matching email identities. Passwords OOB in gitignored `.env.local`. Anon keys populated locally via MCP; `DATABASE_URL` still empty → HTTP `/auth/me` blocked (`DB_UNAVAILABLE`).
+- `public.users.auth_user_id` exists (uuid, nullable) with unique partial index `users_auth_user_id_uidx`. Current live totals (2026-08-10 23:05 IST): **14** mapped, `auth.users=14`, unmapped=`0`.
+- Passwords OOB in gitignored `.env` / `.env.local` only; Auth create/reset script removed from repo.
 
-Evidence: live MCP SQL 2026-08-07; `supabase/migrations/20260807100550_add_users_auth_user_id.sql`; `docs/DATABASE.md`.
+Evidence: live MCP SQL 2026-08-10; `supabase/migrations/20260807100550_add_users_auth_user_id.sql`; `docs/DATABASE.md`.
 
 Related: [[architecture]], [[testing]], [[contradictions]], [[handoff]], [[skills-and-mcp]].

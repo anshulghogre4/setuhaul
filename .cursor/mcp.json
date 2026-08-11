@@ -1,12 +1,6 @@
 {
   "mcpServers": {
-    "memory": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory@2025.11.25"],
-      "env": {
-        "MEMORY_FILE_PATH": ".agent-memory/memory.jsonl"
-      }
-    },"supabase": {
+    "supabase": {
       "url": "https://mcp.supabase.com/mcp?project_ref=kujffzgqjmqphkmrbawy&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
     }
   }

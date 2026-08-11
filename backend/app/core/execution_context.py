@@ -37,11 +37,22 @@ class ExecutionContext(BaseModel):
 
     @property
     def is_operator(self) -> bool:
-        return self.role_name == RoleName.OPERATIONS_EXECUTIVE
+        """Facility-scoped ops personas (shared ops portal + operator password bucket)."""
+        return self.role_name in {
+            RoleName.OPERATIONS_EXECUTIVE,
+            RoleName.WAREHOUSE_PLANNER,
+            RoleName.OPERATIONS_MANAGER,
+            RoleName.FACILITY_MANAGER,
+        }
 
     @property
     def is_admin(self) -> bool:
-        return self.role_name == RoleName.ADMIN
+        """Global read-only ops personas (shared ops portal + admin password bucket)."""
+        return self.role_name in {
+            RoleName.ADMIN,
+            RoleName.TRANSPORT_MANAGER,
+            RoleName.REGIONAL_OPERATIONS_HEAD,
+        }
 
     def assert_driver_self(self, driver_id: str | None) -> bool:
         return self.is_driver and self.driver_id is not None and self.driver_id == driver_id

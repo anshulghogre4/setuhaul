@@ -1,0 +1,216 @@
+{
+  "policy_version": "sprint3_constraints_v1",
+  "status": "active",
+  "source_documents": [
+    "docs/SetuHaul_FDE_Challenge.pdf",
+    "PROJECT.md",
+    "plans/implementation-master-plan.md",
+    "docs/adrs/SPRINT1_ADRS.md"
+  ],
+  "delivery_boundary": {
+    "active_sprint": "Sprint 3 - deterministic feasibility and concurrent allocation",
+    "frontend": "React 19",
+    "backend": "FastAPI modular monolith",
+    "ai_runtime": "LangChain bind_tools plus bounded manual invoke loop",
+    "data_authority": "PostgreSQL via Supabase",
+    "ephemeral_state": "Upstash Redis with 24 hour TTL",
+    "prohibited_patterns": [
+      "create_agent",
+      "AgentExecutor",
+      "create_react_agent",
+      "LLM-generated SQL",
+      "LLM-direct database mutations",
+      "Redis as business source of truth"
+    ]
+  },
+  "non_negotiable_invariants": [
+    {
+      "id": "postgres_is_authority",
+      "statement": "PostgreSQL is the system of record for shipments, appointments, slots, docks, exceptions, audit, and allocation state."
+    },
+    {
+      "id": "llm_orchestrates_only",
+      "statement": "The LLM may choose typed tools, but deterministic services make scheduling decisions and execute all business writes."
+    },
+    {
+      "id": "no_invented_operations_data",
+      "statement": "Never invent shipment, ETA, dock, appointment, capacity, facility, or queue facts."
+    },
+    {
+      "id": "server_authoritative_auth",
+      "statement": "Role, driver scope, facility scope, and global read-only authority come from verified Supabase Auth server-side mapping."
+    },
+    {
+      "id": "options_are_not_promises",
+      "statement": "Displayed feasible slots are informational options, not reservations or promises."
+    },
+    {
+      "id": "confirm_after_transactional_revalidation",
+      "statement": "A selected slot must be revalidated and claimed inside the same database transaction before any confirmed appointment is reported."
+    },
+    {
+      "id": "one_active_slot_winner",
+      "statement": "At most one active PENDING_CONFIRMATION, CONFIRMED, or IN_PROGRESS appointment may occupy a slot."
+    },
+    {
+      "id": "one_active_shipment_appointment",
+      "statement": "A shipment may have at most one active PENDING_CONFIRMATION, CONFIRMED, or IN_PROGRESS appointment."
+    },
+    {
+      "id": "no_feasible_slot_escalates",
+      "statement": "If no compatible slot is feasible, return a reasoned escalation path instead of fabricating availability."
+    }
+  ],
+  "feasibility_hard_constraints": [
+    {
+      "id": "arrival_before_slot_end",
+      "failure_code": "ETA_AFTER_SLOT_WINDOW",
+      "statement": "The shipment ETA plus required unload duration must fit inside the candidate slot window."
+    },
+    {
+      "id": "facility_operating_hours",
+      "failure_code": "FACILITY_CLOSED",
+      "statement": "The candidate slot must be inside the facility's operating calendar and local time-zone rules."
+    },
+    {
+      "id": "dock_operational",
+      "failure_code": "DOCK_UNAVAILABLE",
+      "statement": "The dock must be active and not closed, blocked, under maintenance, or already occupied by protected work."
+    },
+    {
+      "id": "dock_vehicle_compatibility",
+      "failure_code": "DOCK_INCOMPATIBLE_VEHICLE",
+      "statement": "Vehicle type, size, weight, reefer/equipment, and dock compatibility rules must all match."
+    },
+    {
+      "id": "shipment_handling_compatibility",
+      "failure_code": "DOCK_INCOMPATIBLE_LOAD",
+      "statement": "Product, special handling, hazard, temperature, and unload requirements must be compatible with the dock and facility rules."
+    },
+    {
+      "id": "slot_capacity_available",
+      "failure_code": "SLOT_CAPACITY_UNAVAILABLE",
+      "statement": "The candidate slot must have capacity after active appointments, holds, closures, and operational reductions are applied."
+    },
+    {
+      "id": "latest_eta_only",
+      "failure_code": "STALE_ETA",
+      "statement": "Feasibility must use the latest authoritative ETA from PostgreSQL, not stale chat memory or client state."
+    },
+    {
+      "id": "no_conflicting_active_appointment",
+      "failure_code": "ACTIVE_APPOINTMENT_EXISTS",
+      "statement": "A shipment with an active appointment can only use reschedule flow, not a second independent booking flow."
+    }
+  ],
+  "ranking_policy": {
+    "id": "deterministic_rank_v1",
+    "ordered_factors": [
+      "protect_in_progress_confirmed_and_waiting_work",
+      "facility_and_customer_priority",
+      "driver_wait_time_and_lateness_severity",
+      "earliest_feasible_arrival_fit",
+      "least_operational_disruption",
+      "stable_tiebreaker_by_shipment_id_then_slot_id"
+    ],
+    "priority_scores": {
+      "CRITICAL": 4000,
+      "HIGH": 3000,
+      "NORMAL": 2000,
+      "LOW": 1000,
+      "UNKNOWN": 500
+    },
+    "score_weights": {
+      "lateness_per_minute": 4,
+      "wait_after_eta_per_minute": -6,
+      "fit_slack_per_minute": 1,
+      "compatible_but_not_exact_dock_penalty": -25,
+      "lateness_cap_minutes": 720,
+      "fit_slack_cap_minutes": 120
+    },
+    "explainability_required": true,
+    "randomness_allowed": false
+  },
+  "appointment_lifecycle": {
+    "displayed": "Feasible option shown to a user; no capacity is held.",
+    "selected": "User selected an option in conversation; backend must still revalidate.",
+    "requested_or_held": "A bounded hold/request exists only after an authorized transactional write.",
+    "pending_confirmation": "Facility or workflow confirmation is pending; slot is active for conflict purposes.",
+    "confirmed": "Appointment is committed and visible as confirmed.",
+    "in_progress": "Truck is checked in or unloading; protected from displacement.",
+    "expired": "Hold or pending request exceeded its TTL or validity window.",
+    "rejected": "Facility or policy rejected the requested option.",
+    "cancelled": "Appointment was cancelled through an authorized transition.",
+    "conflicted": "A stale or losing selection encountered a newer authoritative state."
+  },
+  "invalidates_displayed_options_when": [
+    "ETA corrected or superseded",
+    "dock closes or capacity changes",
+    "appointment is created, confirmed, cancelled, expired, rejected, or conflicted",
+    "truck checks in, starts unloading, or overruns unload duration",
+    "facility rule or compatibility data changes",
+    "higher priority protected work consumes capacity"
+  ],
+  "no_slot_escalation": {
+    "required": true,
+    "minimum_payload_fields": [
+      "shipment_id",
+      "facility_id",
+      "as_of",
+      "policy_version",
+      "checked_constraints",
+      "blocking_reasons",
+      "recommended_human_queue"
+    ],
+    "forbidden_fallbacks": [
+      "invent a same day slot",
+      "silently overbook capacity",
+      "call a stale option confirmed",
+      "ask the LLM to choose an exception override"
+    ]
+  },
+  "write_safety": {
+    "required_for_business_writes": [
+      "verified ExecutionContext",
+      "role and scope allowlist",
+      "strict Pydantic command schema",
+      "idempotency key",
+      "single database transaction",
+      "post-commit authoritative reread",
+      "audit record",
+      "stable result code"
+    ],
+    "client_supplied_fields_to_ignore_for_authority": [
+      "user_id",
+      "role_id",
+      "driver_id",
+      "facility_id",
+      "global_scope",
+      "tenant_id"
+    ]
+  },
+  "redis_boundary": {
+    "ttl_hours": 24,
+    "allowed_uses": [
+      "bounded conversation history",
+      "structured non-authoritative session context",
+      "client message dedupe hints",
+      "cache and rate-limit state"
+    ],
+    "forbidden_uses": [
+      "appointment source of truth",
+      "slot lock source of truth",
+      "authorization source of truth",
+      "audit source of truth"
+    ]
+  },
+  "deferred_until_after_sprint3_gate": [
+    "maps and GPS telemetry",
+    "national routing",
+    "user and role administration UI",
+    "facility-wide optimization engines",
+    "predictive ETA",
+    "WhatsApp, SMS, Teams, Slack, or voice channels",
+    "multi-tenant SaaS controls"
+  ]
+}

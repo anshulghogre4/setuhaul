@@ -1,4 +1,4 @@
----
+﻿---
 title: SetuHaul LLMWiki Maintainer Schema
 type: schema
 status: authoritative
@@ -17,15 +17,13 @@ This wiki follows the LLMWiki pattern used by Slicematic.
 3. **Schema:** this file and root `AGENTS.md`. These define the operating loop.
 
 ## Required startup sequence
+1. Read [[index]] and [[handoff]].
+2. Read [[current-state]] and [[contradictions]] when correctness or risk matters.
+3. Read the Living sprint status in `plans/implementation-master-plan.md` and note Sprint 1 vs Sprint 2 vs Sprint 3 before new work (canonical cross-IDE scoreboard; see root `AGENTS.md`).
+4. Use [[source-map]] to select topic pages and verify implementation-critical claims against source evidence.
+5. Inspect `git status --short` and preserve teammate changes.
 
-1. Query the Memory MCP for the SetuHaul project context when the server is available.
-2. Read [[index]] and [[handoff]].
-3. Read [[current-state]] and [[contradictions]] when correctness or risk matters.
-4. Read the Living sprint status in `plans/implementation-master-plan.md` and note Sprint 1 vs Sprint 2 vs Sprint 3 before new work (canonical cross-IDE scoreboard; see root `AGENTS.md`).
-5. Use [[source-map]] to select topic pages and verify implementation-critical claims against source evidence.
-6. Inspect `git status --short` and preserve teammate changes.
-
-If Memory MCP is unavailable, continue from the checked-in wiki and record the degraded state; never pretend memory was loaded.
+SetuHaul has no project Memory MCP workflow. Application conversation/session memory uses Upstash Redis only; durable project context lives in checked-in files.
 
 ## Ingest operation
 
@@ -62,12 +60,11 @@ Check for stale or contradictory claims, orphan/duplicate pages, missing provena
 - Never copy credentials or secret values.
 - `log.md` and root `CHANGELOG.md` are append-only.
 
-## Memory MCP loop
+## Redis memory boundary
 
-- **Start:** query the `memory` MCP for entities/relations relevant to SetuHaul and the current task.
-- **During:** store only durable decisions, verified architecture facts, blockers, and stable team preferences. Never store credentials, raw sensitive records, or speculative claims as facts.
-- **End of every prompt:** run the context-sync check. For any durable prompt, append/update concise project memory covering outcome, key decisions, verification, blockers, and next action before the final response.
-- Checked-in source and wiki win when Memory MCP is stale or contradictory; correct memory and record the reconciliation in [[log]].
+- Upstash Redis is application runtime memory for bounded conversation/session context only.
+- Redis data is non-authoritative, expires after 24 hours, and must never replace PostgreSQL business facts or checked-in project context.
+- Do not query, update, or wait for a project Memory MCP.
 
 ## Per-prompt context sync
 
@@ -78,10 +75,10 @@ A durable prompt changes files, implementation state, requirements, decisions, b
 3. Append [[log]].
 4. Append root `CHANGELOG.md`.
 5. When implementation progress changed, update `plans/implementation-master-plan.md` Living sprint status and checklist strikethrough with dated evidence (never strike an exit gate without full gate proof).
-6. Synchronize Memory MCP when available.
+6. Verify Redis-related claims through app code/tests or the live Upstash endpoint when relevant.
 
-Pure read-only conversation that produces no durable context does not create empty entries. Memory MCP complements rather than replaces the checked-in wiki.
+Pure read-only conversation that produces no durable context does not create empty entries.
 
 ## Definition of done
 
-A material task is not complete until affected topic pages, [[handoff]], [[log]], root `CHANGELOG.md`, the master-plan Living checklist (when progress changed), and Memory MCP (when available) agree with the resulting source state.
+A material task is not complete until affected topic pages, [[handoff]], [[log]], root `CHANGELOG.md`, and the master-plan Living checklist (when progress changed) agree with the resulting source state.

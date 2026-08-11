@@ -8,13 +8,17 @@ last_verified: 2026-08-07
 
 # Skills and MCP
 
-## Memory MCP
+## Redis memory boundary
 
-Configured project-wide through `.mcp.json` (Claude), `.cursor/mcp.json` (Cursor), `.codex/config.toml` (Codex), `.gemini/settings.json` (Gemini CLI), and `.agents/mcp_config.json` (Google Antigravity); Claude project approval is enabled by `.claude/settings.json`. All clients point to ignored `.agent-memory/memory.jsonl`.
+SetuHaul does not use a project Memory MCP. Application conversation/session memory uses Upstash Redis only, implemented in `backend/app/services/redis_memory.py` and exposed to Driver LangChain through `get_conversation_memory`.
 
-The server is pinned to `@modelcontextprotocol/server-memory@2025.11.25`. Developers need Node/npm and must approve project MCP execution. Run client-specific MCP listing/status commands after cloning.
+Redis memory rules:
 
-Cursor session 2026-08-07: Memory MCP (`user-memory`) ready. Product AI lock is `ChatOpenAI` + `bind_tools` + manual loop (not create_agent).
+- Store bounded current-thread chat/session context only.
+- Use a 24-hour TTL.
+- Treat Redis as non-authoritative and rebuildable.
+- Refresh shipments, ETA, appointments, docks, facilities, and user permissions from PostgreSQL.
+- Never store credentials or use Redis as durable project memory.
 
 ## Supabase MCP
 

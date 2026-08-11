@@ -1,9 +1,10 @@
-# Secrets and local agent memory
-.agent-memory/
+# Secrets
 .env
 .env.*
 !.env.example
 !**/.env.example
+POC_TEAM_ACCOUNTS.local.md
+*.credentials.local.md
 
 # Python
 backend/.venv/

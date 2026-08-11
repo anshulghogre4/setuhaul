@@ -12,6 +12,24 @@ from app.core.security import JwtVerifier
 from app.core.settings import Settings, get_settings
 from app.db.session import db
 
+_FACILITY_OPS_PERMS = [
+    "operations:read_facility",
+    "shipment:read_facility",
+    "exception:read_facility",
+    "schedule:read_facility",
+    "dock:read_facility",
+    "rules:read_facility",
+]
+
+_GLOBAL_OPS_PERMS = [
+    "operations:read_global",
+    "shipment:read_global",
+    "exception:read_global",
+    "schedule:read_global",
+    "dock:read_global",
+    "rules:read_global",
+]
+
 ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
     RoleName.DRIVER: [
         "driver:read_self",
@@ -20,23 +38,24 @@ ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
         "eta:write_own",
         "chat:own",
     ],
-    RoleName.OPERATIONS_EXECUTIVE: [
-        "operations:read_facility",
-        "shipment:read_facility",
-        "exception:read_facility",
-        "schedule:read_facility",
-        "dock:read_facility",
-        "rules:read_facility",
-    ],
-    RoleName.ADMIN: [
-        "operations:read_global",
-        "shipment:read_global",
-        "exception:read_global",
-        "schedule:read_global",
-        "dock:read_global",
-        "rules:read_global",
-    ],
+    RoleName.OPERATIONS_EXECUTIVE: list(_FACILITY_OPS_PERMS),
+    RoleName.WAREHOUSE_PLANNER: list(_FACILITY_OPS_PERMS),
+    RoleName.OPERATIONS_MANAGER: list(_FACILITY_OPS_PERMS),
+    RoleName.FACILITY_MANAGER: list(_FACILITY_OPS_PERMS),
+    RoleName.ADMIN: list(_GLOBAL_OPS_PERMS),
+    RoleName.TRANSPORT_MANAGER: list(_GLOBAL_OPS_PERMS),
+    RoleName.REGIONAL_OPERATIONS_HEAD: list(_GLOBAL_OPS_PERMS),
 }
+
+OPS_PORTAL_ROLES = (
+    RoleName.OPERATIONS_EXECUTIVE,
+    RoleName.WAREHOUSE_PLANNER,
+    RoleName.OPERATIONS_MANAGER,
+    RoleName.FACILITY_MANAGER,
+    RoleName.TRANSPORT_MANAGER,
+    RoleName.REGIONAL_OPERATIONS_HEAD,
+    RoleName.ADMIN,
+)
 
 
 def get_settings_dep() -> Settings:

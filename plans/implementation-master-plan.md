@@ -7,6 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
+Last refreshed: 2026-08-10 23:24 IST (LLM env loading is launch-directory safe and Driver welcome uses verified context; Sprint 3 exit gate still open for remaining lifecycle/escalation/load flows)
 Active sprint: **Sprint 3 - deterministic feasibility and concurrent allocation**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
 FDE challenge-ready target: **Sprint 3 exit gate**
@@ -25,7 +26,7 @@ Use this plan as a living checklist:
 |---|---|---|
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST (Admin browser + adversarial/IDOR + baseline a11y + minimal CI + CORS both origins) |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST (API demo `DEMO_PATH_PASS` + browser localhost:5173 driver chat/tools/ETA + ops refresh) |
-| Sprint 3 - deterministic allocation | **TODO** | Starts only after Sprint 2 POC exit gate passes |
+| Sprint 3 - deterministic allocation | **IN PROGRESS** | Feasibility/ranking, request/status tools, session-scoped Redis memory, individual POC auth pool, and two-client same-slot proof are done; exit gate remains open |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -34,16 +35,24 @@ Verified repository foundation (not a completed implementation sprint):
 - [x] ~~Stitch design resources are present.~~ Four supplied design sets were found on 2026-08-07; the current POC selection remains set 2 pending any explicit design-decision revision.
 - [x] ~~Scaffold application runtime trees for `backend/` and `frontend/` (formerly `web/`).~~ Verified by repository inspection on 2026-08-07 15:45 IST. Auth users mapped; JWT/JWKS + `/auth/me` PASS 2026-08-07 16:35 IST; browser smoke PASS 16:53 IST. Renamed `web/` → `frontend/` 2026-08-08.
 
+Latest verified deltas since Sprint 2 gate:
+
+- [x] ~~Differentiate Driver and Ops login visuals with role-relevant project-local PNG assets and tighten the authenticated ops shell/dashboard.~~ Evidence 2026-08-10 18:29 and 22:31 IST: `npm run lint` PASS, `npm run build` PASS, login screenshots captured, live Arvind Nair ops login plus `/auth/me`, dashboard summary, and exceptions PASS.
+- [x] ~~Clarify project memory architecture as Redis-only application runtime memory; remove project Memory MCP configs from active agent setup.~~ Evidence 2026-08-10 22:20 IST: checked-in instructions/tooling docs updated; Redis remains non-authoritative 24-hour conversation/session state.
+- [x] ~~Configure current Gemini provider default to a model available for the provided key without committing secrets.~~ Evidence 2026-08-10 22:39 IST: gitignored `.env.local` set locally, `backend/app/assistant/llm.py` defaults Gemini to `gemini-flash-latest`, LLM factory tests PASS, direct Google REST smoke PASS. Current LangChain Gemini invoke must be rechecked after dev environment restart.
+- [x] ~~Scope Redis conversation memory and client-message dedupe by authenticated user, browser session id, and thread id.~~ Evidence 2026-08-10 23:01 IST: `/chat` accepts `session_id`, Driver UI creates a stable `sessionStorage` id, Redis key parts are normalized, and backend tests prove same-user/same-thread session isolation.
+- [x] ~~Make backend env loading robust so local `.env.local` keys are found from repo root, backend, or tool-specific launch directories.~~ Evidence 2026-08-10 23:24 IST: `Settings()` reports `ready_llm=True`, `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-flash-latest`, and `ready_upstash=True` from both repo root and `backend/` without printing secrets.
+
 ## 1. Executive decision
 
 Build SetuHaul as a **modular monolith with clean/hexagonal boundaries**:
 
 - React 19 SPA using the supplied Stitch visuals.
 - One FastAPI API/BFF and one asynchronous worker.
-- Supabase Auth is included from Sprint 1. Prefer two shared permanent internal-POC accounts (Driver + Ops). Seeded Operator (`ROL002`) and Admin (`ROL008`) may both exist; they share one ops dashboard shell and one ops login entry. FastAPI verifies the access token and maps it to the seeded application user, role, driver, and facility/global scope. **Two login UIs only** (`/driver/login`, `/ops/login`); choosing an entry never grants a role.
+- Supabase Auth is included from Sprint 1. Shared internal-POC accounts were acceptable for the Sprint 2 demo, and the live POC pool now also includes individual Driver, Operations Executive, and Admin users for better audit attribution. Seeded Operator (`ROL002`) and Admin (`ROL008`) may both exist; they share one ops dashboard shell and one ops login entry. FastAPI verifies the access token and maps it to the seeded application user, role, driver, and facility/global scope. **Two login UIs only** (`/driver/login`, `/ops/login`); choosing an entry never grants a role.
 - Supabase PostgreSQL as the system of record and final concurrency authority.
 - Upstash Redis for 24-hour conversation history, session context, cache, rate limiting, and non-authoritative coordination.
-- One role-aware LangChain assistant: **`ChatOpenAI` + `bind_tools(...)`** (OpenAI/OpenRouter) or **`ChatGoogleGenerativeAI` + `bind_tools(...)`** (Gemini), plus a **manual bounded invoke loop**. Provider selection via `assistant/llm.py` (`LLM_PROVIDER=auto|openai|openrouter|gemini`; auto = OpenAI → OpenRouter → Gemini). This is **not** `create_agent`, `AgentExecutor`, or `create_react_agent`. **`bind_tools` + manual loop ≠ `create_agent`.** Tools call FastAPI application services only; PostgreSQL is SoT.
+- One role-aware LangChain assistant: **`ChatOpenAI` + `bind_tools(...)`** (OpenAI/OpenRouter) or **`ChatGoogleGenerativeAI` + `bind_tools(...)`** (Gemini), plus a **manual bounded invoke loop**. Provider selection via `assistant/llm.py` (`LLM_PROVIDER=auto|openai|openrouter|gemini`; auto = OpenAI → OpenRouter → Gemini; current Gemini default = `gemini-flash-latest`). This is **not** `create_agent`, `AgentExecutor`, or `create_react_agent`. **`bind_tools` + manual loop ≠ `create_agent`.** Tools call FastAPI application services only; PostgreSQL is SoT.
 - Pydantic models for every API request/response, execution context, conversation state, tool args/results, and domain command/result. Tools call FastAPI application services only; PostgreSQL is SoT; the LLM never invents operational facts.
 - Deterministic application services for feasibility, allocation, appointment transitions, and all writes.
 - LangSmith for AI traces and platform logs/metrics for application operations; do not add overlapping observability products until hosting requires them.
@@ -296,21 +305,24 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 
 ### Build
 
-- [ ] TODO: replace shared POC credentials with individual Supabase users before production so audit records identify the responsible teammate/user.
+- [x] ~~Create individual live Supabase POC users across Driver, Operations Executive, and Admin personas so demos are no longer limited to shared seeded accounts.~~ Evidence 2026-08-10 22:11 IST: six additional Auth users mapped to `public.users.auth_user_id`; password-grant login PASS for all. Production password rotation and account lifecycle hardening remain TODO.
 - [ ] TODO: add session revocation, password-rotation, disabled-user, and stale-role-claim hardening, then repeat all role/IDOR tests.
-- [ ] TODO: implement a pure feasibility engine and versioned deterministic ranking policy.
-- [ ] TODO: deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists.
-- [ ] TODO: return fresh, explainable, non-reserved options with snapshot metadata.
-- [ ] TODO: implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows.
+- [x] ~~Implement a pure feasibility engine and versioned deterministic ranking policy.~~ 2026-08-10 20:16 IST evidence: `backend/app/scheduling/feasibility.py` computes DB-backed candidate feasibility and returns explicit `rank_score` plus ranking factors for priority, lateness, ETA wait, fit slack, dock match, disruption, and stable tie-break. `backend/app/scheduling/constraints.json` owns `priority_scores` and `score_weights`; backend unit tests PASS.
+- [ ] **IN PROGRESS:** deliver and register every Sprint 3 tool in the tool delivery matrix with role-specific allowlists. `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` are registered for Driver LangChain tools; `get_conversation_memory` is registered as infrastructure memory context, not a business-data tool. Remaining Sprint 3 tools are TODO.
+- [x] ~~Return fresh, explainable, non-reserved options with snapshot metadata from the deterministic service/tool.~~ Evidence 2026-08-10 20:16 IST: `find_feasible_slots` returns `DISPLAYED_NOT_RESERVED` options, policy version, `as_of`, checked constraints, ranking factors, and no-slot escalation payloads. Live authenticated chat/API smoke remains a separate TODO.
+- [ ] **IN PROGRESS:** implement atomic request/hold, reschedule, confirm, cancel, reject, expire, and conflict flows. 2026-08-10 20:35 IST evidence: `request_slot` transactionally revalidates an exact selected slot, writes `PENDING_CONFIRMATION`, audit, and idempotency, maps same-slot contention to conflict refresh, and `get_appointment_request_status` reads pending/confirmed/closed request state without mutation. Live same-slot proof PASS via `backend/tests/integration/test_live_scheduling_concurrency.py`; reschedule/confirm/cancel/reject/expire remain TODO.
 - [ ] TODO: invalidate/recompute options on ETA correction, dock closure, capacity change, appointment cancellation, check-in, or unload overrun.
 - [ ] TODO: add human escalation records/queue for no-slot, contradictory, regulated, emergency, or approval-required cases.
 - [ ] TODO: add the operations exception queue and appointment/dock/queue views needed for takeover.
-- [ ] TODO: add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot.
-- [ ] TODO: add end-to-end demonstrations for stale choice, losing a race, cancellation releasing capacity, and no feasible slot.
+- [ ] **IN PROGRESS:** add concurrency and load tests for 10 drivers competing for 3-4 slots and two clients selecting the same slot. 2026-08-10 20:35 IST evidence: `backend/tests/integration/test_live_scheduling_concurrency.py` runs two independent async sessions against live Supabase for the same temporary slot and verifies exactly one `SLOT_REQUESTED` winner, one `SLOT_CONFLICT_REFRESH_REQUIRED` loser, one active appointment, audit/idempotency evidence, and zero leftover `CODX` rows. Broader 10-driver/3-4-slot load test remains TODO.
+- [x] ~~Add an objective losing-a-race proof for two clients selecting the same slot.~~ Evidence 2026-08-10 20:35 IST: live Supabase integration produced one winner and one conflict-refresh loser with cleanup.
+- [x] ~~Isolate Redis runtime chat/session memory by browser session in addition to authenticated user and thread.~~ Evidence 2026-08-10 23:01 IST: `ConversationMemory` keys now include normalized `session_id`, duplicate detection is session-scoped, `get_conversation_memory` returns the session id, and frontend `/chat` requests carry a stable session id from `sessionStorage`.
+- [ ] TODO: add end-to-end demonstrations for stale choice, cancellation releasing capacity, and no feasible slot.
+- [ ] TODO: live-smoke authenticated API/chat paths for `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and `get_conversation_memory` using the current local Supabase/Redis/Gemini env.
 
 ### Exit gate
 
-- [ ] TODO: prove exactly one same-slot contender succeeds; every loser receives a conflict-safe refreshed response; no invalid option is confirmed; all transitions have a complete audit trail; and a no-feasible-slot case escalates safely.
+- [ ] TODO: complete the remaining exit-gate proof: same-slot two-client contention has live evidence (2026-08-10 20:35 IST), but broader contention/load, no invalid confirmed option across stale choices, complete transition audit trail, and no-feasible-slot safe escalation still need objective evidence.
 
 ## 9. Edge-case test catalogue
 
@@ -402,4 +414,15 @@ Keep these visible and unchecked until Sprint 3 passes and the owner explicitly 
 
 ## 13. Immediate next action
 
-**Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).** Next: Sprint 3 deterministic feasibility, ranking, and concurrent appointment allocation. Do not expand into maps, GPS, user management, or non-gate booking UX before Sprint 3 tools/routes exist.
+**Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST). Sprint 3 is IN PROGRESS.** Do not expand into maps, GPS, user management, or non-gate booking UX before the Sprint 3 exit gate has objective evidence.
+
+Next, in order:
+
+1. Restart the backend/dev environment and recheck live LangChain Gemini chat invoke with `gemini-flash-latest`; direct Gemini REST already passes, but the current LangChain shell invoke timed out.
+2. Live-smoke authenticated API/chat paths for scored `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and Redis-backed `get_conversation_memory`; assert no fallback or invented data.
+3. Implement appointment lifecycle transitions: reschedule, confirm, cancel, reject, expire, plus idempotency/audit/status tests.
+4. Add stale-choice invalidation/recompute paths for ETA correction, dock closure, capacity change, appointment cancellation, check-in, and unload overrun.
+5. Add no-slot human escalation records/queue and the ops takeover views required for exception/appointment/dock/queue handling.
+6. Add broader 10-driver/3-4-slot load proof and end-to-end demos for stale choice, cancellation release, and no feasible slot.
+7. Harden enterprise auth operations: session revocation, password rotation, disabled user handling, stale-role claims, and repeated role/IDOR/browser tests.
+8. Promote formal Playwright/responsive/a11y/CI coverage after the Sprint 3 backend gate paths are stable.

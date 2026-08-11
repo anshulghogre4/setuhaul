@@ -9,8 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.execution_context import ExecutionContext
+from app.scheduling.allocation import RequestSlotCommand, get_appointment_request_status, request_slot
+from app.scheduling.feasibility import find_feasible_slots
 from app.services import driver_reads
 from app.services.eta_service import EtaUpdateCommand, confirmation_preview, record_eta_update
+from app.services.redis_memory import ConversationMemory
 
 
 class EmptyArgs(BaseModel):
@@ -62,6 +65,39 @@ class SchedulingArgs(BaseModel):
     shipment_id: str | None = None
 
 
+class FindFeasibleSlotsArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment to evaluate. Required when the driver has multiple active shipments.",
+    )
+    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of slot options to return")
+
+
+class RequestSlotArgs(BaseModel):
+    shipment_id: str = Field(description="Shipment for the selected slot")
+    slot_id: str = Field(description="Exact slot_id selected from find_feasible_slots")
+    displayed_policy_version: str | None = Field(default=None)
+    note: str | None = Field(default=None, description="Optional driver note for the request")
+
+
+class AppointmentRequestStatusArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment whose appointment request status should be checked.",
+    )
+    appointment_id: str | None = Field(
+        default=None,
+        description="Optional appointment_id returned by request_slot.",
+    )
+
+
+class ConversationMemoryArgs(BaseModel):
+    include_recent_messages: bool = Field(
+        default=True,
+        description="Whether to include bounded recent chat snippets from Redis.",
+    )
+
+
 def _json(data: Any) -> str:
     return json.dumps(data, default=str)
 
@@ -71,6 +107,8 @@ def build_driver_tools(
     session: AsyncSession,
     ctx: ExecutionContext,
     thread_id: str,
+    session_id: str | None = None,
+    memory: ConversationMemory | None = None,
 ) -> list[StructuredTool]:
     """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist)."""
 
@@ -85,6 +123,31 @@ def build_driver_tools(
                 "facility_id": ctx.facility_id,
                 "permissions": ctx.permissions,
             }
+        )
+
+    async def get_conversation_memory(args: ConversationMemoryArgs) -> str:
+        if memory is None:
+            return _json(
+                {
+                    "code": "REDIS_MEMORY_UNAVAILABLE",
+                    "source": "upstash_redis",
+                    "thread_id": thread_id,
+                    "session_id": session_id,
+                    "recent_messages": [],
+                    "session": {},
+                    "ttl_seconds": 24 * 60 * 60,
+                    "non_authoritative": True,
+                    "degraded": True,
+                    "degrade_reason": "MEMORY_NOT_ATTACHED_TO_TOOL",
+                }
+            )
+        return _json(
+            memory.snapshot(
+                user_id=ctx.user_id,
+                thread_id=thread_id,
+                session_id=session_id,
+                include_recent_messages=args.include_recent_messages,
+            )
         )
 
     async def get_driver_operational_context(_: EmptyArgs | None = None) -> str:
@@ -190,13 +253,96 @@ def build_driver_tools(
             code = getattr(exc, "code", "ETA_WRITE_FAILED")
             return _json({"code": code, "message": str(exc)})
 
+    async def find_feasible_slots_tool(args: FindFeasibleSlotsArgs) -> str:
+        context = await driver_reads.get_driver_operational_context(session, ctx)
+        active = context.get("active_shipments") or []
+        shipment_id = args.shipment_id
+        if not shipment_id:
+            if len(active) == 0:
+                return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
+            if len(active) > 1:
+                return _json(
+                    {
+                        "code": "CLARIFICATION_REQUIRED",
+                        "message": "Multiple active shipments. Ask which shipment_id to evaluate.",
+                        "candidates": [
+                            {"shipment_id": s["shipment_id"], "status": s["current_status"]}
+                            for s in active
+                        ],
+                    }
+                )
+            shipment_id = active[0]["shipment_id"]
+
+        try:
+            result = await find_feasible_slots(session, ctx, shipment_id, limit=args.limit)
+            payload = result.model_dump()
+            payload["code"] = "FEASIBLE_SLOTS_FOUND" if payload["options"] else "NO_FEASIBLE_SLOTS"
+            payload["appointment_writes"] = 0
+            return _json(payload)
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
+            code = getattr(exc, "code", "FEASIBILITY_FAILED")
+            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+
+    async def request_slot_tool(args: RequestSlotArgs) -> str:
+        command = RequestSlotCommand(
+            note=args.note,
+            displayed_policy_version=args.displayed_policy_version,
+            client_message_id=None,
+        )
+        try:
+            result = await request_slot(
+                session,
+                ctx,
+                shipment_id=args.shipment_id,
+                slot_id=args.slot_id,
+                command=command,
+                idempotency_key=f"chat-{thread_id}-request-slot-{args.shipment_id}-{args.slot_id}",
+            )
+            return _json(result.model_dump())
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
+            code = getattr(exc, "code", "REQUEST_SLOT_FAILED")
+            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+
+    async def get_appointment_request_status_tool(args: AppointmentRequestStatusArgs) -> str:
+        context = await driver_reads.get_driver_operational_context(session, ctx)
+        active = context.get("active_shipments") or []
+        shipment_id = args.shipment_id
+        if not shipment_id:
+            if len(active) == 0:
+                return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
+            if len(active) > 1:
+                return _json(
+                    {
+                        "code": "CLARIFICATION_REQUIRED",
+                        "message": "Multiple active shipments. Ask which shipment_id to check.",
+                        "candidates": [
+                            {"shipment_id": s["shipment_id"], "status": s["current_status"]}
+                            for s in active
+                        ],
+                    }
+                )
+            shipment_id = active[0]["shipment_id"]
+
+        try:
+            result = await get_appointment_request_status(
+                session,
+                ctx,
+                shipment_id=shipment_id,
+                appointment_id=args.appointment_id,
+            )
+            return _json(result.model_dump())
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
+            code = getattr(exc, "code", "APPOINTMENT_REQUEST_STATUS_FAILED")
+            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+
     async def scheduling_capability_disabled(args: SchedulingArgs) -> str:
         return _json(
             {
                 "code": "CAPABILITY_NOT_ENABLED",
                 "message": (
-                    "Slot search, booking, rescheduling, cancellation, and appointment "
-                    "confirmation are not enabled in the Sprint 2 POC. Operations handoff required."
+                    "Rescheduling, cancellation, and appointment confirmation are not enabled "
+                    "until their Sprint 3 transactional services are complete. Use request_slot "
+                    "only for a driver's explicit selected slot request."
                 ),
                 "intent": args.intent,
                 "shipment_id": args.shipment_id,
@@ -210,6 +356,16 @@ def build_driver_tools(
             name="get_current_user_context",
             description="Return verified authenticated user/role/driver mapping.",
             args_schema=EmptyArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_conversation_memory,
+            name="get_conversation_memory",
+            description=(
+                "Return bounded Upstash Redis conversation/session memory for this authenticated "
+                "user and current thread. This is ephemeral, 24-hour, non-authoritative context only; "
+                "never use it as shipment, ETA, appointment, dock, or facility truth."
+            ),
+            args_schema=ConversationMemoryArgs,
         ),
         StructuredTool.from_function(
             coroutine=get_driver_operational_context,
@@ -269,10 +425,39 @@ def build_driver_tools(
             args_schema=ReportDelayArgs,
         ),
         StructuredTool.from_function(
+            coroutine=find_feasible_slots_tool,
+            name="find_feasible_slots",
+            description=(
+                "Find fresh, explainable, non-reserved feasible replacement slot options for "
+                "an in-scope shipment. This never books, holds, reserves, confirms, or mutates appointments."
+            ),
+            args_schema=FindFeasibleSlotsArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=request_slot_tool,
+            name="request_slot",
+            description=(
+                "Request an exact selected slot for an in-scope shipment after the driver explicitly "
+                "chooses a slot_id. Revalidates transactionally and creates PENDING_CONFIRMATION only; "
+                "it never confirms the appointment."
+            ),
+            args_schema=RequestSlotArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_appointment_request_status_tool,
+            name="get_appointment_request_status",
+            description=(
+                "Check the authoritative status of a prior slot request for an in-scope shipment. "
+                "Reports pending confirmation, confirmed, cancelled, rejected, completed, or no request; "
+                "it never mutates appointments."
+            ),
+            args_schema=AppointmentRequestStatusArgs,
+        ),
+        StructuredTool.from_function(
             coroutine=scheduling_capability_disabled,
             name="scheduling_capability_disabled",
             description=(
-                "Return CAPABILITY_NOT_ENABLED for slot search/book/reschedule/cancel/confirm."
+                "Return CAPABILITY_NOT_ENABLED for reschedule/cancel/confirm mutations."
             ),
             args_schema=SchedulingArgs,
         ),
