@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,8 +10,19 @@ from app.core.deps import OPS_PORTAL_ROLES, get_db_session, get_request_id, requ
 from app.core.envelope import ok
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.services.escalation_service import (
+    EscalateExceptionCommand,
+    escalate_exception,
+    get_dock_status,
+    get_exception_queue,
+    get_queue_status,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["operations"])
+
+
+class EscalateExceptionBody(EscalateExceptionCommand):
+    model_config = ConfigDict(extra="forbid")
 
 
 def _as_of() -> str:
@@ -25,6 +37,52 @@ def _resolve_facility(ctx: ExecutionContext, facility_id: str | None) -> str | N
     if facility_id and facility_id != ctx.facility_id:
         raise AppError("Cross-facility access denied.", code="FORBIDDEN", status_code=403)
     return ctx.facility_id
+
+
+@router.get("/operations/escalation-queue")
+async def escalation_queue(
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    facility_id: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    result = await get_exception_queue(session, ctx, facility_id)
+    return ok(result, get_request_id(request))
+
+
+@router.get("/operations/dock-status")
+async def dock_status(
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    facility_id: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    return ok(await get_dock_status(session, ctx, facility_id), get_request_id(request))
+
+
+@router.get("/operations/queue-status")
+async def queue_status(
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    facility_id: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    return ok(await get_queue_status(session, ctx, facility_id), get_request_id(request))
+
+
+@router.post("/operations/escalate")
+async def escalate(
+    body: EscalateExceptionBody,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    try:
+        result = await escalate_exception(session, ctx, body)
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(result, get_request_id(request), message="Escalation queued for operations.")
 
 
 @router.get("/operations/dashboard-summary")

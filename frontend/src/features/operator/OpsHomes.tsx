@@ -21,6 +21,16 @@ type ExceptionItem = {
   reported_at: string
 }
 
+type EscalationItem = {
+  escalation_id: string
+  shipment_id: string
+  driver_id: string | null
+  escalation_type: string
+  escalation_status: string
+  severity_code: string
+  created_at: string
+}
+
 function prettyStatus(status: string) {
   return status
     .toLowerCase()
@@ -74,6 +84,7 @@ function OpsBody({
 }) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [exceptions, setExceptions] = useState<ExceptionItem[]>([])
+  const [escalations, setEscalations] = useState<EscalationItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -82,13 +93,15 @@ function OpsBody({
     setLoading(true)
     const q = !global && facilityId ? `?facility_id=${encodeURIComponent(facilityId)}` : ''
     try {
-      const [sum, exc] = await Promise.all([
+      const [sum, exc, queue] = await Promise.all([
         apiGet<Summary>(`/api/v1/operations/dashboard-summary${q}`),
         apiGet<{ as_of: string; items: ExceptionItem[] }>(`/api/v1/operations/exceptions${q}`),
+        apiGet<{ as_of: string; items: EscalationItem[] }>(`/api/v1/operations/escalation-queue${q}`),
       ])
       setSummary(sum.data)
       setExceptions(exc.data.items || [])
-      setAsOf(exc.data.as_of || sum.data.as_of)
+      setEscalations(queue.data.items || [])
+      setAsOf(queue.data.as_of || exc.data.as_of || sum.data.as_of)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ops load failed')
@@ -231,6 +244,38 @@ function OpsBody({
           )}
         </article>
       </div>
+
+      <article className="ops-status-panel exception-panel">
+        <div className="card-heading">
+          <div>
+            <h2>Escalation queue</h2>
+            <p className="muted">Open human-takeover items for the authorized facility scope.</p>
+          </div>
+          <span className="chip secondary">{escalations.length} open</span>
+        </div>
+        {escalations.length === 0 ? (
+          <div className="empty-state">
+            <strong>No active escalations</strong>
+            <span>New no-slot and exception handoffs will appear here.</span>
+          </div>
+        ) : (
+          <ul className="exception-list">
+            {escalations.slice(0, 8).map((item) => (
+              <li key={item.escalation_id}>
+                <div>
+                  <strong>{item.shipment_id}</strong>
+                  <span>{prettyStatus(item.escalation_type)} · {prettyStatus(item.escalation_status)}</span>
+                  <small>Opened {formatTimestamp(item.created_at)}</small>
+                </div>
+                <div className="exception-meta">
+                  <span>{item.severity_code}</span>
+                  {item.driver_id ? <span>{item.driver_id}</span> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
 
       <p className="fine-print">
         {summary.note ??

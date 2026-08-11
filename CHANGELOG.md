@@ -22,6 +22,12 @@ This append-only log records material implementation, architecture, workflow, de
 - Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); End-to-end multi-turn driver ETA confirmation flow verified with 100% precision (**200 OK**, `ux_state: confirmation_required`).
 - Agent/surface: Google Antigravity.
 
+## 2026-08-12 02:16 IST - Graphify incremental update (demo reset + Sprint 3 docs)
+
+- Ran `graphify --update` on 20 changed files (6 code / 14 docs): AST + semantic chunks, merge into graph, cluster, force-write `graph.json`/`graph.html`/`GRAPH_REPORT.md`.
+- Graph now **1192 nodes · 2096 edges · 73 communities**; includes `reset_demo_day` cast restore, Ravi/NOSLOT/race cast, allocation/escalation hyperedges.
+- Verification: HTML export PASS; queries PASS for cast reset path, request_slot scarce-capacity neighborhood, SHP-D16-RAVI explain. App tests not run.
+
 ## 2026-08-12 02:08 IST - Fix Duplicate Tool Loop & Empty Response on Confirmation
 
 - Fixed issue in `backend/app/assistant/run_assistant.py` where confirming a database write (e.g. `report_delay_or_update_eta` with `confirmed=True`) caused OpenRouter/LLM model to re-invoke the same tool repeatedly across `MAX_TOOL_ROUNDS=6`, leaving `ai.content=""` empty.
@@ -29,6 +35,132 @@ This append-only log records material implementation, architecture, workflow, de
 - Added automatic non-empty success message synthesis for `persisted_success` state (`"ETA update for SHP1017 (...) has been confirmed and saved successfully."`).
 - Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Multi-turn live test sequence verified with 100% clean responses (**200 OK**).
 - Agent/surface: Google Antigravity.
+
+## 2026-08-12 01:18 IST - PDF challenge bug audit (read-only)
+
+## 2026-08-12 01:05 IST - Cast reset live DB safety review (Ravi-scoped)
+
+- Inspected live Postgres tables/FKs for `--mode cast --include-shp1017`. Scope stays cast IDs + Redis demo users; Auth untouched; baseline Aug-4 inventory (except optional `SHP1017`) preserved. Ravi `SHP1001` COMPLETED left alone.
+- Found live risk: `SHP1017` DRIVER_CHAT chain (`APT-A086` → `APT-0F6`) would trip appointments self-FK `replaced_appointment_id` on delete. Hardened `reset_demo_day.py` to null ops-message links + `replaced_appointment_id` before DELETE.
+- Verification: live dry-run PASS; rollback-safe appointment wipe/restore proof PASS (`DELETE 2` then force rollback). Confirm write still not run. App tests not run.
+
+## 2026-08-12 01:00 IST - Demo-day cast reset / restore script
+
+- Added `supabase/demo/reset_demo_day.py` with `--mode cast` (default) and `--mode full`, `--dry-run`, `--confirm` / `SETUHAUL_DEMO_RESET=1`, optional `--include-shp1017`, and Upstash Redis chat-key clear for shared Ravi demos.
+- Cast mode restores golden hero fields (`SHP-D16-RAVI` ETA 18:30 / unload 25, `D16-APT-RAVI-OLD` CONFIRMED, race slot free) and wipes escalations / extra ETAs / DRIVER_CHAT appointments / cast idempotency residue. Full mode wipes namespaced D16 inventory then re-applies `demo_day_2026-08-16.sql`. Does not touch Auth passwords.
+- Documented in `supabase/demo/README.md`, `docs/DEMO_MANUAL_RUNBOOK.md` Prep, and root `README.md` Quick start.
+- Verification: live `--dry-run` cast + full PASS against configured `DATABASE_URL` / Upstash (cast saw escalations/appointments/eta/idempotency/redis keys; no confirm write this turn). Application unit/integration tests not run.
+
+## 2026-08-12 00:40 IST - Manual FDE demo + stress runbook
+
+- Added `docs/DEMO_MANUAL_RUNBOOK.md`: ordered Phases Prep + A–G with exact chat lines, multi-browser race, NOSLOT, stale/cancel, Ops takeover, CONTEND sample, PDF coverage map, pass/fail sign-off.
+- Updated `docs/DEMO_DRIVER_CHAT_SCRIPT.md` (cancel/reschedule enabled; D16-first; points to runbook).
+- Updated `docs/DEMO_DAY_READINESS.md` §11.2 + replaced stale “Still to build before gate” with post-gate polish notes.
+- Linked runbook from root `README.md`.
+- Verification: documentation only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-12 00:35 IST - Architecture Mermaid diagrams (exact Sprint 3 usage)
+
+- Updated root `README.md` Architecture with three Mermaid diagrams: system context, driver chat sequence, scarce-capacity allocation flow.
+- Updated `docs/ARCHITECTURE.md` high-level + AI + invoke-loop sections to the same exact usage model (`bind_tools` manual loop, feasibility/allocation, escalation_queue, Redis 24h).
+- Verification: documentation only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-12 00:30 IST - Root README updated through Sprint 3
+
+- Rewrote root `README.md` Quick start for Sprint 1–3 complete: status table, demo capabilities (feasibility/request/cancel/reschedule/confirm/reject/expire, stale options, escalation queue, scarce-capacity proofs), deferred Sprint 4 / OR-Tools / post-demo auth, demo-day cast script pointers, scheduling architecture notes, docs links, and opt-in live integration test commands.
+- Removed obsolete “Sprint 3 not started / CAPABILITY_NOT_ENABLED” framing; passwords remain owner-shared via `POC_TEAM_ACCOUNTS.local.md` (no resets until after demo).
+- Verification: documentation only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-12 00:25 IST - Sprint 3 exit gate COMPLETE
+
+- Closed Sprint 3 gate with objective evidence: reschedule/reject/expire lifecycle, `REC-` recommendation versioning + `SLOT_OPTIONS_STALE`, durable `escalation_queue` + Ops takeover UI, live **10×4** scarce-slot load (zero double-books), and D16 cast API smoke (options→request→status→stale→cancel frees; NOSLOT persist; ops reject/confirm).
+- Applied migration `20260812010000_sprint3_lifecycle_escalation.sql` (`EXPIRED` + `escalation_queue` + audit action widening). Fixed recommendation validate limit mismatch (5 vs 10), asyncpg-ambiguous NULL filters, and cast unload mins (25) for STANDARD 30-min slots in generator + live cast.
+- Graphify updated (`python -m graphify update .`); NOSLOT tool path persists escalation; auth hardening remains post-demo deferred; facility-wide OR-Tools remains deferred with later design note.
+- Verification: live integration `test_live_demo_day_load.py` **2 passed**; backend units **56 passed**; Playwright multi-browser UI **not run**. Agent/surface: Cursor (+ [lifecycle/escalation slice](d2192e98-8ce5-4a10-94b6-810780b800b8)).
+
+## 2026-08-12 00:15 IST - Write Sprint 4 hosting plan into master plan
+
+- Added Living Sprint 4 row and full §8.1 section to `plans/implementation-master-plan.md`: **PLANNED** hosting/AgentCore/observability/Locust sprint after Sprint 3 gate.
+- Locked topology: **Vercel** frontend; **App Runner** FastAPI default (Azure/GCP also OK — AgentCore does not force BFF onto AWS); **Bedrock AgentCore** assistant (AWS-only); Supabase + Upstash; **CloudWatch** + **LangSmith**; Locust suites A (AgentCore chat) and B (10×3–4 scarce slots).
+- Promoted Locust 10-driver load proof and AgentCore/CloudWatch from Sprint 3 remaining / §12 deferred into Sprint 4; updated Sprint 3 exit-gate wording, §13 next actions, and `plans/README.md`.
+- Synced wiki `implementation`, `handoff`, `current-state`, `log`.
+- Verification: documentation/plan write only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-12 00:02 IST - Fix driver tool kwargs + chat history route + SHP1017 no-feasible chat
+
+- Root cause of chat appointment/facility/slot “errors”: LangChain `StructuredTool.ainvoke` expands schema fields as kwargs, but driver tools took a single `args: Model` parameter (`unexpected keyword argument 'shipment_id'`). Reworked tools to `**kwargs` + `model_validate` (extra=ignore).
+- Feasibility candidate SQL: slot timestamps are **text** in Postgres; bind `:eta_ts` as datetime with `CAST(sl.slot_end_ts AS timestamptz) > :eta_ts` (avoid `:eta_ts::timestamptz` which broke SQLAlchemy bind parsing).
+- `/api/v1/chat/history` 404 was a **stale uvicorn** still holding :8000 without the GET route; clean restart registers history (401 unauth / 200 auth). Chat API now returns tool `result`/`result_preview`; Driver UI `console.groupCollapsed` logs them and status shows `tool:CODE`.
+- Live browser (Ravi): `Find feasible replacement slots for SHP1017.` → `find_feasible_slots:NO_FEASIBLE_SLOTS` with escalation (Aug 7 ETA, 50 min unload vs 30 min D16 slots). Facility/appointment chat retest deferred; local uvicorn+Vite killed on user request pending other session.
+- Verification: scheduling unit tests PASS (`16 passed`); direct `find_feasible_slots(SHP1017)` PASS (0 options + escalation); browser chat NO_FEASIBLE PASS. Full suite / facility+appointment chat / refresh matrix not completed this turn. Agent/surface: Cursor.
+
+## 2026-08-11 23:25 IST - Implement appointment cancellation and confirmation
+
+- Added strict Pydantic cancel/confirm commands and results in `backend/app/scheduling/allocation.py`. Both use trusted `ExecutionContext` scope, idempotency lookup/store, exact appointment row locks, transition validation, audit logs, commit, and authoritative reread.
+- Cancellation allows the assigned Driver or scoped ops/admin for active appointments and writes `CANCELLED`, `is_current=0`, `cancelled_at`, and `cancellation_reason`, releasing the slot through existing partial-index predicates. Confirmation is ops/admin-only and writes `PENDING_CONFIRMATION` → `CONFIRMED`, `confirmed_at`, and `warehouse_confirmation_ref`.
+- Mounted `POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/cancel|confirm`, both requiring `Idempotency-Key`. Registered Driver LangChain `cancel_appointment`; prompt now enables cancel while reschedule stays disabled and confirmation stays ops/warehouse-only.
+- Updated scheduling unit coverage, `docs/API.md`, master-plan Living status, and affected LLMWiki implementation/database/testing/current-state/handoff/log pages. Supabase skill/changelog reviewed; no schema, RLS, migration, secret, or live data change.
+- Verification: focused allocation tests PASS (`10 passed`); full backend tests PASS (`50 passed, 1 skipped`); changed modules compile; OpenAPI contains both routes; IDE lints and `git diff --check` PASS. Live authenticated API/chat and live cancellation-release database proof were not run. Agent/surface: Cursor.
+
+## 2026-08-11 23:16 IST - Persist driver chat UI across re-login (Redis 24h)
+
+- Redis now stores an active conversation pointer per `user_id` (`setuhaul:chat:{uid}:active`) on each chat turn; `GET /api/v1/chat/history` restores bounded bubbles for that pointer (or explicit session/thread).
+- Driver UI hydrates messages on mount, keeps `session_id`/`thread_id` in `localStorage`, prefers profile name (Ravi) over seed `drivers.driver_name`, and maps context-rail fields to real API keys (`current_status`, `slot_start_ts`, etc.).
+- System prompt: open-slot questions must call `find_feasible_slots` for the active shipment; shown options are not facility-wide free reservations.
+- Verification: `tests/unit/test_redis_memory.py` PASS (7); frontend `npm run lint` PASS (exhaustive-deps warning only). Live browser re-login smoke not re-run this turn. Agent/surface: Cursor.
+
+## 2026-08-11 22:54 IST - Demo-day readiness mapped from FDE PDF
+
+- Re-read `docs/SetuHaul_FDE_Challenge.pdf` §§8, 11.2, 12.1–12.2 and mapped each expected demo beat, student design question, chat message type, and stress scenario to current SHOW / ANSWER / PARTIAL / NOT YET status.
+- Added `docs/DEMO_DAY_READINESS.md` as the judge-facing readiness sheet; points to `docs/DEMO_DRIVER_CHAT_SCRIPT.md` for runnable prompts.
+- Verification: PDF text extract (20 pages); no application code changed; status based on verified Sprint 2 gate + Sprint 3 tools/tests already documented. Agent/surface: Cursor.
+
+## 2026-08-11 23:45 IST - Reconcile master-plan Living Sprint 3 checklist
+
+- Updated `plans/implementation-master-plan.md` Living status and §8/§13: struck verified demo-day dataset, timestamptz ETA fix, Auth cast expansion, Redis summaries/chat restore, cancel/confirm, feasible/NOSLOT API smoke, and request/status/race proofs with dated evidence.
+- Added explicit **Sprint 3 remaining vs deferred** scoreboard and refreshed ordered next actions; Sprint 3 exit gate remains **OPEN**.
+- Verification: documentation reconciliation only; application tests not rerun this turn. Agent/surface: Cursor.
+
+## 2026-08-11 23:34 IST - Demo-day dataset + timestamptz ETA fix + Auth cast
+
+- Applied additive migration `20260811233000_fix_v_latest_eta_timestamptz_order.sql` (live via Supabase MCP): `v_latest_eta` orders by `created_at::timestamptz`. Feasibility SQL casts slot/ETA comparisons to timestamptz.
+- Added `supabase/demo/` generator/apply/Auth helpers and applied `demo_day_2026-08-16.sql` to live DB (full brief-scale additive volume + stress cast). Live totals: facilities 6, docks 25, drivers 105, slots 2934, shipments 661.
+- Created 12 new Driver Auth users (`driver.drv004@…`–`drv015@…`) with the **same shared Driver password** (no resets). Password-grant PASS for Ravi + new drivers.
+- Cancel/confirm appointment lifecycle landed earlier this session (REST + driver cancel tool); backend unit tests PASS (`50 passed`).
+- Live API smoke: Ravi `SHP-D16-RAVI` feasible slots 200 with options; Vikas `SHP-D16-NOSLOT` 200 with empty options + escalation; cross-driver IDOR 403.
+- Updated `docs/DEMO_DAY_READINESS.md`, `docs/DEMO_DRIVER_CHAT_SCRIPT.md`, gitignored `POC_TEAM_ACCOUNTS.local.md` (emails only; no passwords in changelog).
+- Verification: demo SQL APPLY_OK; Auth create/map 12; unit tests 50 passed; live feasible/escalation smoke PASS. Broader 10-driver automated load proof and Playwright E2E still TODO. Agent/surface: Cursor.
+
+## 2026-08-11 22:42 IST - Add ERICA-style Redis conversation summaries
+
+- Extended `backend/app/services/redis_memory.py` with `:summaries` list, `load_summaries`, and async `maybe_summarize_history` (oldest 5 raw messages summarized when length ≥ 10; 24h TTL; degrade-safe).
+- Wired summarization into `run_assistant`: injects prior summaries + last 5 raw turns into the LLM context; after each turn may create a summary via the unbound chat model; response includes `summary_created`.
+- Updated system prompt, `get_conversation_memory` tool description, and `constraints.json` redis allowed uses.
+- Verification: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests -q --ignore=tests/integration` from `backend/` PASS (`47 passed`). Live Upstash summarize smoke not run this turn. Agent/surface: Cursor.
+
+## 2026-08-11 22:35 IST - Fix facility_contacts column + verify Ravi driver sync
+
+- Fixed `backend/app/services/driver_reads.py` `get_facility_details`: selected nonexistent `role_title` → correct `contact_role` (matches baseline migration + data dictionary).
+- Verified live Supabase SQL for `FAC-JAI-01` returns three contacts; Ravi `USR001` mapped to `DRV001` / `FAC-JAI-01` with auth linked.
+- Live browser smoke (manual login as `ravi.kumar@setuhaul.com`): `/driver` shows profile `USR001`/`DRV001`/`FAC-JAI-01`, context shipment `SHP1017`, chat facility path 200; second turn used tool `get_facility_details` successfully (no SQL error). Seed note: `drivers.driver_name` is `Rajesh Kumar` while `users.full_name` is `Ravi Kumar` for the same `DRV001` mapping.
+- Added driver demo chat script at `docs/DEMO_DRIVER_CHAT_SCRIPT.md`.
+- Deferred backlog: AWS Bedrock AgentCore + CloudWatch hosting (PROJECT.md AI stack) noted in master plan §12; Redis memory + bind_tools loop already implemented in-app.
+- Verification: backend unit tests PASS (`45 passed`); MCP SQL PASS; browser chat facility tools PASS; passwords not written to docs. Agent/surface: Cursor.
+
+## 2026-08-11 22:34 IST - Compare SetuHaul Upstash Redis vs ERICA classroom core
+
+- Read ERICA VSCode core file-by-file (`config.py`, `memory.py`, `agent.py`, `driver.py`, `.env.example`, `requirements.txt`) and SetuHaul `redis_memory.py` / `run_assistant.py` / tools / settings.
+- Finding: SetuHaul uses Upstash REST with authenticated user+session+thread keys, 24h TTL, bounded history + structured session state, duplicate-message dedupe, and degrade-safe chat. ERICA uses standard Redis URL, thread-only keys, LPUSH LangChain message dicts, and LLM rolling summarization when raw history exceeds 10; it hard-fails without `REDIS_URL` and has no auth scope or TTL.
+- Updated `wiki/ai-system.md`, `wiki/handoff.md`, `wiki/log.md`. No application code changed.
+- Verification: document/source comparison only; application tests not run. Agent/surface: Cursor.
+
+## 2026-08-11 22:27 IST - FDE PDF: system-message and stress-test synthesis
+
+- Re-read `docs/SetuHaul_FDE_Challenge.pdf` (20 pages) for what the Driver system message must encode and which stress scenarios the product must prove.
+- Finding: no literal system prompt is prescribed. Pages 6–10/14 define conversational AI boundaries (clarify, tools, never decide capacity/compatibility/priority/commit/safety); pages 17–19 require concurrency/freshness/no-slot escalation demos.
+- Updated `wiki/ai-system.md`, `wiki/handoff.md`, `wiki/log.md` with the synthesized requirements. Application `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` left unchanged this turn.
+- Verification: PDF text extraction of all 20 pages via PyMuPDF; application tests not run (document analysis only). Agent/surface: Cursor.
+>>>>>>> origin/main
 
 ## 2026-08-10 23:21 IST - Fix hung login preflight (backend venv crash)
 
@@ -478,3 +610,11 @@ This append-only log records material implementation, architecture, workflow, de
 - Graphify: generated the initial canonical-wiki graph with 26 nodes, 41 edges, 4 labeled communities, interactive HTML, report, raw JSON, cache, cost tracker, and incremental manifest.
 - Verification: JSON/TOML configuration parsing and Graphify output checks performed; no application tests run because application code is not yet present.
 - Agent/surface: Codex.
+
+## 2026-08-12 00:00 IST - Sprint 3 lifecycle, stale recommendation, and escalation takeover
+
+- Added `supabase/migrations/20260812010000_sprint3_lifecycle_escalation.sql`, including the `EXPIRED` lifecycle status, constrained lifecycle audit actions, and RLS-protected backend-only `escalation_queue`.
+- Added versioned `REC-` option fingerprints, best-effort 24-hour Redis stale markers on committed ETA updates, lifecycle/reschedule routes and Driver tools, operations escalation/dock/queue APIs, and the Ops escalation list.
+- Updated the Living Sprint 3 checklist and affected wiki handoff, implementation, database, current-state, testing, and log pages.
+- Verification: focused lifecycle/stale/escalation suite **29 passed**; backend compile PASS; frontend lint/build PASS. Migration was not applied and live migration/API/E2E verification remains outstanding.
+- Agent/surface: Cursor.

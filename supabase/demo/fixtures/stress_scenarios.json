@@ -1,0 +1,57 @@
+{
+  "demo_day": "2026-08-16",
+  "timezone": "Asia/Kolkata",
+  "race_slot_id": "D16-SLT-RACE",
+  "cast": [
+    {
+      "shipment_id": "SHP-D16-CONTEND-01..10",
+      "driver_id": "DRV004..DRV013",
+      "what_it_demos": "Ten in-transit standard loads with 17:30-19:00 ETAs competing for four unoccupied Jaipur standard slots between 18:00 and 20:00."
+    },
+    {
+      "shipment_id": "SHP-D16-RACE-A",
+      "driver_id": "DRV001",
+      "what_it_demos": "First participant in the same-slot race for D16-SLT-RACE; the slot starts without an appointment."
+    },
+    {
+      "shipment_id": "SHP-D16-RACE-B",
+      "driver_id": "DRV002",
+      "what_it_demos": "Second participant in the same-slot race for D16-SLT-RACE; PostgreSQL must allow only one active winner."
+    },
+    {
+      "shipment_id": "SHP-D16-RAVI",
+      "driver_id": "DRV001",
+      "what_it_demos": "Single-driver happy path: ETA 18:30 makes the current 17:00 confirmed appointment infeasible while later options remain available."
+    },
+    {
+      "shipment_id": "SHP-D16-NOSLOT",
+      "driver_id": "DRV003",
+      "what_it_demos": "No-feasible outcome: a 31-tonne temperature-controlled heavy load arrives after the last compatible start and requires safe escalation."
+    },
+    {
+      "shipment_id": "SHP-D16-MULTI-B",
+      "driver_id": "DRV003",
+      "what_it_demos": "Second active shipment for DRV003, forcing shipment disambiguation alongside SHP-D16-NOSLOT."
+    },
+    {
+      "shipment_id": "SHP-D16-EARLY",
+      "driver_id": "D16-DRV-001",
+      "what_it_demos": "Jaipur facility snapshot: an early truck waiting in queue position 1."
+    },
+    {
+      "shipment_id": "SHP-D16-LATE",
+      "driver_id": "D16-DRV-002",
+      "what_it_demos": "Jaipur facility snapshot: a late truck waiting in queue position 2."
+    },
+    {
+      "shipment_id": "SHP-D16-UNDOCK",
+      "driver_id": "D16-DRV-003",
+      "what_it_demos": "Jaipur facility snapshot: an in-dock truck actively unloading at DOCK-JAI-D2."
+    },
+    {
+      "shipment_id": "SHP-D16-FUTURE",
+      "driver_id": "D16-DRV-004",
+      "what_it_demos": "Jaipur facility snapshot: a future 20:45 ETA that has not checked in."
+    }
+  ]
+}
