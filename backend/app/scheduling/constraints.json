@@ -193,6 +193,7 @@
     "ttl_hours": 24,
     "allowed_uses": [
       "bounded conversation history",
+      "rolling conversation summaries of older turns",
       "structured non-authoritative session context",
       "client message dedupe hints",
       "cache and rate-limit state"

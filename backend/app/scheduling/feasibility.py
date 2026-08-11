@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, time, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -47,6 +48,7 @@ class FeasibleSlotsResult(BaseModel):
     source: str = "postgresql"
     freshness: str = "live"
     policy_version: str
+    recommendation_id: str
     shipment_id: str
     facility_id: str
     effective_eta_ts: str
@@ -65,6 +67,19 @@ class FeasibleSlotsResult(BaseModel):
 
 def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def recommendation_id_for(
+    *,
+    shipment_id: str,
+    policy_version: str,
+    effective_eta_ts: str,
+    option_slot_ids: list[str],
+) -> str:
+    """Build a deterministic displayed-options fingerprint, never a reservation."""
+    option_part = ",".join(option_slot_ids) if option_slot_ids else "NOSLOT"
+    source = f"{shipment_id}|{policy_version}|{effective_eta_ts}|{option_part}"
+    return f"REC-{hashlib.sha256(source.encode('utf-8')).hexdigest()[:24]}"
 
 
 def _parse_timestamp(value: str) -> datetime:
@@ -386,12 +401,12 @@ async def find_feasible_slots(
                  AND de.event_start_ts < sl.slot_end_ts
                  AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts)
                 WHERE sl.facility_id = :facility_id
-                  AND sl.slot_end_ts > :eta_ts
-                ORDER BY sl.slot_start_ts, sl.slot_id
+                  AND CAST(sl.slot_end_ts AS timestamptz) > :eta_ts
+                ORDER BY CAST(sl.slot_start_ts AS timestamptz), sl.slot_id
                 LIMIT 200
                 """
             ),
-            {"facility_id": shipment_data["destination_facility_id"], "eta_ts": eta_dt.isoformat()},
+            {"facility_id": shipment_data["destination_facility_id"], "eta_ts": eta_dt},
         )
     ).mappings().all()
 
@@ -437,15 +452,22 @@ async def find_feasible_slots(
             "recommended_human_queue": "OPERATIONS_EXCEPTION_QUEUE",
         }
 
+    displayed_options = options[:limit]
     return FeasibleSlotsResult(
         as_of=_as_of(),
         policy_version=constraints.policy_version,
+        recommendation_id=recommendation_id_for(
+            shipment_id=shipment_id,
+            policy_version=constraints.policy_version,
+            effective_eta_ts=eta_dt.isoformat(),
+            option_slot_ids=[option.slot_id for option in displayed_options],
+        ),
         shipment_id=shipment_id,
         facility_id=str(shipment_data["destination_facility_id"]),
         effective_eta_ts=eta_dt.isoformat(),
         eta_source=str(shipment_data["eta_source"]),
         expected_unload_min=int(shipment_data["expected_unload_min"]),
-        options=options[:limit],
+        options=displayed_options,
         rejected_reasons=rejected,
         escalation=escalation,
         current_active_appointment=dict(active_appt) if active_appt else None,

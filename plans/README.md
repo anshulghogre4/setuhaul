@@ -1,6 +1,6 @@
 # SetuHaul implementation plans
 
-This folder is the implementation source of truth that turns the challenge brief into three vertical delivery sprints.
+This folder is the implementation source of truth that turns the challenge brief into gated vertical delivery sprints (Sprint 1–3 for POC/challenge readiness; Sprint 4 for hosting/AgentCore/observability/Locust).
 
 ## Start here
 
@@ -13,7 +13,7 @@ This folder is the implementation source of truth that turns the challenge brief
 
 ## Delivery rule
 
-Complete each sprint's exit gate before starting the next sprint. The challenge is won by proving safe behaviour under concurrent slot demand, not by maximizing page or chatbot feature count.
+Complete each sprint's exit gate before starting the next sprint. The challenge is won by proving safe behaviour under concurrent slot demand, not by maximizing page or chatbot feature count. Sprint 4 (Vercel + App Runner + Bedrock AgentCore + CloudWatch/LangSmith + Locust) starts after the Sprint 3 exit gate unless the owner promotes hosting early.
 
 The master plan is the **cross-agent Living sprint scoreboard** (Cursor, Claude, Codex, Gemini). Unchecked items remain `TODO`, active items are labeled `IN PROGRESS`, and verified completed items are checked and struck through with dated evidence. Deferred work remains as explicit unchecked `TODO (DEFERRED)` entries. Never strike a sprint heading or exit gate until its complete objective evidence exists. Every durable session must refresh this Living status when implementation progress changes (root `AGENTS.md` writeback).
 

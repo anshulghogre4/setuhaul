@@ -29,37 +29,138 @@ This document does not define API contracts or database schemas. Those are docum
 
 # High Level Architecture
 
+Status through **Sprint 3** (gate COMPLETE 2026-08-12): two React portals, one FastAPI BFF, LangChain `bind_tools` + bounded manual loop, deterministic scheduling services, Supabase PostgreSQL SoT, Upstash Redis 24h conversation memory only.
+
+## How we use it (exact)
+
+| Actor | Entry | What happens |
+|---|---|---|
+| Driver | `/driver/login` → chat | Supabase Auth → JWT → FastAPI builds `ExecutionContext` → `POST /api/v1/chat` → `run_assistant` → LLM with role-scoped tools → services → PostgreSQL / Redis |
+| Ops / Admin | `/ops/login` → dashboard | Same Auth path → Ops REST (summary, exceptions, escalation queue, dock/queue status) + confirm/reject/expire appointment REST |
+| LLM | never | Never executes SQL, never invents ETA/slot/capacity facts, never marks appointments `CONFIRMED` |
+| Scheduling engine | `feasibility` + `allocation` | Pure deterministic code + `constraints.json`; Postgres unique indexes enforce one active claim per slot/shipment |
+
+## System context (Mermaid)
+
+```mermaid
+flowchart TB
+  subgraph clients [React 19 portals]
+    Driver["Driver<br/>/driver/login → chat"]
+    Ops["Ops / Admin<br/>/ops/login → dashboard"]
+  end
+
+  subgraph fastapi [FastAPI /api/v1]
+    Auth["JWT verify → ExecutionContext<br/>role + facility/driver scope"]
+    Chat["POST /chat<br/>run_assistant"]
+    Sched["Scheduling REST<br/>feasible · request · status<br/>cancel · reschedule · confirm · reject · expire"]
+    OpsAPI["Ops REST<br/>summary · exceptions<br/>escalation-queue · dock/queue status"]
+  end
+
+  subgraph assistant [LangChain assistant]
+    LLM["ChatOpenAI / OpenRouter / Gemini<br/>bind_tools + bounded manual loop"]
+    Tools["Role-scoped tools<br/>ETA · feasibility · request_slot<br/>status · cancel · reschedule · escalate · memory"]
+  end
+
+  subgraph services [Deterministic services]
+    Eta["eta_service"]
+    Feas["feasibility.py<br/>+ constraints.json"]
+    Alloc["allocation.py<br/>locks · idempotency · audit"]
+    Esc["escalation_service"]
+    Mem["ConversationMemory"]
+  end
+
+  PG[(Supabase PostgreSQL<br/>SoT)]
+  Redis[(Upstash Redis<br/>24h TTL · non-authoritative)]
+  SBAuth[(Supabase Auth)]
+
+  Driver --> Auth
+  Ops --> Auth
+  Driver --> Chat
+  Driver --> Sched
+  Ops --> OpsAPI
+  Ops --> Sched
+  Auth --> SBAuth
+  Chat --> LLM
+  LLM --> Tools
+  Tools --> Eta
+  Tools --> Feas
+  Tools --> Alloc
+  Tools --> Esc
+  Tools --> Mem
+  Sched --> Feas
+  Sched --> Alloc
+  OpsAPI --> Esc
+  Eta --> PG
+  Feas --> PG
+  Alloc --> PG
+  Esc --> PG
+  Mem --> Redis
+  Chat --> Mem
 ```
-                    +----------------------+
-                    |     Driver / Staff   |
-                    +----------+-----------+
-                               |
-                               |
-                  React Frontend (Vite)
-                               |
-                         HTTPS / REST
-                               |
-                  +------------+------------+
-                  |       FastAPI API       |
-                  +------------+------------+
-                               |
-       +-----------------------+-----------------------+
-       |                       |                       |
-       |                       |                       |
-   Authentication         AI Assistant          Operations APIs
-       |                       |                       |
-       |                       |                       |
-       |         LangChain LLM invoke (ChatOpenAI)     |
-       |                       |                       |
-       |     Prompt + verified FastAPI context         |
-       |                       |                       |
-       |       +---------------+---------------+
-       |       |               |               |
-       |       |               |               |
-   PostgreSQL      Redis Cache        ChatOpenAI
-       |
-       |
-Supabase PostgreSQL
+
+## Driver chat turn (Mermaid)
+
+```mermaid
+sequenceDiagram
+  participant UI as Driver UI
+  participant API as FastAPI /chat
+  participant RA as run_assistant
+  participant LLM as LLM bind_tools
+  participant T as Typed tool
+  participant S as Service
+  participant PG as PostgreSQL
+  participant R as Redis
+
+  UI->>API: Bearer JWT + message + session_id
+  API->>API: Verify JWT → ExecutionContext
+  API->>RA: thread_id + user message
+  RA->>R: load history / summaries / session
+  RA->>LLM: system prompt + context + tools
+  loop bounded tool loop
+    LLM-->>RA: tool_calls
+    RA->>T: StructuredTool kwargs
+    T->>S: Pydantic command
+    S->>PG: scoped read/write + audit/idempotency
+    PG-->>S: authoritative reread
+    S-->>RA: ToolMessage JSON
+  end
+  LLM-->>RA: final assistant text
+  RA->>R: append history (+ maybe summarize)
+  RA-->>UI: reply + tool results + session/thread ids
+```
+
+## Scarce-capacity allocation (Mermaid)
+
+```mermaid
+flowchart LR
+  A["find_feasible_slots"] --> B["Ranked options<br/>DISPLAYED_NOT_RESERVED<br/>+ REC- recommendation_id"]
+  B --> C{"Driver picks exact slot_id"}
+  C --> D["request_slot / reschedule<br/>Idempotency-Key"]
+  D --> E{"Revalidate + row locks<br/>REC- still current?"}
+  E -->|stale / taken| F["409 SLOT_OPTIONS_STALE<br/>or CONFLICT_REFRESH<br/>+ refreshed options"]
+  E -->|ok| G["PENDING_CONFIRMATION<br/>unique slot + shipment guards"]
+  G --> H{"Ops"}
+  H --> I["confirm → CONFIRMED"]
+  H --> J["reject / expire → free slot"]
+  G --> K["driver/ops cancel → free slot"]
+  A -->|zero options| L["escalation_queue NOSLOT<br/>Ops takeover list"]
+```
+
+ASCII sketch (same topology):
+
+```
+Driver / Ops (React 19)
+        │
+        ▼
+   FastAPI (/api/v1)  ← JWT ExecutionContext
+        │
+   ┌────┼────────────┐
+   ▼    ▼            ▼
+ Chat  Scheduling   Redis
+(tools) + Ops REST  (24h memory)
+   │     │
+   └─────┼─────► Supabase PostgreSQL (SoT)
+               feasibility · allocation · escalation_queue
 ```
 
 ---
@@ -319,118 +420,66 @@ The AI layer never directly modifies the database.
 
 # AI Architecture
 
+Runtime shape (ADR 011): **not** `create_agent` / AgentExecutor. One assistant per request uses `bind_tools` on a curated Driver allowlist and a custom bounded invoke loop.
+
+```mermaid
+flowchart TD
+  M[User message] --> C[Load Redis history + summaries]
+  C --> P[Build messages: system + summaries + recent raw + user]
+  P --> L[LLM.invoke with bind_tools]
+  L --> Q{tool_calls?}
+  Q -->|yes| T[Execute StructuredTool → service]
+  T --> V[ToolMessage with JSON result]
+  V --> L
+  Q -->|no| F[Final assistant text]
+  F --> S[Persist to Redis 24h]
+  S --> R[Return reply to UI]
 ```
-User Message
 
-↓
-
-Intent Detection
-
-↓
-
-Retrieve Conversation
-
-↓
-
-Retrieve User Context
-
-↓
-
-Determine Required Tool
-
-↓
-
-Execute Tool
-
-↓
-
-Generate AI Response
-
-↓
-
-Save Conversation
-
-↓
-
-Return Response
-```
+Tool calls always land in application services (`eta_service`, `feasibility`, `allocation`, `escalation_service`, `driver_reads`, `ConversationMemory`). Services enforce scope from `ExecutionContext`, never from client-supplied ownership IDs.
 
 ---
 
 # LangChain LLM Invoke Flows
 
+Exact loop implemented in `backend/app/assistant/run_assistant.py`:
+
+```mermaid
+flowchart TD
+  Start[START] --> LoadUser[Trusted ExecutionContext from JWT]
+  LoadUser --> LoadMem[Load Redis history/summaries/session]
+  LoadMem --> Build[Assemble prompt + role-scoped tools]
+  Build --> Invoke[LLM.invoke]
+  Invoke --> Need{Need tool?}
+  Need -->|clarification only| Ask[Ask user · no write]
+  Need -->|tool_calls| Pick[Select typed tool]
+  Pick --> Exec[Service executes command]
+  Exec --> Persist[PostgreSQL write + audit/idempotency OR Redis memory]
+  Persist --> Reread[Authoritative reread]
+  Reread --> Invoke
+  Need -->|final text| End[Return assistant reply]
+  Ask --> End
 ```
-START
 
-↓
-
-Load User
-
-↓
-
-Load Conversation
-
-↓
-
-Understand Intent
-
-↓
-
-Need Clarification?
-
-├── YES
-
-│      ↓
-
-│ Ask Question
-
-│
-
-└── NO
-
-       ↓
-
-Tool Selection
-
-↓
-
-Execute Tool
-
-↓
-
-Generate Response
-
-↓
-
-Save Chat
-
-↓
-
-END
-```
+Clarification (e.g. repair duration ≠ ETA) happens before mutation tools commit. Scheduling tools never invent slots; zero options escalate to `escalation_queue`.
 
 ---
 
 # AI Tools
 
-The AI Agent should use deterministic tools.
+The assistant uses deterministic, role-scoped tools. Driver allowlist (Sprint 3) includes:
 
-Required tools include
+- `get_driver_profile` / operational context reads
+- `get_latest_eta`, `get_eta_history`, `get_current_appointment`
+- `get_facility_details`, `get_exception_status`
+- `report_delay_or_update_eta` (confirm exact ETA before write)
+- `find_feasible_slots` (non-reserved options + `REC-` id)
+- `request_slot`, `get_appointment_request_status`
+- `cancel_appointment`, `reschedule_appointment`
+- `escalate_exception`
+- `get_conversation_memory`
 
-- get_driver_profile
-- get_shipment
-- get_current_appointment
-- get_latest_eta
-- update_eta
-- request_new_slot
-- cancel_appointment
-- get_available_slots
-- get_facility_details
-- get_driver_exceptions
-- get_dashboard_summary
-- generate_daily_report
-
-Each tool should call the corresponding service.
+Ops appointment confirm / reject / expire are REST (ops/admin), not Driver chat tools. Each tool calls the corresponding service; the LLM never runs SQL.
 
 ---
 

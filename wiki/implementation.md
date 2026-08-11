@@ -21,15 +21,20 @@ Sprint goals:
 
 1. Trusted walking skeleton: two entry screens, verified role routing, driver profile/logout shell, current-driver context, read-only ops dashboard, and CI baseline. **No chat mount.** **COMPLETE** (exit gate 2026-08-07 17:55 IST).
 2. Conversational exception and ETA/status coordination POC: `ChatOpenAI` + `bind_tools` + manual bounded invoke loop, clarification, one atomic typed ETA/exception command path, Redis 24h conversation state, LangSmith traces, and populated read-only Ops dashboard of stored schedule/dock/rule facts. **COMPLETE** (exit gate 2026-08-07 19:35 IST).
-3. Deterministic feasibility and concurrency-safe allocation. **IN PROGRESS** — started after Sprint 2 gate; exit gate remains open.
+3. Deterministic feasibility and concurrency-safe allocation. **COMPLETE** (exit gate 2026-08-12 00:25 IST).
+4. Hosting, AgentCore, observability, Locust. **PLANNED** (written 2026-08-12 into master plan §8.1) — starts after Sprint 3 exit gate. Topology: Vercel frontend, App Runner FastAPI (default; Azure/GCP OK), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust suites A/B. Hosted Locust load remains here; pytest 10×4 live scarce-slot proof already closed the Sprint 3 concurrency bar.
 
-Do not build maps, user management, booking mutations, or the full chatbot tool catalogue before the active exit gate passes.
+Do not build maps, user management, or the optional facility-wide OR-Tools engine before an owner promotion. Do not start Sprint 4 deploy before the owner promotes hosting.
 
 The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Codex/Gemini session must report Living status at startup and strike verified checklist items on durable writeback (root `AGENTS.md`).
 
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
-**Living status refresh (2026-08-10 22:46 IST):** `plans/implementation-master-plan.md` has been reconciled from the beginning through the latest UI/auth/Redis/Gemini/scheduling work. Sprint 1 and Sprint 2 remain COMPLETE. Sprint 3 remains IN PROGRESS with struck evidence for deterministic feasibility/ranking, fresh non-reserved option metadata, `request_slot`/status groundwork, live two-client same-slot proof, Redis memory tool context, individual POC Auth users, role-specific login visuals, and authenticated Ops dashboard polish. The exit gate remains open because live authenticated scheduling/chat smoke, reschedule/confirm/cancel/reject/expire flows, stale-choice invalidation, no-slot escalation, operations takeover views, broader 10-driver/3-4-slot load proof, enterprise auth hardening, and formal Playwright/CI coverage remain TODO.
+**Living status refresh (2026-08-11 23:45 IST):** `plans/implementation-master-plan.md` Living Sprint 3 checklist reconciled again. Struck with dated evidence: demo-day 16 Aug dataset + Auth cast, timestamptz ETA fix, Redis summaries/chat restore, cancel/confirm, feasible/NOSLOT API smoke, request/status/race proofs. Exit gate remains OPEN. Remaining vs deferred scoreboard and §13 next actions updated.
+
+**Living status refresh (2026-08-12 00:15 IST):** Sprint 4 **PLANNED** added as §8.1. AgentCore/CloudWatch/Locust hosting promoted from §12 deferred. Sprint 3 remains **IN PROGRESS** / gate OPEN. No hosting code deployed this turn.
+
+**Living status refresh (2026-08-12 00:25 IST):** Sprint 3 exit gate **COMPLETE**. Auth hardening post-demo deferred; OR-Tools facility engine deferred with later design note. Sprint 4 remains PLANNED only.
 
 ## Challenge brief analysis
 
@@ -63,7 +68,7 @@ The registry is loaded through `backend/app/scheduling/constraints.py` using str
 
 On 2026-08-10, the first end-to-end Sprint 3 LangChain read path was added. `backend/app/scheduling/feasibility.py` loads the constraints registry, verifies trusted user scope, reads latest ETA/facility/slot/dock/active appointment data from PostgreSQL, filters candidate slots, ranks options deterministically, and returns non-reserved options with explanations and snapshot metadata.
 
-`backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers `find_feasible_slots` in the driver LangChain allowlist. The system prompt now allows slot search but still forbids booking, holding, rescheduling, cancellation, or confirmation until transactional allocation services exist.
+`backend/app/api/v1/routers/scheduling.py` exposes `GET /api/v1/shipments/{shipment_id}/slots/feasible`, and `backend/app/assistant/tools.py` registers `find_feasible_slots` in the driver LangChain allowlist. The system prompt permits only lifecycle actions backed by completed transactional services.
 
 On 2026-08-10 20:16 IST, ranking was upgraded from earliest-slot ordering to explicit deterministic scoring. Each feasible option now includes `rank_score` and `ranking_factors` for priority, lateness, wait after ETA, fit slack, dock match, operational disruption score, and stable shipment/slot tie-breaker. The editable weights live in `backend/app/scheduling/constraints.json` under `ranking_policy.priority_scores` and `ranking_policy.score_weights`.
 
@@ -71,7 +76,7 @@ On 2026-08-10 20:16 IST, ranking was upgraded from earliest-slot ordering to exp
 
 On 2026-08-10, `backend/app/scheduling/allocation.py` added `request_slot` as the first transactional scheduling command. It requires an `Idempotency-Key`, verifies the driver owns the shipment, locks shipment and slot rows, checks current active appointments and slot occupancy, reuses the feasibility evaluator, inserts a `PENDING_CONFIRMATION` appointment only after revalidation, writes `BOOK_APPOINTMENT` audit, stores the idempotent response, commits, and rereads the appointment.
 
-The REST route is `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request`, and the Driver LangChain allowlist includes `request_slot` for exact selected slot IDs. This is still not final confirmation; reschedule, cancellation, and confirmation remain separate TODO flows.
+The REST route is `POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request`, and the Driver LangChain allowlist includes `request_slot` for exact selected slot IDs. This is still not final confirmation; warehouse confirmation is a separate ops/admin transition.
 
 On 2026-08-10, `request_slot` was hardened for residual allocation races. If PostgreSQL rejects an insert through `ux_active_appointment_per_slot` or `ux_current_active_appointment_per_shipment`, the service rolls back, recomputes options, records the 409 idempotency response, and returns `SLOT_CONFLICT_REFRESH_REQUIRED` with zero appointment writes. The HTTP route now returns 409 for this conflict outcome while preserving refreshed options in the response body.
 
@@ -82,5 +87,19 @@ On 2026-08-10 20:35 IST, `backend/tests/integration/test_live_scheduling_concurr
 On 2026-08-10, `backend/app/scheduling/allocation.py` added `get_appointment_request_status` as a read-only companion to `request_slot`. It verifies trusted driver/operator/admin scope, reads the authoritative appointment request row and recent appointment history from PostgreSQL, maps lifecycle states to stable codes, and explicitly marks `PENDING_CONFIRMATION` as still requiring human/warehouse confirmation.
 
 The REST route is `GET /api/v1/shipments/{shipment_id}/appointment-request/status` with optional `appointment_id`, and the Driver LangChain allowlist includes `get_appointment_request_status`. The tool never mutates appointment state and should be used for “is my requested slot confirmed yet?” questions instead of relying on conversation memory.
+
+## Sprint 3 Cancel and Confirm
+
+On 2026-08-11, `backend/app/scheduling/allocation.py` added strict `CancelAppointmentCommand` and `ConfirmAppointmentCommand` services. Both lock the exact shipment appointment, validate its current state and trusted execution scope, store/replay idempotency responses, write the appointment and audit in one transaction, commit, and return an authoritative reread.
+
+Cancellation accepts the assigned Driver or scoped ops/admin for active `PENDING_CONFIRMATION`, `CONFIRMED`, or `IN_PROGRESS` appointments. It writes `CANCELLED`, `is_current=0`, `cancelled_at`, and `cancellation_reason`; leaving the active-status set releases the slot under the existing partial unique index. The Driver LangChain allowlist now includes `cancel_appointment`, and the prompt requires an explicit reason.
+
+Confirmation is ops/admin REST-only and allows only `PENDING_CONFIRMATION` → `CONFIRMED`, setting `confirmed_at` and `warehouse_confirmation_ref`. Routes are `POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/cancel` and `/confirm`, both requiring `Idempotency-Key`. Reschedule/reject/expire remain disabled/incomplete.
+
+## Sprint 3 lifecycle, stale recommendation, and operations takeover
+
+On 2026-08-12, the scheduling service gained reschedule, reject, and expire command paths. Reschedule verifies a fresh policy/recommendation snapshot before replacing an active claim with a new `PENDING_CONFIRMATION` request; reject and expire are scoped operations-only `PENDING_CONFIRMATION` transitions. All routes require `Idempotency-Key`, retain post-commit rereads, and expose stale/conflict refresh results as 409.
+
+Feasibility now carries a stable `REC-` recommendation fingerprint computed from shipment, policy, effective ETA, and ordered displayed slot IDs (or `NOSLOT`). Redis retains an ephemeral, 24-hour recommendation pointer/stale marker; committed ETA writes mark it stale without affecting PostgreSQL write success. `escalation_queue` service/API paths and the Ops dashboard escalation list provide an initial durable human-takeover surface. Focused units and frontend lint/build pass; live migration/API/E2E proof remains required before the Sprint 3 gate can close.
 
 Related: [[current-state]], [[architecture]], [[testing]], [[ai-system]].

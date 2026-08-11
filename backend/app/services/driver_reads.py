@@ -281,7 +281,7 @@ async def get_facility_details(
         await session.execute(
             text(
                 """
-                SELECT contact_id, facility_id, contact_name, role_title, phone, email
+                SELECT contact_id, facility_id, contact_name, contact_role, phone, email
                 FROM public.facility_contacts WHERE facility_id = :facility_id
                 """
             ),

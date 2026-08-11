@@ -11,12 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import get_settings
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import evaluate_candidate_slot, find_feasible_slots
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
+from app.services.redis_memory import ConversationMemory
 
 AUDIT_ACTION_BOOK_APPOINTMENT = "BOOK_APPOINTMENT"
+AUDIT_ACTION_CANCEL_APPOINTMENT = "CANCEL_APPOINTMENT"
+AUDIT_ACTION_CONFIRM_APPOINTMENT = "UPDATE"
+AUDIT_ACTION_RESCHEDULE_APPOINTMENT = "RESCHEDULE_APPOINTMENT"
+AUDIT_ACTION_REJECT_APPOINTMENT = "REJECT_APPOINTMENT"
+AUDIT_ACTION_EXPIRE_APPOINTMENT = "EXPIRE_APPOINTMENT"
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
 ALLOCATION_UNIQUE_CONSTRAINTS = frozenset(
     {
@@ -34,6 +41,7 @@ class RequestSlotCommand(BaseModel):
         default=None,
         description="Policy version shown with the displayed option, if the client has it.",
     )
+    displayed_recommendation_id: str | None = Field(default=None, max_length=100)
     client_message_id: str | None = Field(default=None, max_length=200)
 
 
@@ -73,6 +81,64 @@ class AppointmentRequestStatusResult(BaseModel):
     appointment_writes: int = 0
 
 
+class CancelAppointmentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    cancellation_reason: str = Field(min_length=1, max_length=500)
+    client_message_id: str | None = Field(default=None, max_length=200)
+
+
+class ConfirmAppointmentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    warehouse_confirmation_ref: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class RescheduleAppointmentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    new_slot_id: str = Field(min_length=1, max_length=100)
+    note: str | None = Field(default=None, max_length=500)
+    displayed_policy_version: str | None = Field(default=None, max_length=100)
+    displayed_recommendation_id: str | None = Field(default=None, max_length=100)
+    client_message_id: str | None = Field(default=None, max_length=200)
+
+
+class RejectAppointmentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    rejection_reason: str = Field(min_length=1, max_length=500)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ExpireAppointmentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    expire_reason: str = Field(min_length=1, max_length=500)
+
+
+class AppointmentTransitionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str
+    source: str = "postgresql"
+    freshness: str = "live"
+    status: str
+    code: str
+    shipment_id: str
+    appointment_id: str
+    appointment: dict[str, Any] | None = None
+    idempotency_key: str
+    idempotent_replay: bool = False
+    appointment_writes: int = 1
+
+
 def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -98,6 +164,16 @@ def _assert_read_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
     raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
 
+def _assert_ops_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
+    if ctx.is_operator:
+        if shipment["destination_facility_id"] != ctx.facility_id:
+            raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
+        return
+    if ctx.is_admin:
+        return
+    raise AppError("Only operations or admin may confirm appointments.", code="FORBIDDEN", status_code=403)
+
+
 def appointment_request_status_code(status: str | None) -> tuple[str, bool]:
     if status is None:
         return "NO_APPOINTMENT_REQUEST", False
@@ -110,6 +186,8 @@ def appointment_request_status_code(status: str | None) -> tuple[str, bool]:
         return "APPOINTMENT_IN_PROGRESS", False
     if normalized == "REJECTED":
         return "APPOINTMENT_REJECTED", False
+    if normalized == "EXPIRED":
+        return "APPOINTMENT_EXPIRED", False
     if normalized == "CANCELLED":
         return "APPOINTMENT_CANCELLED", False
     if normalized == "COMPLETED":
@@ -152,6 +230,32 @@ async def _reread_appointment(session: AsyncSession, appointment_id: str) -> dic
     return dict(row) if row else None
 
 
+async def _locked_appointment(
+    session: AsyncSession,
+    *,
+    shipment_id: str,
+    appointment_id: str,
+) -> dict[str, Any] | None:
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT appointment_id, shipment_id, slot_id, appointment_status,
+                       booking_source, is_current, booked_at, confirmed_at,
+                       cancelled_at, cancellation_reason, replaced_appointment_id,
+                       warehouse_confirmation_ref, updated_at
+                FROM public.appointments
+                WHERE shipment_id = :shipment_id
+                  AND appointment_id = :appointment_id
+                FOR UPDATE
+                """
+            ),
+            {"shipment_id": shipment_id, "appointment_id": appointment_id},
+        )
+    ).mappings().first()
+    return dict(row) if row else None
+
+
 async def _shipment_for_status(session: AsyncSession, shipment_id: str) -> dict[str, Any] | None:
     row = (
         await session.execute(
@@ -174,10 +278,15 @@ async def _appointment_request_status_row(
     shipment_id: str,
     appointment_id: str | None,
 ) -> dict[str, Any] | None:
+    params: dict[str, Any] = {"shipment_id": shipment_id}
+    appointment_filter = ""
+    if appointment_id:
+        appointment_filter = "AND a.appointment_id = :appointment_id"
+        params["appointment_id"] = appointment_id
     row = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT a.appointment_id, a.shipment_id, a.slot_id, a.appointment_status,
                        a.booking_source, a.is_current, a.booked_at, a.confirmed_at,
                        a.cancelled_at, a.cancellation_reason, a.replaced_appointment_id,
@@ -188,7 +297,7 @@ async def _appointment_request_status_row(
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
                 LEFT JOIN public.docks d ON d.dock_id = sl.dock_id
                 WHERE a.shipment_id = :shipment_id
-                  AND (:appointment_id IS NULL OR a.appointment_id = :appointment_id)
+                  {appointment_filter}
                 ORDER BY
                   CASE
                     WHEN a.is_current = 1
@@ -200,7 +309,7 @@ async def _appointment_request_status_row(
                 LIMIT 1
                 """
             ),
-            {"shipment_id": shipment_id, "appointment_id": appointment_id},
+            params,
         )
     ).mappings().first()
     return dict(row) if row else None
@@ -292,6 +401,67 @@ async def _conflict_result(
     )
 
 
+async def _stale_recommendation_result(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    slot_id: str,
+    policy_version: str,
+    idempotency_key: str,
+    message: str,
+) -> RequestSlotResult:
+    refreshed = await find_feasible_slots(session, ctx, shipment_id, limit=5)
+    return RequestSlotResult(
+        as_of=_as_of(),
+        status="CONFLICTED",
+        code="SLOT_OPTIONS_STALE",
+        shipment_id=shipment_id,
+        slot_id=slot_id,
+        policy_version=policy_version,
+        conflict={"reason_code": "SLOT_OPTIONS_STALE", "message": message},
+        refreshed_options=refreshed.model_dump(),
+        idempotency_key=idempotency_key,
+        appointment_writes=0,
+    )
+
+
+async def _validate_displayed_recommendation(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    slot_id: str,
+    displayed_policy_version: str | None,
+    displayed_recommendation_id: str | None,
+    idempotency_key: str,
+) -> RequestSlotResult | None:
+    constraints = load_scheduling_constraints()
+    if displayed_policy_version and displayed_policy_version != constraints.policy_version:
+        return await _stale_recommendation_result(
+            session, ctx, shipment_id=shipment_id, slot_id=slot_id,
+            policy_version=constraints.policy_version, idempotency_key=idempotency_key,
+            message="The displayed scheduling policy is no longer current.",
+        )
+    if not displayed_recommendation_id:
+        return None
+    refreshed = await find_feasible_slots(session, ctx, shipment_id, limit=5)
+    redis_stale = False
+    try:
+        redis_stale = ConversationMemory(get_settings()).is_recommendation_stale(
+            user_id=ctx.user_id, shipment_id=shipment_id
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    if redis_stale or refreshed.recommendation_id != displayed_recommendation_id:
+        return await _stale_recommendation_result(
+            session, ctx, shipment_id=shipment_id, slot_id=slot_id,
+            policy_version=constraints.policy_version, idempotency_key=idempotency_key,
+            message="Displayed slot options are stale; use the refreshed recommendation.",
+        )
+    return None
+
+
 async def get_appointment_request_status(
     session: AsyncSession,
     ctx: ExecutionContext,
@@ -322,6 +492,242 @@ async def get_appointment_request_status(
         history=history,
         requires_human_confirmation=requires_confirmation,
     )
+
+
+async def cancel_appointment(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    command: CancelAppointmentCommand,
+    idempotency_key: str,
+) -> AppointmentTransitionResult:
+    route = (
+        f"POST /api/v1/shipments/{shipment_id}/appointments/"
+        f"{command.appointment_id}/cancel"
+    )
+    req_hash = payload_hash({"shipment_id": shipment_id, **command.model_dump()})
+    replay = await lookup_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=route,
+        request_hash=req_hash,
+    )
+    if replay is not None:
+        return AppointmentTransitionResult.model_validate(
+            {**replay["response"], "idempotent_replay": True}
+        )
+
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_read_scope(ctx, shipment)
+
+    appointment = await _locked_appointment(
+        session,
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+    )
+    if appointment is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    old_status = str(appointment["appointment_status"])
+    if old_status not in ACTIVE_APPOINTMENT_STATUSES:
+        raise AppError(
+            f"Cannot cancel appointment from {old_status}.",
+            code="INVALID_APPOINTMENT_TRANSITION",
+            status_code=409,
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET appointment_status = 'CANCELLED',
+                is_current = 0,
+                cancelled_at = :cancelled_at,
+                cancellation_reason = :cancellation_reason,
+                updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {
+            "appointment_id": command.appointment_id,
+            "cancelled_at": now,
+            "cancellation_reason": command.cancellation_reason,
+            "updated_at": now,
+        },
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"),
+            "user_id": ctx.user_id,
+            "action_type": AUDIT_ACTION_CANCEL_APPOINTMENT,
+            "entity_id": command.appointment_id,
+            "old_value_json": json.dumps(
+                {"status": old_status, "is_current": appointment["is_current"]},
+                default=str,
+            ),
+            "new_value_json": json.dumps(
+                {
+                    "status": "CANCELLED",
+                    "is_current": 0,
+                    "cancellation_reason": command.cancellation_reason,
+                },
+                default=str,
+            ),
+            "created_at": now,
+        },
+    )
+    updated = await _reread_appointment(session, command.appointment_id)
+    result = AppointmentTransitionResult(
+        as_of=_as_of(),
+        status="CANCELLED",
+        code="APPOINTMENT_CANCELLED",
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+        appointment=updated,
+        idempotency_key=idempotency_key,
+    )
+    await store_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=route,
+        request_hash=req_hash,
+        response=result.model_dump(),
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, command.appointment_id)
+    return result
+
+
+async def confirm_appointment(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    command: ConfirmAppointmentCommand,
+    idempotency_key: str,
+) -> AppointmentTransitionResult:
+    route = (
+        f"POST /api/v1/shipments/{shipment_id}/appointments/"
+        f"{command.appointment_id}/confirm"
+    )
+    req_hash = payload_hash({"shipment_id": shipment_id, **command.model_dump()})
+    replay = await lookup_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=route,
+        request_hash=req_hash,
+    )
+    if replay is not None:
+        return AppointmentTransitionResult.model_validate(
+            {**replay["response"], "idempotent_replay": True}
+        )
+
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_ops_scope(ctx, shipment)
+
+    appointment = await _locked_appointment(
+        session,
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+    )
+    if appointment is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    old_status = str(appointment["appointment_status"])
+    if old_status != "PENDING_CONFIRMATION":
+        raise AppError(
+            f"Cannot confirm appointment from {old_status}.",
+            code="INVALID_APPOINTMENT_TRANSITION",
+            status_code=409,
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET appointment_status = 'CONFIRMED',
+                confirmed_at = :confirmed_at,
+                warehouse_confirmation_ref = :warehouse_confirmation_ref,
+                updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {
+            "appointment_id": command.appointment_id,
+            "confirmed_at": now,
+            "warehouse_confirmation_ref": command.warehouse_confirmation_ref,
+            "updated_at": now,
+        },
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"),
+            "user_id": ctx.user_id,
+            "action_type": AUDIT_ACTION_CONFIRM_APPOINTMENT,
+            "entity_id": command.appointment_id,
+            "old_value_json": json.dumps({"status": old_status}, default=str),
+            "new_value_json": json.dumps(
+                {
+                    "status": "CONFIRMED",
+                    "warehouse_confirmation_ref": command.warehouse_confirmation_ref,
+                    "note": command.note,
+                },
+                default=str,
+            ),
+            "created_at": now,
+        },
+    )
+    updated = await _reread_appointment(session, command.appointment_id)
+    result = AppointmentTransitionResult(
+        as_of=_as_of(),
+        status="CONFIRMED",
+        code="APPOINTMENT_CONFIRMED",
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+        appointment=updated,
+        idempotency_key=idempotency_key,
+    )
+    await store_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=route,
+        request_hash=req_hash,
+        response=result.model_dump(),
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, command.appointment_id)
+    return result
 
 
 async def request_slot(
@@ -376,11 +782,31 @@ async def request_slot(
     if shipment is None:
         raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
     shipment_data = dict(shipment)
-    _assert_driver_scope(ctx, shipment_data)
+    if ctx.is_driver:
+        _assert_driver_scope(ctx, shipment_data)
+    else:
+        _assert_ops_scope(ctx, shipment_data)
     if int(shipment_data["active_flag"]) != 1:
         raise AppError("Destination facility is not active.", code="FACILITY_UNAVAILABLE", status_code=409)
     if shipment_data["current_status"] in ("COMPLETED", "CANCELLED"):
         raise AppError("Shipment is not eligible for slot request.", code="SHIPMENT_NOT_ACTIVE", status_code=409)
+
+    stale = await _validate_displayed_recommendation(
+        session,
+        ctx,
+        shipment_id=shipment_id,
+        slot_id=slot_id,
+        displayed_policy_version=command.displayed_policy_version,
+        displayed_recommendation_id=command.displayed_recommendation_id,
+        idempotency_key=idempotency_key,
+    )
+    if stale is not None:
+        await store_idempotency(
+            session, key=idempotency_key, user_id=ctx.user_id, route=route,
+            request_hash=req_hash, response=stale.model_dump(), status_code=409,
+        )
+        await session.commit()
+        return stale
 
     active_for_shipment = await _current_active_appointment_for_shipment(session, shipment_id)
     if active_for_shipment:
@@ -594,4 +1020,218 @@ async def request_slot(
     final_appointment = await _reread_appointment(session, appointment_id)
     result.appointment = final_appointment
     result.idempotent_replay = False
+    try:
+        ConversationMemory(get_settings()).clear_recommendation_stale(
+            user_id=ctx.user_id, shipment_id=shipment_id
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return result
+
+
+async def _ops_pending_transition(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    appointment_id: str,
+    target_status: str,
+    reason: str,
+    action_type: str,
+    idempotency_key: str,
+) -> AppointmentTransitionResult:
+    route = f"POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/{target_status.lower()}"
+    req_hash = payload_hash({"shipment_id": shipment_id, "appointment_id": appointment_id, "reason": reason})
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        return AppointmentTransitionResult.model_validate({**replay["response"], "idempotent_replay": True})
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_ops_scope(ctx, shipment)
+    appointment = await _locked_appointment(
+        session, shipment_id=shipment_id, appointment_id=appointment_id
+    )
+    if appointment is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    if appointment["appointment_status"] != "PENDING_CONFIRMATION":
+        raise AppError(
+            f"Cannot transition appointment from {appointment['appointment_status']}.",
+            code="INVALID_APPOINTMENT_TRANSITION",
+            status_code=409,
+        )
+    now = _as_of()
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET appointment_status = :status, is_current = 0,
+                cancellation_reason = :reason, updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {"status": target_status, "reason": reason, "updated_at": now, "appointment_id": appointment_id},
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "user_id": ctx.user_id, "action_type": action_type,
+            "entity_id": appointment_id,
+            "old_value_json": json.dumps({"status": "PENDING_CONFIRMATION"}),
+            "new_value_json": json.dumps({"status": target_status, "reason": reason}),
+            "created_at": now,
+        },
+    )
+    result = AppointmentTransitionResult(
+        as_of=_as_of(), status=target_status, code=f"APPOINTMENT_{target_status}",
+        shipment_id=shipment_id, appointment_id=appointment_id,
+        appointment=await _reread_appointment(session, appointment_id), idempotency_key=idempotency_key,
+    )
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump()
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, appointment_id)
+    return result
+
+
+async def reject_appointment(
+    session: AsyncSession, ctx: ExecutionContext, *, shipment_id: str,
+    command: RejectAppointmentCommand, idempotency_key: str
+) -> AppointmentTransitionResult:
+    return await _ops_pending_transition(
+        session, ctx, shipment_id=shipment_id, appointment_id=command.appointment_id,
+        target_status="REJECTED", reason=command.rejection_reason,
+        action_type=AUDIT_ACTION_REJECT_APPOINTMENT, idempotency_key=idempotency_key,
+    )
+
+
+async def expire_appointment(
+    session: AsyncSession, ctx: ExecutionContext, *, shipment_id: str,
+    command: ExpireAppointmentCommand, idempotency_key: str
+) -> AppointmentTransitionResult:
+    return await _ops_pending_transition(
+        session, ctx, shipment_id=shipment_id, appointment_id=command.appointment_id,
+        target_status="EXPIRED", reason=command.expire_reason,
+        action_type=AUDIT_ACTION_EXPIRE_APPOINTMENT, idempotency_key=idempotency_key,
+    )
+
+
+async def reschedule_appointment(
+    session: AsyncSession, ctx: ExecutionContext, *, shipment_id: str,
+    command: RescheduleAppointmentCommand, idempotency_key: str
+) -> RequestSlotResult:
+    route = f"POST /api/v1/shipments/{shipment_id}/appointments/{command.appointment_id}/reschedule"
+    req_hash = payload_hash({"shipment_id": shipment_id, **command.model_dump()})
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        return RequestSlotResult.model_validate({**replay["response"], "idempotent_replay": True})
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_read_scope(ctx, shipment)
+    stale = await _validate_displayed_recommendation(
+        session, ctx, shipment_id=shipment_id, slot_id=command.new_slot_id,
+        displayed_policy_version=command.displayed_policy_version,
+        displayed_recommendation_id=command.displayed_recommendation_id,
+        idempotency_key=idempotency_key,
+    )
+    if stale is not None:
+        await store_idempotency(
+            session, key=idempotency_key, user_id=ctx.user_id, route=route,
+            request_hash=req_hash, response=stale.model_dump(), status_code=409
+        )
+        await session.commit()
+        return stale
+    # Verify the requested replacement remains among the fresh options before
+    # retiring the current claim. The subsequent request_slot performs locked
+    # revalidation and PostgreSQL remains the final concurrency authority.
+    options = await find_feasible_slots(session, ctx, shipment_id, limit=10)
+    if command.new_slot_id not in {option.slot_id for option in options.options}:
+        conflict = await _conflict_result(
+            session, ctx, shipment_id=shipment_id, slot_id=command.new_slot_id,
+            policy_version=options.policy_version, reason_code="SLOT_NOT_FEASIBLE",
+            message="Replacement slot is no longer a fresh feasible option.", idempotency_key=idempotency_key,
+        )
+        await store_idempotency(
+            session, key=idempotency_key, user_id=ctx.user_id, route=route,
+            request_hash=req_hash, response=conflict.model_dump(), status_code=409,
+        )
+        await session.commit()
+        return conflict
+    old = await _locked_appointment(
+        session, shipment_id=shipment_id, appointment_id=command.appointment_id
+    )
+    if old is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    if old["appointment_status"] not in ACTIVE_APPOINTMENT_STATUSES:
+        raise AppError("Appointment is not active.", code="INVALID_APPOINTMENT_TRANSITION", status_code=409)
+    now = _as_of()
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET appointment_status = 'CANCELLED', is_current = 0, cancelled_at = :updated_at,
+                cancellation_reason = :reason, updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {"appointment_id": command.appointment_id, "updated_at": now, "reason": "Replaced by reschedule"},
+    )
+    result = await request_slot(
+        session, ctx, shipment_id=shipment_id, slot_id=command.new_slot_id,
+        command=RequestSlotCommand(
+            note=command.note, displayed_policy_version=command.displayed_policy_version,
+            displayed_recommendation_id=command.displayed_recommendation_id,
+            client_message_id=command.client_message_id,
+        ),
+        idempotency_key=f"{idempotency_key}:claim",
+    )
+    if result.code != "SLOT_REQUESTED":
+        raise AppError("Replacement slot could not be claimed.", code=result.code, status_code=409)
+    await session.execute(
+        text("UPDATE public.appointments SET replaced_appointment_id = :old_id WHERE appointment_id = :new_id"),
+        {"old_id": command.appointment_id, "new_id": result.appointment_id},
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "user_id": ctx.user_id,
+            "action_type": AUDIT_ACTION_RESCHEDULE_APPOINTMENT, "entity_id": result.appointment_id,
+            "old_value_json": json.dumps({"appointment_id": command.appointment_id, "status": old["appointment_status"]}),
+            "new_value_json": json.dumps({"appointment_id": result.appointment_id, "slot_id": command.new_slot_id}),
+            "created_at": _as_of(),
+        },
+    )
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump()
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, str(result.appointment_id))
     return result
