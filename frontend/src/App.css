@@ -521,11 +521,14 @@ main {
 .chat-bubble {
   border-radius: 16px;
   padding: 14px 16px;
-  line-height: 1.45;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .chat-bubble p {
   margin: 0 0 8px;
+  white-space: pre-wrap;
 }
 
 .chat-bubble p:last-child {

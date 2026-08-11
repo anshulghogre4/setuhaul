@@ -2,6 +2,12 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-12 03:00 IST - Enhanced AI Assistant Response Formatting & Pre-wrap CSS
+
+- Updated `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` with explicit layout guidelines enforcing double line breaks (`\n\n`), clean card structures, and distinct headers for multi-item shipment/ETA lists.
+- Updated `frontend/src/App.css` to add `white-space: pre-wrap;` and line-height polish on `.chat-bubble` and `.chat-bubble p` elements, preventing text squishing in chat.
+- Verification: 59 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 679ms).
+
 ## 2026-08-12 02:35 IST - Implement 5 New Database-Backed AI Assistant Tools
 
 - Added 5 new database service functions in `backend/app/services/driver_reads.py`:
