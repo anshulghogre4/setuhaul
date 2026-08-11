@@ -14,6 +14,19 @@ Passwords: gitignored `POC_TEAM_ACCOUNTS.local.md` only — never paste them her
 
 ## Prep (do this first)
 
+### Reset (shared Ravi demos)
+
+Re-apply of demo SQL is additive and will **not** undo prior ETA/slot/chat
+mutations. Between demos (or before a fresh Ravi show):
+
+```powershell
+python supabase/demo/reset_demo_day.py --mode cast --include-shp1017 --confirm
+```
+
+Dry-run first if unsure: add `--dry-run` (no `--confirm` needed). Details:
+[../supabase/demo/README.md](../supabase/demo/README.md). Does not change Auth
+passwords.
+
 ### Servers
 
 ```bash

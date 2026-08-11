@@ -28,6 +28,7 @@ last_verified: 2026-08-12
 - `plans/implementation-master-plan.md` Living status refreshed **2026-08-12 00:25 IST** with Sprint 3 exit gate struck.
 - Live Supabase database catalog inspection PASS on 2026-08-10 20:23 IST via read-only asyncpg: PostgreSQL 17.6, public schema has 23 tables and 4 views, and seeded Sprint 3 operational data is present (`shipments=21`, `appointment_slots=106`, `appointments=22`, `driver_exceptions=12`). Scheduling guard indexes are present.
 - **2026-08-11 23:34 IST demo-day overlay applied:** additive `supabase/demo` data for **2026-08-16** → live totals approximately facilities **6**, docks **25**, drivers **105**, slots **2934**, shipments **661**, Auth-mapped users **26**. Stress cast includes `SHP-D16-RAVI`, race pair, NOSLOT, CONTEND-01..10. `v_latest_eta` now orders by `created_at::timestamptz`.
+- **2026-08-12 01:00 IST demo-day reset tooling:** `supabase/demo/reset_demo_day.py` restores shared cast / Redis between demos (`--mode cast` default; `--mode full` wipe+re-apply). Live dry-run PASS; Auth passwords untouched.
 - Live POC Auth pool expanded 2026-08-11: 12 additional Driver accounts (`driver.drv004@…`–`drv015@…`) using the **same shared Driver password** (no password resets).
 - Live POC Auth pool is complete as of 2026-08-10 23:05 IST: all 14 `public.users` rows mapped (`auth.users=14`). Role-shared passwords remain in gitignored `.env.local` (Driver x3 / Operations x6 / Admin x5). The five previously unmapped planner/manager personas (USR102–USR106) now authenticate and use `/ops/login`. Auth create/reset script removed from the repo.
 - Application Redis memory tool added: Driver LangChain allowlist now includes `get_conversation_memory`, backed by `ConversationMemory.snapshot(...)`, returning bounded current-thread Upstash session/history context with explicit 24-hour TTL, degraded state, and non-authoritative labeling. Verified 2026-08-10 19:59 IST with backend unit tests and FastAPI import smoke; live Upstash Redis smoke later passed on 2026-08-10 22:11 IST after local env was configured.
@@ -39,10 +40,10 @@ last_verified: 2026-08-12
 
 ## Verify before claiming
 
+- PDF-demo correctness bugs found 2026-08-12 01:18 IST (not yet fixed): chat sticky `request_slot` idempotency after cancel; reschedule soft-conflict orphan; cast reset vs Phase B active appointment; optional REC skips stale gate; feasibility truncates before global rank.
 - Formal Playwright suite in CI (local one-shot smoke only).
 - LangSmith UI trace inspection (env tracing enabled; UI not opened this session).
 - Live LangChain Gemini invoke with current key/model after backend/dev environment restart. Direct Gemini REST smoke passed, but `ChatGoogleGenerativeAI.invoke` timed out in the local shell.
-- Live migration parity, authenticated lifecycle/API/chat smoke, broader load tests, cancellation-release E2E proof, stale-choice E2E proof, and durable no-slot escalation takeover demo remain incomplete.
 - Enterprise hardening remains incomplete: session revocation, password rotation, disabled-user handling, stale-role-claim handling, formal Playwright/responsive/a11y/CI coverage, and production credential rotation.
 
 Related: [[implementation]], [[testing]], [[handoff]], [[ai-system]], [[database]].

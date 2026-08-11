@@ -67,6 +67,12 @@ npm run dev
 
 API: `http://127.0.0.1:8000` (root `/` is an alive health ping; also `/health/live`, `/health/ready`, `/docs`) · UI: `http://localhost:5173`
 
+**Reset between shared demos** (undo ETA/slot/chat residue; does not change Auth passwords):
+
+```powershell
+python supabase/demo/reset_demo_day.py --mode cast --include-shp1017 --confirm
+```
+
 ### Environment variables
 
 | Variable | Where | Purpose |

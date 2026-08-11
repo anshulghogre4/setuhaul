@@ -37,9 +37,35 @@ or apply it through the Supabase MCP SQL execution tool. The file is wrapped in
 one transaction and uses `ON CONFLICT DO NOTHING` so a repeat run is additive
 and does not erase baseline data.
 
-The cleanup block at the bottom is commented out intentionally. If cleanup is
-needed, review dependency order and the namespace predicates before manually
-uncommenting it.
+The cleanup block at the bottom is commented out intentionally. Prefer the
+reset script below instead of hand-editing that block.
+
+## Reset between demos
+
+Re-applying the demo SQL is **additive** (`ON CONFLICT DO NOTHING`). It does
+**not** undo ETA confirms, `request_slot` / cancel / confirm mutations,
+`escalation_queue` rows, or Upstash chat memory. Use
+`reset_demo_day.py` before a fresh shared Ravi show.
+
+```powershell
+# Preview (no writes)
+python supabase/demo/reset_demo_day.py --mode cast --include-shp1017 --dry-run
+
+# Between team demos (hero cast + optional SHP1017 + Redis chat clear)
+python supabase/demo/reset_demo_day.py --mode cast --include-shp1017 --confirm
+
+# Rare deep refresh: wipe D16-% / SHP-D16-% inventory, then re-apply SQL
+python supabase/demo/reset_demo_day.py --mode full --confirm
+```
+
+Safety:
+
+- Non-dry-run requires `--confirm` or `SETUHAUL_DEMO_RESET=1`.
+- Loads `DATABASE_URL` / Upstash from root `.env.local` / `.env` (never logs secrets).
+- Does **not** reset Auth passwords or delete Auth users.
+- `--mode cast` restores golden cast fields (e.g. `SHP-D16-RAVI` ETA 18:30 /
+  unload 25, `D16-APT-RAVI-OLD` CONFIRMED, race slot free) and clears Redis keys
+  for `USR001`–`USR003` and `USR201`–`USR210`.
 
 ## Authentication boundary
 

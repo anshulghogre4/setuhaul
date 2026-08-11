@@ -8,6 +8,27 @@ last_updated: 2026-08-12
 
 # Wiki log
 
+## 2026-08-12 02:16 IST | index | Graphify update after demo reset
+
+- Incremental graph rebuild for reset script + Sprint 3/demo docs; outputs in `graphify-out/` (1192 nodes / 2096 edges).
+- Synced [[handoff]] + CHANGELOG. App tests not run.
+
+## 2026-08-12 01:18 IST | query | PDF challenge bug audit
+
+- Read-only defect review of scheduling/chat/cast paths against FDE PDF stress cases.
+- Durable findings synced to [[handoff]] + CHANGELOG; Sprint gates unchanged (1–3 COMPLETE, 4 PLANNED).
+- Verification: unit suite 56 passed; no application code changes.
+
+## 2026-08-12 01:05 IST | ops | Cast reset Ravi DB safety review
+
+- Live table/FK review for cast mode; hardened appointment wipe for self-FK + ops messages; rollback proof PASS.
+- Synced [[handoff]] + CHANGELOG. Confirm write not run.
+
+## 2026-08-12 01:00 IST | ops | Demo-day cast reset script
+
+- Added `supabase/demo/reset_demo_day.py` (cast/full, dry-run, confirm, Redis clear); docs in demo README, DEMO_MANUAL_RUNBOOK Prep, root README.
+- Synced [[handoff]], [[current-state]], CHANGELOG. Live dry-run PASS; confirm write not run; app tests not run.
+
 ## 2026-08-12 00:40 IST | docs | Manual FDE demo + stress runbook
 
 - Created `docs/DEMO_MANUAL_RUNBOOK.md`; refreshed driver chat script + DEMO_DAY_READINESS post-gate notes; README link.

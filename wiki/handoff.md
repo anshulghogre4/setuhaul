@@ -10,6 +10,10 @@ last_updated: 2026-08-12
 
 ## Latest work
 
+- **2026-08-12 02:16 IST:** Graphify incremental update (20 changed files) → 1192 nodes / 2096 edges / 73 communities in `graphify-out/`; includes demo cast reset + Sprint 3 allocation/escalation hyperedges. Queried Ravi cast, request_slot, NOSLOT neighborhoods.
+- **2026-08-12 01:18 IST:** PDF-challenge bug audit (read-only). Highest demo risks: chat sticky `request_slot` idempotency (cancel→rebook same slot replays); `reschedule` orphan on soft conflict commit-after-cancel; cast reset leaves `D16-APT-RAVI-OLD` CONFIRMED so Phase B `request_slot` hits `ACTIVE_APPOINTMENT_EXISTS`; stale REC gate skipped when chat omits `displayed_recommendation_id`; ranking early-break before full sort. Race/NOSLOT/cancel-frees OK when REC supplied. Units 56 passed; no code fix this turn.
+- **2026-08-12 01:05 IST:** Live DB safety review of cast reset for shared Ravi demos. Confirmed narrow blast radius; hardened appointment DELETE against `replaced_appointment_id` / `operational_messages` FKs after finding a live `SHP1017` DRIVER_CHAT chain. Rollback proof PASS; Auth untouched.
+- **2026-08-12 01:00 IST:** Added `supabase/demo/reset_demo_day.py` for shared Ravi demos — cast (default) restores golden cast + clears Upstash chat keys; full wipe/re-apply for deep refresh. Documented in demo README, DEMO_MANUAL_RUNBOOK Prep, root README. Dry-run verified live; no Auth password changes. Sprint status unchanged (1–3 COMPLETE; 4 PLANNED).
 - **2026-08-12 00:40 IST:** Added `docs/DEMO_MANUAL_RUNBOOK.md` (ordered FDE manual demo + stress). Synced driver chat script, DEMO_DAY_READINESS, README. Docs-only.
 - **2026-08-12 00:35 IST:** Added exact Sprint 3 architecture Mermaid diagrams to root `README.md` and `docs/ARCHITECTURE.md` (system context, chat sequence, allocation flow, bind_tools loop). Docs-only.
 - **2026-08-12 00:30 IST:** Updated root `README.md` through Sprint 3 COMPLETE (status table, demo capabilities, cast script, deferred Sprint 4/OR-Tools/auth hardening, live test commands). Docs-only.
@@ -94,9 +98,9 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. Finish Sprint 3 gate work: UI cast (`docs/DEMO_DAY_READINESS.md`), stale-choice proof, lifecycle/escalation live evidence, Playwright/CI as needed.
-2. Do **not** start Sprint 4 hosting deploy until Sprint 3 exit gate closes (unless owner promotes). Sprint 4 plan is in master plan §8.1.
-3. After Sprint 3 gate: Vercel + App Runner + AgentCore + CloudWatch/LangSmith + Locust A/B.
+1. Fix PDF-demo blockers before manual runbook: cast reset / Phase B active-appointment precondition; chat `request_slot` idempotency nonce after cancel; inject stored REC (or require REC) for stale ETA proof; harden reschedule so soft conflicts roll back the cancel.
+2. Optional: ranking collect-then-sort; wipe runtime `EXC-*` on cast reset; remove stale `scheduling_capability_disabled` tool wording.
+3. Sprint 4 hosting remains PLANNED — do not start unless owner promotes.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

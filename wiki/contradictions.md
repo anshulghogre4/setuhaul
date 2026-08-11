@@ -10,6 +10,7 @@ last_updated: 2026-08-07
 
 ## Open
 
+- **Cast reset vs Phase B (2026-08-12):** `supabase/demo/reset_demo_day.py` restores `D16-APT-RAVI-OLD` as `CONFIRMED`/`is_current=1`, but `docs/DEMO_MANUAL_RUNBOOK.md` Phase B tells Ravi to `request_slot` without cancel/reschedule. Live cast smoke pre-cancels that row. Either reset should leave Ravi without an active claim for the happy path, or the runbook must cancel/reschedule first.
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
 - `docs/AGENTS.md` names the runtime logistics assistant, while root `AGENTS.md` governs coding agents. Do not conflate them. `docs/AGENTS.md` may still contain older Gemini/AgentExecutor wording in places; prefer ADR 011 + master plan §5.2 + [[ai-system]] for runtime shape until that doc is fully refreshed.
 - The seed contains `OPERATIONS_MANAGER` (`ROL004`) while `PROJECT.md` does not list it as a primary user. Treat it as a later persona until product scope is ratified; do not silently inherit another role's permissions.

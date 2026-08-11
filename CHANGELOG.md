@@ -2,6 +2,27 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-12 02:16 IST - Graphify incremental update (demo reset + Sprint 3 docs)
+
+- Ran `graphify --update` on 20 changed files (6 code / 14 docs): AST + semantic chunks, merge into graph, cluster, force-write `graph.json`/`graph.html`/`GRAPH_REPORT.md`.
+- Graph now **1192 nodes · 2096 edges · 73 communities**; includes `reset_demo_day` cast restore, Ravi/NOSLOT/race cast, allocation/escalation hyperedges.
+- Verification: HTML export PASS; queries PASS for cast reset path, request_slot scarce-capacity neighborhood, SHP-D16-RAVI explain. App tests not run.
+
+## 2026-08-12 01:18 IST - PDF challenge bug audit (read-only)
+
+## 2026-08-12 01:05 IST - Cast reset live DB safety review (Ravi-scoped)
+
+- Inspected live Postgres tables/FKs for `--mode cast --include-shp1017`. Scope stays cast IDs + Redis demo users; Auth untouched; baseline Aug-4 inventory (except optional `SHP1017`) preserved. Ravi `SHP1001` COMPLETED left alone.
+- Found live risk: `SHP1017` DRIVER_CHAT chain (`APT-A086` → `APT-0F6`) would trip appointments self-FK `replaced_appointment_id` on delete. Hardened `reset_demo_day.py` to null ops-message links + `replaced_appointment_id` before DELETE.
+- Verification: live dry-run PASS; rollback-safe appointment wipe/restore proof PASS (`DELETE 2` then force rollback). Confirm write still not run. App tests not run.
+
+## 2026-08-12 01:00 IST - Demo-day cast reset / restore script
+
+- Added `supabase/demo/reset_demo_day.py` with `--mode cast` (default) and `--mode full`, `--dry-run`, `--confirm` / `SETUHAUL_DEMO_RESET=1`, optional `--include-shp1017`, and Upstash Redis chat-key clear for shared Ravi demos.
+- Cast mode restores golden hero fields (`SHP-D16-RAVI` ETA 18:30 / unload 25, `D16-APT-RAVI-OLD` CONFIRMED, race slot free) and wipes escalations / extra ETAs / DRIVER_CHAT appointments / cast idempotency residue. Full mode wipes namespaced D16 inventory then re-applies `demo_day_2026-08-16.sql`. Does not touch Auth passwords.
+- Documented in `supabase/demo/README.md`, `docs/DEMO_MANUAL_RUNBOOK.md` Prep, and root `README.md` Quick start.
+- Verification: live `--dry-run` cast + full PASS against configured `DATABASE_URL` / Upstash (cast saw escalations/appointments/eta/idempotency/redis keys; no confirm write this turn). Application unit/integration tests not run.
+
 ## 2026-08-12 00:40 IST - Manual FDE demo + stress runbook
 
 - Added `docs/DEMO_MANUAL_RUNBOOK.md`: ordered Phases Prep + A–G with exact chat lines, multi-browser race, NOSLOT, stale/cancel, Ops takeover, CONTEND sample, PDF coverage map, pass/fail sign-off.
