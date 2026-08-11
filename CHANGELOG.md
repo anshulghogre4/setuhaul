@@ -2,6 +2,13 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-12 03:05 IST - Add Custom Markdown Renderer in Driver Chat (No Raw Asterisks)
+
+- Implemented `renderFormattedText` helper in `frontend/src/features/driver/DriverHome.tsx` to parse markdown bold (`**text**`) and inline code (`` `code` ``) dynamically into styled React elements (`<strong>`, `<code>`, `.chat-line`).
+- Replaced plain `<p>{m.content}</p>` text node with `{renderFormattedText(m.content)}`, removing all unparsed `**` asterisks from chat output.
+- Styled `strong` tags with signature cyan (`#38bdf8`) and added glowing chip styles for inline code elements (`.chat-inline-code`).
+- Verification: 59 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 607ms).
+
 ## 2026-08-12 03:00 IST - Enhanced AI Assistant Response Formatting & Pre-wrap CSS
 
 - Updated `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` with explicit layout guidelines enforcing double line breaks (`\n\n`), clean card structures, and distinct headers for multi-item shipment/ETA lists.

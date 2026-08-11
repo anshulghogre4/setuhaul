@@ -48,7 +48,49 @@ type ChatResponse = {
     display_eta?: string
     code?: string
   } | null
-  duplicate?: boolean
+}
+
+function renderFormattedText(content: string) {
+  if (!content) return null
+  const lines = content.split('\n')
+  return lines.map((line, lineIdx) => {
+    if (!line.trim()) {
+      return <div key={lineIdx} className="chat-spacer" />
+    }
+
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    const regex = /(\*\*(.*?)\*\*|`(.*?)`)/g
+    let match: RegExpExecArray | null
+
+    while ((match = regex.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(line.slice(lastIndex, match.index))
+      }
+
+      if (match[2] !== undefined) {
+        parts.push(<strong key={`${lineIdx}-${match.index}`}>{match[2]}</strong>)
+      } else if (match[3] !== undefined) {
+        parts.push(
+          <code key={`${lineIdx}-${match.index}`} className="chat-inline-code">
+            {match[3]}
+          </code>
+        )
+      }
+
+      lastIndex = regex.lastIndex
+    }
+
+    if (lastIndex < line.length) {
+      parts.push(line.slice(lastIndex))
+    }
+
+    return (
+      <p key={lineIdx} className="chat-line">
+        {parts}
+      </p>
+    )
+  })
 }
 
 type EtaWriteResult = {
@@ -428,7 +470,7 @@ function DriverBody({
                 <span>{m.role === 'user' ? 'You' : m.role === 'system' ? 'System' : 'SetuHaul AI'}</span>
               </div>
               <div className={`chat-bubble ${m.role === 'user' ? 'glass-bubble' : 'ai-bubble'}`}>
-                <p>{m.content}</p>
+                {renderFormattedText(m.content)}
               </div>
             </div>
           ))}
