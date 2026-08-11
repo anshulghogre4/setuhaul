@@ -15,11 +15,19 @@ from app.assistant.tools import build_driver_tools
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.core.settings import Settings
-from app.services.redis_memory import ConversationMemory, normalize_memory_id
+from app.services.redis_memory import (
+    RAW_CONTEXT_SIZE,
+    ConversationMemory,
+    normalize_memory_id,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 6
+
+
+def _json_safe(value: Any) -> str:
+    return json.dumps(value, default=str)
 
 
 def _configure_langsmith(settings: Settings) -> None:
@@ -71,19 +79,37 @@ async def run_assistant(
             "tool_calls": [],
             "memory_degraded": memory.degraded,
             "memory_degrade_reason": memory.degrade_reason,
+            "summary_created": False,
             "duplicate": True,
             "ux_state": "duplicate_ignored",
         }
 
-    history = memory.load_history(user_id=ctx.user_id, thread_id=tid, session_id=sid)
+    history = memory.load_history(
+        user_id=ctx.user_id, thread_id=tid, session_id=sid, limit=RAW_CONTEXT_SIZE
+    )
+    summaries = memory.load_summaries(user_id=ctx.user_id, thread_id=tid, session_id=sid)
     session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid, session_id=sid)
 
     tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid, session_id=sid, memory=memory)
     tool_map = {t.name: t for t in tools}
 
-    llm = build_chat_model(settings).bind_tools(tools)
+    base_llm = build_chat_model(settings)
+    llm = base_llm.bind_tools(tools)
 
     messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
+    if summaries:
+        summary_block = "\n\n".join(
+            f"Summary {index}: {text}" for index, text in enumerate(summaries, start=1)
+        )
+        messages.append(
+            SystemMessage(
+                content=(
+                    "Earlier conversation summaries (non-authoritative Redis memory; "
+                    "verify operational facts with PostgreSQL-backed tools):\n\n"
+                    + summary_block[:3000]
+                )
+            )
+        )
     if session_ctx:
         messages.append(
             SystemMessage(
@@ -91,7 +117,7 @@ async def run_assistant(
                 + json.dumps(session_ctx, default=str)[:2000]
             )
         )
-    for turn in history[-20:]:
+    for turn in history:
         role = turn.get("role")
         content = str(turn.get("content") or "")
         if role == "user":
@@ -128,14 +154,50 @@ async def run_assistant(
             if tool is None:
                 result = json.dumps({"code": "UNKNOWN_TOOL", "message": f"Tool {name} not allowed."})
             else:
+                invoke_args = args
+                schema = getattr(tool, "args_schema", None)
+                if isinstance(args, dict) and schema is not None:
+                    allowed = set(getattr(schema, "model_fields", {}) or {})
+                    if allowed:
+                        invoke_args = {key: value for key, value in args.items() if key in allowed}
                 try:
-                    result = await tool.ainvoke(args)
+                    result = await tool.ainvoke(invoke_args)
+                except AppError as exc:
+                    result = json.dumps(
+                        {
+                            "code": exc.code,
+                            "message": exc.message,
+                            "detail": exc.detail,
+                            "status_code": exc.status_code,
+                        }
+                    )
                 except Exception as exc:  # noqa: BLE001
-                    result = json.dumps({"code": "TOOL_ERROR", "message": str(exc)[:300]})
+                    result = json.dumps(
+                        {
+                            "code": "TOOL_ERROR",
+                            "message": str(exc)[:300],
+                            "args_received": args if isinstance(args, dict) else {"raw": str(args)[:200]},
+                            "args_invoked": invoke_args
+                            if isinstance(invoke_args, dict)
+                            else {"raw": str(invoke_args)[:200]},
+                        }
+                    )
 
-            observed_tools.append({"name": name, "args": args, "result_preview": str(result)[:400]})
+            result_text = result if isinstance(result, str) else _json_safe(result)
             try:
-                parsed = json.loads(result) if isinstance(result, str) else result
+                parsed = json.loads(result_text) if isinstance(result_text, str) else result_text
+            except (TypeError, json.JSONDecodeError):
+                parsed = {"raw": str(result_text)[:2000]}
+
+            observed_tools.append(
+                {
+                    "name": name,
+                    "args": args,
+                    "result": parsed if isinstance(parsed, (dict, list)) else {"raw": str(parsed)[:2000]},
+                    "result_preview": str(result_text)[:800],
+                }
+            )
+            try:
                 if isinstance(parsed, dict):
                     code = parsed.get("code") or parsed.get("status")
                     if code == "CONFIRMATION_REQUIRED":
@@ -147,10 +209,10 @@ async def run_assistant(
                         ux_state = "capability_not_enabled"
                     elif parsed.get("status") == "PERSISTED":
                         ux_state = "persisted_success"
-            except (TypeError, json.JSONDecodeError):
+            except (TypeError, AttributeError):
                 pass
 
-            messages.append(ToolMessage(content=str(result), tool_call_id=call_id or name or "tool"))
+            messages.append(ToolMessage(content=str(result_text), tool_call_id=call_id or name or "tool"))
 
         try:
             ai = await llm.ainvoke(messages)
@@ -183,14 +245,30 @@ async def run_assistant(
         session=new_session,
         client_message_id=client_message_id,
     )
+    # Rolling summary of oldest raw turns when the thread grows (ERICA-style).
+    new_summary = await memory.maybe_summarize_history(
+        user_id=ctx.user_id,
+        thread_id=tid,
+        session_id=sid,
+        llm=base_llm,
+    )
 
     return {
         "thread_id": tid,
         "session_id": sid,
         "response": content,
-        "tool_calls": [{"name": t["name"], "args": t["args"]} for t in observed_tools],
+        "tool_calls": [
+            {
+                "name": t["name"],
+                "args": t["args"],
+                "result": t.get("result"),
+                "result_preview": t.get("result_preview"),
+            }
+            for t in observed_tools
+        ],
         "memory_degraded": memory.degraded,
         "memory_degrade_reason": memory.degrade_reason,
+        "summary_created": new_summary is not None,
         "ux_state": ux_state,
         "confirmation": confirmation_payload,
         "duplicate": False,

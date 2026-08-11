@@ -3,10 +3,96 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-07
+last_updated: 2026-08-12
 ---
 
 # Wiki log
+
+## 2026-08-12 00:40 IST | docs | Manual FDE demo + stress runbook
+
+- Created `docs/DEMO_MANUAL_RUNBOOK.md`; refreshed driver chat script + DEMO_DAY_READINESS post-gate notes; README link.
+- Synced [[handoff]] + CHANGELOG. Application tests not run.
+
+## 2026-08-12 00:35 IST | docs | Architecture Mermaid exact-usage diagrams
+
+- README + `docs/ARCHITECTURE.md` now show system/chat/allocation Mermaid for Sprint 3 reality.
+- Synced [[handoff]] + CHANGELOG. Application tests not run.
+
+## 2026-08-12 00:30 IST | docs | Root README aligned through Sprint 3
+
+- Updated `README.md` for Sprint 1–3 COMPLETE status, demo cast, scheduling capabilities, and deferred Sprint 4 notes.
+- Synced [[handoff]] + CHANGELOG. Application tests not run.
+
+## 2026-08-12 00:25 IST | gate | Sprint 3 exit gate COMPLETE
+
+- Struck Sprint 3 exit gate with live evidence: 10×4 load + D16 cast smoke; migration applied; units 56 passed.
+- Auth hardening post-demo deferred; facility-wide OR-Tools deferred with later design note; Sprint 4 remains PLANNED.
+- Updated [[current-state]], [[handoff]], [[implementation]], DEMO_DAY_READINESS, Living master plan, CHANGELOG.
+
+## 2026-08-12 00:15 IST | ingest | Sprint 4 hosting plan written into master plan
+
+- Added Living Sprint 4 row + §8.1 checklist to `plans/implementation-master-plan.md` (Vercel, App Runner default, AgentCore, CloudWatch, LangSmith, Locust).
+- Promoted Locust 10×3–4 + AgentCore/CloudWatch from Sprint 3/§12 deferred into Sprint 4; Sprint 3 remains IN PROGRESS / gate OPEN.
+- Updated [[implementation]], [[handoff]], [[current-state]], `plans/README.md`, CHANGELOG. Documentation only; app tests not run.
+
+## 2026-08-12 00:02 IST | implementation | Driver tool kwargs + history route + SHP1017 no-feasible
+
+- Fixed StructuredTool kwargs binding for Driver tools; feasibility CAST bind for text slot timestamps; chat history route after clean uvicorn restart; UI console tool results.
+- Browser: `find_feasible_slots:NO_FEASIBLE_SLOTS` for SHP1017. Further chat/facility/refresh tests deferred; local servers killed.
+- Updated [[handoff]], [[ai-system]], CHANGELOG, Living sprint note. Exit gate still OPEN.
+
+## 2026-08-11 23:45 IST | ingest | Master-plan Living Sprint 3 reconcile
+
+- Struck completed Sprint 3 items with dated evidence; added remaining-vs-deferred scoreboard and refreshed §13 next actions.
+- Exit gate remains OPEN. Documentation-only; tests not rerun.
+
+## 2026-08-11 23:34 IST | ingest | Demo-day 16 Aug dataset + Auth cast
+
+- Timestamptz `v_latest_eta` migration applied; demo SQL applied; 12 Driver Auth users created (same shared password, no resets).
+- Live smoke: RAVI feasible options PASS; NOSLOT escalation PASS; IDOR 403 PASS.
+- Updated [[database]], [[current-state]], [[handoff]], DEMO_DAY_READINESS. Sprint 3 exit gate still open (load proof / stale matrix / escalation UI).
+
+## 2026-08-11 23:25 IST | implementation | Appointment cancel and confirm lifecycle
+
+- Added authorized, idempotent, row-locked cancel and confirm transitions in `backend/app/scheduling/allocation.py`, with audit and post-commit authoritative rereads.
+- Mounted shipment/appointment-scoped REST routes; enabled Driver LangChain cancellation and kept confirmation ops/admin-only.
+- Updated [[implementation]], [[current-state]], [[database]], [[testing]], [[handoff]], `docs/API.md`, the Living sprint plan, and root CHANGELOG.
+- Verification: focused scheduling tests 10 passed; full backend 50 passed, 1 live integration skipped; OpenAPI paths, compile, IDE lints, and `git diff --check` PASS. Live database/API/chat smoke not run.
+
+## 2026-08-11 23:16 IST | ingest | Chat UI restore from Redis
+
+- Active conversation pointer + `GET /api/v1/chat/history`; DriverHome hydrates on login within 24h TTL.
+- Slot question guidance: shipment-feasible `find_feasible_slots`, not unrestricted facility open-slot dump (FDE §7.1 / §9.1).
+- Updated [[handoff]], [[ai-system]], root CHANGELOG. Verification: redis unit 7 passed; frontend lint PASS.
+
+## 2026-08-11 22:54 IST | query | Demo-day readiness from FDE PDF
+
+- Mapped PDF §§8 / 11.2 / 12.1–12.2 to current SHOW/ANSWER/PARTIAL/NOT YET capabilities.
+- Added `docs/DEMO_DAY_READINESS.md`; updated [[handoff]] and root CHANGELOG. No code change.
+
+## 2026-08-11 22:42 IST | ingest | Redis rolling summaries (ERICA-style)
+
+- Added `:summaries` key + `maybe_summarize_history` to `ConversationMemory`; wired into `run_assistant`.
+- Policy: summarize oldest 5 when raw ≥ 10; inject ≤5 summaries + ≤5 raw turns; 24h TTL; non-authoritative.
+- Updated [[ai-system]], constraints allowed_uses, prompts/tool copy. Verification: backend tests 47 passed.
+
+## 2026-08-11 22:34 IST | query | SetuHaul vs ERICA Redis memory
+
+- Compared SetuHaul `ConversationMemory` (Upstash REST, scoped keys, 24h TTL, session JSON, degrade path) to `erica_vscode_core` (`redis` URL, thread-only LPUSH + LLM summarize).
+- Updated [[ai-system]] Memory layers. No code change; Sprint 3 unchanged. Verification: source read only.
+
+## 2026-08-11 22:35 IST | ingest | Facility contacts column + Ravi sync proof
+
+- Fixed `driver_reads.get_facility_details` column `role_title` → `contact_role`.
+- Live proof: MCP SQL FAC-JAI-01 contacts; browser Ravi session `/driver` context SHP1017; chat tool `get_facility_details` 200.
+- Added `docs/DEMO_DRIVER_CHAT_SCRIPT.md`; deferred AgentCore/CloudWatch in master plan §12.
+- Updated [[database]], [[handoff]], root CHANGELOG. Verification: unit 45 passed; passwords not logged.
+
+## 2026-08-11 22:27 IST | query | FDE PDF system message + stress tests
+
+- Re-extracted all 20 pages of `docs/SetuHaul_FDE_Challenge.pdf`.
+- Compiled AI must/must-not, cannot-guess, human-control, and §11.2 stress scenarios into [[ai-system]].
+- No code change; Sprint 3 status unchanged. Verification: document analysis only.
 
 ## 2026-08-10 23:21 IST | query | Login preflight hang
 
@@ -343,3 +429,10 @@ last_updated: 2026-08-07
 - Changed Driver chat welcome rendering so it uses the verified live driver context name instead of a stale initial auth-profile name.
 - Updated [[current-state]], [[implementation]], [[testing]], [[handoff]], the Living sprint scoreboard, and root CHANGELOG.
 - Verification: env smoke PASS from both repo root and `backend/` with `ready_llm=True`/Gemini model visible and no secrets printed; focused backend tests PASS, 14 passed; full backend tests PASS, 43 passed and 1 skipped; frontend lint PASS; frontend build PASS. Stale port-8000 backend process was stopped; local policy blocked hidden restart, so manual backend restart is required before browser retest.
+
+## 2026-08-12 00:00 IST | implementation | Sprint 3 lifecycle, stale recommendation, and escalation queue
+
+- Added the `EXPIRED` appointment migration and an RLS-protected backend-only `escalation_queue`; widened constrained audit actions for lifecycle evidence.
+- Added `REC-` feasibility fingerprints, 24-hour ephemeral Redis stale markers after ETA commits, lifecycle services/routes/tools, and operations escalation/dock/queue takeover reads with a minimal dashboard list.
+- Updated [[database]], [[implementation]], [[current-state]], [[testing]], [[handoff]], and the Living sprint scoreboard.
+- Verification: focused lifecycle/stale/escalation units PASS (29), `python -m compileall app` PASS, frontend lint/build PASS. Migration was not applied; live migration/API/E2E proof remains TODO.

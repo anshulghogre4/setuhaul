@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import get_settings
 from app.services.ids import new_id
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
+from app.services.redis_memory import ConversationMemory
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -507,6 +509,15 @@ async def record_eta_update(
         status_code=200,
     )
     await session.commit()
+    # Redis only accelerates stale-display recovery; a Redis outage must never
+    # turn a committed PostgreSQL ETA update into a failed write.
+    try:
+        ConversationMemory(get_settings()).mark_recommendation_stale(
+            user_id=ctx.user_id,
+            shipment_id=shipment_id,
+        )
+    except Exception:  # noqa: BLE001
+        pass
     # Authoritative post-commit reread
     final = await _reread(
         session,

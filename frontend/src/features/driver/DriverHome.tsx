@@ -17,11 +17,28 @@ type ChatMessage = {
   content: string
 }
 
+type ChatHistoryResponse = {
+  thread_id: string | null
+  session_id: string | null
+  messages: Array<{ role: string; content: string; client_message_id?: string | null }>
+  memory_degraded?: boolean
+  degraded?: boolean
+  degrade_reason?: string | null
+  ttl_seconds?: number
+  non_authoritative?: boolean
+  code?: string
+}
+
 type ChatResponse = {
   thread_id: string
   session_id: string
   response: string
-  tool_calls: Array<{ name: string; args: Record<string, unknown> }>
+  tool_calls: Array<{
+    name: string
+    args: Record<string, unknown>
+    result?: unknown
+    result_preview?: string
+  }>
   memory_degraded: boolean
   memory_degrade_reason: string | null
   ux_state: string
@@ -57,13 +74,38 @@ function getField(record: Record<string, unknown> | null | undefined, keys: stri
   return null
 }
 
-function getDriverSessionId(userId: string) {
-  const key = `setuhaul:driver-session:${userId}`
-  const existing = window.sessionStorage.getItem(key)
-  if (existing) return existing
-  const next = `web-${crypto.randomUUID()}`
-  window.sessionStorage.setItem(key, next)
-  return next
+function getDriverConversationIds(userId: string): { sessionId: string; threadId: string | null } {
+  const key = `setuhaul:driver-conversation:${userId}`
+  const legacySessionKey = `setuhaul:driver-session:${userId}`
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw) {
+      const parsed = JSON.parse(raw) as { sessionId?: string; threadId?: string | null }
+      if (parsed.sessionId) {
+        return {
+          sessionId: parsed.sessionId,
+          threadId: parsed.threadId || null,
+        }
+      }
+    }
+  } catch {
+    // ignore corrupt local state
+  }
+  const legacy = window.sessionStorage.getItem(legacySessionKey)
+  const sessionId = legacy || `web-${crypto.randomUUID()}`
+  window.localStorage.setItem(key, JSON.stringify({ sessionId, threadId: null }))
+  window.sessionStorage.setItem(legacySessionKey, sessionId)
+  return { sessionId, threadId: null }
+}
+
+function saveDriverConversationIds(
+  userId: string,
+  sessionId: string,
+  threadId: string | null,
+) {
+  const key = `setuhaul:driver-conversation:${userId}`
+  window.localStorage.setItem(key, JSON.stringify({ sessionId, threadId }))
+  window.sessionStorage.setItem(`setuhaul:driver-session:${userId}`, sessionId)
 }
 
 function DataField({
@@ -112,13 +154,15 @@ function DriverBody({
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [threadId, setThreadId] = useState<string | null>(null)
-  const [sessionId] = useState(() => getDriverSessionId(userId))
+  const initialIds = getDriverConversationIds(userId)
+  const [threadId, setThreadId] = useState<string | null>(initialIds.threadId)
+  const [sessionId, setSessionId] = useState(initialIds.sessionId)
   const [sending, setSending] = useState(false)
   const [uxState, setUxState] = useState<string>('ready')
   const [pendingConfirm, setPendingConfirm] = useState<ChatResponse['confirmation']>(null)
   const [memoryNote, setMemoryNote] = useState<string | null>(null)
   const [lastTools, setLastTools] = useState<string[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
 
   async function refreshContext() {
     setLoading(true)
@@ -135,6 +179,58 @@ function DriverBody({
 
   useEffect(() => {
     void refreshContext()
+
+    async function restoreChatHistoryOnMount() {
+      setHistoryLoading(true)
+      const saved = getDriverConversationIds(userId)
+      try {
+        // Prefer server active pointer so re-login restores last Redis thread (24h).
+        let restored = (await apiGet<ChatHistoryResponse>('/api/v1/chat/history')).data
+        if (!restored.messages?.length && (saved.threadId || saved.sessionId)) {
+          const params = new URLSearchParams()
+          if (saved.sessionId) params.set('session_id', saved.sessionId)
+          if (saved.threadId) params.set('thread_id', saved.threadId)
+          restored = (
+            await apiGet<ChatHistoryResponse>(`/api/v1/chat/history?${params.toString()}`)
+          ).data
+        }
+        if (restored.session_id) setSessionId(restored.session_id)
+        if (restored.thread_id) setThreadId(restored.thread_id)
+        if (restored.session_id || restored.thread_id) {
+          saveDriverConversationIds(
+            userId,
+            restored.session_id || saved.sessionId,
+            restored.thread_id || null,
+          )
+        }
+        if (restored.messages?.length) {
+          setMessages(
+            restored.messages
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
+              .map((m, index) => ({
+                id: m.client_message_id || `restored-${index}`,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+              })),
+          )
+          setMemoryNote(
+            restored.degraded
+              ? `Conversation memory degraded (${restored.degrade_reason || 'unknown'}).`
+              : `Restored last ${restored.messages.length} Redis chat turns (24h TTL, non-authoritative).`,
+          )
+        }
+      } catch (err) {
+        setMemoryNote(
+          err instanceof Error
+            ? `Could not restore chat history: ${err.message}`
+            : 'Could not restore chat history.',
+        )
+      } finally {
+        setHistoryLoading(false)
+      }
+    }
+
+    void restoreChatHistoryOnMount()
   }, [userId])
 
   async function sendChat(text: string) {
@@ -153,9 +249,34 @@ function DriverBody({
         client_message_id: clientMessageId,
       })
       setThreadId(res.data.thread_id)
+      setSessionId(res.data.session_id)
+      saveDriverConversationIds(userId, res.data.session_id, res.data.thread_id)
       setUxState(res.data.ux_state || 'answered')
       setPendingConfirm(res.data.confirmation ?? null)
-      setLastTools((res.data.tool_calls || []).map((t) => t.name))
+      const tools = res.data.tool_calls || []
+      setLastTools(
+        tools.map((t) => {
+          const code =
+            t.result && typeof t.result === 'object' && t.result !== null && 'code' in t.result
+              ? String((t.result as { code?: unknown }).code || '')
+              : ''
+          return code ? `${t.name}:${code}` : t.name
+        }),
+      )
+      // Demo/debug: full tool args + results for the driver console.
+      console.groupCollapsed(
+        `[SetuHaul] chat tools (${tools.length}) · thread ${res.data.thread_id} · ux ${res.data.ux_state}`,
+      )
+      console.log('user_message', trimmed)
+      console.log('assistant_response', res.data.response)
+      for (const tool of tools) {
+        console.log(tool.name, {
+          args: tool.args,
+          result: tool.result ?? null,
+          result_preview: tool.result_preview ?? null,
+        })
+      }
+      console.groupEnd()
       if (res.data.memory_degraded) {
         setMemoryNote(
           `Conversation memory degraded (${res.data.memory_degrade_reason || 'unknown'}). REST still works.`,
@@ -254,7 +375,7 @@ function DriverBody({
     }
   }
 
-  const displayName = ctx?.driver.driver_name ?? driverName
+  const displayName = driverName || ctx?.driver.driver_name || 'Driver'
   const status = ctx?.driver.driver_status ?? 'Context pending'
   const facilityLabel =
     typeof ctx?.facility?.facility_name === 'string'
@@ -394,11 +515,13 @@ function DriverBody({
             </button>
           </div>
           <p className="fine-print" role="status" aria-live="polite">
-            {memoryNote
-              ? memoryNote
-              : lastTools.length
-                ? `Last tools: ${lastTools.join(', ')}`
-                : 'Live ChatOpenAI.bind_tools + manual invoke loop. Writes require explicit ETA confirmation.'}
+            {historyLoading
+              ? 'Restoring chat history…'
+              : memoryNote
+                ? memoryNote
+                : lastTools.length
+                  ? `Last tools: ${lastTools.join(', ')}`
+                  : 'Live ChatOpenAI.bind_tools + manual invoke loop. Writes require explicit ETA confirmation.'}
           </p>
         </form>
       </section>
@@ -444,14 +567,38 @@ function DriverBody({
                   />
                   <DataField
                     label="Status"
-                    value={getField(ctx.primary_shipment, ['status', 'shipment_status'])}
+                    value={getField(ctx.primary_shipment, [
+                      'current_status',
+                      'status',
+                      'shipment_status',
+                    ])}
                   />
-                  <DataField label="Priority" value={getField(ctx.primary_shipment, ['priority'])} tone="warn" />
-                  <DataField label="Product" value={getField(ctx.primary_shipment, ['product_class'])} />
-                  <DataField label="Planned ETA" value={getField(ctx.primary_shipment, ['planned_eta'])} />
+                  <DataField
+                    label="Priority"
+                    value={getField(ctx.primary_shipment, ['priority_code', 'priority'])}
+                    tone="warn"
+                  />
+                  <DataField
+                    label="Product"
+                    value={getField(ctx.primary_shipment, [
+                      'product_category',
+                      'product_class',
+                    ])}
+                  />
+                  <DataField
+                    label="Planned ETA"
+                    value={getField(ctx.primary_shipment, [
+                      'original_eta_ts',
+                      'latest_eta_ts',
+                      'planned_eta',
+                    ])}
+                  />
                   <DataField
                     label="Unload minutes"
-                    value={getField(ctx.primary_shipment, ['expected_unload_minutes'])}
+                    value={getField(ctx.primary_shipment, [
+                      'expected_unload_min',
+                      'expected_unload_minutes',
+                    ])}
                   />
                 </div>
               ) : (
@@ -469,7 +616,10 @@ function DriverBody({
                   />
                   <DataField label="Source" value={getField(ctx.latest_eta, ['source_type'])} />
                   <DataField label="Declared at" value={getField(ctx.latest_eta, ['declared_at'])} />
-                  <DataField label="Confidence" value={getField(ctx.latest_eta, ['confidence_note'])} />
+                  <DataField
+                    label="Confidence"
+                    value={getField(ctx.latest_eta, ['confidence_code', 'confidence_note'])}
+                  />
                 </div>
               ) : (
                 <p className="state">No ETA row</p>
@@ -490,8 +640,17 @@ function DriverBody({
                   />
                   <DataField label="Dock" value={getField(ctx.current_appointment, ['dock_id', 'dock_name'])} />
                   <DataField label="Slot" value={getField(ctx.current_appointment, ['slot_id'])} />
-                  <DataField label="Start" value={getField(ctx.current_appointment, ['start_time'])} />
-                  <DataField label="End" value={getField(ctx.current_appointment, ['end_time'])} />
+                  <DataField
+                    label="Start"
+                    value={getField(ctx.current_appointment, [
+                      'slot_start_ts',
+                      'start_time',
+                    ])}
+                  />
+                  <DataField
+                    label="End"
+                    value={getField(ctx.current_appointment, ['slot_end_ts', 'end_time'])}
+                  />
                 </div>
               ) : (
                 <p className="state">No current appointment</p>

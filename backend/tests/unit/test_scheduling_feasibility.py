@@ -2,7 +2,7 @@ from datetime import datetime
 
 from app.assistant.tools import build_driver_tools
 from app.core.execution_context import ExecutionContext, RoleName
-from app.scheduling.feasibility import evaluate_candidate_slot
+from app.scheduling.feasibility import evaluate_candidate_slot, recommendation_id_for
 
 
 def _shipment(**overrides):
@@ -155,3 +155,26 @@ def test_driver_tool_allowlist_includes_feasible_slot_search():
     names = {tool.name for tool in tools}
 
     assert "find_feasible_slots" in names
+
+
+def test_recommendation_id_is_stable_and_uses_noslot_marker():
+    first = recommendation_id_for(
+        shipment_id="SHP1017",
+        policy_version="sprint3_constraints_v1",
+        effective_eta_ts="2026-08-04T12:00:00+05:30",
+        option_slot_ids=["SLT-A", "SLT-B"],
+    )
+    assert first == recommendation_id_for(
+        shipment_id="SHP1017",
+        policy_version="sprint3_constraints_v1",
+        effective_eta_ts="2026-08-04T12:00:00+05:30",
+        option_slot_ids=["SLT-A", "SLT-B"],
+    )
+    assert first.startswith("REC-")
+    assert len(first) == 28
+    assert recommendation_id_for(
+        shipment_id="SHP1017",
+        policy_version="sprint3_constraints_v1",
+        effective_eta_ts="2026-08-04T12:00:00+05:30",
+        option_slot_ids=[],
+    ) != first

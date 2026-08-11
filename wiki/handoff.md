@@ -3,13 +3,29 @@ title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-10
+last_updated: 2026-08-12
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-12 00:40 IST:** Added `docs/DEMO_MANUAL_RUNBOOK.md` (ordered FDE manual demo + stress). Synced driver chat script, DEMO_DAY_READINESS, README. Docs-only.
+- **2026-08-12 00:35 IST:** Added exact Sprint 3 architecture Mermaid diagrams to root `README.md` and `docs/ARCHITECTURE.md` (system context, chat sequence, allocation flow, bind_tools loop). Docs-only.
+- **2026-08-12 00:30 IST:** Updated root `README.md` through Sprint 3 COMPLETE (status table, demo capabilities, cast script, deferred Sprint 4/OR-Tools/auth hardening, live test commands). Docs-only.
+- **2026-08-12 00:25 IST:** **Sprint 3 exit gate COMPLETE.** Lifecycle reschedule/reject/expire + stale `REC-` invalidation + durable escalation queue/Ops UI + live 10×4 load + D16 cast smoke PASS. Migration applied. Backend units 56 passed. Auth password hardening post-demo deferred; facility-wide OR-Tools deferred with design note. Sprint 4 remains PLANNED (do not start unless owner promotes).
+- **2026-08-12 00:15 IST:** Wrote **Sprint 4** into `plans/implementation-master-plan.md` §8.1 (**PLANNED**): Vercel frontend (locked), App Runner FastAPI (default; Azure/GCP OK), Bedrock AgentCore assistant (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust suites A/B. Promoted Locust 10×3–4 load + AgentCore/CloudWatch from Sprint 3/§12 deferred into Sprint 4. Living table + `plans/README.md` updated. No application code/deploy this turn. Sprint 3 remains active; Sprint 4 starts after Sprint 3 gate unless owner promotes.
+- **2026-08-12 00:00 IST:** Implemented Sprint 3 lifecycle/stale recommendation/durable escalation slice: migration for `EXPIRED` + backend-only `escalation_queue`; versioned `REC-` option fingerprints; Redis 24h stale markers after ETA commits; reschedule/reject/expire services/routes; driver reschedule/escalate tools; operations queue/dock/status routes; and a minimal Ops escalation list. Focused unit suite **29 passed**, backend compile PASS, frontend lint/build PASS. Migration/live API/E2E evidence remains TODO; Sprint 3 exit gate OPEN.
+- **2026-08-12 00:02 IST:** Fixed Sprint 3 driver chat tool failures: LangChain kwargs vs single `args` model; feasibility text-ts bind; stale uvicorn missing `GET /api/v1/chat/history`; console tool-result logging. Browser: SHP1017 → `NO_FEASIBLE_SLOTS` (correct for 50 min unload vs 30 min D16 slots). User paused further browser tests for another session; killed local uvicorn (:8000) and Vite (:5173).
+- **2026-08-11 23:45 IST:** Reconciled `plans/implementation-master-plan.md` Living Sprint 3 checklist — struck completed items with dated evidence; remaining vs deferred scoreboard + next-action order refreshed; exit gate still OPEN.
+- **2026-08-11 23:34 IST:** Demo-ready data for **2026-08-16**: timestamptz ETA view fix; additive full-scale `supabase/demo` apply (6 facilities / 25 docks / 2934 slots / 661 shipments); 12 new Driver Auth accounts with same shared password (no resets); live smoke PASS for `SHP-D16-RAVI` options and `SHP-D16-NOSLOT` escalation. UI cast in `docs/DEMO_DAY_READINESS.md`.
+- **2026-08-11 23:25 IST:** Implemented Sprint 3 appointment cancellation and confirmation. Driver-own or scoped ops/admin cancellation moves any active appointment to `CANCELLED`, clears `is_current`, records reason/timestamp, audits, and releases slot capacity; Driver LangChain cancel is enabled. Ops/admin-only confirmation moves `PENDING_CONFIRMATION` to `CONFIRMED` with warehouse reference/timestamp and audit. Both REST routes require `Idempotency-Key`. Verification: focused 10 passed; full backend 50 passed, 1 live integration skipped; OpenAPI paths/compile/lints/diff check PASS. Live DB/API/chat smoke not run.
+- **2026-08-11 23:16 IST:** Driver chat persistence across re-login: Redis active pointer + `GET /api/v1/chat/history`; UI restores bubbles from Upstash (24h TTL). Prompt clarified for shipment-feasible slot questions. Context-rail field mapping + Ravi display-name preference fixed. Redis unit tests 7 PASS.
+- **2026-08-11 22:54 IST:** Mapped FDE PDF demo-day questions (§12.1), expected demo (§12.2), chat types (§8), and stress scenarios (§11.2) to SHOW/ANSWER/PARTIAL/NOT YET in `docs/DEMO_DAY_READINESS.md`. No code change.
+- **2026-08-11 22:42 IST:** Added ERICA-style rolling Redis conversation summaries to SetuHaul. `ConversationMemory` now stores `:summaries`, summarizes the oldest 5 raw messages when history reaches 10 (via the configured LLM, no tools), injects up to 5 summaries + 5 recent raw turns into `run_assistant`, and returns `summary_created`. Still 24h TTL, auth+session+thread scoped, non-authoritative. Verification: backend tests PASS (`47 passed`).
+- **2026-08-11 22:34 IST:** Compared SetuHaul Upstash Redis to ERICA VSCode classroom core (`erica_vscode_core`: config/memory/agent/driver). SetuHaul: Upstash REST, user+session+thread keys, 24h TTL, history + session JSON, duplicate-message check, degrade-safe. ERICA: Redis URL, thread-only LPUSH + LLM rolling summaries. Documented in [[ai-system]]. Summarization later adopted 22:42 IST.
+- **2026-08-11 22:35 IST:** Fixed driver `get_facility_details` SQL (`role_title` → `contact_role`). Verified Ravi Kumar login data sync: JWT → `USR001`/`DRV001`/`FAC-JAI-01`, context `SHP1017`, live chat used `get_facility_details` with HTTP 200. Unit tests 45 passed. Added `docs/DEMO_DRIVER_CHAT_SCRIPT.md`. Noted deferred Bedrock AgentCore/CloudWatch in master plan §12 (Redis + bind_tools loop already present). Seed naming drift: drivers table says Rajesh Kumar for DRV001 while users says Ravi Kumar.
+- **2026-08-11 22:27 IST:** Re-read all 20 pages of `docs/SetuHaul_FDE_Challenge.pdf` for system-message and stress-test requirements. Finding: the brief does not ship a literal system prompt; §6.2–6.3 / §9.3 define conversational vs non-LLM decisions, and §11.2 lists required stress scenarios (10 drivers/3–4 slots, same-slot race, stale options, no-feasible escalation, etc.). Recommended SYSTEM_PROMPT content synthesized into [[ai-system]]; current `backend/app/assistant/prompts.py` already covers the core boundaries. No application code changed. Verification: PDF text extract of pages 1–20 via PyMuPDF; app tests not run.
 - **2026-08-10 23:21 IST:** Diagnosed stuck Driver login: Supabase password grant returned 200, but `/api/v1/auth/me` CORS preflight stayed pending because the FastAPI process was crashed (`starlette`/`greenlet` broken in `backend/.venv` after a bad reload of `.venv`). Restored packages and restarted uvicorn on `127.0.0.1:8000` with `--reload-dir app`. Verified `/health/live` 200 and OPTIONS `/api/v1/auth/me` 200 with `Access-Control-Allow-Origin: http://localhost:5173`. The two Network rows for `me` are normal: browser OPTIONS preflight + GET.
 - **2026-08-10 23:12 IST:** Moved the full POC user/role/password roster into gitignored `POC_TEAM_ACCOUNTS.local.md` for team sharing. Cleared POC password/email values from `.env` / `.env.local`. All 8 `roles` and 14 users are listed there; passwords are not in env files anymore.
 - **2026-08-10 23:05 IST:** Authenticated the five remaining seeded users (USR102–USR106) with the existing three `.env.local` role-shared passwords. Live Auth inventory is now 14/14 mapped. Expanded ops portal/API allowlists for planner/manager roles. Deleted `docs/scripts/create_poc_auth_users.py` for security. Password-grant PASS across driver/ops/admin buckets including the five new accounts.
@@ -43,19 +59,20 @@ last_updated: 2026-08-10
 
 ## Current state
 
-See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is IN PROGRESS with constraints registry, scored `find_feasible_slots` ranking, `request_slot`, `get_appointment_request_status`, live same-slot contention proof, allocation unique-index race mapping, session-scoped Redis memory tool context, individual POC Auth users, and polished role-specific UI in place. **OpenAI + OpenRouter live invoke verified; current Gemini direct REST verified with `gemini-flash-latest`, while current LangChain Gemini invoke needs restart/recheck.**
+See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/AgentCore/Locust is PLANNED only. Challenge-ready deterministic allocation is verified with live scarce-capacity load and D16 cast smoke. **OpenAI + OpenRouter live invoke verified; current Gemini direct REST verified with `gemini-flash-latest`, while current LangChain Gemini invoke needs restart/recheck.**
 
 ## Decisions and blockers
 
 - Product AI: `ChatOpenAI.bind_tools` for OpenAI/OpenRouter; **`ChatGoogleGenerativeAI`** for Gemini; same bind_tools manual loop. Default Gemini model **`gemini-flash-latest`**.
 - JWT verify uses `leeway=300` for local clock skew vs Supabase `iat`.
-- **Security:** keys pasted in chat â†’ rotate after POC; never commit. README emails only; passwords OOB.
+- **Security:** keys pasted in chat â†’ rotate after POC; never commit. README emails only; passwords OOB. **Do not reset the 3 shared role passwords until after demo.**
 - Sprint 3 constraints are centralized in `backend/app/scheduling/constraints.json`; change this file when policy wording changes, then keep deterministic services/tests aligned.
-- `find_feasible_slots` may show explainable non-reserved options with deterministic `rank_score`/`ranking_factors`. Ranking policy weights are editable in `constraints.json`; appointment writes use deterministic transactional services.
-- `request_slot` may create `PENDING_CONFIRMATION` after exact slot selection and transactional revalidation. It is not a confirmed booking; confirmation/rejection/expiry are still separate TODO flows.
-- `get_appointment_request_status` may answer pending/confirmed/closed/no-request status from PostgreSQL with zero appointment writes; use it instead of inferring confirmation from chat history.
-- Same-slot live contention has an opt-in proof test. This covers two clients choosing the same slot, not the broader 10-driver/3-4-slot load test.
-- `get_conversation_memory` reads only current authenticated user/thread Redis memory and labels it non-authoritative; use it for chat continuity only, never as business truth.
+- `find_feasible_slots` returns explainable non-reserved options with `REC-` recommendation_id + deterministic `rank_score`/`ranking_factors`.
+- `request_slot` / `reschedule_appointment` may create `PENDING_CONFIRMATION` after exact slot selection and transactional revalidation; stale recommendation versions return `SLOT_OPTIONS_STALE`. Confirmation/reject/expire are scoped ops/admin.
+- `cancel_appointment` is enabled for a Driver's own active appointment and scoped ops/admin. It releases capacity by writing `CANCELLED` + `is_current=0`.
+- Same-slot live contention and 10×4 scarce-slot live load are proved (opt-in `SETUHAUL_RUN_LIVE_DB_TESTS=1`). Hosted Locust remains Sprint 4.
+- Durable `escalation_queue` persists NOSLOT/human cases; Ops dashboard lists open escalations.
+- Facility-wide OR-Tools engine is deferred; later path is rule-based facility snapshot tool first, optional OR-Tools behind the same tool boundary.
 - No project Memory MCP is used. Durable project memory is checked-in docs/source; Redis is application runtime memory only.
 
 ## Verification
@@ -67,7 +84,7 @@ See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is I
 - Full POC Auth: password-grant PASS across driver/ops/admin buckets including newly created USR102–USR106; Auth reset script removed from repo.
 
 - Live same-slot concurrency proof: `SETUHAUL_RUN_LIVE_DB_TESTS=1` + `DATABASE_URL`, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\integration\test_live_scheduling_concurrency.py -q` from `backend/` PASS: 1 passed; cleanup verification found zero `CODX` rows.
-- Backend scheduling/LangChain allocation/memory path: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests -q` from `backend/` PASS: 41 passed, 1 live integration skipped by default. FastAPI import smoke PASS with 11 routes.
+- Backend scheduling/LangChain allocation/memory path: `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests -q` from `backend/` PASS: 50 passed, 1 live integration skipped by default. Cancel/confirm OpenAPI paths, compile, lints, and focused 10-test suite PASS.
 - Login hero refinement: generated image asset copied into `frontend/src/assets/setuhaul-dock-command-hero.png`; `npm run lint` PASS; `npm run build` PASS; screenshot `tmp/ui-polish/driver-login-dock-hero.png` visually spot-checked.
 - Frontend UI: `npm run lint` PASS; `npm run build` PASS; Vite running on `http://127.0.0.1:5173`; unauthenticated login screenshots visually spot-checked. Authenticated driver/ops data screens not smoke-tested this turn because `.env`/`.env.local` files are absent and chat-pasted secrets were not written to disk.
 - PDF analysis: text extracted from all 20 pages with `pdfplumber`; representative pages 1, 10, and 18 rendered with Poppler and visually spot-checked. No application tests run because this was document analysis only.
@@ -77,12 +94,9 @@ See [[current-state]]. Sprint 2 complete. Sprint 3 deterministic allocation is I
 
 ## Next action
 
-1. Restart the backend/dev environment and recheck live LangChain Gemini chat invoke with `gemini-flash-latest`.
-2. Live-smoke authenticated API/chat paths for scored `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, and `get_conversation_memory`.
-3. Add reschedule/confirm/cancel/reject/expire services now that same-slot proof exists.
-4. Add stale-choice invalidation/recompute paths, no-slot escalation records/queue, and ops takeover views.
-5. Add broader 10-driver/3-4-slot load proof and end-to-end demos for stale choice, cancellation release, and no feasible slot.
-6. Add enterprise auth hardening and formal Playwright/responsive/a11y/CI coverage.
+1. Finish Sprint 3 gate work: UI cast (`docs/DEMO_DAY_READINESS.md`), stale-choice proof, lifecycle/escalation live evidence, Playwright/CI as needed.
+2. Do **not** start Sprint 4 hosting deploy until Sprint 3 exit gate closes (unless owner promotes). Sprint 4 plan is in master plan §8.1.
+3. After Sprint 3 gate: Vercel + App Runner + AgentCore + CloudWatch/LangSmith + Locust A/B.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

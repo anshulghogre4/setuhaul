@@ -3,7 +3,7 @@ title: SetuHaul Database
 type: topic
 status: compiled
 scope: database
-last_verified: 2026-08-10
+last_verified: 2026-08-12
 ---
 
 # Database
@@ -18,6 +18,20 @@ Rules:
 - Load the Supabase and Postgres best-practice skills before database changes.
 - Redis is not a database substitute.
 
+## Sprint 3 lifecycle + escalation (2026-08-12)
+
+Migration `supabase/migrations/20260812010000_sprint3_lifecycle_escalation.sql` (applied live):
+
+- Widens `appointments.appointment_status` to include `EXPIRED`.
+- Widens `audit_logs.action_type` for `RESCHEDULE_APPOINTMENT`, `REJECT_APPOINTMENT`, `EXPIRE_APPOINTMENT`.
+- Adds backend-only `escalation_queue` (RLS on; revoke anon/authenticated; grant service_role/postgres) with unique `dedupe_key` for idempotent NOSLOT/human escalations.
+
+## Driver facility contacts column fix (2026-08-11 22:35 IST)
+
+`facility_contacts.contact_role` is the authoritative column name (baseline migration + `docs/database_docs/setuhaul_data_dictionary.csv`). `backend/app/services/driver_reads.py` `get_facility_details` incorrectly selected `role_title`; corrected to `contact_role`. Live MCP SQL for `FAC-JAI-01` returns three contacts. Browser Driver chat then invoked `get_facility_details` without SQL failure.
+
+Seed naming drift for demo login: `public.users` `USR001` full_name `Ravi Kumar` maps to `drivers.DRV001` whose `driver_name` is `Rajesh Kumar`. Auth/profile uses users; driver context rail prefers `drivers.driver_name`.
+
 ## Allocation constraints
 
 The baseline keeps PostgreSQL as the final allocation authority through partial unique indexes:
@@ -25,7 +39,15 @@ The baseline keeps PostgreSQL as the final allocation authority through partial 
 - `ux_active_appointment_per_slot` prevents more than one active `PENDING_CONFIRMATION`, `CONFIRMED`, or `IN_PROGRESS` appointment per slot.
 - `ux_current_active_appointment_per_shipment` prevents more than one current active appointment per shipment.
 
-As of 2026-08-10 20:35 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. `backend/tests/integration/test_live_scheduling_concurrency.py` proves two independent live Supabase sessions competing for the same temporary slot yield exactly one winner and one conflict refresh, then cleans all temporary rows. No schema or RLS change was made; broader load proof and remaining lifecycle transitions are still required before the Sprint 3 exit gate can close.
+As of 2026-08-10 20:35 IST, `backend/app/scheduling/allocation.py` translates residual `request_slot` races detected by those indexes into `SLOT_CONFLICT_REFRESH_REQUIRED` with refreshed options and zero appointment writes. `backend/tests/integration/test_live_scheduling_concurrency.py` proves two independent live Supabase sessions competing for the same temporary slot yield exactly one winner and one conflict refresh, then cleans all temporary rows.
+
+On 2026-08-11, cancel/confirm lifecycle services were added without a schema or RLS change. Cancellation moves an active appointment to `CANCELLED` and sets `is_current=0`, so it immediately leaves both partial-index predicates and releases the slot/current-shipment claim. Confirmation changes only `PENDING_CONFIRMATION` to `CONFIRMED`, retaining the same active claim. Both transitions lock the exact appointment, write idempotency and audit records, and commit atomically. The baseline audit action check already supports `CANCEL_APPOINTMENT`; confirmation is recorded as allowed action `UPDATE` with the precise transition/reference in audit JSON.
+
+## Sprint 3 lifecycle and escalation migration (2026-08-12)
+
+`supabase/migrations/20260812010000_sprint3_lifecycle_escalation.sql` widens the baseline appointment lifecycle check to include `EXPIRED` and widens the constrained audit action set for `RESCHEDULE_APPOINTMENT`, `REJECT_APPOINTMENT`, and `EXPIRE_APPOINTMENT`. It locates the baseline auto-named checks through `pg_constraint` before replacing them.
+
+The migration adds `public.escalation_queue`, an RLS-enabled, backend-only durable queue keyed by a daily shipment/type `dedupe_key`, with shipment/facility/driver FKs, typed escalation/status checks, payload JSON text, policy/recommendation metadata, and a facility/status/created index. It has not been applied or parity-tested against live Supabase in this turn.
 
 ## Live POC Auth expansion (2026-08-10 22:11 IST)
 
@@ -63,7 +85,7 @@ All 14 `public.users` rows now have Auth. Role-shared passwords stay in gitignor
 | Admin | same | USR105 sanjay.gupta | TRANSPORT_MANAGER | ops |
 | Admin | same | USR106 neha.bansal | REGIONAL_OPERATIONS_HEAD | ops |
 
-Proof: `auth.users=14`, mapped=`14`, unmapped=`0`. Password-grant PASS for samples across all three buckets including the five newly created accounts. Ops portal/API allowlists expanded so the five deferred personas can use `/ops/login` with facility (USR102–104) or global (USR105–106) scope. Team-share roster (with passwords) lives only in gitignored `POC_TEAM_ACCOUNTS.local.md`; `.env` / `.env.local` no longer store POC passwords.
+Proof: earlier 2026-08-10 inventory was `auth.users=14` all mapped. **2026-08-11 23:34 IST:** +12 Driver Auth users for demo contention (`USR201`–`USR212` / `DRV004`–`DRV015`), same shared Driver password, **no resets** of existing accounts. Live mapped Auth users ≈ **26**. Passwords remain only in gitignored `POC_TEAM_ACCOUNTS.local.md`.
 
 ## Live catalog inspection (2026-08-10 20:23 IST)
 

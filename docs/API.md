@@ -377,6 +377,26 @@ Cancel appointment.
 
 ------------------------------------------------
 
+POST
+
+/shipments/{shipment_id}/appointments/{appointment_id}/cancel
+
+Cancel an active in-scope appointment. Requires `Idempotency-Key`.
+
+Allowed: assigned Driver, scoped Operations, Admin.
+
+------------------------------------------------
+
+POST
+
+/shipments/{shipment_id}/appointments/{appointment_id}/confirm
+
+Confirm a pending appointment. Requires `Idempotency-Key`.
+
+Allowed: scoped Operations and Admin only.
+
+------------------------------------------------
+
 GET
 
 /appointments/available-slots
