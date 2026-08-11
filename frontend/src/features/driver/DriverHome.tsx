@@ -311,6 +311,24 @@ function DriverBody({
               </div>
             </div>
           ))}
+          {sending ? (
+            <div className="chat-row ai typing-row" aria-live="polite">
+              <div className="chat-meta">
+                <span className="chat-avatar" aria-hidden="true">
+                  AI
+                </span>
+                <span>SetuHaul AI</span>
+              </div>
+              <div className="chat-bubble ai-bubble typing-bubble">
+                <div className="typing-dots" aria-label="Thinking">
+                  <span className="dot dot-1" />
+                  <span className="dot dot-2" />
+                  <span className="dot dot-3" />
+                </div>
+                <span className="typing-text">Thinking &amp; verifying database facts…</span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="composer-chips" style={{ padding: '0 16px' }}>

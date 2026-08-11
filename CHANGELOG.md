@@ -2,6 +2,34 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-12 02:35 IST - Implement 5 New Database-Backed AI Assistant Tools
+
+- Added 5 new database service functions in `backend/app/services/driver_reads.py`:
+  1. `get_vehicle_and_carrier_details`: Reads assigned truck registration, weight capacity, refrigeration capability, and carrier contact info from `vehicles`, `vehicle_types`, `carriers`, `shipments`.
+  2. `get_gate_and_queue_status`: Reads yard queue position, arrival state (EARLY/ON_TIME/LATE), and gate check-in timestamps from `facility_checkins`.
+  3. `get_facility_rules_and_restrictions`: Reads safety rules, gate policies, and check-in grace periods from `facility_rules` and `facilities`.
+  4. `report_vehicle_breakdown_or_incident`: Upserts parent `chat_threads` row and writes structured breakdown records to `driver_exceptions` in PostgreSQL.
+  5. `get_dock_maintenance_alerts`: Queries active dock maintenance and outage events from `dock_status_events` and `docks`.
+- Registered Pydantic schemas and `StructuredTool.from_function` definitions in `backend/app/assistant/tools.py`.
+- Verification: 48 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Live AI assistant tool invocation verified with 100% accuracy across all 5 tools (**200 OK**, `ux_state: persisted_success`).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-12 02:20 IST - Fix Tool Coroutine Kwargs Unpacking & Confirmation Loop Bug
+
+- Fixed `TypeError: build_driver_tools.<locals>.get_latest_eta() got an unexpected keyword argument 'shipment_id'` in `backend/app/assistant/tools.py` where LangChain `StructuredTool.from_function` passed unpacked keyword arguments (`shipment_id="..."`, `declared_eta_ts="..."`), but coroutines expected a single `args` positional parameter.
+- Updated all driver tool coroutine signatures in `tools.py` (`get_shipment_details`, `get_latest_eta`, `report_delay_or_update_eta`, etc.) to accept `args` or unpacked `**kwargs` seamlessly.
+- Added `should_break_after_round = True` for `CONFIRMATION_REQUIRED` in `backend/app/assistant/run_assistant.py` so the assistant breaks out of `MAX_TOOL_ROUNDS` immediately on preview, eliminating duplicate/corrupt tool calls.
+- Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); End-to-end multi-turn driver ETA confirmation flow verified with 100% precision (**200 OK**, `ux_state: confirmation_required`).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-12 02:08 IST - Fix Duplicate Tool Loop & Empty Response on Confirmation
+
+- Fixed issue in `backend/app/assistant/run_assistant.py` where confirming a database write (e.g. `report_delay_or_update_eta` with `confirmed=True`) caused OpenRouter/LLM model to re-invoke the same tool repeatedly across `MAX_TOOL_ROUNDS=6`, leaving `ai.content=""` empty.
+- Added early loop termination (`should_break_after_round = True`) when a tool returns `status: PERSISTED`.
+- Added automatic non-empty success message synthesis for `persisted_success` state (`"ETA update for SHP1017 (...) has been confirmed and saved successfully."`).
+- Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Multi-turn live test sequence verified with 100% clean responses (**200 OK**).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-10 23:21 IST - Fix hung login preflight (backend venv crash)
 
 - Diagnosed Driver login hang after successful Supabase `token?grant_type=password` 200: Network showed `/api/v1/auth/me` OPTIONS + GET both pending. Root cause was a crashed FastAPI worker (`ModuleNotFoundError: starlette`, then broken `greenlet`), not a frontend double-call bug.

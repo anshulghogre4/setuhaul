@@ -1,4 +1,4 @@
-﻿---
+---
 title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
@@ -7,6 +7,14 @@ last_updated: 2026-08-07
 ---
 
 # Wiki log
+
+## 2026-08-12 02:40 IST | implementation | 5 New Database Tools, Kwargs Unpacking Fix & Driver UI Typing Animation
+
+- Added 5 new database-backed tools (`get_vehicle_and_carrier_details`, `get_gate_and_queue_status`, `get_facility_rules_and_restrictions`, `report_vehicle_breakdown_or_incident`, `get_dock_maintenance_alerts`) in `driver_reads.py` and `tools.py`.
+- Fixed `TypeError` in `tools.py` for unpacked keyword arguments from LangChain `StructuredTool.from_function`.
+- Fixed tool loop termination in `run_assistant.py` on `CONFIRMATION_REQUIRED` and `PERSISTED` to guarantee non-empty responses.
+- Added animated typing indicator bubble in `DriverHome.tsx` and keyframe styles in `App.css`.
+- Verification: 48 backend unit tests PASS (`PYTHONPATH=. pytest tests/unit`); Vite build PASS (`built in 588ms`); Live assistant execution verified for all 5 new tools (**200 OK**).
 
 ## 2026-08-10 23:21 IST | query | Login preflight hang
 

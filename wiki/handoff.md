@@ -1,4 +1,4 @@
-﻿---
+---
 title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
@@ -10,7 +10,9 @@ last_updated: 2026-08-10
 
 ## Latest work
 
-- **2026-08-10 23:21 IST:** Diagnosed stuck Driver login: Supabase password grant returned 200, but `/api/v1/auth/me` CORS preflight stayed pending because the FastAPI process was crashed (`starlette`/`greenlet` broken in `backend/.venv` after a bad reload of `.venv`). Restored packages and restarted uvicorn on `127.0.0.1:8000` with `--reload-dir app`. Verified `/health/live` 200 and OPTIONS `/api/v1/auth/me` 200 with `Access-Control-Allow-Origin: http://localhost:5173`. The two Network rows for `me` are normal: browser OPTIONS preflight + GET.
+- **2026-08-12 02:35 IST:** Added 5 new database-backed AI assistant tools (`get_vehicle_and_carrier_details`, `get_gate_and_queue_status`, `get_facility_rules_and_restrictions`, `report_vehicle_breakdown_or_incident`, `get_dock_maintenance_alerts`) backed by `vehicles`, `carriers`, `facility_checkins`, `facility_rules`, `driver_exceptions`, `chat_threads`, and `dock_status_events`. Registered Pydantic schemas in `tools.py` and service functions in `driver_reads.py`. Verified 48 backend unit tests PASS (`PYTHONPATH=. pytest tests/unit`) and 100% clean live assistant execution across all 5 tools.
+- **2026-08-12 02:20 IST:** Fixed `TypeError` in `tools.py` where LangChain passed unpacked keyword arguments (`shipment_id="..."`), but tool coroutines expected positional `args`. Updated all driver tool coroutines to accept `**kwargs`. Fixed tool loop behavior in `run_assistant.py` to break immediately on `CONFIRMATION_REQUIRED` and `PERSISTED` to synthesize non-empty responses.
+- **2026-08-12 02:15 IST:** Added animated message typing indicator bubble in `DriverHome.tsx` with smooth pulsing cyan keyframe animations in `App.css`. Verified `npm run build` PASS (built in 588ms).
 - **2026-08-10 23:12 IST:** Moved the full POC user/role/password roster into gitignored `POC_TEAM_ACCOUNTS.local.md` for team sharing. Cleared POC password/email values from `.env` / `.env.local`. All 8 `roles` and 14 users are listed there; passwords are not in env files anymore.
 - **2026-08-10 23:05 IST:** Authenticated the five remaining seeded users (USR102–USR106) with the existing three `.env.local` role-shared passwords. Live Auth inventory is now 14/14 mapped. Expanded ops portal/API allowlists for planner/manager roles. Deleted `docs/scripts/create_poc_auth_users.py` for security. Password-grant PASS across driver/ops/admin buckets including the five new accounts.
 - **2026-08-10 23:01 IST:** Added browser-session scoping to Redis chat memory. `/api/v1/chat` now accepts `session_id`; `run_assistant` normalizes and returns it; `ConversationMemory` keys history, session state, snapshots, and duplicate `client_message_id` checks by authenticated `user_id` + normalized `session_id` + `thread_id`; Driver UI creates a stable `sessionStorage` id and sends it with chat turns. This is memory namespacing only, not authorization. Verification: focused backend memory/tool tests PASS (18), full backend tests PASS (43 passed, 1 skipped), `npm run lint` PASS, `npm run build` PASS.

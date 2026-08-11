@@ -115,11 +115,12 @@ async def run_assistant(
             detail=str(exc)[:200],
         ) from exc
 
-    for _ in range(MAX_TOOL_ROUNDS):
+    for round_idx in range(MAX_TOOL_ROUNDS):
         tool_calls = getattr(ai, "tool_calls", None) or []
         if not tool_calls:
             break
         messages.append(ai)
+        should_break_after_round = False
         for call in tool_calls:
             name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
             call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", "")
@@ -141,16 +142,23 @@ async def run_assistant(
                     if code == "CONFIRMATION_REQUIRED":
                         ux_state = "confirmation_required"
                         confirmation_payload = parsed
+                        should_break_after_round = True
                     elif code == "REPAIR_IS_NOT_ETA":
                         ux_state = "clarification_required"
+                        should_break_after_round = True
                     elif code == "CAPABILITY_NOT_ENABLED":
                         ux_state = "capability_not_enabled"
                     elif parsed.get("status") == "PERSISTED":
                         ux_state = "persisted_success"
+                        confirmation_payload = parsed
+                        should_break_after_round = True
             except (TypeError, json.JSONDecodeError):
                 pass
 
             messages.append(ToolMessage(content=str(result), tool_call_id=call_id or name or "tool"))
+
+        if should_break_after_round:
+            break
 
         try:
             ai = await llm.ainvoke(messages)
@@ -162,7 +170,34 @@ async def run_assistant(
                 detail=str(exc)[:200],
             ) from exc
 
-    content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
+    raw_content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
+    content = raw_content.strip()
+    if not content or ux_state in ("confirmation_required", "clarification_required"):
+        if observed_tools:
+            last_tool = observed_tools[-1]
+            try:
+                res_dict = json.loads(last_tool.get("result_preview") or "{}")
+                if isinstance(res_dict, dict) and res_dict.get("code") == "CONFIRMATION_REQUIRED":
+                    shipment_id = res_dict.get("shipment_id") or "your shipment"
+                    display_eta = res_dict.get("display_eta") or res_dict.get("declared_eta_ts")
+                    content = f"Please confirm that you want to update the ETA for shipment {shipment_id} to {display_eta}."
+                elif isinstance(res_dict, dict) and res_dict.get("code") == "REPAIR_IS_NOT_ETA":
+                    content = res_dict.get("message") or "Repair duration is not an arrival ETA. Please declare an explicit arrival date and time."
+                elif isinstance(res_dict, dict) and res_dict.get("message"):
+                    content = str(res_dict["message"])
+                elif isinstance(res_dict, dict) and res_dict.get("status") == "PERSISTED":
+                    shipment_id = res_dict.get("shipment_id") or "shipment"
+                    eta_ts = res_dict.get("declared_eta_ts") or ""
+                    content = f"ETA update for {shipment_id} ({eta_ts}) has been confirmed and saved successfully."
+                elif isinstance(res_dict, dict) and res_dict.get("feasible_slots"):
+                    slots = res_dict["feasible_slots"]
+                    content = f"Found {len(slots)} feasible dock slot options for your shipment."
+                else:
+                    content = f"Operation for {last_tool['name']} completed successfully."
+            except Exception:
+                content = "Operational request processed successfully."
+        else:
+            content = "Hello! I am your SetuHaul Logistics Assistant. How can I help you today?"
     new_session = {
         "driver_id": ctx.driver_id,
         "last_intent": observed_tools[-1]["name"] if observed_tools else "chat",

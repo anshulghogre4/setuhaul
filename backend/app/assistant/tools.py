@@ -98,6 +98,62 @@ class ConversationMemoryArgs(BaseModel):
     )
 
 
+class VehicleCarrierArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment ID to query vehicle, payload capacity, and carrier details for.",
+    )
+
+
+class GateQueueArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment ID to check yard queue position and gate check-in status.",
+    )
+
+
+class FacilityRulesArgs(BaseModel):
+    facility_id: str | None = Field(
+        default=None,
+        description="Facility ID to query safety rules, grace periods, and procedures for.",
+    )
+    shipment_id: str | None = Field(
+        default=None,
+        description="Optional shipment ID to derive destination facility ID.",
+    )
+
+
+class ReportIncidentArgs(BaseModel):
+    shipment_id: str | None = Field(
+        default=None,
+        description="Shipment ID associated with the breakdown or vehicle incident.",
+    )
+    incident_type: str = Field(
+        default="BREAKDOWN",
+        description="Incident type: BREAKDOWN, TRAFFIC, WEATHER, DELAY, ACCIDENT, OTHER.",
+    )
+    description: str = Field(
+        default="",
+        description="Detailed description of the breakdown or vehicle incident.",
+    )
+    reported_delay_min: int | None = Field(
+        default=None,
+        description="Optional estimated delay in minutes caused by the breakdown.",
+    )
+
+
+class DockMaintenanceArgs(BaseModel):
+    facility_id: str | None = Field(
+        default=None,
+        description="Facility ID to check active dock maintenance alerts for.",
+    )
+    dock_id: str | None = Field(
+        default=None,
+        description="Optional dock ID to filter specific dock maintenance alerts.",
+    )
+
+
+
 def _json(data: Any) -> str:
     return json.dumps(data, default=str)
 
@@ -163,28 +219,35 @@ def build_driver_tools(
             }
         )
 
-    async def get_shipment_details(args: ShipmentIdArgs) -> str:
-        return _json(await driver_reads.get_shipment_details(session, ctx, args.shipment_id))
+    async def get_shipment_details(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id", "")
+        return _json(await driver_reads.get_shipment_details(session, ctx, shipment_id))
 
-    async def get_latest_eta(args: ShipmentIdArgs) -> str:
-        return _json(await driver_reads.get_latest_eta(session, ctx, args.shipment_id))
+    async def get_latest_eta(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id", "")
+        return _json(await driver_reads.get_latest_eta(session, ctx, shipment_id))
 
-    async def get_eta_history(args: ShipmentIdArgs) -> str:
-        return _json(await driver_reads.get_eta_history(session, ctx, args.shipment_id))
+    async def get_eta_history(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id", "")
+        return _json(await driver_reads.get_eta_history(session, ctx, shipment_id))
 
-    async def get_current_appointment(args: ShipmentIdArgs) -> str:
-        return _json(await driver_reads.get_current_appointment(session, ctx, args.shipment_id))
+    async def get_current_appointment(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id", "")
+        return _json(await driver_reads.get_current_appointment(session, ctx, shipment_id))
 
-    async def get_facility_details(args: FacilityIdArgs) -> str:
-        return _json(await driver_reads.get_facility_details(session, ctx, args.facility_id))
+    async def get_facility_details(args: FacilityIdArgs | None = None, **kwargs: Any) -> str:
+        facility_id = (args.facility_id if args else None) or kwargs.get("facility_id", "")
+        return _json(await driver_reads.get_facility_details(session, ctx, facility_id))
 
-    async def get_exception_status(args: ExceptionArgs) -> str:
-        return _json(await driver_reads.get_exception_status(session, ctx, args.shipment_id))
+    async def get_exception_status(args: ExceptionArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id")
+        return _json(await driver_reads.get_exception_status(session, ctx, shipment_id))
 
-    async def report_delay_or_update_eta(args: ReportDelayArgs) -> str:
+    async def report_delay_or_update_eta(args: ReportDelayArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = args if isinstance(args, ReportDelayArgs) else ReportDelayArgs(**kwargs)
         context = await driver_reads.get_driver_operational_context(session, ctx)
         active = context.get("active_shipments") or []
-        shipment_id = args.shipment_id
+        shipment_id = parsed_args.shipment_id
         if not shipment_id:
             if len(active) == 0:
                 return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
@@ -201,19 +264,19 @@ def build_driver_tools(
                 )
             shipment_id = active[0]["shipment_id"]
 
-        if args.repair_duration_min is not None and not args.declared_eta_ts:
+        if parsed_args.repair_duration_min is not None and not parsed_args.declared_eta_ts:
             return _json(
                 {
                     "code": "REPAIR_IS_NOT_ETA",
                     "message": (
-                        f"Repair duration ({args.repair_duration_min} min) is not a revised ETA. "
+                        f"Repair duration ({parsed_args.repair_duration_min} min) is not a revised ETA. "
                         "Ask for the expected arrival date/time with timezone."
                     ),
-                    "repair_duration_min": args.repair_duration_min,
+                    "repair_duration_min": parsed_args.repair_duration_min,
                 }
             )
 
-        if not args.declared_eta_ts:
+        if not parsed_args.declared_eta_ts:
             return _json(
                 {
                     "code": "CLARIFICATION_REQUIRED",
@@ -222,20 +285,20 @@ def build_driver_tools(
             )
 
         cmd = EtaUpdateCommand(
-            declared_eta_ts=args.declared_eta_ts,
-            delay_reason_code=args.delay_reason_code,
-            confidence_code=args.confidence_code,
-            note=args.note,
-            reported_delay_min=args.reported_delay_min,
-            repair_duration_min=args.repair_duration_min,
-            confirmed=args.confirmed,
-            confirmation_eta_ts=args.confirmation_eta_ts,
-            description=args.description,
+            declared_eta_ts=parsed_args.declared_eta_ts,
+            delay_reason_code=parsed_args.delay_reason_code,
+            confidence_code=parsed_args.confidence_code,
+            note=parsed_args.note,
+            reported_delay_min=parsed_args.reported_delay_min,
+            repair_duration_min=parsed_args.repair_duration_min,
+            confirmed=parsed_args.confirmed,
+            confirmation_eta_ts=parsed_args.confirmation_eta_ts,
+            description=parsed_args.description,
             thread_id=thread_id,
             client_message_id=None,
         )
 
-        if not args.confirmed:
+        if not parsed_args.confirmed:
             preview = confirmation_preview(cmd)
             preview["shipment_id"] = shipment_id
             return _json(preview)
@@ -253,10 +316,11 @@ def build_driver_tools(
             code = getattr(exc, "code", "ETA_WRITE_FAILED")
             return _json({"code": code, "message": str(exc)})
 
-    async def find_feasible_slots_tool(args: FindFeasibleSlotsArgs) -> str:
+    async def find_feasible_slots_tool(args: FindFeasibleSlotsArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = args if isinstance(args, FindFeasibleSlotsArgs) else FindFeasibleSlotsArgs(**kwargs)
         context = await driver_reads.get_driver_operational_context(session, ctx)
         active = context.get("active_shipments") or []
-        shipment_id = args.shipment_id
+        shipment_id = parsed_args.shipment_id
         if not shipment_id:
             if len(active) == 0:
                 return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
@@ -274,7 +338,7 @@ def build_driver_tools(
             shipment_id = active[0]["shipment_id"]
 
         try:
-            result = await find_feasible_slots(session, ctx, shipment_id, limit=args.limit)
+            result = await find_feasible_slots(session, ctx, shipment_id, limit=parsed_args.limit)
             payload = result.model_dump()
             payload["code"] = "FEASIBLE_SLOTS_FOUND" if payload["options"] else "NO_FEASIBLE_SLOTS"
             payload["appointment_writes"] = 0
@@ -283,30 +347,32 @@ def build_driver_tools(
             code = getattr(exc, "code", "FEASIBILITY_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
-    async def request_slot_tool(args: RequestSlotArgs) -> str:
+    async def request_slot_tool(args: RequestSlotArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = args if isinstance(args, RequestSlotArgs) else RequestSlotArgs(**kwargs)
         command = RequestSlotCommand(
-            note=args.note,
-            displayed_policy_version=args.displayed_policy_version,
+            note=parsed_args.note,
+            displayed_policy_version=parsed_args.displayed_policy_version,
             client_message_id=None,
         )
         try:
             result = await request_slot(
                 session,
                 ctx,
-                shipment_id=args.shipment_id,
-                slot_id=args.slot_id,
+                shipment_id=parsed_args.shipment_id,
+                slot_id=parsed_args.slot_id,
                 command=command,
-                idempotency_key=f"chat-{thread_id}-request-slot-{args.shipment_id}-{args.slot_id}",
+                idempotency_key=f"chat-{thread_id}-request-slot-{parsed_args.shipment_id}-{parsed_args.slot_id}",
             )
             return _json(result.model_dump())
         except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
             code = getattr(exc, "code", "REQUEST_SLOT_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
-    async def get_appointment_request_status_tool(args: AppointmentRequestStatusArgs) -> str:
+    async def get_appointment_request_status_tool(args: AppointmentRequestStatusArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = args if isinstance(args, AppointmentRequestStatusArgs) else AppointmentRequestStatusArgs(**kwargs)
         context = await driver_reads.get_driver_operational_context(session, ctx)
         active = context.get("active_shipments") or []
-        shipment_id = args.shipment_id
+        shipment_id = parsed_args.shipment_id
         if not shipment_id:
             if len(active) == 0:
                 return _json({"code": "NO_ACTIVE_SHIPMENT", "message": "No active shipment found."})
@@ -328,14 +394,15 @@ def build_driver_tools(
                 session,
                 ctx,
                 shipment_id=shipment_id,
-                appointment_id=args.appointment_id,
+                appointment_id=parsed_args.appointment_id,
             )
             return _json(result.model_dump())
         except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
             code = getattr(exc, "code", "APPOINTMENT_REQUEST_STATUS_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
-    async def scheduling_capability_disabled(args: SchedulingArgs) -> str:
+    async def scheduling_capability_disabled(args: SchedulingArgs | None = None, **kwargs: Any) -> str:
+        parsed = args if isinstance(args, SchedulingArgs) else SchedulingArgs(**kwargs)
         return _json(
             {
                 "code": "CAPABILITY_NOT_ENABLED",
@@ -344,11 +411,35 @@ def build_driver_tools(
                     "until their Sprint 3 transactional services are complete. Use request_slot "
                     "only for a driver's explicit selected slot request."
                 ),
-                "intent": args.intent,
-                "shipment_id": args.shipment_id,
+                "intent": parsed.intent,
+                "shipment_id": parsed.shipment_id,
                 "appointment_writes": 0,
             }
         )
+
+    async def get_vehicle_and_carrier_details(args: VehicleCarrierArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id")
+        return _json(await driver_reads.get_vehicle_and_carrier_details(session, ctx, shipment_id))
+
+    async def get_gate_and_queue_status(args: GateQueueArgs | None = None, **kwargs: Any) -> str:
+        shipment_id = (args.shipment_id if args else None) or kwargs.get("shipment_id")
+        return _json(await driver_reads.get_gate_and_queue_status(session, ctx, shipment_id))
+
+    async def get_facility_rules_and_restrictions(args: FacilityRulesArgs | None = None, **kwargs: Any) -> str:
+        parsed = args if isinstance(args, FacilityRulesArgs) else FacilityRulesArgs(**kwargs)
+        return _json(await driver_reads.get_facility_rules_and_restrictions(session, ctx, parsed.facility_id, parsed.shipment_id))
+
+    async def report_vehicle_breakdown_or_incident(args: ReportIncidentArgs | None = None, **kwargs: Any) -> str:
+        parsed = args if isinstance(args, ReportIncidentArgs) else ReportIncidentArgs(**kwargs)
+        return _json(
+            await driver_reads.report_vehicle_breakdown_or_incident(
+                session, ctx, parsed.shipment_id, parsed.incident_type, parsed.description, parsed.reported_delay_min, thread_id=thread_id
+            )
+        )
+
+    async def get_dock_maintenance_alerts(args: DockMaintenanceArgs | None = None, **kwargs: Any) -> str:
+        parsed = args if isinstance(args, DockMaintenanceArgs) else DockMaintenanceArgs(**kwargs)
+        return _json(await driver_reads.get_dock_maintenance_alerts(session, ctx, parsed.facility_id, parsed.dock_id))
 
     return [
         StructuredTool.from_function(
@@ -454,6 +545,36 @@ def build_driver_tools(
             args_schema=AppointmentRequestStatusArgs,
         ),
         StructuredTool.from_function(
+            coroutine=get_vehicle_and_carrier_details,
+            name="get_vehicle_and_carrier_details",
+            description="Get assigned vehicle registration, payload capacity kg, refrigeration capability, and carrier contact details.",
+            args_schema=VehicleCarrierArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_gate_and_queue_status,
+            name="get_gate_and_queue_status",
+            description="Get gate check-in status, yard queue position, arrival state, and dock assignment.",
+            args_schema=GateQueueArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_facility_rules_and_restrictions,
+            name="get_facility_rules_and_restrictions",
+            description="Get facility safety rules, policies, gate procedures, and check-in grace periods.",
+            args_schema=FacilityRulesArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=report_vehicle_breakdown_or_incident,
+            name="report_vehicle_breakdown_or_incident",
+            description="Report a roadside vehicle breakdown, accident, or emergency incident to dispatch.",
+            args_schema=ReportIncidentArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=get_dock_maintenance_alerts,
+            name="get_dock_maintenance_alerts",
+            description="Get active dock maintenance alerts, outages, or capacity reduction events for a facility.",
+            args_schema=DockMaintenanceArgs,
+        ),
+        StructuredTool.from_function(
             coroutine=scheduling_capability_disabled,
             name="scheduling_capability_disabled",
             description=(
@@ -462,3 +583,4 @@ def build_driver_tools(
             args_schema=SchedulingArgs,
         ),
     ]
+
