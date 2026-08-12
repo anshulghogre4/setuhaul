@@ -230,7 +230,6 @@ function OpsBody({
           <div className="card-heading">
             <div>
               <h2>Shipment status</h2>
-              <p className="muted">Authorized aggregate for the current scope.</p>
             </div>
             <span className="chip secondary">{statusEntries.length} buckets</span>
           </div>
@@ -257,7 +256,6 @@ function OpsBody({
           <div className="card-heading">
             <div>
               <h2>Latest exceptions</h2>
-              <p className="muted">Refresh after a driver ETA write to reconcile state.</p>
             </div>
             <span className="chip secondary">{exceptions.length} rows</span>
           </div>
@@ -292,7 +290,6 @@ function OpsBody({
         <div className="card-heading">
           <div>
             <h2>Escalation queue</h2>
-            <p className="muted">Open human-takeover items for the authorized facility scope.</p>
           </div>
           <span className="chip secondary">{escalations.length} open</span>
         </div>

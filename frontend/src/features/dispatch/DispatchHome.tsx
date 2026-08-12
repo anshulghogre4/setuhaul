@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { apiGet, apiPost } from '../../core/http/api'
+import { apiGet, apiPost, formatUserFriendlyError } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
 
 type DriverItem = {
@@ -219,7 +219,7 @@ function DispatchBody() {
           setSelectedFacility(fRes.data.facilities[0].facility_id)
         }
       } catch (err) {
-        setListError(err instanceof Error ? err.message : 'Failed to load drivers/facilities')
+        setListError(formatUserFriendlyError(err))
       } finally {
         setLoadingLists(false)
       }
@@ -256,7 +256,7 @@ function DispatchBody() {
       })
       setResult(res.data)
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Dispatch assignment failed')
+      setSubmitError(formatUserFriendlyError(err))
     } finally {
       setSubmitting(false)
     }

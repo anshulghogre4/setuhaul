@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { apiGet, apiPost } from '../../core/http/api'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { apiGet, apiPost, formatUserFriendlyError } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
 import './DriverLayout.css'
 
@@ -217,13 +217,12 @@ export function DriverHome() {
 function DriverBody({
   userId,
   driverName,
-  driverId,
+  driverId: _driverId,
 }: {
   userId: string
   driverName: string
   driverId: string | null
 }) {
-  const statusId = useId()
   const [ctx, setCtx] = useState<DriverContext | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -233,11 +232,8 @@ function DriverBody({
   const [threadId, setThreadId] = useState<string | null>(initialIds.threadId)
   const [sessionId, setSessionId] = useState(initialIds.sessionId)
   const [sending, setSending] = useState(false)
-  const [uxState, setUxState] = useState<string>('ready')
+  const [, setUxState] = useState<string>('ready')
   const [pendingConfirm, setPendingConfirm] = useState<ChatResponse['confirmation']>(null)
-  const [memoryNote, setMemoryNote] = useState<string | null>(null)
-  const [lastTools, setLastTools] = useState<string[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
   const chatHistoryRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -263,7 +259,6 @@ function DriverBody({
     void refreshContext()
 
     async function restoreChatHistoryOnMount() {
-      setHistoryLoading(true)
       const saved = getDriverConversationIds(userId)
       try {
         // Prefer server active pointer so re-login restores last Redis thread (24h).
@@ -295,20 +290,9 @@ function DriverBody({
                 content: m.content,
               })),
           )
-          setMemoryNote(
-            restored.degraded
-              ? `Conversation memory degraded (${restored.degrade_reason || 'unknown'}).`
-              : `Restored last ${restored.messages.length} Redis chat turns (24h TTL, non-authoritative).`,
-          )
         }
-      } catch (err) {
-        setMemoryNote(
-          err instanceof Error
-            ? `Could not restore chat history: ${err.message}`
-            : 'Could not restore chat history.',
-        )
-      } finally {
-        setHistoryLoading(false)
+      } catch {
+        // Ignored
       }
     }
 
@@ -318,33 +302,31 @@ function DriverBody({
   async function sendChat(text: string) {
     const trimmed = text.trim()
     if (!trimmed || sending) return
+    const clientMessageId = `msg-${Date.now()}`
     setSending(true)
-    setUxState('write_in_progress')
-    const clientMessageId = crypto.randomUUID()
-    setMessages((prev) => [...prev, { id: clientMessageId, role: 'user', content: trimmed }])
     setDraft('')
+    setPendingConfirm(null)
+    setMessages((prev) => [
+      ...prev,
+      { id: clientMessageId, role: 'user', content: trimmed },
+    ])
     try {
-      const res = await apiPost<ChatResponse>('/api/v1/chat', {
+      const res = await apiPost<ChatResponse>('/api/v1/chat/message', {
         message: trimmed,
-        thread_id: threadId,
         session_id: sessionId,
+        thread_id: threadId,
         client_message_id: clientMessageId,
       })
-      setThreadId(res.data.thread_id)
-      setSessionId(res.data.session_id)
-      saveDriverConversationIds(userId, res.data.session_id, res.data.thread_id)
-      setUxState(res.data.ux_state || 'answered')
+      if (res.data.session_id) setSessionId(res.data.session_id)
+      if (res.data.thread_id) setThreadId(res.data.thread_id)
+      saveDriverConversationIds(
+        userId,
+        res.data.session_id || sessionId,
+        res.data.thread_id || threadId,
+      )
+      setUxState(res.data.ux_state)
       setPendingConfirm(res.data.confirmation ?? null)
       const tools = res.data.tool_calls || []
-      setLastTools(
-        tools.map((t) => {
-          const code =
-            t.result && typeof t.result === 'object' && t.result !== null && 'code' in t.result
-              ? String((t.result as { code?: unknown }).code || '')
-              : ''
-          return code ? `${t.name}:${code}` : t.name
-        }),
-      )
       // Demo/debug: full tool args + results for the driver console.
       console.groupCollapsed(
         `[SetuHaul] chat tools (${tools.length}) · thread ${res.data.thread_id} · ux ${res.data.ux_state}`,
@@ -359,13 +341,6 @@ function DriverBody({
         })
       }
       console.groupEnd()
-      if (res.data.memory_degraded) {
-        setMemoryNote(
-          `Conversation memory degraded (${res.data.memory_degrade_reason || 'unknown'}). REST still works.`,
-        )
-      } else {
-        setMemoryNote(null)
-      }
       setMessages((prev) => [
         ...prev,
         {
@@ -384,7 +359,7 @@ function DriverBody({
         {
           id: `${clientMessageId}-err`,
           role: 'system',
-          content: err instanceof Error ? err.message : 'Chat failed',
+          content: formatUserFriendlyError(err),
         },
       ])
     } finally {
@@ -425,7 +400,7 @@ function DriverBody({
           {
             id: `eta-${key}`,
             role: 'assistant',
-            content: `ETA persisted: ${res.data.display_eta || pendingConfirm.display_eta}. Ops can refresh to see the matching exception/ETA.`,
+            content: `ETA updated: ${res.data.display_eta || pendingConfirm.display_eta}.`,
           },
         ])
         await refreshContext()
@@ -447,9 +422,7 @@ function DriverBody({
         {
           id: `eta-err-${key}`,
           role: 'system',
-          content:
-            (err instanceof Error ? err.message : 'ETA write failed') +
-            ' — if the network dropped after commit, retry with the same Idempotency-Key is safe.',
+          content: formatUserFriendlyError(err),
         },
       ])
     } finally {
@@ -534,15 +507,6 @@ function DriverBody({
           ) : null}
         </div>
 
-        <div className="composer-chips" style={{ padding: '0 16px' }}>
-          <span className="chip secondary">{status}</span>
-          <span className="chip primary">{facilityLabel}</span>
-          {driverId ? <span className="chip primary">{driverId}</span> : null}
-          <span className="chip secondary" id={statusId}>
-            UX: {uxState}
-          </span>
-        </div>
-
         <div className="quick-actions" aria-label="Quick actions">
           <button
             type="button"
@@ -614,15 +578,6 @@ function DriverBody({
               {sending ? '…' : 'Send'}
             </button>
           </div>
-          <p className="fine-print" role="status" aria-live="polite">
-            {historyLoading
-              ? 'Restoring chat history…'
-              : memoryNote
-                ? memoryNote
-                : lastTools.length
-                  ? `Last tools: ${lastTools.join(', ')}`
-                  : 'Live ChatOpenAI.bind_tools + manual invoke loop. Writes require explicit ETA confirmation.'}
-          </p>
         </form>
       </section>
 
