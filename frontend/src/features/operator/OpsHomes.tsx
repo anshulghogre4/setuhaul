@@ -496,11 +496,6 @@ function OpsBody({
           </div>
         </div>
       ) : null}
-
-      <p className="fine-print">
-        {summary.note ??
-          'Observational dashboard. No scheduling mutations. Refresh to reconcile with seeded/driver ETA writes.'}
-      </p>
     </section>
   )
 }

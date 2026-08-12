@@ -169,7 +169,6 @@ async def dashboard_summary(
         "shipments_by_status": {row["current_status"]: row["n"] for row in shipment_counts},
         "open_exceptions": open_exceptions,
         "freshness": "live",
-        "note": "Observational summary only; no scheduling mutations in Sprint 1.",
     }
     return ok(data, get_request_id(request))
 

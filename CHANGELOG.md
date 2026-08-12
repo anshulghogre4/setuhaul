@@ -8,7 +8,8 @@ This append-only log records material implementation, architecture, workflow, de
 - Exposed `POST /api/v1/operations/escalations/{escalation_id}/resolve` endpoint in `backend/app/api/v1/routers/operations.py`.
 - Added `Why Escalated` conflict reason banner on each escalation card in `OpsHomes.tsx` (extracts rejection reasons, no-slot flags, or driver breakdown notes from `payload`).
 - Created an interactive **Inspect & Take Decision** popup modal allowing Ops to review root causes, add resolution notes, and resolve/override or assign new loads.
-- Verification: 59 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 606ms).
+- Removed Sprint 1 observational fine-print summary note from `backend/app/api/v1/routers/operations.py` and `frontend/src/features/operator/OpsHomes.tsx`.
+- Verification: 59 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 592ms).
 - Agent/surface: Google Antigravity.
 
 ## 2026-08-13 01:48 IST - Complete End-to-End Verification of Dispatch & Auto-Booking Service
