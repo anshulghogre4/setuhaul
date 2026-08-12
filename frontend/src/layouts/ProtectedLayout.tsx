@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { apiGet, type MeProfile } from '../core/http/api'
 import {
@@ -15,6 +15,42 @@ type Props = {
   children: (profile: MeProfile, refresh: () => Promise<void>) => ReactNode
 }
 
+function ProfileMenu({ profile, onLogout }: { profile: MeProfile; onLogout: () => void }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (detailsRef.current && detailsRef.current.open && !detailsRef.current.contains(event.target as Node)) {
+        detailsRef.current.open = false
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  return (
+    <details className="profile-menu" ref={detailsRef}>
+      <summary aria-label={`Profile menu for ${profile.full_name}`}>
+        {profile.full_name}
+      </summary>
+      <div className="profile-panel">
+        <p className="profile-role">
+          <strong>{profile.role_name.replaceAll('_', ' ')}</strong>
+        </p>
+        <p>{profile.email}</p>
+        <p>User ID : {profile.user_id}</p>
+        {profile.facility_id ? <p>Facility {profile.facility_id}</p> : null}
+        {profile.driver_id ? <p>Driver {profile.driver_id}</p> : null}
+        <button type="button" className="secondary-btn logout-btn" onClick={onLogout}>
+          Log out
+        </button>
+      </div>
+    </details>
+  )
+}
+
 export function ProtectedLayout({ portal, title, children }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -29,8 +65,10 @@ export function ProtectedLayout({ portal, title, children }: Props) {
       const session = await getSession()
       if (!session) {
         setProfile(null)
+        setLoading(false)
         return
       }
+
       const me = await apiGet<MeProfile>('/api/v1/auth/me')
       const actual = roleToPortal(me.data.role_name)
       if (actual !== portal) {
@@ -40,12 +78,12 @@ export function ProtectedLayout({ portal, title, children }: Props) {
       }
       setProfile(me.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load profile')
+      setError(err instanceof Error ? err.message : 'Auth verification failed')
       setProfile(null)
     } finally {
       setLoading(false)
     }
-  }, [portal])
+  }, [navigate, portal])
 
   useEffect(() => {
     void load()
@@ -68,26 +106,7 @@ export function ProtectedLayout({ portal, title, children }: Props) {
           <h1>{title}</h1>
         </div>
         <div className="topbar-actions">
-          {profile ? (
-            <details className="profile-menu">
-              <summary aria-label={`Profile menu for ${profile.full_name}`}>
-                {profile.full_name}
-              </summary>
-              <div className="profile-panel">
-                <p className="profile-role">
-                  <strong>{profile.role_name.replaceAll('_', ' ')}</strong>
-                </p>
-                <p>{profile.email}</p>
-                <p>User {profile.user_id}</p>
-                {profile.facility_id ? <p>Facility {profile.facility_id}</p> : null}
-                {profile.driver_id ? <p>Driver {profile.driver_id}</p> : null}
-                <p className="scope">{profile.scope.type}</p>
-                <button type="button" className="secondary-btn logout-btn" onClick={() => void onLogout()}>
-                  Log out
-                </button>
-              </div>
-            </details>
-          ) : null}
+          {profile ? <ProfileMenu profile={profile} onLogout={() => void onLogout()} /> : null}
         </div>
       </header>
       {portal === 'ops' ? (
