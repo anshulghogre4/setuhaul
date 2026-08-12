@@ -179,6 +179,37 @@ async def get_exception_queue(
     return {"as_of": _as_of(), "source": "postgresql", "facility_id": scope, "items": items}
 
 
+async def resolve_escalation(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    escalation_id: str,
+    resolution_note: str = "Resolved by Operations",
+    status: str = "RESOLVED",
+) -> dict[str, Any]:
+    if not (ctx.is_operator or ctx.is_admin):
+        raise AppError("Insufficient permissions to resolve escalations.", code="FORBIDDEN", status_code=403)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    row = (
+        await session.execute(
+            text(
+                """
+                UPDATE public.escalation_queue
+                SET escalation_status = :status,
+                    updated_at = :now_iso
+                WHERE escalation_id = :eid
+                RETURNING escalation_id, shipment_id, escalation_type, escalation_status
+                """
+            ),
+            {"status": status, "now_iso": now_iso, "eid": escalation_id},
+        )
+    ).mappings().first()
+    if row is None:
+        raise AppError(f"Escalation '{escalation_id}' not found.", code="NOT_FOUND", status_code=404)
+    await session.commit()
+    return dict(row)
+
+
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
     scope = facility_id if ctx.is_admin else ctx.facility_id
     if not scope or (not ctx.is_admin and facility_id and facility_id != scope):
