@@ -1,0 +1,74 @@
+/* DriverLayout.css — Fixed Viewport Layout for Driver Console */
+
+.driver-workspace {
+  height: calc(100vh - 110px);
+  max-height: calc(100vh - 110px);
+  overflow: hidden;
+  grid-template-rows: 1fr;
+}
+
+.chat-shell {
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header stays fixed at top of chat panel */
+.chat-panel-header {
+  flex-shrink: 0;
+}
+
+/* ONLY chat-history container scrolls vertically */
+.chat-history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  padding-right: 12px;
+}
+
+/* Custom scrollbar for chat history */
+.chat-history::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-history::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.chat-history::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.3);
+  border-radius: 999px;
+}
+
+.chat-history::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.6);
+}
+
+/* Bottom elements stay fixed at bottom of chat panel */
+.composer-chips,
+.quick-actions,
+.confirm-banner,
+.chat-composer {
+  flex-shrink: 0;
+}
+
+/* Right-side context rail scrolls independently if content overflows */
+.context-rail {
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.context-rail::-webkit-scrollbar {
+  width: 4px;
+}
+
+.context-rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}

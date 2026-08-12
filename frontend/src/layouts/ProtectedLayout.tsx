@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { apiGet, type MeProfile } from '../core/http/api'
 import {
   getSession,
@@ -17,6 +17,7 @@ type Props = {
 
 export function ProtectedLayout({ portal, title, children }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [profile, setProfile] = useState<MeProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -89,6 +90,50 @@ export function ProtectedLayout({ portal, title, children }: Props) {
           ) : null}
         </div>
       </header>
+      {portal === 'ops' ? (
+        <nav
+          style={{
+            display: 'flex',
+            gap: '8px',
+            padding: '12px 24px 0 24px',
+            borderBottom: '1px solid var(--outline)',
+            background: 'rgba(15, 23, 42, 0.6)',
+          }}
+        >
+          <Link
+            to="/ops"
+            style={{
+              padding: '8px 18px',
+              borderRadius: '8px 8px 0 0',
+              background: location.pathname === '/ops' ? 'var(--panel-high)' : 'transparent',
+              color: location.pathname === '/ops' ? 'var(--accent)' : 'var(--muted)',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              textDecoration: 'none',
+              borderBottom: location.pathname === '/ops' ? '2px solid var(--accent)' : '2px solid transparent',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Dock Command
+          </Link>
+          <Link
+            to="/dispatch"
+            style={{
+              padding: '8px 18px',
+              borderRadius: '8px 8px 0 0',
+              background: location.pathname === '/dispatch' ? 'var(--panel-high)' : 'transparent',
+              color: location.pathname === '/dispatch' ? 'var(--accent)' : 'var(--muted)',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              textDecoration: 'none',
+              borderBottom: location.pathname === '/dispatch' ? '2px solid var(--accent)' : '2px solid transparent',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Dispatch Console
+          </Link>
+        </nav>
+      ) : null}
       <main>
         <div className="sr-live" aria-live="polite" aria-atomic="true">
           {loading ? <p className="state">Loading…</p> : null}

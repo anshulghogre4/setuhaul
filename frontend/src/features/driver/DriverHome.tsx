@@ -1,6 +1,7 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { apiGet, apiPost } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
+import './DriverLayout.css'
 
 type DriverContext = {
   as_of: string
@@ -108,6 +109,38 @@ function valueText(value: unknown, fallback = 'Unknown') {
   return String(value)
 }
 
+function formatHumanDateTime(value: unknown, fallback = '—'): string {
+  if (value === null || value === undefined || value === '') return fallback
+  const raw = String(value).trim()
+  try {
+    const date = new Date(raw)
+    if (isNaN(date.getTime())) return raw
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date)
+  } catch {
+    return raw
+  }
+}
+
+function hasEtaChanged(original: unknown, latest: unknown): boolean {
+  if (!latest || !original) return false
+  const origStr = String(original).trim()
+  const latStr = String(latest).trim()
+  if (!origStr || !latStr || origStr === latStr) return false
+  const origTime = new Date(origStr).getTime()
+  const latTime = new Date(latStr).getTime()
+  if (!isNaN(origTime) && !isNaN(latTime)) {
+    return origTime !== latTime
+  }
+  return origStr !== latStr
+}
+
 function getField(record: Record<string, unknown> | null | undefined, keys: string[]) {
   if (!record) return null
   for (const key of keys) {
@@ -205,6 +238,13 @@ function DriverBody({
   const [memoryNote, setMemoryNote] = useState<string | null>(null)
   const [lastTools, setLastTools] = useState<string[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const chatHistoryRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (chatHistoryRef.current) {
+      chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight
+    }
+  }, [messages, sending])
 
   async function refreshContext() {
     setLoading(true)
@@ -443,7 +483,7 @@ function DriverBody({
             <span className="chip primary">{shipmentId || 'Shipment pending'}</span>
           </div>
         </div>
-        <div className="chat-history">
+        <div className="chat-history" ref={chatHistoryRef}>
           <div className="chat-day">Today</div>
           <div className="chat-row ai">
             <div className="chat-meta">
@@ -611,7 +651,6 @@ function DriverBody({
                 <DataField label="Shipment" value={shipmentId} tone="neutral" />
                 <DataField label="Facility" value={facilityLabel} />
               </div>
-              <p className="muted">as_of {ctx.as_of}</p>
               <button type="button" className="secondary-btn" onClick={() => void refreshContext()}>
                 Refresh context
               </button>
@@ -647,12 +686,20 @@ function DriverBody({
                   />
                   <DataField
                     label="Planned ETA"
-                    value={getField(ctx.primary_shipment, [
-                      'original_eta_ts',
-                      'latest_eta_ts',
-                      'planned_eta',
-                    ])}
+                    value={formatHumanDateTime(
+                      getField(ctx.primary_shipment, ['original_eta_ts', 'planned_eta'])
+                    )}
                   />
+                  {hasEtaChanged(
+                    ctx.primary_shipment.original_eta_ts,
+                    ctx.primary_shipment.latest_eta_ts
+                  ) ? (
+                    <DataField
+                      label="Updated ETA"
+                      value={formatHumanDateTime(ctx.primary_shipment.latest_eta_ts)}
+                      tone="good"
+                    />
+                  ) : null}
                   <DataField
                     label="Unload minutes"
                     value={getField(ctx.primary_shipment, [
@@ -663,26 +710,6 @@ function DriverBody({
                 </div>
               ) : (
                 <p className="state">No active shipment</p>
-              )}
-            </article>
-            <article className="context-card">
-              <h2>Latest ETA</h2>
-              {ctx.latest_eta ? (
-                <div className="data-grid">
-                  <DataField
-                    label="Declared ETA"
-                    value={getField(ctx.latest_eta, ['declared_eta', 'declared_eta_ts'])}
-                    tone="good"
-                  />
-                  <DataField label="Source" value={getField(ctx.latest_eta, ['source_type'])} />
-                  <DataField label="Declared at" value={getField(ctx.latest_eta, ['declared_at'])} />
-                  <DataField
-                    label="Confidence"
-                    value={getField(ctx.latest_eta, ['confidence_code', 'confidence_note'])}
-                  />
-                </div>
-              ) : (
-                <p className="state">No ETA row</p>
               )}
             </article>
             <article className="context-card">
@@ -702,14 +729,18 @@ function DriverBody({
                   <DataField label="Slot" value={getField(ctx.current_appointment, ['slot_id'])} />
                   <DataField
                     label="Start"
-                    value={getField(ctx.current_appointment, [
-                      'slot_start_ts',
-                      'start_time',
-                    ])}
+                    value={formatHumanDateTime(
+                      getField(ctx.current_appointment, [
+                        'slot_start_ts',
+                        'start_time',
+                      ])
+                    )}
                   />
                   <DataField
                     label="End"
-                    value={getField(ctx.current_appointment, ['slot_end_ts', 'end_time'])}
+                    value={formatHumanDateTime(
+                      getField(ctx.current_appointment, ['slot_end_ts', 'end_time'])
+                    )}
                   />
                 </div>
               ) : (

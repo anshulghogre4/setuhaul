@@ -2,6 +2,36 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-13 01:48 IST - Complete End-to-End Verification of Dispatch & Auto-Booking Service
+
+- Included all required PostgreSQL `NOT NULL` columns (`carrier_id`, `vehicle_id`, `origin_name`, `origin_city`, `planned_departure_ts`, `temperature_control_required`) in `create_dispatch_shipment` SQL `INSERT`.
+- Fixed `request_slot` keyword-only parameter call and set `displayed_recommendation_id=None` to enable immediate pre-booking of top-ranked dock slots.
+- Verified end-to-end dispatch execution with payload `driver_id: D16-DRV-006`, `destination_facility_id: FAC-AMD-01`, `original_eta_ts: 2026-08-16T10:40:00+05:30`:
+  - Created shipment `SHP-DISP-83C3F2C0` in PostgreSQL.
+  - Automatically booked dock slot `D16-SLT-02739` (`11:00 AM – 11:30 AM`) with status `PENDING_CONFIRMATION` and appointment ID `APT-F16FD7C41E41`.
+- Moved "Dock Command" and "Dispatch Console" out of the header topbar-actions into a dedicated sub-header navigation tab bar in `ProtectedLayout.tsx`, allowing Priya Mehta's profile menu to render cleanly alone on the top right.
+- Verification: 59 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 596ms).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-13 01:25 IST - Add Dispatch Console, Fixed Viewport Driver Layout & Bounded LOV Select
+
+- Created Dispatch Console feature (`frontend/src/features/dispatch/DispatchHome.tsx`, `backend/app/services/dispatch_service.py`, `backend/app/api/v1/routers/dispatch.py`):
+  - Enables Person A (Dispatch / Transport Manager) to create new shipments and assign drivers in PostgreSQL.
+  - Automatically executes `find_feasible_slots` and `request_slot` to pre-mark initial dock appointments for assigned drivers.
+  - Added `/dispatch` route and nav buttons in `ProtectedLayout.tsx`.
+- Refined Driver UI Layout (`frontend/src/features/driver/DriverLayout.css`, `DriverHome.tsx`):
+  - Fixed viewport layout: Header, composer chips, quick actions, and composer remain fixed while only `.chat-history` scrolls vertically.
+  - Auto-scrolls chat history to bottom upon receiving responses.
+  - Hidden raw `as_of` timestamp in Active Context card.
+  - Formatted Planned ETA, Start, and End timestamps into human-readable strings (`Aug 16, 2026, 6:40 PM`).
+  - Added highlighted `Updated ETA` tag under Primary Shipment, rendered only when a distinct ETA revision exists (`hasEtaChanged`).
+- Built `BoundedLOVSelect` Component in Dispatch Console:
+  - Constrained LOV dropdown popups to a compact `max-height: 210px` window with internal scrolling.
+  - Added instant search/filter input to filter 105+ drivers without screen takeover.
+  - Added click-outside listener (`useRef` + `mousedown`) to auto-dismiss dropdown lists when clicking outside.
+- Verification: `npm run build` PASS (built in 587ms, 95 modules transformed); zero TypeScript lint errors.
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-12 03:05 IST - Add Custom Markdown Renderer in Driver Chat (No Raw Asterisks)
 
 - Implemented `renderFormattedText` helper in `frontend/src/features/driver/DriverHome.tsx` to parse markdown bold (`**text**`) and inline code (`` `code` ``) dynamically into styled React elements (`<strong>`, `<code>`, `.chat-line`).

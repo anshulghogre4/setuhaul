@@ -8,6 +8,14 @@ last_updated: 2026-08-12
 
 # Wiki log
 
+## 2026-08-13 01:25 IST | implementation | Dispatch Console, Fixed Viewport Layout & Bounded LOV Select with Click-Outside Dismissal
+
+- Implemented Dispatch Console (`DispatchHome.tsx`, `dispatch_service.py`, `dispatch.py`) allowing Person A (Dispatch) to create shipments and auto-book initial appointments for assigned drivers.
+- Implemented `DriverLayout.css` with fixed viewport height bounds where only `.chat-history` scrolls vertically.
+- Added human-readable timestamp formatting and conditional `Updated ETA` field under Primary Shipment card.
+- Implemented `BoundedLOVSelect` with `useRef` + `mousedown` click-outside dismissal and `max-height: 210px` scrollable search overlay.
+- Verification: `npm run build` PASS (built in 587ms, 95 modules transformed); zero TypeScript lint errors.
+
 ## 2026-08-12 02:40 IST | implementation | 5 New Database Tools, Kwargs Unpacking Fix & Driver UI Typing Animation
 
 - Added 5 new database-backed tools (`get_vehicle_and_carrier_details`, `get_gate_and_queue_status`, `get_facility_rules_and_restrictions`, `report_vehicle_breakdown_or_incident`, `get_dock_maintenance_alerts`) in `driver_reads.py` and `tools.py`.

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginForm } from './features/auth/LoginForm'
+import { DispatchHome } from './features/dispatch/DispatchHome'
 import { DriverHome } from './features/driver/DriverHome'
 import { OpsHome } from './features/operator/OpsHomes'
 import './App.css'
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/admin" element={<Navigate to="/ops" replace />} />
       <Route path="/driver" element={<DriverHome />} />
       <Route path="/ops" element={<OpsHome />} />
+      <Route path="/dispatch" element={<DispatchHome />} />
       <Route path="*" element={<Navigate to="/driver/login" replace />} />
     </Routes>
   )
