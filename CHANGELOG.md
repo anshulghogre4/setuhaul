@@ -2,6 +2,41 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-14 03:30 IST - Root README Sprint 3–4 holistic refresh
+
+- Root `README.md` now matches live Sprint 3 COMPLETE + Sprint 4 in progress: hosted Vercel/BFF URLs, dual-mode ARN rule, Dispatch, remaining Locust Suite B / gate, teammate missing-files list, and copy-paste Docker / AgentCore / Locust / reset commands. Scoreboard remains the command book. No secrets. App tests **not run**.
+- Verification: docs only. Agent/surface: Cursor.
+
+## 2026-08-14 03:26 IST - Locust commands in team READMEs
+
+- Added copy-paste Suite A (web UI + headless) and Suite B commands to root `README.md` Testing, `loadtests/README.md`, and `docs/DEMO_MANUAL_RUNBOOK.md`. Scoreboard §5.8 points at those. No secrets. App tests **not run**.
+- Verification: docs only. Agent/surface: Cursor.
+
+## 2026-08-14 03:22 IST - Runbook vs Locust pass/fail scorecards
+
+- Documented that Phase A–G Sign-off is reply/invariant based; Locust Suite A is hosted-chat HTTP health; Suite B is zero double-books. Last Suite A (03:18 IST) is **not** a runbook Phase A–G PASS — Locust did not read replies; C5/B4 off; one C2 503 is a Suite A hosting fail only. Added scoring box to `docs/DEMO_MANUAL_RUNBOOK.md` and `loadtests/README.md`.
+- Verification: docs + prior Locust stats table. App tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-14 03:18 IST - Locust Suite A hosted chat (web UI)
+
+- Ran `loadtests/locust_runbook_chat.py` against Express BFF (ARN set). Locust **web UI** at `http://127.0.0.1:8089` (not headless); 5 users / 1/s / 3 min autostart. Login is laptop Supabase password-grant (Driver bucket from gitignored `POC_TEAM_ACCOUNTS.local.md`) then JWT `Authorization` to the BFF — not the Vercel login form. `GET /auth/me` **5/5** 200. Chat 16/17 200; **1** `C2_lock_race_b` **503**. Locust exit 1. Suite B **not run**. Sprint 4 gate **not struck**.
+- Verification: Locust 2.46.3 stats table 03:15–03:18 IST; BFF `/health/live` 200 before start; Ravi grant smoke true (token not logged). Agent/surface: Cursor.
+
+## 2026-08-14 03:20 IST - Locust files from demo runbook (not run)
+
+- Authored `loadtests/locust_runbook_chat.py` (Suite A: runbook Phases A–D exact prompts via `POST /api/v1/chat/message`; C5/E5 only if `SETUHAUL_LOCUST_MUTATE=1`) and `loadtests/locust_slot_contention.py` (Suite B: Phase G CONTEND-01..10 REST; GET feasible then request; never invents `slot_id`; 409 = pass; exit 1 on two `SLOT_REQUESTED` per slot). Shared helpers in `loadtests/common.py`. How-to: `loadtests/README.md`. Expanded C5B + quick-copy lines in `docs/DEMO_MANUAL_RUNBOOK.md` so Locust strings stay verbatim. Scoreboard §5.8 now points at these files. Live Locust **not run**. Sprint 4 gate **not struck**.
+- Verification: `backend/tests/unit/test_locust_runbook_prompts.py` (prompts in runbook; 10-driver CONTEND cast). Agent/surface: Cursor.
+
+## 2026-08-14 03:04 IST - Locust scope + Express cost (no run)
+
+- Step 10 not started. Suite A = short hosted chat load (LLM). Suite B = 10 Drivers / 3–4 slots REST, zero double-books (no LLM). Locust files still missing. Live Express task is 1 vCPU / 2 GB; idle 1 task + ALB ≈ $0.07–0.08/hr; Locust minutes are pennies on Fargate. Delete Express after demo.
+- Verification: plan + `describe-task-definition default-setuhaul-api:2` cpu=1024 memory=2048. Locust **not run**. Agent/surface: Cursor.
+
+## 2026-08-14 02:59 IST - Owner pushed Step 8–9 work to main
+
+- Owner committed and pushed `9cabf48 after hosting` to `origin/main` (38 files). Includes AgentCore project, Runtime unwrap, smoke/stage scripts, wiki/plans. No `.env`, `POC_TEAM_ACCOUNTS.local.md`, CodeZip, or `cdk.out`. Vercel will rebuild production from this commit (no `VITE_*` change required). Sprint 4 gate **not struck**.
+- Verification: `git status` clean `main...origin/main`; `git show --stat 9cabf48`. Agent/surface: Cursor.
+
 ## 2026-08-14 02:52 IST - Sprint 4 Step 9 BFF ARN + hosted Runtime chat PASS
 
 - Set `AGENTCORE_RUNTIME_ARN` on ECS Express Mode `setuhaul-api` (task def `default-setuhaul-api:2`). Created task role `setuhaul-bff-task-role` with `InvokeAgentRuntime` on the SetuHaul Runtime only. Secrets/env names preserved. Vercel not rebuilt. One active revision; ARN set; `/health/live` **200**.

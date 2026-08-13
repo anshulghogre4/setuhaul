@@ -8,6 +8,34 @@ last_updated: 2026-08-14
 
 # Wiki log
 
+## 2026-08-14 03:30 IST | docs | root README Sprint 3–4 refresh
+
+- Hosted URLs, dual-mode, AgentCore/Locust/Docker commands, remaining work. Synced [[handoff]], CHANGELOG, master plan Living line.
+
+## 2026-08-14 03:26 IST | docs | Locust commands in READMEs
+
+- Root README Testing + loadtests README + demo runbook. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 03:22 IST | decision | runbook vs Locust scorecards
+
+- Phase A–G Sign-off is reply/invariant; Suite A is HTTP health; Suite B is double-book. Synced runbook, [[handoff]], CHANGELOG.
+
+## 2026-08-14 03:18 IST | verification | Locust Suite A hosted
+
+- 5 users, web UI `:8089`, 3 min. auth_me 5/5; one C2 503. Suite B not run. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG, master plan. Gate not struck.
+
+## 2026-08-14 03:20 IST | implementation | Locust files from demo runbook
+
+- Authored `loadtests/` Suite A chat + Suite B CONTEND REST. Prompts unit-tested against `docs/DEMO_MANUAL_RUNBOOK.md`. Live Locust not run. Synced [[handoff]], [[current-state]], [[testing]], [[implementation]], CHANGELOG, master plan, scoreboard §5.8. Gate not struck.
+
+## 2026-08-14 03:04 IST | decision | Locust scope and ECS cost
+
+- Suite A short chat; Suite B scarce REST. Express idle ~$0.08/hr. Locust not run. Synced scoreboard §5.8, [[handoff]], CHANGELOG.
+
+## 2026-08-14 02:59 IST | verification | owner pushed 9cabf48 to main
+
+- Step 8–9 files on `origin/main`. No secrets in the commit. Synced [[handoff]], CHANGELOG. Gate not struck.
+
 ## 2026-08-14 02:52 IST | verification | Sprint 4 Step 9 BFF ARN
 
 - Express ARN set; hosted Ravi chat through Runtime; CW logs + LangSmith `setuhaul.chat`. Synced [[handoff]], [[current-state]], [[testing]], [[implementation]], CHANGELOG, master plan, scoreboard. Gate not struck.

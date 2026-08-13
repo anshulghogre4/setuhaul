@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-14 02:52 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–9 evidenced; hosted BFF chat through AgentCore; Locust remaining; gate not struck)
+Last refreshed: 2026-08-14 03:30 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–9 evidenced; root README refreshed for teammates; Locust Suite A ran (not clean); Suite B not run; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -415,7 +415,8 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 - [x] ~~Add ERICA-style `observability.py` (OTEL histograms → CloudWatch + LangSmith metadata/tags); sanitize tool args in traces; project name `setuhaul-agentcore`.~~ Evidence 2026-08-13 23:50 IST file + units; hosted 2026-08-14 02:52 IST: CW Runtime log group `/aws/bedrock-agentcore/runtimes/SetuHaulAgent_SetuHaulAgent-18B4pX4XF1-DEFAULT`; LangSmith `setuhaul-agentcore` runs `setuhaul.chat` + `get_driver_operational_context`. Console screenshots optional; Locust spike remains Step 10.
 - [x] ~~Deploy AgentCore Runtime (`agentcore.cmd deploy`); document Runtime ARN; hosted BFF already switches on `AGENTCORE_RUNTIME_ARN` (step 9 env).~~ Evidence 2026-08-14 02:28 IST deploy + 02:52 IST Step 9: Express ARN set; hosted chat through Runtime.
 - [x] ~~Sprint 4 Step 9 point hosted BFF at AgentCore; one Driver chat through Runtime; CloudWatch + LangSmith.~~ Evidence 2026-08-14 02:52 IST: Express task def `:2`; `smoke_hosted_step9.py` exit 0; CW logs 21:20 UTC; LangSmith `setuhaul.chat` success. Vercel unchanged. Locust not run.
-- [ ] TODO: Locust suite A — AgentCore chat load (`loadtests/locust_agentcore_chat.py`) via `boto3.invoke_agent_runtime` with unique session IDs (ERICA `locustfile.py` pattern).
+- [x] ~~Author runbook-aligned Locust files (Suite A chat + Suite B REST).~~ Evidence 2026-08-14 03:20 IST: `loadtests/locust_runbook_chat.py` (Phases A–D exact prompts; C5/E5 only if `SETUHAUL_LOCUST_MUTATE=1`); `loadtests/locust_slot_contention.py` (CONTEND-01..10, never invents `slot_id`, 409 = pass); prompt unit `backend/tests/unit/test_locust_runbook_prompts.py`. Live Locust **not run**.
+- [ ] TODO: Locust suite A — hosted chat load (`loadtests/locust_runbook_chat.py`) via BFF `POST /api/v1/chat/message` (JWT → AgentCore) with unique `locust-session-<uuid>`. Keep short (LLM spend). **First run 2026-08-14 03:15–03:18 IST:** 5 users, web UI `:8089`, `auth_me` 5/5 200, 16/17 chat 200, **1× C2 503**, Locust exit 1. Not a clean pass; do not strike.
 - [ ] TODO: Locust suite B — scarce-capacity scheduling load (`loadtests/locust_slot_contention.py`) against `SHP-D16-CONTEND-01..10` / 3–4 STANDARD evening slots; post-run assert **zero** double-booked active appointments.
 - [ ] TODO: Capture CloudWatch Locust spike evidence + LangSmith tool-backed traces/screenshots for the demo.
 - [ ] TODO: After hosted smoke, fold `plans/sprint-4-hosting.md` into `docs/HOSTING.md` (click-path + Locust how-to) and refresh demo runbook beats (login → delay → options → race → NOSLOT → open CloudWatch + LangSmith during Locust). Scoreboard already exists (2026-08-13); this item is the post-smoke docs fold, not a missing plan.

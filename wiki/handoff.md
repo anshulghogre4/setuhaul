@@ -10,6 +10,13 @@ last_updated: 2026-08-14
 
 ## Latest work
 
+- **2026-08-14 03:30 IST:** Root `README.md` refreshed for Sprint 3–4 (hosted URLs, dual-mode, AgentCore/Locust/Docker commands, teammate missing-files). Gate not struck.
+- **2026-08-14 03:26 IST:** Locust commands copied into root `README.md` Testing, `loadtests/README.md`, and the demo runbook so teammates can run Suite A/B from repo root. Gate not struck.
+- **2026-08-14 03:22 IST:** Clarified pass/fail: runbook Sign-off ≠ Locust HTTP. Suite A 03:18 is hosting **not clean** (1× C2 503) and does **not** tick Phases A–G. Scoring box in the demo runbook + `loadtests/README.md`. Gate not struck.
+- **2026-08-14 03:18 IST:** Locust **Suite A ran** with web UI `http://127.0.0.1:8089` (autoquit closed it after 3 min). 5 users on hosted BFF. Login = laptop Supabase grant + JWT, not Vercel. `auth_me` 5/5 200. Chat 16/17 200; one Amit C2 **503**. Exit 1. Suite B not run. Gate not struck.
+- **2026-08-14 03:20 IST:** Step 10 Locust **files** written from [`docs/DEMO_MANUAL_RUNBOOK.md`](../docs/DEMO_MANUAL_RUNBOOK.md). Suite A = exact Phase A–D chat prompts (C5/E5 only if `SETUHAUL_LOCUST_MUTATE=1`). Suite B = Phase G CONTEND REST, never invents `slot_id`, 409 = pass, exit 1 on double-book. How-to: [`loadtests/README.md`](../loadtests/README.md). Live Locust **not run**. Next: run Suite A short then Suite B after cast reset when asked. Gate not struck.
+- **2026-08-14 03:04 IST:** Locust not run. Explained Suite A (short chat/LLM) vs Suite B (10×3–4 REST, zero double-books). Express idle ≈ $0.07–0.08/hr (1 vCPU/2 GB + ALB); Locust minutes are cheap on ECS, Suite A LLM is the spend. Next: write `loadtests/` and run when asked. Gate not struck.
+- **2026-08-14 02:59 IST:** Owner pushed `9cabf48 after hosting` to `origin/main` (Step 8–9 AgentCore + BFF ARN docs/code). Working tree clean. Vercel will rebuild; no env change needed. Next: Step 10 Locust when asked. Gate not struck.
 - **2026-08-14 02:52 IST:** Sprint 4 **Step 9 PASS**. Express BFF ARN set; task role `setuhaul-bff-task-role` can invoke Runtime. Hosted Ravi chat **200** via BFF → AgentCore (`get_driver_operational_context`). CW Runtime logs + LangSmith `setuhaul.chat` at the same minute. Vercel unchanged. Next: Step 10 Locust last. Do not strike the Sprint 4 gate.
 - **2026-08-14 02:28 IST:** Sprint 4 **Step 8 PASS**. AgentCore Runtime `SetuHaulAgent` READY (`SetuHaulAgent_SetuHaulAgent-18B4pX4XF1`). CLI invoke returned a real Ravi assistant reply (`list_active_shipments`, `ux=answered`). ARN is in gitignored `.env` only. Express BFF ARN still blank. Next: Step 9 set ARN on BFF + CloudWatch/LangSmith. Do not strike the Sprint 4 gate.
 - **2026-08-14 01:51 IST:** Sprint 4 **Step 7 PASS** on `main`. PR #5 `91cb6bb`; Vercel `https://setuhaul-roan.vercel.app` READY; `/driver/login` **200**; Ravi `/auth/me` + in-process chat **200**. Next: Step 8 AgentCore. Do not strike the Sprint 4 gate.
@@ -131,7 +138,7 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. **Step 8:** AgentCore (`create` → `validate` → `dev` → `dry-run` → `deploy` → CLI invoke). Do not set `AGENTCORE_RUNTIME_ARN` until Step 9. Do not strike the Sprint 4 gate.
+1. **Step 10:** Suite A ran (1× C2 503). When asked: Suite B after cast reset. Do not strike the Sprint 4 gate until Locust evidence + Express delete.
 2. Optional: open `https://setuhaul-roan.vercel.app/driver/login` as Ravi and click around Ops.
 2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
 3. Do not `git commit` unless asked.

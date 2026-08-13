@@ -137,7 +137,7 @@ After `--mode cast` reset, `D16-APT-RAVI-OLD` is **historical** (`CANCELLED` / n
 | C2 | B | `I need help with shipment SHP-D16-RACE-B.` | Context locked |
 | C3 | A | `Show feasible slots after 6 PM.` | Options include race slot if free |
 | C4 | B | `Show feasible slots after 6 PM.` | Same |
-| C5 | A+B **nearly together** | `Request slot D16-SLT-RACE for SHP-D16-RACE-A.` / `…RACE-B.` | **One** winner → `PENDING_CONFIRMATION`; **one** loser → conflict / refresh; **no double-book** |
+| C5 | A+B **nearly together** | `Request slot D16-SLT-RACE for SHP-D16-RACE-A.` / `Request slot D16-SLT-RACE for SHP-D16-RACE-B.` | **One** winner → `PENDING_CONFIRMATION`; **one** loser → conflict / refresh; **no double-book** |
 
 **Pass / fail**
 
@@ -229,6 +229,32 @@ Full **10×4** concurrency is already proven by live pytest (`SETUHAUL_RUN_LIVE_
 - [ ] PASS — no double-book on sampled slot
 - [ ] FAIL — two actives on one slot
 
+Hosted Locust (laptop → BFF): [`loadtests/README.md`](../loadtests/README.md). Suite A = Phases A–D chat prompts. Suite B = this CONTEND cast via REST (10 users, zero double-books). From **repo root**:
+
+```powershell
+# Suite A — web UI at http://127.0.0.1:8089 (then Start: 5 users / 1 per second)
+uv run --with locust locust -f loadtests/locust_runbook_chat.py --web-host 127.0.0.1 --web-port 8089
+
+# Suite A — headless (LLM; keep short)
+uv run --with locust locust -f loadtests/locust_runbook_chat.py --headless -u 5 -r 1 -t 3m
+
+# Suite B — reset first; 409 = pass; two winners on one slot = fail
+python supabase/demo/reset_demo_day.py --mode cast --include-shp1017 --confirm
+uv run --with locust locust -f loadtests/locust_slot_contention.py --headless -u 10 -r 10 -t 90s
+```
+
+### How to score pass / fail (do not mix scorecards)
+
+The **Sign-off** table below is the runbook verdict. Tick a phase **PASS** only when the **Expect** column is true (read the assistant reply, and for C/G check the slot has one active claim). Locust HTTP 200 is **not** that verdict.
+
+| Scorecard | PASS | FAIL |
+|---|---|---|
+| **This runbook (Phases A–G)** | Reply matches Expect (repair≠ETA, options not reserved, pending≠confirmed, NOSLOT invents nothing, one winner on a raced slot) | Opposite of that phase’s FAIL line |
+| **Locust Suite A** (hosted chat up) | `auth_me` + chat rows ~0% fail; Locust exit 0 | Any `http_5xx` / `success_false` (example: 2026-08-14 C2 **503** → Suite A not clean) |
+| **Locust Suite B** (Phase G) | Prints `PASS_zero_double_books`; exit 0 | Prints `FAIL_double_book`; exit 1 |
+
+Suite A does **not** read reply text and does **not** run C5/B4/E5 unless `SETUHAUL_LOCUST_MUTATE=1`. Phase F is Ops UI only. For a judge demo, walk this file in the browser; use Locust for hosted load + zero double-books.
+
 ---
 
 ## Optional extras (if time)
@@ -278,9 +304,16 @@ I need help with shipment SHP-D16-RAVI.
 Show feasible slots after 6 PM.
 Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.
 Has the warehouse confirmed my new slot?
+I need help with shipment SHP-D16-RACE-A.
+I need help with shipment SHP-D16-RACE-B.
+Request slot D16-SLT-RACE for SHP-D16-RACE-A.
+Request slot D16-SLT-RACE for SHP-D16-RACE-B.
+What are my active shipments?
+Escalate this no-slot case for SHP-D16-NOSLOT.
 Cancel my pending appointment request for SHP-D16-RAVI because plans changed.
 Find feasible slots for SHP-D16-NOSLOT.
 Find slots for SHP-D16-MULTI-B.
+I need help with shipment SHP-D16-CONTEND-01.
 ```
 
 ---

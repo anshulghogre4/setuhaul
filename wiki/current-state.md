@@ -10,6 +10,12 @@ last_verified: 2026-08-14
 
 ## Verified
 
+- **2026-08-14 03:30 IST:** Root `README.md` is the teammate entry for Sprint 3–4 status, hosted URLs, and AgentCore/Locust/Docker commands. Gate OPEN.
+- **2026-08-14 03:26 IST:** Locust copy-paste commands are in root `README.md` Testing, `loadtests/README.md`, and `docs/DEMO_MANUAL_RUNBOOK.md`. Gate OPEN.
+- **2026-08-14 03:22 IST:** Runbook Phase A–G Sign-off is **not** Locust HTTP 200. Suite A 03:18 = hosting not clean (C2 503); phases A–G remain unchecked until a human (or Suite B for G) verifies Expect. Gate OPEN.
+- **2026-08-14 03:18 IST:** Locust Suite A **ran** (web UI `:8089`, 5 users, 3 min) against Express BFF. Hosted login = Supabase grant on laptop + JWT. `auth_me` 5/5 200. Aggregated 17 reqs, 1 fail (`C2_lock_race_b` 503). Exit 1. Suite B not run. Gate OPEN.
+- **2026-08-14 03:20 IST:** Step 10 Locust **files** authored from `docs/DEMO_MANUAL_RUNBOOK.md` (`loadtests/locust_runbook_chat.py`, `loadtests/locust_slot_contention.py`). Live Locust **not run**. Gate OPEN.
+- **2026-08-14 02:59 IST:** `origin/main` is `9cabf48 after hosting`. Step 8–9 code/docs pushed; secrets not in the commit. Gate OPEN.
 - **2026-08-14 02:52 IST:** Sprint 4 Step 9 **PASS**. Express BFF ARN set (one revision); hosted Ravi `/chat/message` **200** through Runtime (`get_driver_operational_context`). CW AgentCore logs + LangSmith `setuhaul.chat` 21:20 UTC. Vercel not rebuilt. Gate OPEN.
 - **2026-08-14 02:28 IST:** Sprint 4 Step 8 **PASS**. Runtime `SetuHaulAgent` READY; CLI invoke `list_active_shipments` for Ravi; `ux=answered`. ARN in gitignored `.env` only. Hosted BFF still in-process (ARN blank). Gate OPEN.
 - **2026-08-14 01:51 IST:** Sprint 4 Step 7 **PASS**. `main` `91cb6bb` (PR #5). `https://setuhaul-roan.vercel.app/driver/login` **200**; Ravi `/auth/me` + chat **200**; CORS OK. ARN blank. Gate OPEN.

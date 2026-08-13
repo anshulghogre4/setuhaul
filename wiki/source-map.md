@@ -19,6 +19,7 @@ last_verified: 2026-08-14
 | API intent | `docs/API.md` |
 | Agent workflow | root `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/setuhaul.mdc`, `wiki/AGENTS.md` |
 | Session history | `CHANGELOG.md`, `wiki/log.md`, `wiki/handoff.md` |
+| Hosted Locust (Step 10) | `loadtests/README.md`, `loadtests/locust_runbook_chat.py`, `loadtests/locust_slot_contention.py`, `docs/DEMO_MANUAL_RUNBOOK.md` |
 | Knowledge graph | `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json` when present |
 
 Executable source and fresh verification outrank summaries when they disagree.

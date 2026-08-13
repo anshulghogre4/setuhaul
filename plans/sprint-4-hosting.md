@@ -506,14 +506,21 @@ Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no
 
 ### 5.8 Locust last
 
+Locust files are in `loadtests/` (runbook-aligned). Copy-paste commands: root `README.md` Testing, `loadtests/README.md`, and `docs/DEMO_MANUAL_RUNBOOK.md`. Locust runs on the **laptop** and only *hits* the hosted BFF / AgentCore. Reset the cast before Suite B or any `SETUHAUL_LOCUST_MUTATE=1` run. Suite A first run 2026-08-14 (1× C2 503). Suite B not run.
+
+| Suite | What it proves | Target | LLM? |
+|---|---|---|---|
+| **A chat** | Hosted assistant stays up under a few concurrent Drivers | `POST /api/v1/chat/message` (JWT) **or** `InvokeAgentRuntime` with unique `locust-session-<uuid>` | Yes — this is the spend |
+| **B scarce slots** | 10 Drivers / 3–4 evening STANDARD slots → **zero** double-books | `SHP-D16-CONTEND-01..10` via scheduling REST (same as Sprint 3 pytest 10×4) | No |
+
+Keep Suite A short (about 5–10 users, a few minutes, `wait` 1–3s). Suite B is a burst, not a long soak. Pass = CW spike + ~0% system error + LangSmith `setuhaul.chat` + post-run assert no two active appointments on one slot.
+
+**ECS cost (live Express `setuhaul-api`, us-east-1, 1 vCPU / 2 GB, min 1 / max 2):** list prices ~$0.04048/vCPU-hr + $0.004445/GB-hr + ALB ~$0.0225/hr. Idle **1 task + ALB ≈ $0.07–0.08/hr** (~$2/day if left up). Locust may scale to 2 tasks for minutes (**pennies**). The Locust *run* bill is mostly **LLM tokens** on Suite A, not Fargate. Delete Express Mode after the demo — the ALB bills while idle.
+
 ```powershell
-uv run --with locust --with "boto3[crt]" --with python-dotenv locust -f loadtests/locust_agentcore_chat.py
+uv run --with locust locust -f loadtests/locust_runbook_chat.py --headless -u 5 -r 1 -t 3m
+uv run --with locust locust -f loadtests/locust_slot_contention.py --headless -u 10 -r 10 -t 90s
 ```
-
-- Suite A: chat via hosted BFF JWT (or `invoke_agent_runtime` with unique session IDs).
-- Suite B: scarce slots (`SHP-D16-CONTEND-01..10`); assert **zero** double-books.
-
-Evidence: CloudWatch spike + ~0% system error; LangSmith `setuhaul.chat` + history-size chart.
 
 ### 5.9 Vercel (not AWS)
 
