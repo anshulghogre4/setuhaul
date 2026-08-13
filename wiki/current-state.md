@@ -10,7 +10,10 @@ last_verified: 2026-08-14
 
 ## Verified
 
-- **2026-08-14 01:46 IST:** Owner lifted `hosting`→`main` merge lock. Vercel tracks `main`. Merge not yet verified on GitHub. Gate OPEN.
+- **2026-08-14 02:52 IST:** Sprint 4 Step 9 **PASS**. Express BFF ARN set (one revision); hosted Ravi `/chat/message` **200** through Runtime (`get_driver_operational_context`). CW AgentCore logs + LangSmith `setuhaul.chat` 21:20 UTC. Vercel not rebuilt. Gate OPEN.
+- **2026-08-14 02:28 IST:** Sprint 4 Step 8 **PASS**. Runtime `SetuHaulAgent` READY; CLI invoke `list_active_shipments` for Ravi; `ux=answered`. ARN in gitignored `.env` only. Hosted BFF still in-process (ARN blank). Gate OPEN.
+- **2026-08-14 01:51 IST:** Sprint 4 Step 7 **PASS**. `main` `91cb6bb` (PR #5). `https://setuhaul-roan.vercel.app/driver/login` **200**; Ravi `/auth/me` + chat **200**; CORS OK. ARN blank. Gate OPEN.
+- **2026-08-14 01:46 IST:** Owner lifted `hosting`→`main` merge lock. Vercel tracks `main`. Merge verified 01:51 IST. Gate OPEN.
 - **2026-08-14 01:40 IST:** Vercel project `setuhaul` production READY from `main` at `https://setuhaul-roan.vercel.app`. JS has BFF host. `/driver/login` **404** (no SPA rewrites on `main`). Step 7 not passed. Gate OPEN.
 - **2026-08-14 01:37 IST:** Do not merge `hosting`→`main`. Step 7 can use a Vercel **preview** of `hosting` while Production Branch stays `main`. Gate OPEN.
 - **2026-08-14 01:30 IST:** Vercel Import defaults unsafe (`main`, Root `./`, FastAPI as a second service, 25 env vars). Frontend-only + `hosting` + three `VITE_*` required before Deploy. Gate OPEN.

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "SetuHaulAgent",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "SetuHaulAgent"
+  },
+  "runtimes": [
+    {
+      "name": "SetuHaulAgent",
+      "build": "CodeZip",
+      "entrypoint": "app/assistant/agentcore_main.py",
+      "codeLocation": "agentcore/codezip/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "envVars": [
+        {
+          "name": "LANGSMITH_TRACING",
+          "value": "true"
+        },
+        {
+          "name": "LANGSMITH_PROJECT",
+          "value": "setuhaul-agentcore"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        }
+      ]
+    }
+  ],
+  "memories": [],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [],
+  "datasets": [],
+  "payments": []
+}

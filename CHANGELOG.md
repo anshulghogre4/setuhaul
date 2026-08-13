@@ -2,6 +2,23 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-14 02:52 IST - Sprint 4 Step 9 BFF ARN + hosted Runtime chat PASS
+
+- Set `AGENTCORE_RUNTIME_ARN` on ECS Express Mode `setuhaul-api` (task def `default-setuhaul-api:2`). Created task role `setuhaul-bff-task-role` with `InvokeAgentRuntime` on the SetuHaul Runtime only. Secrets/env names preserved. Vercel not rebuilt. One active revision; ARN set; `/health/live` **200**.
+- Hosted Ravi smoke `docs/scripts/smoke_hosted_step9.py` exit 0: grant **200**; `/auth/me` `USR001`/`DRIVER`/`DRV001`; `POST /chat/message` **200** `success=true` tool `get_driver_operational_context`. AgentCore CW logs at 21:20 UTC show Runtime OTEL `gen_ai_agent` + Upstash/LLM HTTP 200 (same minute). LangSmith project `setuhaul-agentcore`: `setuhaul.chat` + `get_driver_operational_context` success 21:20 UTC. Residual: OTEL AWS exporter log `Failed to load AWS Credentials: maximum recursion depth exceeded` (CW log group still received lines). Locust **not run**. Sprint 4 gate **not struck**.
+- Verification: Express describe (names only); smoke script; `agentcore.cmd logs --since 15m`; `docs/scripts/check_langsmith_step9.py` run names only. Agent/surface: Cursor.
+
+## 2026-08-14 02:28 IST - Sprint 4 Step 8 AgentCore Runtime PASS
+
+- Deployed `SetuHaulAgent` CodeZip Runtime in `us-east-1` (stack `AgentCore-SetuHaulAgent-default`). First dry-run failed: CDK requires `pyproject.toml` at `agentcore/codezip/` (ERICA layout). Stager now copies `backend/pyproject.agentcore.toml`. `agentcore.cmd deploy --dry-run` then live deploy **PASS**. Runtime READY `SetuHaulAgent_SetuHaulAgent-18B4pX4XF1`. Inline IAM `SetuHaulSsmRead` on the Runtime role (`/setuhaul/*` GetParameter only). ARN saved to gitignored `.env` only — Express BFF ARN **still blank**.
+- First CLI invoke returned `Provide verified execution_context` because `agentcore invoke --prompt-file` wraps JSON as a string prompt. Added `_normalize_runtime_payload`; focused units **2 passed**. Redeploy + second invoke **PASS**: Ravi “Show my shipment” → real reply, tool `list_active_shipments`, `ux=answered`, `source=postgresql` (`SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`). `agentcore dev --logs` skipped (validate + dry-run + units + live invoke). Step 9 ARN-on-BFF / CW / LangSmith **not started**. Sprint 4 gate **not struck**.
+- Verification: `agentcore.cmd status` READY; invoke session `setuhaul-dev-session-000000000000000002`; pytest `test_agentcore_unwraps_cli_prompt_file_json` + `test_agentcore_ssm_map_is_names_only`. Agent/surface: Cursor.
+
+## 2026-08-14 01:51 IST - Sprint 4 Step 7 Vercel on main PASS
+
+- Owner merged PR #5 `hosting` → `main` (`91cb6bb`). Vercel production rebuilt READY. `https://setuhaul-roan.vercel.app/driver/login` and `/ops/login` **200** (SPA rewrites). JS still has Express BFF host. Ravi grant **200**; BFF `/auth/me` `USR001`/`DRIVER`/`DRV001`; `POST /api/v1/chat/message` **200** tool `get_driver_operational_context`. CORS ACAO matches the Vercel origin. ARN blank. Ops dashboard click **not run**. Sprint 4 gate **not struck**.
+- Verification: Vercel MCP deploy + URL fetch; `docs/scripts/smoke_hosted_step7.py` exit 0. Agent/surface: Cursor.
+
 ## 2026-08-14 01:46 IST - Owner lifted hosting→main merge lock
 
 - Owner chose Vercel-on-`main` and will merge `hosting` → `main`. Removed the “merge only after Step 10” branch rule from `plans/sprint-4-hosting.md` §6 / header, `plans/README.md`, master-plan Living table, [[implementation]], [[contradictions]]. Step order, Actions CI-only, and Sprint 4 exit-gate evidence stay locked. Merge itself is owner-performed (not this turn).

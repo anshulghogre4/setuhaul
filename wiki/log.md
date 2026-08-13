@@ -8,6 +8,18 @@ last_updated: 2026-08-14
 
 # Wiki log
 
+## 2026-08-14 02:52 IST | verification | Sprint 4 Step 9 BFF ARN
+
+- Express ARN set; hosted Ravi chat through Runtime; CW logs + LangSmith `setuhaul.chat`. Synced [[handoff]], [[current-state]], [[testing]], [[implementation]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 02:28 IST | verification | Sprint 4 Step 8 AgentCore
+
+- Runtime READY; CLI invoke real Ravi reply (`list_active_shipments`). ARN local-only. BFF ARN blank. Synced [[handoff]], [[current-state]], [[testing]], [[implementation]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 01:51 IST | verification | Sprint 4 Step 7 Vercel
+
+- PR #5 on `main`; login routes 200; hosted Ravi chat 200. Synced [[handoff]], [[current-state]], [[testing]], [[implementation]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
 ## 2026-08-14 01:46 IST | decision | hosting→main merge lock lifted
 
 - Vercel production tracks `main`. Exit gate still requires Steps 7–10 evidence. Synced scoreboard, master plan, [[implementation]], [[contradictions]], [[handoff]], [[current-state]], CHANGELOG.

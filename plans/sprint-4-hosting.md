@@ -22,9 +22,9 @@ Work **down this list**. Do not start a later step until the earlier one is done
 | **4** | AWS once: CLI, CDK bootstrap, billing $20/$50, SSM secrets | **PASS 2026-08-14 00:28 IST** — identity + `/setuhaul/*` names (billing budgets still console) | §5.0–5.3 |
 | **5** | Build/push ECR image (`linux/amd64`) | **PASS 2026-08-14 00:45 IST** — Image in `setuhaul-api` | §5.4 |
 | **6** | Host the BFF — **ARN still blank** | **PASS 2026-08-14 01:00 IST** — Express Mode after App Runner reject; `/health/live` 200; ALB idle 180s | §5.5 |
-| **7** | Host the SPA on Vercel | `VITE_API_BASE_URL` = BFF HTTPS **before** build. Login, `/auth/me`, in-process Driver chat, Ops dashboard | §5.9 |
-| **8** | AgentCore (only after local chat already works) | `create` → `validate` → `dev` → `dry-run` → `deploy` → one CLI invoke | §5.6 |
-| **9** | Point BFF at AgentCore | Set `AGENTCORE_RUNTIME_ARN` on the BFF; one Driver chat through Runtime; CloudWatch + LangSmith | §5.5 + §5.7 |
+| **7** | Host the SPA on Vercel | **PASS 2026-08-14 01:51 IST** — `setuhaul-roan.vercel.app` from `main` `91cb6bb`; login routes 200; Ravi `/auth/me` + in-process chat 200 | §5.9 |
+| **8** | AgentCore (only after local chat already works) | **PASS 2026-08-14 02:28 IST** — Runtime READY; CLI invoke `list_active_shipments`; ARN in `.env` only; BFF ARN still blank | §5.6 |
+| **9** | Point BFF at AgentCore | **PASS 2026-08-14 02:52 IST** — Express ARN set; hosted Ravi chat through Runtime; CW + LangSmith `setuhaul.chat` | §5.5 + §5.7 |
 | **10 LAST** | Locust | Suite A chat + suite B scarce slots; **zero** double-books; CW spike; LangSmith traces | §5.8 |
 | **After last** | Save credits | Pause App Runner **or delete** Express Mode. Strike Sprint 4 gate only with Steps 7–10 evidence | §6 |
 
@@ -109,7 +109,7 @@ Today’s [`chat.py`](../backend/app/api/v1/routers/chat.py) calls `run_assistan
 
 ## 1. Compatibility verdict (2026-08-13)
 
-**The topology works.** Same commit can stay local and go live. **Step 1 code is in** (chat alias, CORS regex, Dockerfile, vercel.json, ARN switch). **Step 2 local smoke PASS** 2026-08-14 00:12/00:16 IST. **Step 3 Docker PASS** 2026-08-14 00:20 IST. **Step 4 SSM PASS** 2026-08-14 00:28 IST. **Step 5 ECR PASS** 2026-08-14 00:45 IST. **Step 6 BFF PASS** 2026-08-14 01:00 IST. Live hosted smoke is still Steps 7–10.
+**The topology works.** Same commit can stay local and go live. **Step 1 code is in** (chat alias, CORS regex, Dockerfile, vercel.json, ARN switch). **Step 2 local smoke PASS** 2026-08-14 00:12/00:16 IST. **Step 3 Docker PASS** 2026-08-14 00:20 IST. **Step 4 SSM PASS** 2026-08-14 00:28 IST. **Step 5 ECR PASS** 2026-08-14 00:45 IST. **Step 6 BFF PASS** 2026-08-14 01:00 IST. **Step 7 Vercel PASS** 2026-08-14 01:51 IST. **Step 8 AgentCore PASS** 2026-08-14 02:28 IST (CLI invoke). **Step 9 BFF ARN PASS** 2026-08-14 02:52 IST (hosted chat through Runtime; CW + LangSmith). Locust remains Step 10.
 
 ```mermaid
 sequenceDiagram
@@ -277,7 +277,7 @@ Probe App Runner (~30s). If new-customer reject, ECS Express Mode with the **sam
 
 Set `VITE_API_BASE_URL` to the step-6 URL **then** build. Smoke: login, `/auth/me`, Driver chat (still in-process), Ops dashboard.
 
-**Pass:** hosted UI talks to hosted API. This proves hosting even if AgentCore is not up yet.
+**Pass:** hosted UI talks to hosted API. This proves hosting even if AgentCore is not up yet. **Evidence 2026-08-14 01:51 IST:** `main` `91cb6bb`; `https://setuhaul-roan.vercel.app/driver/login` **200**; Ravi `/auth/me` + in-process chat **200**.
 
 ### Step 8 — AgentCore
 
@@ -491,11 +491,11 @@ $SESSION = "setuhaul-dev-session-000000000000000001"
 agentcore.cmd deploy --dry-run --yes
 agentcore.cmd deploy --yes
 agentcore.cmd status
-agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION "Show my shipment"
+agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION --prompt-file docs/scripts/agentcore_invoke_ravi.json
 agentcore.cmd logs --runtime SetuHaulAgent
 ```
 
-Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only**.
+Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package plus `backend/pyproject.agentcore.toml` staged to `agentcore/codezip/pyproject.toml` (CDK requires it). CLI `--prompt-file` wraps JSON as a string prompt; `agentcore_main._normalize_runtime_payload` unwraps it. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only** (Step 9). Do not set it on Express Mode during Step 8.
 
 ### 5.7 CloudWatch / LangSmith
 
@@ -620,7 +620,7 @@ later     →  optional Actions + AWS OIDC to push ECR / update Express Mode
 
 Owner lifted the `hosting`→`main` merge lock on 2026-08-14 01:46 IST (Vercel production tracks `main`). Do **not** strike the Sprint 4 exit gate until all of the following have evidence:
 
-- [ ] **Step 7:** Hosted Driver/Ops UI on Vercel talks to the hosted FastAPI BFF (login, `/auth/me`, Ops dashboard).
+- [x] ~~**Step 7:** Hosted Driver/Ops UI on Vercel talks to the hosted FastAPI BFF (login, `/auth/me`, Ops dashboard).~~ Evidence 2026-08-14 01:51 IST: `https://setuhaul-roan.vercel.app/driver/login` **200**; Ravi `/auth/me` **200**; in-process `POST /chat/message` **200**. Ops UI route `/ops/login` **200**; dashboard click not run.
 - [ ] **Steps 7 then 9:** Driver chat works hosted (in-process first, then via AgentCore ARN).
 - [ ] **Steps 9–10:** CloudWatch shows Locust traffic with ~0% system error.
 - [ ] **Step 9:** LangSmith shows tool-backed `setuhaul.chat` traces (no invented slots).

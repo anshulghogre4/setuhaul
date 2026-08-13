@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from typing import Any
 
 from app.assistant.run_assistant import run_assistant
@@ -13,6 +15,17 @@ from app.db.session import db
 
 logger = logging.getLogger(__name__)
 
+# Names only. Values stay in SSM / process env and are never logged.
+_SSM_ENV = (
+    ("/setuhaul/google-api-key", "GOOGLE_API_KEY"),
+    ("/setuhaul/openai-api-key", "OPENAI_API_KEY"),
+    ("/setuhaul/upstash-redis-rest-url", "UPSTASH_REDIS_REST_URL"),
+    ("/setuhaul/upstash-redis-rest-token", "UPSTASH_REDIS_REST_TOKEN"),
+    ("/setuhaul/langsmith-api-key", "LANGSMITH_API_KEY"),
+    ("/setuhaul/supabase-url", "SUPABASE_URL"),
+    ("/setuhaul/database-url", "DATABASE_URL"),
+)
+
 try:
     from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -21,13 +34,65 @@ except Exception:  # noqa: BLE001 — FastAPI/local pytest must import this modu
     app = None  # type: ignore[assignment]
 
 
+def _hydrate_ssm_into_env() -> int:
+    """Copy /setuhaul/* SecureStrings into env. Never prints values."""
+    loaded = 0
+    missing = [env_key for _, env_key in _SSM_ENV if not (os.environ.get(env_key) or "").strip()]
+    if not missing:
+        return 0
+    try:
+        import boto3
+    except ImportError:
+        logger.warning("ssm hydrate skipped: boto3 missing")
+        return 0
+    region = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1").strip()
+    client = boto3.client("ssm", region_name=region)
+    for name, env_key in _SSM_ENV:
+        if (os.environ.get(env_key) or "").strip():
+            continue
+        try:
+            value = client.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
+        except Exception:  # noqa: BLE001
+            logger.warning("ssm hydrate miss %s", name)
+            continue
+        if value:
+            os.environ[env_key] = value
+            loaded += 1
+    if not (os.environ.get("LANGSMITH_PROJECT") or "").strip():
+        os.environ["LANGSMITH_PROJECT"] = "setuhaul-agentcore"
+    get_settings.cache_clear()
+    return loaded
+
+
 def _ensure_db() -> None:
+    _hydrate_ssm_into_env()
     settings = get_settings()
     if db.engine is None:
         db.configure(settings)
 
 
+def _normalize_runtime_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Accept BFF dicts or CLI --prompt-file JSON wrapped as a string prompt."""
+    if isinstance(payload.get("execution_context"), dict):
+        return payload
+    for key in ("prompt", "message", "user_input"):
+        raw = payload.get(key)
+        if not isinstance(raw, str):
+            continue
+        text = raw.strip()
+        if not text.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get("execution_context"), dict):
+            return parsed
+    return payload
+
+
 async def _run_turn(payload: dict[str, Any]) -> dict[str, Any]:
+    payload = _normalize_runtime_payload(payload)
     message = (payload.get("message") or payload.get("prompt") or payload.get("user_input") or "").strip()
     if not message:
         return {"error": "Provide 'message'."}

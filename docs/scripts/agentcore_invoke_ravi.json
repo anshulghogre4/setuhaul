@@ -1,0 +1,18 @@
+{
+  "message": "Show my shipment",
+  "session_id": "setuhaul-dev-session-000000000000000001",
+  "thread_id": "default",
+  "execution_context": {
+    "request_id": "step8-cli-invoke",
+    "auth_subject": "00000000-0000-0000-0000-000000000001",
+    "user_id": "USR001",
+    "email": "ravi.kumar@setuhaul.com",
+    "full_name": "Ravi Kumar",
+    "role_id": "ROL001",
+    "role_name": "DRIVER",
+    "driver_id": "DRV001",
+    "facility_id": "FAC-JAI-01",
+    "is_active": true,
+    "permissions": []
+  }
+}

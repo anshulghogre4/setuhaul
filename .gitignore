@@ -25,6 +25,12 @@ web/dist/
 frontend/node_modules/
 frontend/dist/
 
+# AgentCore generated zip / CDK junk (keep agentcore.json)
+agentcore/codezip/
+agentcore/cdk/node_modules/
+agentcore/cdk/cdk.out/
+agentcore/.cache/
+
 # Generated / local scratch
 tmp/
 graphify-out/

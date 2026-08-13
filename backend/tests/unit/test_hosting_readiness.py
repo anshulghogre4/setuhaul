@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -155,3 +156,28 @@ def test_cors_localhost_and_vercel_regex():
         },
     )
     assert vercel.headers.get("access-control-allow-origin") == "https://setuhaul-abc.vercel.app"
+
+
+def test_agentcore_ssm_map_is_names_only():
+    from app.assistant.agentcore_main import _SSM_ENV
+
+    assert _SSM_ENV
+    for name, env_key in _SSM_ENV:
+        assert name.startswith("/setuhaul/")
+        assert env_key.isupper()
+        assert "KEY" in env_key or "URL" in env_key or "TOKEN" in env_key or env_key == "DATABASE_URL"
+
+
+def test_agentcore_unwraps_cli_prompt_file_json():
+    from app.assistant.agentcore_main import _normalize_runtime_payload
+
+    inner = {
+        "message": "Show my shipment",
+        "execution_context": {"user_id": "USR001", "role_name": "DRIVER"},
+    }
+    wrapped = {"prompt": json.dumps(inner)}
+    out = _normalize_runtime_payload(wrapped)
+    assert out["message"] == "Show my shipment"
+    assert out["execution_context"]["user_id"] == "USR001"
+    already = _normalize_runtime_payload(inner)
+    assert already is inner

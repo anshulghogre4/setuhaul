@@ -10,6 +10,9 @@ last_updated: 2026-08-14
 
 ## Latest work
 
+- **2026-08-14 02:52 IST:** Sprint 4 **Step 9 PASS**. Express BFF ARN set; task role `setuhaul-bff-task-role` can invoke Runtime. Hosted Ravi chat **200** via BFF → AgentCore (`get_driver_operational_context`). CW Runtime logs + LangSmith `setuhaul.chat` at the same minute. Vercel unchanged. Next: Step 10 Locust last. Do not strike the Sprint 4 gate.
+- **2026-08-14 02:28 IST:** Sprint 4 **Step 8 PASS**. AgentCore Runtime `SetuHaulAgent` READY (`SetuHaulAgent_SetuHaulAgent-18B4pX4XF1`). CLI invoke returned a real Ravi assistant reply (`list_active_shipments`, `ux=answered`). ARN is in gitignored `.env` only. Express BFF ARN still blank. Next: Step 9 set ARN on BFF + CloudWatch/LangSmith. Do not strike the Sprint 4 gate.
+- **2026-08-14 01:51 IST:** Sprint 4 **Step 7 PASS** on `main`. PR #5 `91cb6bb`; Vercel `https://setuhaul-roan.vercel.app` READY; `/driver/login` **200**; Ravi `/auth/me` + in-process chat **200**. Next: Step 8 AgentCore. Do not strike the Sprint 4 gate.
 - **2026-08-14 01:46 IST:** Owner lifted the `hosting`→`main` merge lock. Vercel production tracks `main`. Owner will merge `hosting` → `main`. Step order + Actions CI-only + Sprint 4 exit-gate evidence **unchanged**. After merge, Vercel should rebuild `setuhaul-roan.vercel.app` with `vercel.json`. Then smoke `/driver/login`. Gate not struck.
 - **2026-08-14 01:43 IST:** Main-only repercussions: full `hosting`→`main` merge would fix SPA 404s via auto-deploy but puts unfinished AgentCore/Locust work on the default branch and breaks the post-smoke merge lock. Prefer `hosting` preview; if blocked, smallest main change is `frontend/vercel.json` only. Do not merge unless asked. Gate not struck.
 - **2026-08-14 01:40 IST:** Inspected existing Vercel project `setuhaul`. Production from **`main`** `677c218` is READY at `https://setuhaul-roan.vercel.app`. Vite build PASS; JS points at Express BFF (not localhost). `/` **200**; `/driver/login` and `/ops/login` **404** (no `vercel.json` on `main`). Do not merge. Next: Create Deployment from `hosting` so SPA rewrites land, then smoke login. Gate not struck.
@@ -128,7 +131,8 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. **Step 7:** Owner merges `hosting` → `main` (lock lifted). Wait for Vercel rebuild of `https://setuhaul-roan.vercel.app`, then smoke `/driver/login` + `/auth/me` + in-process chat. Do not strike the Sprint 4 gate.
+1. **Step 8:** AgentCore (`create` → `validate` → `dev` → `dry-run` → `deploy` → CLI invoke). Do not set `AGENTCORE_RUNTIME_ARN` until Step 9. Do not strike the Sprint 4 gate.
+2. Optional: open `https://setuhaul-roan.vercel.app/driver/login` as Ravi and click around Ops.
 2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
 3. Do not `git commit` unless asked.
 

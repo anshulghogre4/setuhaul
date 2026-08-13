@@ -22,7 +22,7 @@ Sprint goals:
 1. Trusted walking skeleton: two entry screens, verified role routing, driver profile/logout shell, current-driver context, read-only ops dashboard, and CI baseline. **No chat mount.** **COMPLETE** (exit gate 2026-08-07 17:55 IST).
 2. Conversational exception and ETA/status coordination POC: `ChatOpenAI` + `bind_tools` + manual bounded invoke loop, clarification, one atomic typed ETA/exception command path, Redis 24h conversation state, LangSmith traces, and populated read-only Ops dashboard of stored schedule/dock/rule facts. **COMPLETE** (exit gate 2026-08-07 19:35 IST).
 3. Deterministic feasibility and concurrency-safe allocation. **COMPLETE** (exit gate 2026-08-12 00:25 IST).
-4. Hosting, AgentCore, observability, Locust. **PLANNED** — scoreboard `plans/sprint-4-hosting.md`. Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** (same Docker image if App Runner rejects new accounts), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust suites A/B. Vercel production tracks `main` (owner lifted the `hosting`-only merge lock 2026-08-14). Exit gate not struck.
+4. Hosting, AgentCore, observability, Locust. **PLANNED** — Steps 1–9 evidenced (Vercel 01:51; AgentCore CLI 02:28; BFF ARN + hosted Runtime chat 02:52 IST). Step 10 Locust remains. Exit gate not struck.
 
 Do not build maps, user management, or the optional facility-wide OR-Tools engine before an owner promotion. Sprint 4 application/deploy work follows `plans/sprint-4-hosting.md` on `main`.
 
@@ -31,6 +31,10 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 **Living status (2026-08-07 19:35 IST):** Sprint 1 **COMPLETE**. Sprint 2 **COMPLETE**. Sprint 3 **TODO** (active next).
 
 **Living status refresh (2026-08-11 23:45 IST):** `plans/implementation-master-plan.md` Living Sprint 3 checklist reconciled again. Struck with dated evidence: demo-day 16 Aug dataset + Auth cast, timestamptz ETA fix, Redis summaries/chat restore, cancel/confirm, feasible/NOSLOT API smoke, request/status/race proofs. Exit gate remains OPEN. Remaining vs deferred scoreboard and §13 next actions updated.
+
+**Living status refresh (2026-08-14 02:52 IST):** Sprint 4 Step 9 **PASS** (BFF ARN set; hosted Ravi chat through Runtime; CW + LangSmith `setuhaul.chat`). Next Step 10 Locust. Gate OPEN.
+
+**Living status refresh (2026-08-14 02:28 IST):** Sprint 4 Step 8 AgentCore **PASS** (Runtime READY; CLI invoke `list_active_shipments`). Next Step 9 ARN on BFF. Gate OPEN.
 
 **Living status refresh (2026-08-12 00:15 IST):** Sprint 4 **PLANNED** added as §8.1. AgentCore/CloudWatch/Locust hosting promoted from §12 deferred. Sprint 3 remains **IN PROGRESS** / gate OPEN. No hosting code deployed this turn.
 
