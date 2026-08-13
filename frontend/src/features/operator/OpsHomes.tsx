@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiGet } from '../../core/http/api'
+import { apiGet, apiPost } from '../../core/http/api'
 import { ProtectedLayout } from '../../layouts/ProtectedLayout'
 
 type Summary = {
@@ -29,6 +29,27 @@ type EscalationItem = {
   escalation_status: string
   severity_code: string
   created_at: string
+  payload?: Record<string, any>
+}
+
+function extractEscalationReason(item: EscalationItem): string {
+  const p = item.payload || {}
+  if (p.reason) return String(p.reason)
+  if (p.note) return String(p.note)
+  if (p.message) return String(p.message)
+  if (p.rejected_reasons && Array.isArray(p.rejected_reasons) && p.rejected_reasons.length > 0) {
+    const first = p.rejected_reasons[0]
+    return typeof first === 'object'
+      ? `${first.failure_code || 'SLOT_REJECTED'}: ${first.message || 'No dock available'}`
+      : String(first)
+  }
+  if (item.escalation_type === 'NO_SLOT') {
+    return 'No same-day dock slot available matching shipment requirements and driver ETA.'
+  }
+  if (item.escalation_type === 'DRIVER_BREAKDOWN') {
+    return 'Driver reported vehicle breakdown or emergency incident on route.'
+  }
+  return 'Requires manual operational review and decision.'
 }
 
 function prettyStatus(status: string) {
@@ -89,6 +110,11 @@ function OpsBody({
   const [loading, setLoading] = useState(true)
   const [asOf, setAsOf] = useState<string | null>(null)
 
+  // Decision Modal State
+  const [selectedEscalation, setSelectedEscalation] = useState<EscalationItem | null>(null)
+  const [decisionNote, setDecisionNote] = useState('')
+  const [submittingDecision, setSubmittingDecision] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
     const q = !global && facilityId ? `?facility_id=${encodeURIComponent(facilityId)}` : ''
@@ -101,10 +127,10 @@ function OpsBody({
       setSummary(sum.data)
       setExceptions(exc.data.items || [])
       setEscalations(queue.data.items || [])
-      setAsOf(queue.data.as_of || exc.data.as_of || sum.data.as_of)
+      setAsOf(sum.data.as_of)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ops load failed')
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
@@ -113,6 +139,23 @@ function OpsBody({
   useEffect(() => {
     void load()
   }, [load])
+
+  async function handleTakeDecision(escalationId: string, status: string) {
+    setSubmittingDecision(true)
+    try {
+      await apiPost(`/api/v1/operations/escalations/${escalationId}/resolve`, {
+        resolution_note: decisionNote || 'Resolved by Operations user',
+        status: status,
+      })
+      setSelectedEscalation(null)
+      setDecisionNote('')
+      void load()
+    } catch (err) {
+      alert('Failed to resolve escalation: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSubmittingDecision(false)
+    }
+  }
 
   if (error) {
     return (
@@ -187,7 +230,6 @@ function OpsBody({
           <div className="card-heading">
             <div>
               <h2>Shipment status</h2>
-              <p className="muted">Authorized aggregate for the current scope.</p>
             </div>
             <span className="chip secondary">{statusEntries.length} buckets</span>
           </div>
@@ -214,7 +256,6 @@ function OpsBody({
           <div className="card-heading">
             <div>
               <h2>Latest exceptions</h2>
-              <p className="muted">Refresh after a driver ETA write to reconcile state.</p>
             </div>
             <span className="chip secondary">{exceptions.length} rows</span>
           </div>
@@ -249,7 +290,6 @@ function OpsBody({
         <div className="card-heading">
           <div>
             <h2>Escalation queue</h2>
-            <p className="muted">Open human-takeover items for the authorized facility scope.</p>
           </div>
           <span className="chip secondary">{escalations.length} open</span>
         </div>
@@ -260,27 +300,199 @@ function OpsBody({
           </div>
         ) : (
           <ul className="exception-list">
-            {escalations.slice(0, 8).map((item) => (
-              <li key={item.escalation_id}>
-                <div>
-                  <strong>{item.shipment_id}</strong>
-                  <span>{prettyStatus(item.escalation_type)} · {prettyStatus(item.escalation_status)}</span>
-                  <small>Opened {formatTimestamp(item.created_at)}</small>
-                </div>
-                <div className="exception-meta">
-                  <span>{item.severity_code}</span>
-                  {item.driver_id ? <span>{item.driver_id}</span> : null}
-                </div>
-              </li>
-            ))}
+            {escalations.slice(0, 8).map((item) => {
+              const reasonText = extractEscalationReason(item)
+              return (
+                <li key={item.escalation_id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                    <div>
+                      <strong>{item.shipment_id}</strong>
+                      <span style={{ marginLeft: '10px' }}>
+                        {prettyStatus(item.escalation_type)} · {prettyStatus(item.escalation_status)}
+                      </span>
+                      <small style={{ display: 'block', marginTop: '2px' }}>Opened {formatTimestamp(item.created_at)}</small>
+                    </div>
+                    <div className="exception-meta" style={{ textAlign: 'right' }}>
+                      <span className="chip secondary">{item.severity_code}</span>
+                      {item.driver_id ? <span style={{ marginLeft: '6px' }}>{item.driver_id}</span> : null}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      borderLeft: '3px solid var(--accent)',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      fontSize: '0.82rem',
+                      color: 'var(--text)',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <strong>Why Escalated:</strong> {reasonText}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      style={{
+                        fontSize: '0.8rem',
+                        padding: '6px 14px',
+                        background: 'var(--accent)',
+                        color: '#000',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => {
+                        setSelectedEscalation(item)
+                        setDecisionNote('')
+                      }}
+                    >
+                      Inspect &amp; Take Decision
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </article>
 
-      <p className="fine-print">
-        {summary.note ??
-          'Observational dashboard. No scheduling mutations. Refresh to reconcile with seeded/driver ETA writes.'}
-      </p>
+      {/* Decision Modal */}
+      {selectedEscalation ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            className="context-card"
+            style={{
+              maxWidth: '560px',
+              width: '100%',
+              background: '#161f33',
+              border: '1px solid var(--outline)',
+              borderRadius: '14px',
+              padding: '24px',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>⚡ Escalation Decision</h2>
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '1.2rem', cursor: 'pointer' }}
+                onClick={() => setSelectedEscalation(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="data-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div className="data-field">
+                <span>Shipment ID</span>
+                <strong>{selectedEscalation.shipment_id}</strong>
+              </div>
+              <div className="data-field">
+                <span>Escalation Type</span>
+                <strong>{selectedEscalation.escalation_type}</strong>
+              </div>
+              <div className="data-field">
+                <span>Driver</span>
+                <strong>{selectedEscalation.driver_id || 'Unassigned'}</strong>
+              </div>
+              <div className="data-field">
+                <span>Severity</span>
+                <strong>{selectedEscalation.severity_code}</strong>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '14px',
+                marginBottom: '18px',
+              }}
+            >
+              <p style={{ margin: '0 0 6px 0', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent)' }}>
+                Why this requires Ops intervention:
+              </p>
+              <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.4 }}>
+                {extractEscalationReason(selectedEscalation)}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--muted)', fontWeight: 500 }}>
+                Operations Resolution Note
+              </label>
+              <input
+                type="text"
+                value={decisionNote}
+                onChange={(e) => setDecisionNote(e.target.value)}
+                placeholder="e.g. Approved manual dock override; notified gate team."
+                style={{
+                  width: '100%',
+                  height: '44px',
+                  padding: '0 14px',
+                  background: 'var(--panel-high)',
+                  color: 'var(--text)',
+                  border: '1px solid var(--outline)',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setSelectedEscalation(null)}
+                disabled={submittingDecision}
+              >
+                Cancel
+              </button>
+              <a
+                href="/dispatch"
+                className="secondary-btn"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                📦 Assign New Load
+              </a>
+              <button
+                type="button"
+                style={{
+                  padding: '10px 18px',
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={() => void handleTakeDecision(selectedEscalation.escalation_id, 'RESOLVED')}
+                disabled={submittingDecision}
+              >
+                {submittingDecision ? 'Saving…' : 'Mark Resolved'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

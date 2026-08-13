@@ -70,3 +70,36 @@ export async function apiPost<T>(
   }
   return body
 }
+
+export function formatUserFriendlyError(err: unknown): string {
+  if (!err) return 'Something went wrong while processing your request. Please try again.'
+  const message = err instanceof Error ? err.message : String(err)
+  const lower = message.toLowerCase()
+
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('network error') ||
+    lower.includes('failed to connect') ||
+    lower.includes('load failed')
+  ) {
+    return 'Unable to connect to SetuHaul server. Please check your internet connection or server status and try again.'
+  }
+  if (lower.includes('not authenticated') || lower.includes('401') || lower.includes('unauthorized') || lower.includes('token expired')) {
+    return 'Your session has expired. Please sign in again.'
+  }
+  if (lower.includes('403') || lower.includes('forbidden') || lower.includes('permission')) {
+    return 'Access denied. You do not have permission for this action.'
+  }
+  if (lower.includes('404') || lower.includes('not found')) {
+    return 'The requested record or facility details could not be found.'
+  }
+  if (lower.includes('409') || lower.includes('conflict')) {
+    return 'This request has already been processed or updated by another user. Please refresh and try again.'
+  }
+  if (lower.includes('500') || lower.includes('502') || lower.includes('503') || lower.includes('504')) {
+    return 'SetuHaul server is temporarily busy. Please try again in a few moments.'
+  }
+  const cleaned = message.replace(/^(error:|apperror:|httperror:)\s*/i, '').trim()
+  return cleaned || 'An unexpected error occurred. Please try again.'
+}

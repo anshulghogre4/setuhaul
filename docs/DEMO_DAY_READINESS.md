@@ -111,12 +111,12 @@ API already verified: Ravi `SHP-D16-RAVI` feasible **200** with options; Vikas `
 
 ## After Sprint 3 gate (manual + polish)
 
-Sprint 3 exit gate is **COMPLETE** (2026-08-12). Remaining polish, not gate blockers:
+Sprint 3 exit gate is **COMPLETE** (2026-08-12). PDF chat/cast demo-hardening is **COMPLETE** (2026-08-13 21:39 IST). Remaining is rehearsal and optional polish, not product blockers:
 
-1. Run [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md) end-to-end before demo day.
-2. Optional formal Playwright E2E of the cast script.
-3. Optional facility-wide `propose_facility_schedule` (PDF §7.3) — deferred.
-4. Hosted Locust / AgentCore — Sprint 4 (planned).
+1. **Do this:** run [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md) end-to-end after `reset_demo_day.py --mode cast` (live `--confirm` of the new historical-appointment reset not yet run).
+2. Optional: ranking collect-then-sort; wipe runtime `EXC-*` on cast reset; drop leftover `scheduling_capability_disabled` tool.
+3. Optional formal Playwright E2E of the cast script.
+4. Intentional **NOT YET** (do not claim): OR-Tools / facility-wide engine, dock-close mid-conversation UI, warehouse reply channel, GPS/maps. Hosted Locust / AgentCore = Sprint 4.
 
 ## Do not claim
 

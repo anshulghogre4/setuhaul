@@ -2,11 +2,124 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-13 21:52 IST - Owner will push demo-hardening
+
+- Agent commit/push cancelled. Local demo-hardening stays uncommitted for the owner to push on `setuhal-santosh`. Verification: not run. Agent/surface: Cursor.
+
+## 2026-08-13 21:51 IST - Compatibility check vs teammate (Aman / Antigravity) commits
+
+- Confirmed classroom demo-hardening did not revert Aman’s committed work on `setuhal-santosh` (HEAD `9d37538`). Frontend is unmodified: Dispatch Console, Ops resolve modal, layout/nav, typing indicator, extra Driver tools, kwargs unpacking, and UI polish commits remain as pushed.
+- Only overlap: dispatch auto-book now passes the just-computed `recommendation_id` instead of `None` (keeps auto-book; enables the stale-REC gate). Chat tools still register Aman’s five extra tools and `**kwargs`.
+- Verification: `git status --short -- frontend/` clean; `git log` retains `fba0f02` / `3341ca3` / `cf70272` / UI follow-ups; local uncommitted set is backend scheduling/chat/reset + docs. Agent/surface: Cursor.
+
+## 2026-08-13 21:44 IST - Demo remaining scoreboard
+
+- Classroom demo product blockers are closed (Sprint 3 gate + 21:39 IST hardening + Ravi Auth restore). Remaining demo work is rehearsal: run `DEMO_MANUAL_RUNBOOK.md` after `--mode cast` (live confirm of the new reset not yet run).
+- Optional polish only: ranking collect-then-sort, wipe runtime `EXC-*` on reset, drop leftover `scheduling_capability_disabled`. Intentional NOT YET: OR-Tools, dock-close mid-chat UI, warehouse reply channel, GPS. Sprint 4 hosting stays PLANNED.
+- Updated `docs/DEMO_DAY_READINESS.md` after-gate list. Verification: docs/status only; app tests not re-run. Agent/surface: Cursor.
+
+## 2026-08-13 21:39 IST - PDF demo-hardening (cast reset, chat idempotency, stale REC, reschedule orphan)
+
+- Refreshed Living sprint status in `plans/implementation-master-plan.md` with post-Sprint-3 deltas (Dispatch Console, escalation resolve, extra Driver tools, Ravi Auth restore) without reopening the Sprint 3 exit gate.
+- Cast reset: `D16-APT-RAVI-OLD` is restored as historical CANCELLED / not current so Phase B `request_slot` is not blocked by `ACTIVE_APPOINTMENT_EXISTS`; `APT1017` stays CONFIRMED. Runbook Phase B + demo README aligned.
+- Chat `request_slot` / `reschedule` idempotency keys now include `client_message_id` (else a nonce). Inactive `SLOT_REQUESTED` replays are ignored so cancel→rebook can claim again.
+- Stale options: chat injects stored Redis REC when the model omits it; Redis stale is honored even without a REC id; dispatch auto-book passes the just-computed `recommendation_id`.
+- Reschedule nested `request_slot(..., persist=False)` and restores the prior appointment when the replacement claim is not `SLOT_REQUESTED`.
+- Verification: backend unit suite **65 passed**; live DB/cast reset `--confirm` **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 21:26 IST - Restore Ravi Driver Auth password (invalid_credentials)
+
+- Diagnosed `ravi.kumar@setuhaul.com` Driver login `invalid_credentials`: `USR001` mapping, role, and Auth flags were healthy; password grant against the documented Driver bucket returned **400** for Ravi and **200** for Amit.
+- Restored **only** Ravi via GoTrue Admin API onto the existing shared Driver bucket. Did not rotate Amit/Vikas/drv004–015 or the other two POC buckets.
+- Verification: Ravi password-grant **200**; Amit still **200**; local `GET /api/v1/auth/me` **200** with `USR001` / `DRIVER` / `DRV001`. Passwords not written to changelog. Agent/surface: Cursor.
+
+## 2026-08-13 02:00 IST - Add Ops Escalation Resolution Service & UI Action
+
+- Created `resolve_escalation` service function in `backend/app/services/escalation_service.py` to update `escalation_status = 'RESOLVED'` in PostgreSQL `public.escalation_queue`.
+- Exposed `POST /api/v1/operations/escalations/{escalation_id}/resolve` endpoint in `backend/app/api/v1/routers/operations.py`.
+- Added `Why Escalated` conflict reason banner on each escalation card in `OpsHomes.tsx` (extracts rejection reasons, no-slot flags, or driver breakdown notes from `payload`).
+- Created an interactive **Inspect & Take Decision** popup modal allowing Ops to review root causes, add resolution notes, and resolve/override or assign new loads.
+- Removed Sprint 1 observational fine-print summary note from `backend/app/api/v1/routers/operations.py` and `frontend/src/features/operator/OpsHomes.tsx`.
+- Removed `composer-chips` tags (`ACTIVE`, `Facility Label`, `Driver ID`, `UX: ready`) above the chat message input box in `frontend/src/features/driver/DriverHome.tsx`.
+- Verification: 59 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 613ms).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-13 01:48 IST - Complete End-to-End Verification of Dispatch & Auto-Booking Service
+
+- Included all required PostgreSQL `NOT NULL` columns (`carrier_id`, `vehicle_id`, `origin_name`, `origin_city`, `planned_departure_ts`, `temperature_control_required`) in `create_dispatch_shipment` SQL `INSERT`.
+- Fixed `request_slot` keyword-only parameter call and set `displayed_recommendation_id=None` to enable immediate pre-booking of top-ranked dock slots.
+- Verified end-to-end dispatch execution with payload `driver_id: D16-DRV-006`, `destination_facility_id: FAC-AMD-01`, `original_eta_ts: 2026-08-16T10:40:00+05:30`:
+  - Created shipment `SHP-DISP-83C3F2C0` in PostgreSQL.
+  - Automatically booked dock slot `D16-SLT-02739` (`11:00 AM – 11:30 AM`) with status `PENDING_CONFIRMATION` and appointment ID `APT-F16FD7C41E41`.
+- Moved "Dock Command" and "Dispatch Console" out of the header topbar-actions into a dedicated sub-header navigation tab bar in `ProtectedLayout.tsx`, allowing Priya Mehta's profile menu to render cleanly alone on the top right.
+- Verification: 59 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 596ms).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-13 01:25 IST - Add Dispatch Console, Fixed Viewport Driver Layout & Bounded LOV Select
+
+- Created Dispatch Console feature (`frontend/src/features/dispatch/DispatchHome.tsx`, `backend/app/services/dispatch_service.py`, `backend/app/api/v1/routers/dispatch.py`):
+  - Enables Person A (Dispatch / Transport Manager) to create new shipments and assign drivers in PostgreSQL.
+  - Automatically executes `find_feasible_slots` and `request_slot` to pre-mark initial dock appointments for assigned drivers.
+  - Added `/dispatch` route and nav buttons in `ProtectedLayout.tsx`.
+- Refined Driver UI Layout (`frontend/src/features/driver/DriverLayout.css`, `DriverHome.tsx`):
+  - Fixed viewport layout: Header, composer chips, quick actions, and composer remain fixed while only `.chat-history` scrolls vertically.
+  - Auto-scrolls chat history to bottom upon receiving responses.
+  - Hidden raw `as_of` timestamp in Active Context card.
+  - Formatted Planned ETA, Start, and End timestamps into human-readable strings (`Aug 16, 2026, 6:40 PM`).
+  - Added highlighted `Updated ETA` tag under Primary Shipment, rendered only when a distinct ETA revision exists (`hasEtaChanged`).
+- Built `BoundedLOVSelect` Component in Dispatch Console:
+  - Constrained LOV dropdown popups to a compact `max-height: 210px` window with internal scrolling.
+  - Added instant search/filter input to filter 105+ drivers without screen takeover.
+  - Added click-outside listener (`useRef` + `mousedown`) to auto-dismiss dropdown lists when clicking outside.
+- Verification: `npm run build` PASS (built in 587ms, 95 modules transformed); zero TypeScript lint errors.
+- Agent/surface: Google Antigravity.
+
+## 2026-08-12 03:05 IST - Add Custom Markdown Renderer in Driver Chat (No Raw Asterisks)
+
+- Implemented `renderFormattedText` helper in `frontend/src/features/driver/DriverHome.tsx` to parse markdown bold (`**text**`) and inline code (`` `code` ``) dynamically into styled React elements (`<strong>`, `<code>`, `.chat-line`).
+- Replaced plain `<p>{m.content}</p>` text node with `{renderFormattedText(m.content)}`, removing all unparsed `**` asterisks from chat output.
+- Styled `strong` tags with signature cyan (`#38bdf8`) and added glowing chip styles for inline code elements (`.chat-inline-code`).
+- Verification: 59 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 607ms).
+
+## 2026-08-12 03:00 IST - Enhanced AI Assistant Response Formatting & Pre-wrap CSS
+
+- Updated `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` with explicit layout guidelines enforcing double line breaks (`\n\n`), clean card structures, and distinct headers for multi-item shipment/ETA lists.
+- Updated `frontend/src/App.css` to add `white-space: pre-wrap;` and line-height polish on `.chat-bubble` and `.chat-bubble p` elements, preventing text squishing in chat.
+- Verification: 59 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 679ms).
+
+## 2026-08-12 02:35 IST - Implement 5 New Database-Backed AI Assistant Tools
+
+- Added 5 new database service functions in `backend/app/services/driver_reads.py`:
+  1. `get_vehicle_and_carrier_details`: Reads assigned truck registration, weight capacity, refrigeration capability, and carrier contact info from `vehicles`, `vehicle_types`, `carriers`, `shipments`.
+  2. `get_gate_and_queue_status`: Reads yard queue position, arrival state (EARLY/ON_TIME/LATE), and gate check-in timestamps from `facility_checkins`.
+  3. `get_facility_rules_and_restrictions`: Reads safety rules, gate policies, and check-in grace periods from `facility_rules` and `facilities`.
+  4. `report_vehicle_breakdown_or_incident`: Upserts parent `chat_threads` row and writes structured breakdown records to `driver_exceptions` in PostgreSQL.
+  5. `get_dock_maintenance_alerts`: Queries active dock maintenance and outage events from `dock_status_events` and `docks`.
+- Registered Pydantic schemas and `StructuredTool.from_function` definitions in `backend/app/assistant/tools.py`.
+- Verification: 48 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Live AI assistant tool invocation verified with 100% accuracy across all 5 tools (**200 OK**, `ux_state: persisted_success`).
+- Agent/surface: Google Antigravity.
+
+## 2026-08-12 02:20 IST - Fix Tool Coroutine Kwargs Unpacking & Confirmation Loop Bug
+
+- Fixed `TypeError: build_driver_tools.<locals>.get_latest_eta() got an unexpected keyword argument 'shipment_id'` in `backend/app/assistant/tools.py` where LangChain `StructuredTool.from_function` passed unpacked keyword arguments (`shipment_id="..."`, `declared_eta_ts="..."`), but coroutines expected a single `args` positional parameter.
+- Updated all driver tool coroutine signatures in `tools.py` (`get_shipment_details`, `get_latest_eta`, `report_delay_or_update_eta`, etc.) to accept `args` or unpacked `**kwargs` seamlessly.
+- Added `should_break_after_round = True` for `CONFIRMATION_REQUIRED` in `backend/app/assistant/run_assistant.py` so the assistant breaks out of `MAX_TOOL_ROUNDS` immediately on preview, eliminating duplicate/corrupt tool calls.
+- Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); End-to-end multi-turn driver ETA confirmation flow verified with 100% precision (**200 OK**, `ux_state: confirmation_required`).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-12 02:16 IST - Graphify incremental update (demo reset + Sprint 3 docs)
 
 - Ran `graphify --update` on 20 changed files (6 code / 14 docs): AST + semantic chunks, merge into graph, cluster, force-write `graph.json`/`graph.html`/`GRAPH_REPORT.md`.
 - Graph now **1192 nodes · 2096 edges · 73 communities**; includes `reset_demo_day` cast restore, Ravi/NOSLOT/race cast, allocation/escalation hyperedges.
 - Verification: HTML export PASS; queries PASS for cast reset path, request_slot scarce-capacity neighborhood, SHP-D16-RAVI explain. App tests not run.
+
+## 2026-08-12 02:08 IST - Fix Duplicate Tool Loop & Empty Response on Confirmation
+
+- Fixed issue in `backend/app/assistant/run_assistant.py` where confirming a database write (e.g. `report_delay_or_update_eta` with `confirmed=True`) caused OpenRouter/LLM model to re-invoke the same tool repeatedly across `MAX_TOOL_ROUNDS=6`, leaving `ai.content=""` empty.
+- Added early loop termination (`should_break_after_round = True`) when a tool returns `status: PERSISTED`.
+- Added automatic non-empty success message synthesis for `persisted_success` state (`"ETA update for SHP1017 (...) has been confirmed and saved successfully."`).
+- Verification: 45 backend unit tests **PASS** (`PYTHONPATH=. pytest tests/unit`); Multi-turn live test sequence verified with 100% clean responses (**200 OK**).
+- Agent/surface: Google Antigravity.
 
 ## 2026-08-12 01:18 IST - PDF challenge bug audit (read-only)
 
@@ -132,6 +245,7 @@ This append-only log records material implementation, architecture, workflow, de
 - Finding: no literal system prompt is prescribed. Pages 6–10/14 define conversational AI boundaries (clarify, tools, never decide capacity/compatibility/priority/commit/safety); pages 17–19 require concurrency/freshness/no-slot escalation demos.
 - Updated `wiki/ai-system.md`, `wiki/handoff.md`, `wiki/log.md` with the synthesized requirements. Application `SYSTEM_PROMPT` in `backend/app/assistant/prompts.py` left unchanged this turn.
 - Verification: PDF text extraction of all 20 pages via PyMuPDF; application tests not run (document analysis only). Agent/surface: Cursor.
+>>>>>>> origin/main
 
 ## 2026-08-10 23:21 IST - Fix hung login preflight (backend venv crash)
 

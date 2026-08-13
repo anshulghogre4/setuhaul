@@ -295,6 +295,8 @@ async def test_live_d16_cast_smoke_options_request_cancel_noslot_reject_stale():
     ops = _ops_ctx()
     try:
         async with session_factory() as session:
+            # Cast reset now leaves D16-APT-RAVI-OLD cancelled/not current. This
+            # UPDATE is a no-op after a correct reset and still defends leftover CONFIRMED rows.
             await session.execute(
                 text(
                     """

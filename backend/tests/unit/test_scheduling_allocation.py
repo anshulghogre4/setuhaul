@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -225,3 +226,184 @@ async def test_confirm_appointment_transitions_pending_row_and_commits(monkeypat
     assert update_params["warehouse_confirmation_ref"] == "WH-JAI-2026-021"
     store.assert_awaited_once()
     session.commit.assert_awaited_once()
+
+
+def test_replay_claim_is_active_requires_current_active_status():
+    assert allocation.replay_claim_is_active(
+        {"appointment_status": "PENDING_CONFIRMATION", "is_current": 1}
+    )
+    assert allocation.replay_claim_is_active({"appointment_status": "CONFIRMED", "is_current": 1})
+    assert not allocation.replay_claim_is_active(
+        {"appointment_status": "CANCELLED", "is_current": 0}
+    )
+    assert not allocation.replay_claim_is_active(
+        {"appointment_status": "CONFIRMED", "is_current": 0}
+    )
+    assert not allocation.replay_claim_is_active(None)
+
+
+def test_chat_request_slot_idempotency_key_is_stable_for_same_client_message():
+    from app.assistant.tools import chat_mutation_idempotency_key
+
+    first = chat_mutation_idempotency_key(
+        thread_id="THR-1",
+        action="request-slot",
+        parts=["SHP-D16-RAVI", "D16-SLT-1"],
+        client_message_id="msg-42",
+    )
+    second = chat_mutation_idempotency_key(
+        thread_id="THR-1",
+        action="request-slot",
+        parts=["SHP-D16-RAVI", "D16-SLT-1"],
+        client_message_id="msg-42",
+    )
+    third = chat_mutation_idempotency_key(
+        thread_id="THR-1",
+        action="request-slot",
+        parts=["SHP-D16-RAVI", "D16-SLT-1"],
+        client_message_id="msg-43",
+    )
+    assert first == second
+    assert first != third
+    assert first.endswith("-msg-42")
+
+
+def test_chat_request_slot_idempotency_key_without_client_message_is_unique():
+    from app.assistant.tools import chat_mutation_idempotency_key
+
+    first = chat_mutation_idempotency_key(
+        thread_id="THR-1",
+        action="request-slot",
+        parts=["SHP1", "SLT1"],
+        client_message_id=None,
+    )
+    second = chat_mutation_idempotency_key(
+        thread_id="THR-1",
+        action="request-slot",
+        parts=["SHP1", "SLT1"],
+        client_message_id=None,
+    )
+    assert first != second
+
+
+@pytest.mark.asyncio
+async def test_omitted_recommendation_id_honors_redis_stale_marker(monkeypatch):
+    class _Mem:
+        def is_recommendation_stale(self, **_kwargs):
+            return True
+
+    async def fake_stale(_session, _ctx, **_kwargs):
+        return allocation.RequestSlotResult(
+            as_of="t",
+            status="CONFLICTED",
+            code="SLOT_OPTIONS_STALE",
+            shipment_id="SHP1",
+            slot_id="SLT1",
+            policy_version="v1",
+            idempotency_key="k",
+        )
+
+    monkeypatch.setattr(allocation, "ConversationMemory", lambda _settings: _Mem())
+    monkeypatch.setattr(allocation, "get_settings", lambda: object())
+    monkeypatch.setattr(allocation, "_stale_recommendation_result", fake_stale)
+
+    result = await allocation._validate_displayed_recommendation(
+        AsyncMock(),
+        _driver_ctx(),
+        shipment_id="SHP1",
+        slot_id="SLT1",
+        displayed_policy_version=None,
+        displayed_recommendation_id=None,
+        idempotency_key="k",
+    )
+    assert result is not None
+    assert result.code == "SLOT_OPTIONS_STALE"
+
+
+@pytest.mark.asyncio
+async def test_omitted_recommendation_id_allows_request_when_redis_not_stale(monkeypatch):
+    class _Mem:
+        def is_recommendation_stale(self, **_kwargs):
+            return False
+
+    monkeypatch.setattr(allocation, "ConversationMemory", lambda _settings: _Mem())
+    monkeypatch.setattr(allocation, "get_settings", lambda: object())
+
+    result = await allocation._validate_displayed_recommendation(
+        AsyncMock(),
+        _driver_ctx(),
+        shipment_id="SHP1",
+        slot_id="SLT1",
+        displayed_policy_version=None,
+        displayed_recommendation_id=None,
+        idempotency_key="k",
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_reschedule_restores_old_appointment_when_claim_conflicts(monkeypatch):
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(
+            return_value={
+                "shipment_id": "SHP1",
+                "driver_id": "DRV001",
+                "destination_facility_id": "FAC-JAI-01",
+            }
+        ),
+    )
+    monkeypatch.setattr(allocation, "_assert_read_scope", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(allocation, "_validate_displayed_recommendation", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "find_feasible_slots",
+        AsyncMock(return_value=SimpleNamespace(options=[SimpleNamespace(slot_id="SLT-NEW")], policy_version="v1")),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(
+            return_value={
+                "appointment_id": "APT-OLD",
+                "appointment_status": "CONFIRMED",
+            }
+        ),
+    )
+    conflict = allocation.RequestSlotResult(
+        as_of="t",
+        status="CONFLICTED",
+        code="SLOT_CONFLICT_REFRESH_REQUIRED",
+        shipment_id="SHP1",
+        slot_id="SLT-NEW",
+        policy_version="v1",
+        appointment_writes=0,
+        idempotency_key="k:claim",
+    )
+    request_slot_mock = AsyncMock(return_value=conflict)
+    monkeypatch.setattr(allocation, "request_slot", request_slot_mock)
+    store = AsyncMock()
+    monkeypatch.setattr(allocation, "store_idempotency", store)
+
+    from app.scheduling.allocation import reschedule_appointment
+
+    result = await reschedule_appointment(
+        session,
+        _driver_ctx(),
+        shipment_id="SHP1",
+        command=RescheduleAppointmentCommand(appointment_id="APT-OLD", new_slot_id="SLT-NEW"),
+        idempotency_key="k",
+    )
+
+    assert result.code == "SLOT_CONFLICT_REFRESH_REQUIRED"
+    request_slot_mock.assert_awaited_once()
+    assert request_slot_mock.await_args.kwargs["persist"] is False
+    restore_params = session.execute.await_args_list[1].args[1]
+    assert restore_params["appointment_id"] == "APT-OLD"
+    assert restore_params["status"] == "CONFIRMED"
+    store.assert_awaited_once()
+    session.commit.assert_awaited_once()
+

@@ -16,6 +16,7 @@ from app.services.escalation_service import (
     get_dock_status,
     get_exception_queue,
     get_queue_status,
+    resolve_escalation,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["operations"])
@@ -23,6 +24,11 @@ router = APIRouter(prefix="/api/v1", tags=["operations"])
 
 class EscalateExceptionBody(EscalateExceptionCommand):
     model_config = ConfigDict(extra="forbid")
+
+
+class ResolveEscalationBody(BaseModel):
+    resolution_note: str | None = "Resolved by Operations"
+    status: str = "RESOLVED"
 
 
 def _as_of() -> str:
@@ -47,6 +53,20 @@ async def escalation_queue(
     facility_id: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
     result = await get_exception_queue(session, ctx, facility_id)
+    return ok(result, get_request_id(request))
+
+
+@router.post("/operations/escalations/{escalation_id}/resolve")
+async def resolve_escalation_endpoint(
+    escalation_id: str,
+    body: ResolveEscalationBody,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    result = await resolve_escalation(
+        session, ctx, escalation_id, resolution_note=body.resolution_note or "Resolved", status=body.status
+    )
     return ok(result, get_request_id(request))
 
 
@@ -149,7 +169,6 @@ async def dashboard_summary(
         "shipments_by_status": {row["current_status"]: row["n"] for row in shipment_counts},
         "open_exceptions": open_exceptions,
         "freshness": "live",
-        "note": "Observational summary only; no scheduling mutations in Sprint 1.",
     }
     return ok(data, get_request_id(request))
 

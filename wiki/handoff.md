@@ -1,16 +1,24 @@
-﻿---
+---
 title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-12
+last_updated: 2026-08-13
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-13 21:52 IST:** Owner will commit and push the local demo-hardening themselves. Do not `git commit` or `git push` from this agent unless asked again.
+- **2026-08-13 21:51 IST:** Compatibility vs Aman’s pushes: frontend untouched; Dispatch Console, Ops resolve modal, extra Driver tools, kwargs, typing/UI polish still at HEAD. Only shared file change is dispatch auto-book passing `recommendation_id` (intended, not a revert).
+- **2026-08-13 21:44 IST:** Demo remaining scoreboard: no further classroom product blockers. Next is live runbook rehearsal after cast reset. Optional polish and PDF NOT YET items listed in [[handoff]] Next action + `docs/DEMO_DAY_READINESS.md`.
+- **2026-08-13 21:39 IST:** PDF demo-hardening: cast reset leaves `D16-APT-RAVI-OLD` historical (Phase B `request_slot` unblocked); chat mutation keys per `client_message_id`/nonce + skip inactive replays; inject stored REC / honor Redis stale without REC; dispatch passes fresh `recommendation_id`; reschedule `persist=False` restores old appointment on soft conflict. Units **65 passed**. Sprint 3 gate unchanged COMPLETE; Sprint 4 PLANNED.
+- **2026-08-13 21:26 IST:** Restored Ravi Driver login. Auth mapping (`USR001`/`DRV001`) was intact; password grant vs the documented Driver bucket was **400** for Ravi and **200** for Amit. Admin-API reset **only** Ravi onto the existing shared Driver bucket (no other users, no bucket rotation). Re-smoke: Ravi grant **200**; `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`. Use `/driver/login` + `ravi.kumar@setuhaul.com` + Driver bucket from `POC_TEAM_ACCOUNTS.local.md`.
+- **2026-08-12 02:35 IST:** Added 5 new database-backed AI assistant tools (`get_vehicle_and_carrier_details`, `get_gate_and_queue_status`, `get_facility_rules_and_restrictions`, `report_vehicle_breakdown_or_incident`, `get_dock_maintenance_alerts`) backed by `vehicles`, `carriers`, `facility_checkins`, `facility_rules`, `driver_exceptions`, `chat_threads`, and `dock_status_events`. Registered Pydantic schemas in `tools.py` and service functions in `driver_reads.py`. Verified 48 backend unit tests PASS (`PYTHONPATH=. pytest tests/unit`) and 100% clean live assistant execution across all 5 tools.
+- **2026-08-12 02:20 IST:** Fixed `TypeError` in `tools.py` where LangChain passed unpacked keyword arguments (`shipment_id="..."`), but tool coroutines expected positional `args`. Updated all driver tool coroutines to accept `**kwargs`. Fixed tool loop behavior in `run_assistant.py` to break immediately on `CONFIRMATION_REQUIRED` and `PERSISTED` to synthesize non-empty responses.
 - **2026-08-12 02:16 IST:** Graphify incremental update (20 changed files) → 1192 nodes / 2096 edges / 73 communities in `graphify-out/`; includes demo cast reset + Sprint 3 allocation/escalation hyperedges. Queried Ravi cast, request_slot, NOSLOT neighborhoods.
+- **2026-08-12 02:15 IST:** Added animated message typing indicator bubble in `DriverHome.tsx` with smooth pulsing cyan keyframe animations in `App.css`. Verified `npm run build` PASS (built in 588ms).
 - **2026-08-12 01:18 IST:** PDF-challenge bug audit (read-only). Highest demo risks: chat sticky `request_slot` idempotency (cancel→rebook same slot replays); `reschedule` orphan on soft conflict commit-after-cancel; cast reset leaves `D16-APT-RAVI-OLD` CONFIRMED so Phase B `request_slot` hits `ACTIVE_APPOINTMENT_EXISTS`; stale REC gate skipped when chat omits `displayed_recommendation_id`; ranking early-break before full sort. Race/NOSLOT/cancel-frees OK when REC supplied. Units 56 passed; no code fix this turn.
 - **2026-08-12 01:05 IST:** Live DB safety review of cast reset for shared Ravi demos. Confirmed narrow blast radius; hardened appointment DELETE against `replaced_appointment_id` / `operational_messages` FKs after finding a live `SHP1017` DRIVER_CHAT chain. Rollback proof PASS; Auth untouched.
 - **2026-08-12 01:00 IST:** Added `supabase/demo/reset_demo_day.py` for shared Ravi demos — cast (default) restores golden cast + clears Upstash chat keys; full wipe/re-apply for deep refresh. Documented in demo README, DEMO_MANUAL_RUNBOOK Prep, root README. Dry-run verified live; no Auth password changes. Sprint status unchanged (1–3 COMPLETE; 4 PLANNED).
@@ -98,8 +106,8 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. Fix PDF-demo blockers before manual runbook: cast reset / Phase B active-appointment precondition; chat `request_slot` idempotency nonce after cancel; inject stored REC (or require REC) for stale ETA proof; harden reschedule so soft conflicts roll back the cancel.
-2. Optional: ranking collect-then-sort; wipe runtime `EXC-*` on cast reset; remove stale `scheduling_capability_disabled` tool wording.
+1. Run [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast` (Phase B no longer needs a secret pre-cancel).
+2. Optional polish: ranking collect-then-sort; wipe runtime `EXC-*` on cast reset; remove stale `scheduling_capability_disabled` tool wording.
 3. Sprint 4 hosting remains PLANNED — do not start unless owner promotes.
 
 

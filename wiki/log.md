@@ -1,12 +1,52 @@
-﻿---
+---
 title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-12
+last_updated: 2026-08-13
 ---
 
 # Wiki log
+
+## 2026-08-13 21:52 IST | ops | Owner will push locally
+
+- Stopped agent commit/push. Owner will push demo-hardening on `setuhal-santosh`. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 21:51 IST | query | Teammate commit compatibility
+
+- Aman’s Dispatch/Ops/tools/UI commits intact on `setuhal-santosh`. Local demo-hardening did not modify `frontend/`. Dispatch auto-book still present; REC id now passed. Synced [[handoff]], [[current-state]], CHANGELOG.
+
+## 2026-08-13 21:44 IST | query | Demo remaining scoreboard
+
+- Classroom product blockers closed. Remaining: live runbook rehearsal; optional polish; intentional PDF NOT YET. Synced [[handoff]] + `docs/DEMO_DAY_READINESS.md` + CHANGELOG.
+
+## 2026-08-13 21:39 IST | implementation | PDF demo-hardening four blockers
+
+- Cast reset leaves `D16-APT-RAVI-OLD` historical; chat mutation keys per turn; Redis stale without REC; reschedule restore on nested claim failure.
+- Living scoreboard struck with unit evidence (65 passed). Sprint 3 gate unchanged; Sprint 4 PLANNED.
+- Synced [[handoff]], [[current-state]], [[contradictions]], CHANGELOG.
+
+## 2026-08-13 21:26 IST | ops | Restore Ravi Driver Auth password
+
+- Live password-grant: Ravi **400 invalid_credentials**, Amit **200** on the same Driver bucket. Mapping `USR001`/`DRV001` intact.
+- Admin-API reset only Ravi; re-smoke Ravi **200**; local `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`.
+- Synced [[handoff]], [[current-state]], CHANGELOG. No application code. Passwords not recorded.
+
+## 2026-08-13 01:25 IST | implementation | Dispatch Console, Fixed Viewport Layout & Bounded LOV Select with Click-Outside Dismissal
+
+- Implemented Dispatch Console (`DispatchHome.tsx`, `dispatch_service.py`, `dispatch.py`) allowing Person A (Dispatch) to create shipments and auto-book initial appointments for assigned drivers.
+- Implemented `DriverLayout.css` with fixed viewport height bounds where only `.chat-history` scrolls vertically.
+- Added human-readable timestamp formatting and conditional `Updated ETA` field under Primary Shipment card.
+- Implemented `BoundedLOVSelect` with `useRef` + `mousedown` click-outside dismissal and `max-height: 210px` scrollable search overlay.
+- Verification: `npm run build` PASS (built in 587ms, 95 modules transformed); zero TypeScript lint errors.
+
+## 2026-08-12 02:40 IST | implementation | 5 New Database Tools, Kwargs Unpacking Fix & Driver UI Typing Animation
+
+- Added 5 new database-backed tools (`get_vehicle_and_carrier_details`, `get_gate_and_queue_status`, `get_facility_rules_and_restrictions`, `report_vehicle_breakdown_or_incident`, `get_dock_maintenance_alerts`) in `driver_reads.py` and `tools.py`.
+- Fixed `TypeError` in `tools.py` for unpacked keyword arguments from LangChain `StructuredTool.from_function`.
+- Fixed tool loop termination in `run_assistant.py` on `CONFIRMATION_REQUIRED` and `PERSISTED` to guarantee non-empty responses.
+- Added animated typing indicator bubble in `DriverHome.tsx` and keyframe styles in `App.css`.
+- Verification: 48 backend unit tests PASS (`PYTHONPATH=. pytest tests/unit`); Vite build PASS (`built in 588ms`); Live assistant execution verified for all 5 new tools (**200 OK**).
 
 ## 2026-08-12 02:16 IST | index | Graphify update after demo reset
 
@@ -114,6 +154,7 @@ last_updated: 2026-08-12
 - Re-extracted all 20 pages of `docs/SetuHaul_FDE_Challenge.pdf`.
 - Compiled AI must/must-not, cannot-guess, human-control, and §11.2 stress scenarios into [[ai-system]].
 - No code change; Sprint 3 status unchanged. Verification: document analysis only.
+>>>>>>> origin/main
 
 ## 2026-08-10 23:21 IST | query | Login preflight hang
 

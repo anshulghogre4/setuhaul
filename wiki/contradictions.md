@@ -3,20 +3,20 @@ title: SetuHaul Contradictions and Staleness Ledger
 type: ledger
 status: authoritative
 scope: repository
-last_updated: 2026-08-07
+last_updated: 2026-08-13
 ---
 
 # Contradictions and staleness ledger
 
 ## Open
 
-- **Cast reset vs Phase B (2026-08-12):** `supabase/demo/reset_demo_day.py` restores `D16-APT-RAVI-OLD` as `CONFIRMED`/`is_current=1`, but `docs/DEMO_MANUAL_RUNBOOK.md` Phase B tells Ravi to `request_slot` without cancel/reschedule. Live cast smoke pre-cancels that row. Either reset should leave Ravi without an active claim for the happy path, or the runbook must cancel/reschedule first.
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
 - `docs/AGENTS.md` names the runtime logistics assistant, while root `AGENTS.md` governs coding agents. Do not conflate them. `docs/AGENTS.md` may still contain older Gemini/AgentExecutor wording in places; prefer ADR 011 + master plan §5.2 + [[ai-system]] for runtime shape until that doc is fully refreshed.
 - The seed contains `OPERATIONS_MANAGER` (`ROL004`) while `PROJECT.md` does not list it as a primary user. Treat it as a later persona until product scope is ratified; do not silently inherit another role's permissions.
 
 ## Resolved
 
+- **Cast reset vs Phase B** — resolved 2026-08-13 21:39 IST: `--mode cast` restores `D16-APT-RAVI-OLD` as CANCELLED / not current; Phase B `request_slot` is unblocked; `APT1017` remains CONFIRMED for SHP1017 disambiguation.
 - Frontend ambiguity is resolved by ADR 012 in the master plan: React 19, not Angular, unless the owner explicitly changes the decision.
 - Admin POC scope resolved as global read-only (ADR 005) — moved from Open on 2026-08-07.
 - Product AI runtime locked: LangChain `ChatOpenAI` + `bind_tools(role_scoped_tools)` + custom bounded `run_assistant` invoke loop. Forbidden: `create_agent` / `AgentExecutor` / `create_react_agent`. The 16:00 “no bind_tools” changelog line is historical and superseded (16:05+ / ADR 011). Do not reference external private projects by name.

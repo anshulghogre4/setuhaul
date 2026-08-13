@@ -166,6 +166,21 @@ class ConversationMemory:
             self.degrade_reason = f"UPSTASH_RECOMMENDATION_CLEAR_FAILED:{type(exc).__name__}"
             logger.warning("Upstash recommendation stale clear failed: %s", type(exc).__name__)
 
+    def get_active_recommendation(self, *, user_id: str, shipment_id: str) -> str | None:
+        """Return the last displayed REC id for this user/shipment, if Redis still has it."""
+        if self._client is None:
+            return None
+        try:
+            raw = self._client.get(self._recommendation_key(user_id=user_id, shipment_id=shipment_id))
+            data = raw if isinstance(raw, dict) else (json.loads(raw) if raw else {})
+            rec = data.get("recommendation_id")
+            return str(rec) if rec else None
+        except Exception as exc:  # noqa: BLE001
+            self.degraded = True
+            self.degrade_reason = f"UPSTASH_RECOMMENDATION_GET_FAILED:{type(exc).__name__}"
+            logger.warning("Upstash recommendation get failed: %s", type(exc).__name__)
+            return None
+
     def load_history(
         self,
         *,

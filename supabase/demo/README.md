@@ -64,8 +64,9 @@ Safety:
 - Loads `DATABASE_URL` / Upstash from root `.env.local` / `.env` (never logs secrets).
 - Does **not** reset Auth passwords or delete Auth users.
 - `--mode cast` restores golden cast fields (e.g. `SHP-D16-RAVI` ETA 18:30 /
-  unload 25, `D16-APT-RAVI-OLD` CONFIRMED, race slot free) and clears Redis keys
-  for `USR001`–`USR003` and `USR201`–`USR210`.
+  unload 25, `D16-APT-RAVI-OLD` historical CANCELLED / not current so Phase B
+  `request_slot` can run, race slot free) and clears Redis keys
+  for `USR001`–`USR003` and `USR201`–`USR210`. `APT1017` stays CONFIRMED.
 
 ## Authentication boundary
 
