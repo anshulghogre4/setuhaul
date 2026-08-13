@@ -3,7 +3,7 @@ title: SetuHaul Architecture
 type: topic
 status: compiled
 scope: architecture
-last_verified: 2026-08-07
+last_verified: 2026-08-13
 ---
 
 # Architecture
@@ -21,6 +21,6 @@ Core invariants:
 - Redis state is bounded, namespaced, expiring, and non-authoritative.
 - Business writes require validation, authorization, idempotency, audit logging, and confirmed backend results.
 
-Evidence: `docs/ARCHITECTURE.md`, `plans/implementation-master-plan.md`, `plans/branches/solution-architecture.md`.
+Evidence: `docs/ARCHITECTURE.md`, `plans/implementation-master-plan.md`, `plans/branches/solution-architecture.md`, Sprint 4 hosting scoreboard `plans/sprint-4-hosting.md` (Vercel + App Runner or ECS Express Mode + AgentCore; local ARN blank).
 
 Related: [[database]], [[ai-system]], [[implementation]].

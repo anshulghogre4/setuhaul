@@ -30,13 +30,16 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     # CORS first so error responses still get ACAO headers for the browser.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    cors_kwargs: dict = {
+        "allow_origins": settings.cors_origin_list,
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+    regex = (settings.cors_origin_regex or "").strip()
+    if regex:
+        cors_kwargs["allow_origin_regex"] = regex
+    app.add_middleware(CORSMiddleware, **cors_kwargs)
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_error_handler)

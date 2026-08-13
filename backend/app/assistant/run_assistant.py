@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.llm import build_chat_model
+from app.assistant.observability import observe_input, observe_output, tool_outcome_metadata
 from app.assistant.prompts import SYSTEM_PROMPT
 from app.assistant.tools import build_driver_tools
 from app.core.errors import AppError
@@ -36,7 +37,9 @@ def _configure_langsmith(settings: Settings) -> None:
         os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
         os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
         os.environ.setdefault("LANGCHAIN_API_KEY", settings.langsmith_api_key)
-        os.environ.setdefault("LANGSMITH_PROJECT", "setuhaul-sprint2")
+        project = (settings.langsmith_project or "setuhaul-agentcore").strip()
+        os.environ["LANGSMITH_PROJECT"] = project
+        os.environ["LANGCHAIN_PROJECT"] = project
 
 
 async def run_assistant(
@@ -137,8 +140,9 @@ async def run_assistant(
     ux_state = "answered"
     confirmation_payload: dict[str, Any] | None = None
 
+    invoke_config = observe_input(len(history))
     try:
-        ai: AIMessage = await llm.ainvoke(messages)
+        ai: AIMessage = await llm.ainvoke(messages, config=invoke_config)
     except Exception as exc:  # noqa: BLE001
         logger.exception("LLM invoke failed")
         raise AppError(
@@ -230,7 +234,10 @@ async def run_assistant(
             break
 
         try:
-            ai = await llm.ainvoke(messages)
+            invoke_config = observe_input(
+                len(history), extra_metadata=tool_outcome_metadata(observed_tools, ux_state)
+            )
+            ai = await llm.ainvoke(messages, config=invoke_config)
         except Exception as exc:  # noqa: BLE001
             raise AppError(
                 "LLM failed during tool loop.",
@@ -294,6 +301,8 @@ async def run_assistant(
         session_id=sid,
         llm=base_llm,
     )
+
+    observe_output(content)
 
     return {
         "thread_id": tid,

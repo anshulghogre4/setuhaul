@@ -3,20 +3,35 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-13
+last_verified: 2026-08-14
 ---
 
 # Current state
 
 ## Verified
 
+- **2026-08-14 01:46 IST:** Owner lifted `hosting`→`main` merge lock. Vercel tracks `main`. Merge not yet verified on GitHub. Gate OPEN.
+- **2026-08-14 01:40 IST:** Vercel project `setuhaul` production READY from `main` at `https://setuhaul-roan.vercel.app`. JS has BFF host. `/driver/login` **404** (no SPA rewrites on `main`). Step 7 not passed. Gate OPEN.
+- **2026-08-14 01:37 IST:** Do not merge `hosting`→`main`. Step 7 can use a Vercel **preview** of `hosting` while Production Branch stays `main`. Gate OPEN.
+- **2026-08-14 01:30 IST:** Vercel Import defaults unsafe (`main`, Root `./`, FastAPI as a second service, 25 env vars). Frontend-only + `hosting` + three `VITE_*` required before Deploy. Gate OPEN.
+- **2026-08-14 01:24 IST:** `origin/hosting` = `39ec4c9 mid hosting` (includes `frontend/vercel.json`). Step 7 next is Vercel portal Import, not CLI. Deploy not run. Gate OPEN.
+- **2026-08-14 01:20 IST:** Step 7 Git Import **held** until push. Superseded 01:24 IST after owner pushed `39ec4c9`.
+- **2026-08-14 01:04 IST:** Pre-Vercel DNS recheck: public resolvers have the Express hostname; `/health/live` **200**. Laptop default DNS still NXDOMAIN. Step 7 can use the public URL.
+- **2026-08-14 01:00 IST:** Sprint 4 Step 6 BFF **PASS**. App Runner `SubscriptionRequiredException`. ECS Express Mode `setuhaul-api`; ARN blank; ALB idle 180s; target healthy; `GET /health/live` **200**. URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. Vercel not built. Gate OPEN.
+- **2026-08-14 00:45 IST:** Sprint 4 Step 5 ECR **PASS**. Repo `setuhaul-api` `us-east-1` tag `latest` digest `sha256:250201c7605d…` (same local Step 3 image). ARN blank. BFF not hosted yet. Gate OPEN.
+- **2026-08-14 00:28 IST:** Sprint 4 Step 4 **PASS**. Owner `aws login` as root `us-east-1`. `/setuhaul/*` SecureString names exist (8); `database-url` classified pooler `:6543`. Values not printed. CDK bootstrap already present. IAM user `setuhaul-deploy-aman` exists. Billing budgets not checked. Gate OPEN.
+- **2026-08-14 00:20 IST:** Sprint 4 Step 3 local Docker **PASS**. Image `setuhaul-api:step1` published on `127.0.0.1:18000` (ARN blank). `/health/live` **200** (healthy). Ravi `/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `/driver/context` `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`. Container stopped after smoke. AWS **not run**. Gate OPEN.
+- **2026-08-14 00:16 IST:** Sprint 4 Step 2 **browser** Driver chat **PASS**. Ravi on `/driver`; UI “Do I have a current appointment?” → assistant “no active appointment”; uvicorn `POST /api/v1/chat/message` **200**. Gate OPEN.
+- **2026-08-14 00:12 IST:** Sprint 4 Step 2 local smoke **PASS** (ARN blank). Ravi password-grant **200**; `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `/api/v1/driver/context` **200** `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `success=true` `ux=answered` tool `list_active_shipments`. Vite `:5173` **200**. Credentials from gitignored `POC_TEAM_ACCOUNTS.local.md` (not printed). Interactive browser password fill not used. AWS/Vercel/AgentCore **not run**. Gate OPEN.
+- **2026-08-13 23:50 IST:** Sprint 4 Step 1 code on `hosting`. Units **77 passed**. Not deployed. Gate OPEN.
+- **2026-08-13 23:15 IST:** Sprint 4 hosting scoreboard checked in as `plans/sprint-4-hosting.md` on branch `hosting`. Topology still PLANNED (not deployed). BFF: probe App Runner, else same ECR image on ECS Express Mode. Punch-list is documented, not implemented. Sprint 4 gate not struck. App tests not run (docs-only).
 - **2026-08-13 21:51 IST:** Local demo-hardening did not revert teammate (Antigravity) commits on `setuhal-santosh`. `frontend/` working tree clean; Dispatch Console, Ops resolve, extra Driver tools remain. Dispatch auto-book still calls `request_slot` and now supplies `options_result.recommendation_id`.
 - **2026-08-13 21:39 IST:** PDF demo-hardening landed: cast reset vs Phase B, chat cancel→rebook idempotency, omitted-REC stale gate, reschedule orphan restore. Backend units **65 passed**. Live cast reset `--confirm` not run.
 - **2026-08-13 21:26 IST:** Ravi Driver Auth password restored onto the existing shared Driver bucket after live `invalid_credentials`. Mapping `USR001`/`DRV001` was already correct. Password-grant Ravi **200**, Amit still **200**, local `/api/v1/auth/me` **200** (`USR001` / `DRIVER` / `DRV001`). Other Driver accounts were not reset.
 - Sprint 1 exit gate COMPLETE (2026-08-07 17:55 IST).
 - **Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).**
 - **Sprint 3 exit gate COMPLETE (2026-08-12 00:25 IST).** Evidence: lifecycle reschedule/reject/expire; `REC-` stale invalidation; durable `escalation_queue` + Ops escalation list; live 10×4 scarce load (4 winners / 6 conflicts / zero double-books); D16 cast API smoke PASS; migration applied; backend units 56 passed.
-- **Sprint 4 PLANNED** (2026-08-12 00:15 IST) in `plans/implementation-master-plan.md` §8.1: Vercel frontend, App Runner FastAPI (default; Azure/GCP acceptable), Bedrock AgentCore assistant (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust A/B. Implementation not started; starts after Sprint 3 gate unless owner promotes.
+- **Sprint 4 PLANNED** (2026-08-12 00:15 IST) in `plans/implementation-master-plan.md` §8.1. Hosting scoreboard 2026-08-13: Vercel frontend, App Runner **or ECS Express Mode** FastAPI BFF, Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust A/B. Command book: `plans/sprint-4-hosting.md`. Implementation not started.
 - Challenge brief re-analyzed from `docs/SetuHaul_FDE_Challenge.pdf` on 2026-08-10 and again 2026-08-11 for system-message content: the PDF does not prescribe a literal prompt string; §6.2–6.3 / §9.3 define conversational vs non-LLM decisions, and §11.2 lists required stress scenarios. It reinforces Sprint 3 as the FDE challenge-ready gate for deterministic feasibility, scarce-capacity allocation, stale option handling, same-slot competition, and safe no-slot escalation.
 - React 19 `frontend/` (renamed from `web/` 2026-08-08) + FastAPI + Supabase PG SoT + Upstash 24h chat memory + LangChain `ChatOpenAI.bind_tools` manual loop.
 - Owner clarified on 2026-08-10 22:20 IST: there is no project Memory MCP for SetuHaul. Redis is the only memory layer, and it is application runtime conversation/session memory only.

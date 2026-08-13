@@ -3,10 +3,98 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 ---
 
 # Wiki log
+
+## 2026-08-14 01:46 IST | decision | hosting→main merge lock lifted
+
+- Vercel production tracks `main`. Exit gate still requires Steps 7–10 evidence. Synced scoreboard, master plan, [[implementation]], [[contradictions]], [[handoff]], [[current-state]], CHANGELOG.
+
+## 2026-08-14 01:43 IST | decision | main-only merge repercussions
+
+- Full merge not required. vercel.json-on-main is the small escape hatch. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:40 IST | verification | Vercel main deploy inspected
+
+- `setuhaul-roan.vercel.app` READY from main; `/` 200; login routes 404. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG.
+
+## 2026-08-14 01:37 IST | decision | no merge hosting→main
+
+- Preview-deploy `hosting` instead. Production Branch may stay `main`. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:32 IST | decision | Vercel branch via Settings → Git
+
+- Import `main` chip opens GitHub. Production Branch is set after create. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:30 IST | decision | Vercel Import must be frontend-only
+
+- Do not Deploy the default main/monorepo/25-env Import. Synced [[handoff]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:24 IST | decision | Step 7 use Vercel portal
+
+- `origin/hosting` is `39ec4c9 mid hosting`. Prefer portal Import over CLI. Synced [[handoff]], [[current-state]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:20 IST | decision | Step 7 no Git Import yet
+
+- Do not Import `setuhaul` on Vercel until `hosting` Step 1–6 code is pushed. Synced [[handoff]], [[current-state]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:04 IST | verification | BFF public DNS ready
+
+- 8.8.8.8/1.1.1.1 resolve Express URL; health 200. Laptop resolver still NXDOMAIN. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:00 IST | verification | Sprint 4 Step 6 BFF
+
+- App Runner rejected; Express Mode health 200. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:45 IST | verification | Sprint 4 Step 5 ECR
+
+- Pushed `setuhaul-api:latest` to ECR `us-east-1`. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:28 IST | verification | Sprint 4 Step 4 SSM
+
+- Owner `aws login` root `us-east-1`. Eight `/setuhaul/*` names written; values not logged. CDK bootstrap already present. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:25 IST | blocker | Step 4 AWS CLI session expired
+
+- `get-caller-identity` failed; SSM not written. Synced [[handoff]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 00:20 IST | verification | Sprint 4 Step 3 Docker smoke
+
+- `setuhaul-api:step1` `:18000` health 200 + Ravi `/chat/message` 200. Container stopped. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:16 IST | verification | Sprint 4 Step 2 browser chat
+
+- Owner-login Vite Driver home: composer → `POST /api/v1/chat/message` 200; no active appointment. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:12 IST | verification | Sprint 4 Step 2 local smoke
+
+- Ravi login + REST + `POST /api/v1/chat/message` on Vite `:5173` / uvicorn `:8000`, ARN blank. Roster file used for Driver bucket (no secrets written). Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-13 23:50 IST | implementation | Sprint 4 Step 1 code
+
+- Host-readiness: chat alias, dual-mode ARN switch, CORS regex, Dockerfile, vercel.json, observability, thin AgentCore host. Units 77 passed. Synced [[handoff]], [[current-state]], [[implementation]], CHANGELOG, master plan (gate not struck).
+
+## 2026-08-13 23:32 IST | ingest | Day-2 update commands
+
+- Scoreboard §5.11: laptop redeploy commands; GHA CI-only. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 23:28 IST | ingest | ARN vs hosted URL
+
+- Scoreboard now states Vercel uses BFF URL only; ARN is BFF env for chat at step 9. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 23:25 IST | ingest | Sprint 4 path locked
+
+- Owner: stick to `plans/sprint-4-hosting.md`. GHA remains CI-only. Synced [[handoff]], CHANGELOG, master plan Living refresh. Gate not struck.
+
+## 2026-08-13 23:20 IST | ingest | Hosting first-to-last order
+
+- `plans/sprint-4-hosting.md` now has an explicit Step 1 FIRST → Step 10 LAST (Locust) table plus pass/fail checks. Synced [[handoff]], CHANGELOG, master plan Living refresh. Gate not struck.
+
+## 2026-08-13 23:15 IST | ingest | Sprint 4 hosting scoreboard
+
+- Added `plans/sprint-4-hosting.md` (branch `hosting`). App Runner closed to new customers → ECS Express Mode fallback. Punch-list documented, not implemented. Synced [[handoff]], [[current-state]], [[implementation]], [[architecture]], [[source-map]], [[contradictions]], CHANGELOG, master plan Living status (gate not struck).
 
 ## 2026-08-13 21:52 IST | ops | Owner will push locally
 

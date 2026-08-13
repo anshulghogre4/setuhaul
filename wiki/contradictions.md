@@ -3,7 +3,7 @@ title: SetuHaul Contradictions and Staleness Ledger
 type: ledger
 status: authoritative
 scope: repository
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 ---
 
 # Contradictions and staleness ledger
@@ -11,11 +11,13 @@ last_updated: 2026-08-13
 ## Open
 
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
+- `docs/DEPLOYMENT.md` still describes Docker Compose / local Redis as the deployment shape. Sprint 4 hosting truth is `plans/sprint-4-hosting.md` (Vercel + App Runner probe / ECS Express Mode + AgentCore). Prefer the scoreboard until `docs/HOSTING.md` is folded after hosted smoke.
 - `docs/AGENTS.md` names the runtime logistics assistant, while root `AGENTS.md` governs coding agents. Do not conflate them. `docs/AGENTS.md` may still contain older Gemini/AgentExecutor wording in places; prefer ADR 011 + master plan §5.2 + [[ai-system]] for runtime shape until that doc is fully refreshed.
 - The seed contains `OPERATIONS_MANAGER` (`ROL004`) while `PROJECT.md` does not list it as a primary user. Treat it as a later persona until product scope is ratified; do not silently inherit another role's permissions.
 
 ## Resolved
 
+- **`hosting` vs `main` merge lock** — resolved 2026-08-14 01:46 IST: owner lifted the “merge only after Step 10” branch rule so Vercel production can track `main`. Step order and Sprint 4 exit-gate evidence are unchanged.
 - **Cast reset vs Phase B** — resolved 2026-08-13 21:39 IST: `--mode cast` restores `D16-APT-RAVI-OLD` as CANCELLED / not current; Phase B `request_slot` is unblocked; `APT1017` remains CONFIRMED for SHP1017 disambiguation.
 - Frontend ambiguity is resolved by ADR 012 in the master plan: React 19, not Angular, unless the owner explicitly changes the decision.
 - Admin POC scope resolved as global read-only (ADR 005) — moved from Open on 2026-08-07.

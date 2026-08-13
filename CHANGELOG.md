@@ -2,6 +2,119 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-14 01:46 IST - Owner lifted hosting→main merge lock
+
+- Owner chose Vercel-on-`main` and will merge `hosting` → `main`. Removed the “merge only after Step 10” branch rule from `plans/sprint-4-hosting.md` §6 / header, `plans/README.md`, master-plan Living table, [[implementation]], [[contradictions]]. Step order, Actions CI-only, and Sprint 4 exit-gate evidence stay locked. Merge itself is owner-performed (not this turn).
+- Verification: docs update only. Git merge **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:43 IST - Step 7: main-only vs merge repercussions
+
+- Owner asked what happens if Vercel stays on `main` only. `origin/hosting` is 2 commits / 37 files ahead of `main` (incl. `frontend/vercel.json`, Docker/AgentCore, deploy JSON). Decision recorded: full merge to `main` is technically safe (dual-mode, BFF already from hosting image) but violates the post-smoke merge rule and puts unfinished Steps 8–10 on the default branch. Smaller path if portal cannot pick `hosting`: add only `frontend/vercel.json` to `main`. Do not merge unless owner asks.
+- Verification: `git diff --stat origin/main...origin/hosting`. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:40 IST - Step 7: inspected existing Vercel main deploy
+
+- Project `setuhaul` (`prj_ltWDG3ecaNYBEZQfSDuJYuMWlfQC`) production READY from **`main`** `677c218`. Alias `https://setuhaul-roan.vercel.app`. Vite build PASS. JS has BFF host (not localhost) and Supabase. `/` **200**. `/driver/login` and `/ops/login` **404** because `frontend/vercel.json` SPA rewrites are only on `hosting`. Do not merge to `main`. Next: redeploy `hosting` as preview (or add rewrites) then smoke login.
+- Verification: Vercel MCP get_project + get_deployment + build logs + URL fetch. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:37 IST - Step 7: do not merge hosting to main
+
+- Owner cannot change Vercel Production Branch off `main`. Decision: **do not merge**. Deploy `hosting` as a preview (`Deployments → Create Deployment → hosting`). CORS already allows `*.vercel.app`. Merge to `main` stays after Steps 7–10.
+- Verification: plan branch rule. Deploy **not confirmed**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:32 IST - Step 7: Import main chip is not a branch picker
+
+- Owner: clicking `main` on Vercel Import opens GitHub. Correct path: create frontend-only project, then Settings → Git → Production Branch = `hosting`, Redeploy. Do not import the 25 detected env vars.
+- Verification: UI screenshot. Deploy **not confirmed**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:30 IST - Step 7: Vercel Import defaults are unsafe
+
+- Portal Import of `setuhaul` is on `main`, Root `./`, and treats FastAPI as a second Vercel service plus 25 detected env vars (from `.env.example`, including service-role/DB/LLM placeholders). Instruction: switch to `hosting`, frontend-only, three `VITE_*` only. Deploy not clicked yet.
+- Verification: screenshot review. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:24 IST - Step 7: hosting pushed; prefer Vercel portal
+
+- Owner pushed `hosting` (`39ec4c9 mid hosting`); `origin/hosting` now includes `frontend/vercel.json` and Step 1–6 host-readiness files. Next: Vercel **portal Import** (not CLI). CLI 58.11.0 is not logged in; portal already has GitHub `setuhaul`. Configure Root Directory `frontend`, Production Branch `hosting`, three `VITE_*` before Deploy.
+- Verification: local `hosting` matches `origin/hosting` `39ec4c9`; remote tree has `frontend/vercel.json`. Deploy **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:20 IST - Step 7: do not Import Git yet
+
+- Owner opened Vercel New Project with GitHub `anshulghogre4/setuhaul` visible. Decision: **do not Import + Deploy yet**. Local `hosting` has Step 1–6 work uncommitted; `origin/hosting` is still `f08d012 pre hosting plan`. An import would build stale `main`/`hosting` without `frontend/vercel.json` and without bake-time `VITE_API_BASE_URL`. Git import is OK **after** a push, with Root Directory `frontend` and the three `VITE_*` env vars set before the first build.
+- Verification: `git status` + `origin/hosting` = `f08d012` **PASS**. Vercel deploy **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:04 IST - Step 6 public DNS ready for Vercel
+
+- Recheck before Step 7: Express Mode still ACTIVE, ALB target healthy. Public resolvers 8.8.8.8 / 1.1.1.1 resolve `se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. `GET /health/live` **200** via that hostname + public A record. This laptop’s default DNS still NXDOMAIN after flush (local resolver lag only).
+- Verification: public DNS + health **PASS**. Vercel **not started**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:00 IST - Sprint 4 Step 6 BFF Express Mode PASS
+
+- App Runner probe **rejected** (`SubscriptionRequiredException`). Created ECS Express Mode service `setuhaul-api` from ECR `:latest`, ARN blank, secrets from `/setuhaul/*` (names only). ALB idle timeout **180s**. Target **healthy**. `GET /health/live` **200** on `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws` (laptop DNS for `on.aws` lagged; proved via ALB IP + Host). Roles `ecsTaskExecutionRole` + `ecsInfrastructureRoleForExpressServices`.
+- Verification: hosted health **PASS**. Vercel/AgentCore **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:45 IST - Sprint 4 Step 5 ECR push PASS
+
+- Reused local `setuhaul-api:step1` / `:latest` (same image as Step 3, `linux/amd64`). ECR repo `setuhaul-api` in `us-east-1`; docker login succeeded; pushed `:latest`. `describe-images` shows tag `latest` digest `sha256:250201c7605d…`. ARN still blank. No App Runner/ECS this turn.
+- Verification: ECR image **PASS**. Units **not re-run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:28 IST - Sprint 4 Step 4 SSM + identity PASS
+
+- After owner `aws login`, `get-caller-identity` **PASS** as account root in `us-east-1`. Wrote `/setuhaul/*` SecureString params from gitignored `.env` via `docs/scripts/put_hosting_ssm.py` (values not printed). Names listed: google-api-key, openai-api-key, upstash-redis-rest-url/token, langsmith-api-key, supabase-url, supabase-jwks-issuer-base, database-url (`pooler_6543`). CDK bootstrap already present (no changes). IAM user `setuhaul-deploy-aman` exists. Billing $20/$50 budgets **not checked** (console).
+- Verification: identity + SSM name list **PASS**. `--with-decryption` **not run**. ECR/BFF **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:25 IST - Step 4 blocked: AWS CLI session expired
+
+- Owner asked to create `/setuhaul/*` SecureString params from local `.env` (no values in chat). `aws sts get-caller-identity` failed: session expired; CLI asked for `aws login`. Console root login does not authenticate this shell. SSM **not written**.
+- Verification: AWS identity **FAIL**. Secrets **not printed**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:20 IST - Sprint 4 Step 3 local Docker smoke PASS
+
+- Ran `setuhaul-api:step1` as `setuhaul-step3` on `127.0.0.1:18000` (uvicorn kept `:8000`). ARN forced blank. `GET /health/live` **200**, Docker health **healthy**. Ravi grant **200**; container `/auth/me` `USR001`/`DRIVER`/`DRV001`; `/driver/context` `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`. Container stopped after smoke. Image kept locally. No ECR push.
+- Verification: live Docker health + chat **PASS**. Units **not re-run**. AWS/Vercel/AgentCore **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:16 IST - Sprint 4 Step 2 browser Driver chat PASS
+
+- After owner login, Vite `http://localhost:5173/driver` showed Ravi Kumar `USR001`/`DRV001`. Composer sent “Do I have a current appointment?”; assistant replied there is no active appointment. uvicorn `OPTIONS`+`POST /api/v1/chat/message` **200**. Matches context rail “No current appointment”.
+- Verification: live browser chat **PASS**. Units **not re-run**. AWS/Vercel/AgentCore **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 00:12 IST - Sprint 4 Step 2 local smoke PASS
+
+- Local ARN blank. Ravi password grant from gitignored `POC_TEAM_ACCOUNTS.local.md` Driver bucket (no secrets logged). `GET /health/live` **200**. `GET /api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`. `GET /api/v1/driver/context` **200** primary `SHP-D16-RACE-A`. `POST /api/v1/chat/message` **200** `success=true` `ux=answered` tool `list_active_shipments`. Vite `http://localhost:5173/` **200**; `/driver/login` form loaded. Interactive browser password fill not used.
+- Verification: live local API + Vite smoke **PASS**. Backend units **not re-run**. AWS/Vercel/AgentCore/Docker-chat **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-13 23:50 IST - Sprint 4 Step 1 host-readiness code
+
+- Chat: `POST /api/v1/chat` and `/api/v1/chat/message` share one handler. Blank `AGENTCORE_RUNTIME_ARN` → in-process `run_assistant`; set ARN → `InvokeAgentRuntime` (JWT already verified). Thin Runtime host `agentcore_main.py`.
+- CORS: localhost list + default regex `https://.*\\.vercel.app`. Dockerfile (uv, port 8000, ARN blank). `frontend/vercel.json` SPA rewrite. LangSmith project `setuhaul-agentcore`, run name `setuhaul.chat`. `observability.py` histograms no-op without OTEL.
+- CI also runs on branch `hosting`. Optional pyproject extra `agentcore` for OTEL distro (not in the BFF image by default).
+- Verification: backend units **77 passed**. Docker `linux/amd64` image **built**; `GET /health/live` **200**. Live Driver chat **not run**. AWS/Vercel **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-13 23:32 IST - Day-2 update commands in hosting scoreboard
+
+- Added `plans/sprint-4-hosting.md` §5.11: after first deploy, update BFF via ECR push + App Runner `start-deployment` or ECS `update-express-gateway-service`; AgentCore via `agentcore.cmd deploy`; UI via `npx vercel`. GitHub Actions remains CI-only (no CD until after first host).
+- Verification: docs-only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 23:28 IST - ARN vs hosted URL in hosting scoreboard
+
+- Documented in `plans/sprint-4-hosting.md`: Vercel URL never carries `AGENTCORE_RUNTIME_ARN`. SPA uses `VITE_API_BASE_URL` = BFF HTTPS. ARN is a BFF env switch for chat only, blank through step 7, set at step 9. Login/Ops/REST never need it.
+- Verification: docs-only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 23:25 IST - Sprint 4 locked to sprint-4-hosting.md
+
+- Owner confirmed: follow `plans/sprint-4-hosting.md` as written. First host is the PowerShell command book (App Runner probe / ECS Express Mode). GitHub Actions stays CI-only (`.github/workflows/ci.yml`); no Actions CD until after a successful first host. Optional OIDC ECR deploy is after steps 6–9, not instead of them.
+- Verification: docs-only; application tests **not run**. Sprint 4 gate not struck. Agent/surface: Cursor.
+
+## 2026-08-13 23:20 IST - Hosting plan first-to-last work order
+
+- Clarified `plans/sprint-4-hosting.md`: numbered table Step 1 FIRST (code) through Step 10 LAST (Locust), then pause/delete and merge. Expanded §4 with pass/fail checks; command book mapped to steps; merge gate tagged by step number.
+- Verification: docs-only; application tests **not run**. Sprint 4 gate not struck. Agent/surface: Cursor.
+
+## 2026-08-13 23:15 IST - Sprint 4 hosting scoreboard on branch hosting
+
+- Added `plans/sprint-4-hosting.md` and linked it from `plans/README.md`. Dual-mode (local Vite+uvicorn vs Vercel+BFF+AgentCore); App Runner new-customer cutoff → probe then **ECS Express Mode** with the same ECR image; E2E punch-list (chat `/message` alias, CORS, Dockerfile, vercel.json, pooler URL, ALB idle timeout); PowerShell command book; Driver `runtimeSessionId` mapping; merge-to-main gate.
+- Master plan §8.1 BFF row updated to App Runner probe / Express Mode fallback. Living Sprint 4 status remains **PLANNED**; exit gate **not struck**.
+- Verification: docs-only; application tests **not run**. No secrets in the scoreboard. Agent/surface: Cursor.
+
 ## 2026-08-13 21:52 IST - Owner will push demo-hardening
 
 - Agent commit/push cancelled. Local demo-hardening stays uncommitted for the owner to push on `setuhal-santosh`. Verification: not run. Agent/surface: Cursor.

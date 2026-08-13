@@ -41,12 +41,23 @@ class Settings(BaseSettings):
     upstash_redis_rest_token: str = ""
     langsmith_api_key: str = ""
     langsmith_tracing: bool = False
+    langsmith_project: str = "setuhaul-agentcore"
+
+    # Blank locally and on first hosted BFF. Set only after AgentCore is deployed (step 9).
+    agentcore_runtime_arn: str = ""
+    aws_region: str = "us-east-1"
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Starlette regex; allows Vercel preview/prod *.vercel.app without knowing the URL yet.
+    cors_origin_regex: str = r"https://.*\.vercel\.app"
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def agentcore_enabled(self) -> bool:
+        return bool((self.agentcore_runtime_arn or "").strip())
 
     @property
     def supabase_issuer(self) -> str:
