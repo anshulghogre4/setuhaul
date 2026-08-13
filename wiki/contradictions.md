@@ -11,6 +11,7 @@ last_updated: 2026-08-13
 ## Open
 
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
+- `docs/DEPLOYMENT.md` still describes Docker Compose / local Redis as the deployment shape. Sprint 4 hosting truth is `plans/sprint-4-hosting.md` (Vercel + App Runner probe / ECS Express Mode + AgentCore). Prefer the scoreboard until `docs/HOSTING.md` is folded after hosted smoke.
 - `docs/AGENTS.md` names the runtime logistics assistant, while root `AGENTS.md` governs coding agents. Do not conflate them. `docs/AGENTS.md` may still contain older Gemini/AgentExecutor wording in places; prefer ADR 011 + master plan §5.2 + [[ai-system]] for runtime shape until that doc is fully refreshed.
 - The seed contains `OPERATIONS_MANAGER` (`ROL004`) while `PROJECT.md` does not list it as a primary user. Treat it as a later persona until product scope is ratified; do not silently inherit another role's permissions.
 

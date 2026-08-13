@@ -10,13 +10,15 @@ last_verified: 2026-08-13
 
 ## Verified
 
+- **2026-08-13 23:25 IST:** Sprint 4 hosting path **locked** to `plans/sprint-4-hosting.md` (laptop command book; GitHub Actions CI-only). Still PLANNED; not deployed. App tests not run (docs-only).
+- **2026-08-13 23:15 IST:** Sprint 4 hosting scoreboard checked in as `plans/sprint-4-hosting.md` on branch `hosting`. Topology still PLANNED (not deployed). BFF: probe App Runner, else same ECR image on ECS Express Mode. Punch-list is documented, not implemented. Sprint 4 gate not struck. App tests not run (docs-only).
 - **2026-08-13 21:51 IST:** Local demo-hardening did not revert teammate (Antigravity) commits on `setuhal-santosh`. `frontend/` working tree clean; Dispatch Console, Ops resolve, extra Driver tools remain. Dispatch auto-book still calls `request_slot` and now supplies `options_result.recommendation_id`.
 - **2026-08-13 21:39 IST:** PDF demo-hardening landed: cast reset vs Phase B, chat cancel→rebook idempotency, omitted-REC stale gate, reschedule orphan restore. Backend units **65 passed**. Live cast reset `--confirm` not run.
 - **2026-08-13 21:26 IST:** Ravi Driver Auth password restored onto the existing shared Driver bucket after live `invalid_credentials`. Mapping `USR001`/`DRV001` was already correct. Password-grant Ravi **200**, Amit still **200**, local `/api/v1/auth/me` **200** (`USR001` / `DRIVER` / `DRV001`). Other Driver accounts were not reset.
 - Sprint 1 exit gate COMPLETE (2026-08-07 17:55 IST).
 - **Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).**
 - **Sprint 3 exit gate COMPLETE (2026-08-12 00:25 IST).** Evidence: lifecycle reschedule/reject/expire; `REC-` stale invalidation; durable `escalation_queue` + Ops escalation list; live 10×4 scarce load (4 winners / 6 conflicts / zero double-books); D16 cast API smoke PASS; migration applied; backend units 56 passed.
-- **Sprint 4 PLANNED** (2026-08-12 00:15 IST) in `plans/implementation-master-plan.md` §8.1: Vercel frontend, App Runner FastAPI (default; Azure/GCP acceptable), Bedrock AgentCore assistant (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust A/B. Implementation not started; starts after Sprint 3 gate unless owner promotes.
+- **Sprint 4 PLANNED** (2026-08-12 00:15 IST) in `plans/implementation-master-plan.md` §8.1. Hosting scoreboard 2026-08-13: Vercel frontend, App Runner **or ECS Express Mode** FastAPI BFF, Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust A/B. Command book: `plans/sprint-4-hosting.md`. Implementation not started.
 - Challenge brief re-analyzed from `docs/SetuHaul_FDE_Challenge.pdf` on 2026-08-10 and again 2026-08-11 for system-message content: the PDF does not prescribe a literal prompt string; §6.2–6.3 / §9.3 define conversational vs non-LLM decisions, and §11.2 lists required stress scenarios. It reinforces Sprint 3 as the FDE challenge-ready gate for deterministic feasibility, scarce-capacity allocation, stale option handling, same-slot competition, and safe no-slot escalation.
 - React 19 `frontend/` (renamed from `web/` 2026-08-08) + FastAPI + Supabase PG SoT + Upstash 24h chat memory + LangChain `ChatOpenAI.bind_tools` manual loop.
 - Owner clarified on 2026-08-10 22:20 IST: there is no project Memory MCP for SetuHaul. Redis is the only memory layer, and it is application runtime conversation/session memory only.

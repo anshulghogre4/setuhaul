@@ -8,6 +8,26 @@ last_updated: 2026-08-13
 
 # Wiki log
 
+## 2026-08-13 23:32 IST | ingest | Day-2 update commands
+
+- Scoreboard §5.11: laptop redeploy commands; GHA CI-only. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 23:28 IST | ingest | ARN vs hosted URL
+
+- Scoreboard now states Vercel uses BFF URL only; ARN is BFF env for chat at step 9. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 23:25 IST | ingest | Sprint 4 path locked
+
+- Owner: stick to `plans/sprint-4-hosting.md`. GHA remains CI-only. Synced [[handoff]], CHANGELOG, master plan Living refresh. Gate not struck.
+
+## 2026-08-13 23:20 IST | ingest | Hosting first-to-last order
+
+- `plans/sprint-4-hosting.md` now has an explicit Step 1 FIRST → Step 10 LAST (Locust) table plus pass/fail checks. Synced [[handoff]], CHANGELOG, master plan Living refresh. Gate not struck.
+
+## 2026-08-13 23:15 IST | ingest | Sprint 4 hosting scoreboard
+
+- Added `plans/sprint-4-hosting.md` (branch `hosting`). App Runner closed to new customers → ECS Express Mode fallback. Punch-list documented, not implemented. Synced [[handoff]], [[current-state]], [[implementation]], [[architecture]], [[source-map]], [[contradictions]], CHANGELOG, master plan Living status (gate not struck).
+
 ## 2026-08-13 21:52 IST | ops | Owner will push locally
 
 - Stopped agent commit/push. Owner will push demo-hardening on `setuhal-santosh`. Synced [[handoff]], CHANGELOG.

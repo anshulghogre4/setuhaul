@@ -10,6 +10,11 @@ last_updated: 2026-08-13
 
 ## Latest work
 
+- **2026-08-13 23:32 IST:** Added day-2 update commands to [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md) §5.11 (ECR+BFF roll, AgentCore deploy, Vercel, env/ARN). Actions stays CI-only.
+- **2026-08-13 23:28 IST:** Clarified ARN vs hosted URL in [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md): Vercel never sees the ARN; SPA calls BFF via `VITE_API_BASE_URL`; ARN is BFF-only and only for chat after step 9.
+- **2026-08-13 23:25 IST:** Owner locked Sprint 4 to [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md). First host = this command book (not GitHub Actions CD). Existing `.github/workflows/ci.yml` stays CI-only. Next: Step 1 punch-list when asked to implement. Do not `git commit` unless asked.
+- **2026-08-13 23:20 IST:** Clarified first→last work order in [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md): Step 1 code punch-list → local → Docker → AWS/SSM → ECR → BFF (ARN blank) → Vercel → AgentCore → set ARN/traces → **Locust last** → pause/delete then merge. Do not skip; do not strike Sprint 4 gate until Step 10 evidence. Docs-only.
+- **2026-08-13 23:15 IST:** Wrote Sprint 4 hosting scoreboard [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md) on branch `hosting` (linked from `plans/README.md`). Dual-mode local/hosted; App Runner probe then **ECS Express Mode** same Docker image (new accounts closed after 2026-04-30); E2E punch-list (chat `/message` alias, CORS, Dockerfile, vercel.json, pooler URL, ALB idle timeout); PowerShell command book; Driver `runtimeSessionId` mapping. **No application code.** Sprint 4 exit gate **not struck**. Next: implement punch-list then Docker/BFF/AgentCore. Do not `git commit` unless asked.
 - **2026-08-13 21:52 IST:** Owner will commit and push the local demo-hardening themselves. Do not `git commit` or `git push` from this agent unless asked again.
 - **2026-08-13 21:51 IST:** Compatibility vs Aman’s pushes: frontend untouched; Dispatch Console, Ops resolve modal, extra Driver tools, kwargs, typing/UI polish still at HEAD. Only shared file change is dispatch auto-book passing `recommendation_id` (intended, not a revert).
 - **2026-08-13 21:44 IST:** Demo remaining scoreboard: no further classroom product blockers. Next is live runbook rehearsal after cast reset. Optional polish and PDF NOT YET items listed in [[handoff]] Next action + `docs/DEMO_DAY_READINESS.md`.
@@ -106,9 +111,9 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. Run [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast` (Phase B no longer needs a secret pre-cancel).
-2. Optional polish: ranking collect-then-sort; wipe runtime `EXC-*` on cast reset; remove stale `scheduling_capability_disabled` tool wording.
-3. Sprint 4 hosting remains PLANNED — do not start unless owner promotes.
+1. Start at Step 1 of `plans/sprint-4-hosting.md` (code punch-list on `hosting`). Work first→last; Locust is last. Do not strike the Sprint 4 gate until Step 10 evidence.
+2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
+3. Do not `git commit` unless asked.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

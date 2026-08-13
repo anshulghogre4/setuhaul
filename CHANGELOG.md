@@ -2,6 +2,32 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-13 23:32 IST - Day-2 update commands in hosting scoreboard
+
+- Added `plans/sprint-4-hosting.md` §5.11: after first deploy, update BFF via ECR push + App Runner `start-deployment` or ECS `update-express-gateway-service`; AgentCore via `agentcore.cmd deploy`; UI via `npx vercel`. GitHub Actions remains CI-only (no CD until after first host).
+- Verification: docs-only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 23:28 IST - ARN vs hosted URL in hosting scoreboard
+
+- Documented in `plans/sprint-4-hosting.md`: Vercel URL never carries `AGENTCORE_RUNTIME_ARN`. SPA uses `VITE_API_BASE_URL` = BFF HTTPS. ARN is a BFF env switch for chat only, blank through step 7, set at step 9. Login/Ops/REST never need it.
+- Verification: docs-only; application tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 23:25 IST - Sprint 4 locked to sprint-4-hosting.md
+
+- Owner confirmed: follow `plans/sprint-4-hosting.md` as written. First host is the PowerShell command book (App Runner probe / ECS Express Mode). GitHub Actions stays CI-only (`.github/workflows/ci.yml`); no Actions CD until after a successful first host. Optional OIDC ECR deploy is after steps 6–9, not instead of them.
+- Verification: docs-only; application tests **not run**. Sprint 4 gate not struck. Agent/surface: Cursor.
+
+## 2026-08-13 23:20 IST - Hosting plan first-to-last work order
+
+- Clarified `plans/sprint-4-hosting.md`: numbered table Step 1 FIRST (code) through Step 10 LAST (Locust), then pause/delete and merge. Expanded §4 with pass/fail checks; command book mapped to steps; merge gate tagged by step number.
+- Verification: docs-only; application tests **not run**. Sprint 4 gate not struck. Agent/surface: Cursor.
+
+## 2026-08-13 23:15 IST - Sprint 4 hosting scoreboard on branch hosting
+
+- Added `plans/sprint-4-hosting.md` and linked it from `plans/README.md`. Dual-mode (local Vite+uvicorn vs Vercel+BFF+AgentCore); App Runner new-customer cutoff → probe then **ECS Express Mode** with the same ECR image; E2E punch-list (chat `/message` alias, CORS, Dockerfile, vercel.json, pooler URL, ALB idle timeout); PowerShell command book; Driver `runtimeSessionId` mapping; merge-to-main gate.
+- Master plan §8.1 BFF row updated to App Runner probe / Express Mode fallback. Living Sprint 4 status remains **PLANNED**; exit gate **not struck**.
+- Verification: docs-only; application tests **not run**. No secrets in the scoreboard. Agent/surface: Cursor.
+
 ## 2026-08-13 21:52 IST - Owner will push demo-hardening
 
 - Agent commit/push cancelled. Local demo-hardening stays uncommitted for the owner to push on `setuhal-santosh`. Verification: not run. Agent/surface: Cursor.

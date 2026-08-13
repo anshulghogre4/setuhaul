@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-13 21:39 IST (Sprint 3 exit gate remains **COMPLETE**; post-gate demo-hardening **COMPLETE**; Sprint 4 remains PLANNED)
+Last refreshed: 2026-08-13 23:25 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 remains **PLANNED** — locked to `plans/sprint-4-hosting.md` on branch `hosting`; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -29,7 +29,7 @@ Use this plan as a living checklist:
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST |
 | Sprint 3 - deterministic allocation | **COMPLETE** | Exit gate struck 2026-08-12 00:25 IST |
-| Sprint 4 - hosting, AgentCore, observability, Locust | **PLANNED** | Starts after Sprint 3 exit gate. Topology locked 2026-08-12: Vercel frontend, App Runner FastAPI (default; Azure/GCP OK), Bedrock AgentCore assistant (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust |
+| Sprint 4 - hosting, AgentCore, observability, Locust | **PLANNED** | Starts after Sprint 3 exit gate. Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** if App Runner rejects new accounts (same Docker image), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust. Command book: `plans/sprint-4-hosting.md` (branch `hosting`). Do not strike this gate until hosted smoke. |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -388,7 +388,7 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 | Layer | Host | Notes |
 |---|---|---|
 | Frontend | **Vercel** (Vite React 19) | Locked. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`. SPA rewrites to `index.html`. No service-role / LLM / DB secrets. |
-| Business API / BFF | **AWS App Runner** (Dockerized FastAPI) — **default, not mandatory** | Normal ASGI host for REST/JWT/scheduling. AgentCore does **not** force FastAPI onto AWS. Azure App Service / GCP Cloud Run / Railway also fine; then BFF needs AWS creds to call AgentCore if chat is proxied. Same-AWS default keeps IAM/SSM and the demo story simple. |
+| Business API / BFF | **AWS App Runner** (probe) → **ECS Express Mode** fallback | Dockerized FastAPI JWT/REST BFF. App Runner is closed to new customers after 2026-04-30; probe `create-service` once, then the same ECR image on ECS Express Mode (Fargate + ALB). Azure/GCP still acceptable if documented. Command book: `plans/sprint-4-hosting.md`. |
 | LangChain assistant | **AWS Bedrock AgentCore Runtime** | **AWS-only hard constraint** (`PROJECT.md` + ERICA). Thin `BedrockAgentCoreApp` + `@app.entrypoint` wrapping existing `run_assistant`; no duplicate tool logic. |
 | DB + Auth | **Supabase** (unchanged) | PostgreSQL SoT + Auth. |
 | Conversation memory | **Upstash Redis** (unchanged) | 24h non-authoritative TTL. |
@@ -403,7 +403,7 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 ### Build
 
 - [ ] TODO: Deploy Vite frontend to **Vercel** (`VITE_*` only); point `VITE_API_BASE_URL` at the hosted FastAPI HTTPS URL; add SPA rewrites.
-- [ ] TODO: Containerize FastAPI (`Dockerfile`) and deploy **App Runner** (default); allow Vercel origin(s) in CORS. (Alternative BFF hosts remain acceptable if documented.)
+- [ ] TODO: Containerize FastAPI (`Dockerfile`) and deploy **App Runner** (probe) or **ECS Express Mode** with the same image if create fails; allow Vercel origin(s) in CORS. See `plans/sprint-4-hosting.md`.
 - [ ] TODO: Generate AgentCore project (`agentcore.cmd create`); add `main.py` entrypoint wrapping `run_assistant` / sync adapter; smoke with `agentcore.cmd dev` before deploy.
 - [ ] TODO: Store Gemini/OpenAI, Upstash, LangSmith, and DB secrets in SSM SecureString; attach IAM read to Runtime; keep `agentcore.json` non-secret only.
 - [ ] TODO: Add ERICA-style `observability.py` (OTEL histograms → CloudWatch + LangSmith metadata/tags); sanitize tool args in traces; project name `setuhaul-agentcore`.
@@ -411,7 +411,7 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 - [ ] TODO: Locust suite A — AgentCore chat load (`loadtests/locust_agentcore_chat.py`) via `boto3.invoke_agent_runtime` with unique session IDs (ERICA `locustfile.py` pattern).
 - [ ] TODO: Locust suite B — scarce-capacity scheduling load (`loadtests/locust_slot_contention.py`) against `SHP-D16-CONTEND-01..10` / 3–4 STANDARD evening slots; post-run assert **zero** double-booked active appointments.
 - [ ] TODO: Capture CloudWatch Locust spike evidence + LangSmith tool-backed traces/screenshots for the demo.
-- [ ] TODO: Write `docs/HOSTING.md` (topology, deploy commands, CloudWatch/LangSmith click-path, Locust how-to) and refresh demo runbook beats (login → delay → options → race → NOSLOT → open CloudWatch + LangSmith during Locust).
+- [ ] TODO: After hosted smoke, fold `plans/sprint-4-hosting.md` into `docs/HOSTING.md` (click-path + Locust how-to) and refresh demo runbook beats (login → delay → options → race → NOSLOT → open CloudWatch + LangSmith during Locust). Scoreboard already exists on branch `hosting` (2026-08-13); this item is the post-smoke docs fold, not a missing plan.
 - [ ] TODO: Map PDF §12.1 judge answers to hosted evidence in the demo runbook (see `docs/DEMO_DAY_READINESS.md` cast).
 
 ### Exit gate
