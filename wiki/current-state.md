@@ -3,13 +3,16 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-12
+last_verified: 2026-08-13
 ---
 
 # Current state
 
 ## Verified
 
+- **2026-08-13 21:51 IST:** Local demo-hardening did not revert teammate (Antigravity) commits on `setuhal-santosh`. `frontend/` working tree clean; Dispatch Console, Ops resolve, extra Driver tools remain. Dispatch auto-book still calls `request_slot` and now supplies `options_result.recommendation_id`.
+- **2026-08-13 21:39 IST:** PDF demo-hardening landed: cast reset vs Phase B, chat cancel→rebook idempotency, omitted-REC stale gate, reschedule orphan restore. Backend units **65 passed**. Live cast reset `--confirm` not run.
+- **2026-08-13 21:26 IST:** Ravi Driver Auth password restored onto the existing shared Driver bucket after live `invalid_credentials`. Mapping `USR001`/`DRV001` was already correct. Password-grant Ravi **200**, Amit still **200**, local `/api/v1/auth/me` **200** (`USR001` / `DRIVER` / `DRV001`). Other Driver accounts were not reset.
 - Sprint 1 exit gate COMPLETE (2026-08-07 17:55 IST).
 - **Sprint 2 exit gate COMPLETE (2026-08-07 19:35 IST).**
 - **Sprint 3 exit gate COMPLETE (2026-08-12 00:25 IST).** Evidence: lifecycle reschedule/reject/expire; `REC-` stale invalidation; durable `escalation_queue` + Ops escalation list; live 10×4 scarce load (4 winners / 6 conflicts / zero double-books); D16 cast API smoke PASS; migration applied; backend units 56 passed.
@@ -36,11 +39,11 @@ last_verified: 2026-08-12
 - Redis rolling summaries added 2026-08-11 22:42 IST (ERICA-style): when raw history reaches 10 messages, the oldest 5 are LLM-summarized into `:summaries`; chat injects up to 5 summaries + 5 recent raw turns. Still non-authoritative with 24h TTL. Backend tests PASS (`47 passed`).
 - Backend env loading was hardened on 2026-08-10 23:24 IST so gitignored `.env`/`.env.local` files are resolved from source-relative backend and repo-root paths instead of only the process working directory. This fixes the local Driver chat `No LLM API key configured` failure after restart. Driver chat welcome copy now renders from the verified live driver context instead of a stale initial profile name.
 - Multi-provider LLM: OpenAI + OpenRouter + Gemini live invoke **PASS** (2026-08-07 20:25 IST). Gemini = `ChatGoogleGenerativeAI`; current default is `gemini-flash-latest`, and direct REST smoke with the local Gemini key PASS on 2026-08-10.
-- Default backend tests: **56 passed**. Explicit live proofs: same-slot concurrency + **10×4 scarce load** + D16 cast smoke (opt-in `SETUHAUL_RUN_LIVE_DB_TESTS=1`).
+- Default backend tests: **65 passed**. Explicit live proofs: same-slot concurrency + **10×4 scarce load** + D16 cast smoke (opt-in `SETUHAUL_RUN_LIVE_DB_TESTS=1`; not re-run this turn).
 
 ## Verify before claiming
 
-- PDF-demo correctness bugs found 2026-08-12 01:18 IST (not yet fixed): chat sticky `request_slot` idempotency after cancel; reschedule soft-conflict orphan; cast reset vs Phase B active appointment; optional REC skips stale gate; feasibility truncates before global rank.
+- Feasibility still truncates candidates before global rank sort (not in this demo-hardening slice).
 - Formal Playwright suite in CI (local one-shot smoke only).
 - LangSmith UI trace inspection (env tracing enabled; UI not opened this session).
 - Live LangChain Gemini invoke with current key/model after backend/dev environment restart. Direct Gemini REST smoke passed, but `ChatGoogleGenerativeAI.invoke` timed out in the local shell.

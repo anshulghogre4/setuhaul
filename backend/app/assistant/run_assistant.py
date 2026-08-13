@@ -90,7 +90,14 @@ async def run_assistant(
     summaries = memory.load_summaries(user_id=ctx.user_id, thread_id=tid, session_id=sid)
     session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid, session_id=sid)
 
-    tools = build_driver_tools(session=session, ctx=ctx, thread_id=tid, session_id=sid, memory=memory)
+    tools = build_driver_tools(
+        session=session,
+        ctx=ctx,
+        thread_id=tid,
+        session_id=sid,
+        memory=memory,
+        client_message_id=client_message_id,
+    )
     tool_map = {t.name: t for t in tools}
 
     base_llm = build_chat_model(settings)

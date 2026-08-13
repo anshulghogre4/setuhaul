@@ -103,6 +103,8 @@ Optional later: Vikas (`vikas.sharma@setuhaul.com`), contention drivers `driver.
 
 **Who:** Browser A — Ravi (continue same session)
 
+After `--mode cast` reset, `D16-APT-RAVI-OLD` is **historical** (`CANCELLED` / not current). `SHP-D16-RAVI` has **no** current appointment, so Phase B can use bare `request_slot`. `APT1017` on `SHP1017` stays CONFIRMED for disambiguation.
+
 | Step | Type exactly | Expect |
 |---|---|---|
 | B1 | `I need help with shipment SHP-D16-RAVI.` | Locks context to demo hero shipment |

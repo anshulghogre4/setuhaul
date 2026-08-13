@@ -467,16 +467,18 @@ async def execute_cast(conn: Any, shipment_ids: Sequence[str], *, dry_run: bool)
         await conn.execute(
             """
             UPDATE public.appointments
-            SET appointment_status = 'CONFIRMED',
-                is_current = 1,
+            SET appointment_status = 'CANCELLED',
+                is_current = 0,
                 booking_source = 'PLANNER',
                 confirmed_at = COALESCE(confirmed_at, '2026-08-15T09:00:00+05:30'),
-                cancelled_at = NULL,
-                cancellation_reason = NULL,
+                cancelled_at = COALESCE(cancelled_at, '2026-08-16T16:00:00+05:30'),
+                cancellation_reason = COALESCE(
+                  cancellation_reason, 'Cast reset: historical appointment; Phase B uses request_slot'
+                ),
                 warehouse_confirmation_ref = COALESCE(
                   warehouse_confirmation_ref, 'WH-D16-APT-RAVI-OLD'
                 ),
-                updated_at = '2026-08-15T09:00:00+05:30'
+                updated_at = '2026-08-16T16:00:00+05:30'
             WHERE appointment_id = $1
             """,
             RAVI_OLD_APPOINTMENT_ID,

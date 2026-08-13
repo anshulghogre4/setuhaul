@@ -3,10 +3,34 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-12
+last_updated: 2026-08-13
 ---
 
 # Wiki log
+
+## 2026-08-13 21:52 IST | ops | Owner will push locally
+
+- Stopped agent commit/push. Owner will push demo-hardening on `setuhal-santosh`. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-13 21:51 IST | query | Teammate commit compatibility
+
+- Aman’s Dispatch/Ops/tools/UI commits intact on `setuhal-santosh`. Local demo-hardening did not modify `frontend/`. Dispatch auto-book still present; REC id now passed. Synced [[handoff]], [[current-state]], CHANGELOG.
+
+## 2026-08-13 21:44 IST | query | Demo remaining scoreboard
+
+- Classroom product blockers closed. Remaining: live runbook rehearsal; optional polish; intentional PDF NOT YET. Synced [[handoff]] + `docs/DEMO_DAY_READINESS.md` + CHANGELOG.
+
+## 2026-08-13 21:39 IST | implementation | PDF demo-hardening four blockers
+
+- Cast reset leaves `D16-APT-RAVI-OLD` historical; chat mutation keys per turn; Redis stale without REC; reschedule restore on nested claim failure.
+- Living scoreboard struck with unit evidence (65 passed). Sprint 3 gate unchanged; Sprint 4 PLANNED.
+- Synced [[handoff]], [[current-state]], [[contradictions]], CHANGELOG.
+
+## 2026-08-13 21:26 IST | ops | Restore Ravi Driver Auth password
+
+- Live password-grant: Ravi **400 invalid_credentials**, Amit **200** on the same Driver bucket. Mapping `USR001`/`DRV001` intact.
+- Admin-API reset only Ravi; re-smoke Ravi **200**; local `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`.
+- Synced [[handoff]], [[current-state]], CHANGELOG. No application code. Passwords not recorded.
 
 ## 2026-08-13 01:25 IST | implementation | Dispatch Console, Fixed Viewport Layout & Bounded LOV Select with Click-Outside Dismissal
 

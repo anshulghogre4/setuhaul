@@ -223,6 +223,19 @@ def _tool_error(exc: Exception) -> str:
     return _json({"code": "TOOL_ERROR", "message": str(exc)[:300]})
 
 
+def chat_mutation_idempotency_key(
+    *,
+    thread_id: str,
+    action: str,
+    parts: list[str],
+    client_message_id: str | None,
+) -> str:
+    """Per-turn chat mutation key so cancel→rebook is not a sticky replay."""
+    suffix = (client_message_id or "").strip() or uuid4().hex[:16]
+    joined = "-".join(part for part in parts if part)
+    return f"chat-{thread_id}-{action}-{joined}-{suffix}"
+
+
 def build_driver_tools(
     *,
     session: AsyncSession,
@@ -230,8 +243,16 @@ def build_driver_tools(
     thread_id: str,
     session_id: str | None = None,
     memory: ConversationMemory | None = None,
+    client_message_id: str | None = None,
 ) -> list[StructuredTool]:
     """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist)."""
+
+    def _displayed_recommendation_id(explicit: str | None, shipment_id: str) -> str | None:
+        if explicit:
+            return explicit
+        if memory is None:
+            return None
+        return memory.get_active_recommendation(user_id=ctx.user_id, shipment_id=shipment_id)
 
     async def get_current_user_context(_: EmptyArgs | None = None) -> str:
         return _json(
@@ -469,11 +490,14 @@ def build_driver_tools(
 
     async def request_slot_tool(args: RequestSlotArgs | None = None, **kwargs: Any) -> str:
         parsed_args = args if isinstance(args, RequestSlotArgs) else RequestSlotArgs.model_validate(kwargs)
+        rec_id = _displayed_recommendation_id(
+            parsed_args.displayed_recommendation_id, parsed_args.shipment_id
+        )
         command = RequestSlotCommand(
             note=parsed_args.note,
             displayed_policy_version=parsed_args.displayed_policy_version,
-            displayed_recommendation_id=parsed_args.displayed_recommendation_id,
-            client_message_id=None,
+            displayed_recommendation_id=rec_id,
+            client_message_id=client_message_id,
         )
         try:
             result = await request_slot(
@@ -482,7 +506,12 @@ def build_driver_tools(
                 shipment_id=parsed_args.shipment_id,
                 slot_id=parsed_args.slot_id,
                 command=command,
-                idempotency_key=f"chat-{thread_id}-request-slot-{parsed_args.shipment_id}-{parsed_args.slot_id}",
+                idempotency_key=chat_mutation_idempotency_key(
+                    thread_id=thread_id,
+                    action="request-slot",
+                    parts=[parsed_args.shipment_id, parsed_args.slot_id],
+                    client_message_id=client_message_id,
+                ),
             )
             return _json(result.model_dump())
         except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
@@ -491,6 +520,9 @@ def build_driver_tools(
 
     async def reschedule_appointment_tool(args: RescheduleAppointmentArgs | None = None, **kwargs: Any) -> str:
         parsed_args = args if isinstance(args, RescheduleAppointmentArgs) else RescheduleAppointmentArgs.model_validate(kwargs)
+        rec_id = _displayed_recommendation_id(
+            parsed_args.displayed_recommendation_id, parsed_args.shipment_id
+        )
         try:
             result = await reschedule_appointment(
                 session,
@@ -501,9 +533,15 @@ def build_driver_tools(
                     new_slot_id=parsed_args.new_slot_id,
                     note=parsed_args.note,
                     displayed_policy_version=parsed_args.displayed_policy_version,
-                    displayed_recommendation_id=parsed_args.displayed_recommendation_id,
+                    displayed_recommendation_id=rec_id,
+                    client_message_id=client_message_id,
                 ),
-                idempotency_key=f"chat-{thread_id}-reschedule-{parsed_args.appointment_id}-{parsed_args.new_slot_id}",
+                idempotency_key=chat_mutation_idempotency_key(
+                    thread_id=thread_id,
+                    action="reschedule",
+                    parts=[parsed_args.appointment_id, parsed_args.new_slot_id],
+                    client_message_id=client_message_id,
+                ),
             )
             return _json(result.model_dump())
         except Exception as exc:  # noqa: BLE001

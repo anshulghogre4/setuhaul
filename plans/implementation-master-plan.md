@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-12 00:25 IST (Sprint 3 exit gate **COMPLETE**; Sprint 4 remains PLANNED)
+Last refreshed: 2026-08-13 21:39 IST (Sprint 3 exit gate remains **COMPLETE**; post-gate demo-hardening **COMPLETE**; Sprint 4 remains PLANNED)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -50,6 +50,13 @@ Latest verified deltas since Sprint 2 gate:
 - [x] ~~Fix offset-aware ETA ordering for mixed `+00:00` / `+05:30` text timestamps (ADR 008).~~ Evidence 2026-08-11 23:34 IST: migration `20260811233000_fix_v_latest_eta_timestamptz_order.sql` applied; feasibility SQL casts slot/ETA compares to `timestamptz`.
 - [x] ~~Apply additive full-scale demo-day dataset anchored to 2026-08-16 and expand Driver Auth cast (same 3 shared passwords; no resets).~~ Evidence 2026-08-11 23:34 IST: live totals ~6 facilities / 25 docks / 105 drivers / 2934 slots / 661 shipments / 26 Auth-mapped users; stress cast in `supabase/demo/fixtures/stress_scenarios.json`; password-grant PASS for Ravi + new `driver.drv004@…`–`drv015@…`.
 - [x] ~~Live-smoke authenticated feasible-slot and no-slot escalation API paths for demo cast shipments.~~ Evidence 2026-08-11 23:34 IST: Ravi `SHP-D16-RAVI` feasible 200 with options; Vikas `SHP-D16-NOSLOT` 200 with `options=[]` + escalation; cross-driver IDOR 403. Browser chat E2E of the full cast script remains TODO.
+
+Latest verified deltas since Sprint 3 gate (do not unstrike the gate):
+
+- [x] ~~Dispatch Console + auto-book of an initial appointment for a newly created shipment.~~ Evidence 2026-08-13: `dispatch_service.py` + `/dispatch` UI. Auto-book now passes the just-computed `recommendation_id` (2026-08-13 21:39 IST).
+- [x] ~~Ops escalation resolve REST + Inspect & Take Decision modal.~~ Evidence 2026-08-13 02:00 IST: `POST /api/v1/operations/escalations/{id}/resolve`.
+- [x] ~~Extra Driver LangChain tools (vehicle/carrier, gate/queue, facility rules, breakdown, dock alerts).~~ Evidence 2026-08-12 02:35 IST.
+- [x] ~~Restore Ravi Driver Auth onto the existing shared Driver bucket after `invalid_credentials`.~~ Evidence 2026-08-13 21:26 IST: Ravi grant 200; `/auth/me` USR001/DRV001. Other Driver accounts not reset.
 
 ## 1. Executive decision
 
@@ -338,6 +345,13 @@ Goal: prove the core challenge under simultaneous scarce capacity.
 - [x] ~~Sprint 3 exit gate **COMPLETE**.~~ Evidence 2026-08-12 00:25 IST: lifecycle reschedule/reject/expire + `REC-` stale invalidation + durable `escalation_queue`/Ops takeover UI + live 10×4 scarce load (zero double-books) + D16 cast API smoke PASS; backend units **56 passed**; migration applied live. Formal Playwright/CI and hosted Locust remain Sprint 4 / post-gate polish. Auth password hardening remains **post-demo deferred**.
 
 ### Sprint 3 remaining vs deferred (scoreboard)
+
+**IN PROGRESS — demo-hardening (not gate-blocking; PDF chat/cast correctness):**
+
+- [x] ~~Cast reset vs Phase B — `D16-APT-RAVI-OLD` restored as historical CANCELLED / not current so Phase B `request_slot` can run; `APT1017` stays CONFIRMED.~~ Evidence 2026-08-13 21:39 IST: `reset_demo_day.py` + runbook Phase B note; live smoke UPDATE is now a defensive no-op.
+- [x] ~~Chat `request_slot` sticky idempotency after cancel→rebook.~~ Evidence 2026-08-13 21:39 IST: `chat_mutation_idempotency_key` uses `client_message_id` or nonce; inactive `SLOT_REQUESTED` replays are deleted and re-allocated. Units 65 passed.
+- [x] ~~Stale REC skipped when `displayed_recommendation_id` omitted.~~ Evidence 2026-08-13 21:39 IST: chat injects stored Redis REC; Redis stale honored without REC id; dispatch passes just-computed `recommendation_id`.
+- [x] ~~`reschedule_appointment` orphan on nested `request_slot` commit.~~ Evidence 2026-08-13 21:39 IST: `persist=False` nested claim; restore prior appointment on non-`SLOT_REQUESTED`. Unit: `test_reschedule_restores_old_appointment_when_claim_conflicts`.
 
 **Remaining after gate (demo polish, not gate-blocking):**
 

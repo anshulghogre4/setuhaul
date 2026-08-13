@@ -221,6 +221,7 @@ def test_recommendation_stale_marker_is_ephemeral_and_scoped():
     assert memory.is_recommendation_stale(user_id="USR001", shipment_id="SHP1017") is True
     memory.clear_recommendation_stale(user_id="USR001", shipment_id="SHP1017")
     assert memory.is_recommendation_stale(user_id="USR001", shipment_id="SHP1017") is False
+    assert memory.get_active_recommendation(user_id="USR001", shipment_id="SHP1017") == "REC-123"
     assert all(seconds == TTL_SECONDS for seconds in fake.expirations.values())
 
 

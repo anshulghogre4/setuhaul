@@ -169,7 +169,7 @@ async def create_dispatch_shipment(
             req_cmd = RequestSlotCommand(
                 note=f"Initial pre-booking by dispatch {ctx.full_name}",
                 displayed_policy_version=options_result.policy_version,
-                displayed_recommendation_id=None,
+                displayed_recommendation_id=options_result.recommendation_id,
             )
             idem_key = f"IDEM-DISP-{uuid.uuid4().hex[:16]}"
             booking_res = await request_slot(

@@ -230,6 +230,41 @@ async def _reread_appointment(session: AsyncSession, appointment_id: str) -> dic
     return dict(row) if row else None
 
 
+def replay_claim_is_active(appointment: dict[str, Any] | None) -> bool:
+    if not appointment:
+        return False
+    status = str(appointment.get("appointment_status") or "")
+    try:
+        current = int(appointment.get("is_current") or 0)
+    except (TypeError, ValueError):
+        current = 0
+    return status in ACTIVE_APPOINTMENT_STATUSES and current == 1
+
+
+async def _store_request_idempotency(
+    session: AsyncSession,
+    *,
+    persist: bool,
+    key: str,
+    user_id: str,
+    route: str,
+    request_hash: str,
+    response: dict[str, Any],
+    status_code: int,
+) -> None:
+    await store_idempotency(
+        session,
+        key=key,
+        user_id=user_id,
+        route=route,
+        request_hash=request_hash,
+        response=response,
+        status_code=status_code,
+    )
+    if persist:
+        await session.commit()
+
+
 async def _locked_appointment(
     session: AsyncSession,
     *,
@@ -443,9 +478,6 @@ async def _validate_displayed_recommendation(
             policy_version=constraints.policy_version, idempotency_key=idempotency_key,
             message="The displayed scheduling policy is no longer current.",
         )
-    if not displayed_recommendation_id:
-        return None
-    refreshed = await find_feasible_slots(session, ctx, shipment_id, limit=5)
     redis_stale = False
     try:
         redis_stale = ConversationMemory(get_settings()).is_recommendation_stale(
@@ -453,6 +485,15 @@ async def _validate_displayed_recommendation(
         )
     except Exception:  # noqa: BLE001
         pass
+    if not displayed_recommendation_id:
+        if redis_stale:
+            return await _stale_recommendation_result(
+                session, ctx, shipment_id=shipment_id, slot_id=slot_id,
+                policy_version=constraints.policy_version, idempotency_key=idempotency_key,
+                message="Displayed slot options are stale; use the refreshed recommendation.",
+            )
+        return None
+    refreshed = await find_feasible_slots(session, ctx, shipment_id, limit=5)
     if redis_stale or refreshed.recommendation_id != displayed_recommendation_id:
         return await _stale_recommendation_result(
             session, ctx, shipment_id=shipment_id, slot_id=slot_id,
@@ -738,6 +779,7 @@ async def request_slot(
     slot_id: str,
     command: RequestSlotCommand,
     idempotency_key: str,
+    persist: bool = True,
 ) -> RequestSlotResult:
     constraints = load_scheduling_constraints()
     route = f"POST /api/v1/shipments/{shipment_id}/slots/{slot_id}/request"
@@ -757,7 +799,17 @@ async def request_slot(
         request_hash=req_hash,
     )
     if replay is not None:
-        return RequestSlotResult.model_validate({**replay["response"], "idempotent_replay": True})
+        result = RequestSlotResult.model_validate({**replay["response"], "idempotent_replay": True})
+        if result.code == "SLOT_REQUESTED" and result.appointment_id:
+            existing = await _reread_appointment(session, result.appointment_id)
+            if replay_claim_is_active(existing):
+                return result
+            await session.execute(
+                text("DELETE FROM public.idempotency_requests WHERE idempotency_key = :key"),
+                {"key": idempotency_key},
+            )
+        else:
+            return result
 
     now = datetime.now(timezone.utc).isoformat()
     shipment = (
@@ -801,11 +853,10 @@ async def request_slot(
         idempotency_key=idempotency_key,
     )
     if stale is not None:
-        await store_idempotency(
-            session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        await _store_request_idempotency(
+            session, persist=persist, key=idempotency_key, user_id=ctx.user_id, route=route,
             request_hash=req_hash, response=stale.model_dump(), status_code=409,
         )
-        await session.commit()
         return stale
 
     active_for_shipment = await _current_active_appointment_for_shipment(session, shipment_id)
@@ -820,8 +871,9 @@ async def request_slot(
             message="Shipment already has an active current appointment. Use reschedule flow next.",
             idempotency_key=idempotency_key,
         )
-        await store_idempotency(
+        await _store_request_idempotency(
             session,
+            persist=persist,
             key=idempotency_key,
             user_id=ctx.user_id,
             route=route,
@@ -829,7 +881,6 @@ async def request_slot(
             response=result.model_dump(),
             status_code=409,
         )
-        await session.commit()
         return result
 
     slot = (
@@ -895,8 +946,9 @@ async def request_slot(
             message=reason.message if reason else "Selected slot is no longer feasible.",
             idempotency_key=idempotency_key,
         )
-        await store_idempotency(
+        await _store_request_idempotency(
             session,
+            persist=persist,
             key=idempotency_key,
             user_id=ctx.user_id,
             route=route,
@@ -904,7 +956,6 @@ async def request_slot(
             response=result.model_dump(),
             status_code=409,
         )
-        await session.commit()
         return result
 
     appointment_id = new_id("APT")
@@ -981,8 +1032,9 @@ async def request_slot(
             ),
             idempotency_key=idempotency_key,
         )
-        await store_idempotency(
+        await _store_request_idempotency(
             session,
+            persist=persist,
             key=idempotency_key,
             user_id=ctx.user_id,
             route=route,
@@ -990,7 +1042,6 @@ async def request_slot(
             response=result.model_dump(),
             status_code=409,
         )
-        await session.commit()
         return result
 
     appointment = await _reread_appointment(session, appointment_id)
@@ -1006,8 +1057,9 @@ async def request_slot(
         idempotency_key=idempotency_key,
         appointment_writes=1,
     )
-    await store_idempotency(
+    await _store_request_idempotency(
         session,
+        persist=persist,
         key=idempotency_key,
         user_id=ctx.user_id,
         route=route,
@@ -1015,10 +1067,9 @@ async def request_slot(
         response=result.model_dump(),
         status_code=200,
     )
-    await session.commit()
-
-    final_appointment = await _reread_appointment(session, appointment_id)
-    result.appointment = final_appointment
+    if persist:
+        final_appointment = await _reread_appointment(session, appointment_id)
+        result.appointment = final_appointment
     result.idempotent_replay = False
     try:
         ConversationMemory(get_settings()).clear_recommendation_stale(
@@ -1182,6 +1233,7 @@ async def reschedule_appointment(
     if old["appointment_status"] not in ACTIVE_APPOINTMENT_STATUSES:
         raise AppError("Appointment is not active.", code="INVALID_APPOINTMENT_TRANSITION", status_code=409)
     now = _as_of()
+    prior_status = str(old["appointment_status"])
     await session.execute(
         text(
             """
@@ -1201,9 +1253,30 @@ async def reschedule_appointment(
             client_message_id=command.client_message_id,
         ),
         idempotency_key=f"{idempotency_key}:claim",
+        persist=False,
     )
     if result.code != "SLOT_REQUESTED":
-        raise AppError("Replacement slot could not be claimed.", code=result.code, status_code=409)
+        await session.execute(
+            text(
+                """
+                UPDATE public.appointments
+                SET appointment_status = :status, is_current = 1,
+                    cancelled_at = NULL, cancellation_reason = NULL, updated_at = :updated_at
+                WHERE appointment_id = :appointment_id
+                """
+            ),
+            {
+                "status": prior_status,
+                "updated_at": _as_of(),
+                "appointment_id": command.appointment_id,
+            },
+        )
+        await store_idempotency(
+            session, key=idempotency_key, user_id=ctx.user_id, route=route,
+            request_hash=req_hash, response=result.model_dump(), status_code=409,
+        )
+        await session.commit()
+        return result
     await session.execute(
         text("UPDATE public.appointments SET replaced_appointment_id = :old_id WHERE appointment_id = :new_id"),
         {"old_id": command.appointment_id, "new_id": result.appointment_id},

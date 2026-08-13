@@ -2,6 +2,37 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-13 21:52 IST - Owner will push demo-hardening
+
+- Agent commit/push cancelled. Local demo-hardening stays uncommitted for the owner to push on `setuhal-santosh`. Verification: not run. Agent/surface: Cursor.
+
+## 2026-08-13 21:51 IST - Compatibility check vs teammate (Aman / Antigravity) commits
+
+- Confirmed classroom demo-hardening did not revert Aman’s committed work on `setuhal-santosh` (HEAD `9d37538`). Frontend is unmodified: Dispatch Console, Ops resolve modal, layout/nav, typing indicator, extra Driver tools, kwargs unpacking, and UI polish commits remain as pushed.
+- Only overlap: dispatch auto-book now passes the just-computed `recommendation_id` instead of `None` (keeps auto-book; enables the stale-REC gate). Chat tools still register Aman’s five extra tools and `**kwargs`.
+- Verification: `git status --short -- frontend/` clean; `git log` retains `fba0f02` / `3341ca3` / `cf70272` / UI follow-ups; local uncommitted set is backend scheduling/chat/reset + docs. Agent/surface: Cursor.
+
+## 2026-08-13 21:44 IST - Demo remaining scoreboard
+
+- Classroom demo product blockers are closed (Sprint 3 gate + 21:39 IST hardening + Ravi Auth restore). Remaining demo work is rehearsal: run `DEMO_MANUAL_RUNBOOK.md` after `--mode cast` (live confirm of the new reset not yet run).
+- Optional polish only: ranking collect-then-sort, wipe runtime `EXC-*` on reset, drop leftover `scheduling_capability_disabled`. Intentional NOT YET: OR-Tools, dock-close mid-chat UI, warehouse reply channel, GPS. Sprint 4 hosting stays PLANNED.
+- Updated `docs/DEMO_DAY_READINESS.md` after-gate list. Verification: docs/status only; app tests not re-run. Agent/surface: Cursor.
+
+## 2026-08-13 21:39 IST - PDF demo-hardening (cast reset, chat idempotency, stale REC, reschedule orphan)
+
+- Refreshed Living sprint status in `plans/implementation-master-plan.md` with post-Sprint-3 deltas (Dispatch Console, escalation resolve, extra Driver tools, Ravi Auth restore) without reopening the Sprint 3 exit gate.
+- Cast reset: `D16-APT-RAVI-OLD` is restored as historical CANCELLED / not current so Phase B `request_slot` is not blocked by `ACTIVE_APPOINTMENT_EXISTS`; `APT1017` stays CONFIRMED. Runbook Phase B + demo README aligned.
+- Chat `request_slot` / `reschedule` idempotency keys now include `client_message_id` (else a nonce). Inactive `SLOT_REQUESTED` replays are ignored so cancel→rebook can claim again.
+- Stale options: chat injects stored Redis REC when the model omits it; Redis stale is honored even without a REC id; dispatch auto-book passes the just-computed `recommendation_id`.
+- Reschedule nested `request_slot(..., persist=False)` and restores the prior appointment when the replacement claim is not `SLOT_REQUESTED`.
+- Verification: backend unit suite **65 passed**; live DB/cast reset `--confirm` **not run**. Agent/surface: Cursor.
+
+## 2026-08-13 21:26 IST - Restore Ravi Driver Auth password (invalid_credentials)
+
+- Diagnosed `ravi.kumar@setuhaul.com` Driver login `invalid_credentials`: `USR001` mapping, role, and Auth flags were healthy; password grant against the documented Driver bucket returned **400** for Ravi and **200** for Amit.
+- Restored **only** Ravi via GoTrue Admin API onto the existing shared Driver bucket. Did not rotate Amit/Vikas/drv004–015 or the other two POC buckets.
+- Verification: Ravi password-grant **200**; Amit still **200**; local `GET /api/v1/auth/me` **200** with `USR001` / `DRIVER` / `DRV001`. Passwords not written to changelog. Agent/surface: Cursor.
+
 ## 2026-08-13 02:00 IST - Add Ops Escalation Resolution Service & UI Action
 
 - Created `resolve_escalation` service function in `backend/app/services/escalation_service.py` to update `escalation_status = 'RESOLVED'` in PostgreSQL `public.escalation_queue`.
