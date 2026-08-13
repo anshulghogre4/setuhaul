@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-13 23:25 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 remains **PLANNED** — locked to `plans/sprint-4-hosting.md` on branch `hosting`; gate not struck)
+Last refreshed: 2026-08-14 01:00 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–6 on `hosting`; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -402,12 +402,18 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 
 ### Build
 
-- [ ] TODO: Deploy Vite frontend to **Vercel** (`VITE_*` only); point `VITE_API_BASE_URL` at the hosted FastAPI HTTPS URL; add SPA rewrites.
-- [ ] TODO: Containerize FastAPI (`Dockerfile`) and deploy **App Runner** (probe) or **ECS Express Mode** with the same image if create fails; allow Vercel origin(s) in CORS. See `plans/sprint-4-hosting.md`.
-- [ ] TODO: Generate AgentCore project (`agentcore.cmd create`); add `main.py` entrypoint wrapping `run_assistant` / sync adapter; smoke with `agentcore.cmd dev` before deploy.
-- [ ] TODO: Store Gemini/OpenAI, Upstash, LangSmith, and DB secrets in SSM SecureString; attach IAM read to Runtime; keep `agentcore.json` non-secret only.
-- [ ] TODO: Add ERICA-style `observability.py` (OTEL histograms → CloudWatch + LangSmith metadata/tags); sanitize tool args in traces; project name `setuhaul-agentcore`.
-- [ ] TODO: Deploy AgentCore Runtime (`agentcore.cmd deploy`); document Runtime ARN; choose whether App Runner `/api/v1/chat` invokes locally or proxies to AgentCore for the hosted path.
+- [x] ~~Sprint 4 Step 1 host-readiness code on branch `hosting`.~~ Evidence 2026-08-13 23:50 IST: chat `/message` alias; CORS Vercel regex; `backend/Dockerfile`; `frontend/vercel.json`; `AGENTCORE_RUNTIME_ARN` blank → in-process else invoke; LangSmith project `setuhaul-agentcore`; `observability.py`; thin `agentcore_main.py`. Backend units **77 passed**. Docker `linux/amd64` build PASS; `GET /health/live` **200**. Live Driver chat and AWS deploy **not run**.
+- [x] ~~Sprint 4 Step 2 local Vite + uvicorn smoke (ARN blank).~~ Evidence 2026-08-14 00:12 IST API + **00:16 IST browser**: Ravi password-grant **200** from `POC_TEAM_ACCOUNTS.local.md`; `/auth/me` `USR001`/`DRIVER`/`DRV001`; `/driver/context` `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`; Vite `:5173` **200**. Browser `/driver` composer “Do I have a current appointment?” → no active appointment; uvicorn `POST /api/v1/chat/message` **200**. AWS deploy **not run**.
+- [x] ~~Sprint 4 Step 3 local Docker smoke.~~ Evidence 2026-08-14 00:20 IST: `setuhaul-api:step1` on `127.0.0.1:18000` (ARN blank); `/health/live` **200** healthy; Ravi `/auth/me` `USR001`/`DRV001`; `POST /api/v1/chat/message` **200** `list_active_shipments`. Container stopped after smoke. ECR/AWS **not run**.
+- [x] ~~Sprint 4 Step 4 AWS identity + SSM SecureString names.~~ Evidence 2026-08-14 00:28 IST: owner `aws login` root `us-east-1`; eight `/setuhaul/*` names listed (no decrypt); `database-url` pooler `:6543`; CDK bootstrap already present; `setuhaul-deploy-aman` exists. Billing budgets not checked. IAM attach to BFF/Runtime remains later.
+- [x] ~~Sprint 4 Step 5 ECR `setuhaul-api` linux/amd64 push.~~ Evidence 2026-08-14 00:45 IST: repo `setuhaul-api` `us-east-1` tag `latest` digest `sha256:250201c7605d…` (reused Step 3 local image). BFF host not started.
+- [x] ~~Sprint 4 Step 6 hosted BFF (ARN blank).~~ Evidence 2026-08-14 01:00 IST: App Runner rejected (`SubscriptionRequiredException`); ECS Express Mode `setuhaul-api`; ALB idle 180s; `/health/live` **200** at `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`.
+- [ ] TODO: Deploy Vite frontend to **Vercel** (`VITE_*` only); point `VITE_API_BASE_URL` at the hosted FastAPI HTTPS URL (rewrites file exists).
+- [ ] TODO: Deploy Dockerized FastAPI to **App Runner** (probe) or **ECS Express Mode** with the same image if create fails; set `CORS_ORIGINS` to the production Vercel URL. See `plans/sprint-4-hosting.md`.
+- [ ] TODO: Generate AgentCore project (`agentcore.cmd create`); thin entrypoint is `backend/app/assistant/agentcore_main.py`; smoke with `agentcore.cmd dev` before deploy.
+- [x] ~~Store Gemini/OpenAI, Upstash, LangSmith, and DB secrets in SSM SecureString.~~ Evidence 2026-08-14 00:28 IST: `/setuhaul/*` names exist; values not logged. **TODO remaining:** attach IAM read to Runtime/BFF roles; keep `agentcore.json` non-secret only.
+- [x] ~~Add ERICA-style `observability.py` (OTEL histograms → CloudWatch + LangSmith metadata/tags); sanitize tool args in traces; project name `setuhaul-agentcore`.~~ Evidence 2026-08-13 23:50 IST: file + unit tests; histograms no-op without OTEL. Hosted CW/LangSmith screenshots remain Step 9.
+- [ ] TODO: Deploy AgentCore Runtime (`agentcore.cmd deploy`); document Runtime ARN; hosted BFF already switches on `AGENTCORE_RUNTIME_ARN` (step 9 env).
 - [ ] TODO: Locust suite A — AgentCore chat load (`loadtests/locust_agentcore_chat.py`) via `boto3.invoke_agent_runtime` with unique session IDs (ERICA `locustfile.py` pattern).
 - [ ] TODO: Locust suite B — scarce-capacity scheduling load (`loadtests/locust_slot_contention.py`) against `SHP-D16-CONTEND-01..10` / 3–4 STANDARD evening slots; post-run assert **zero** double-booked active appointments.
 - [ ] TODO: Capture CloudWatch Locust spike evidence + LangSmith tool-backed traces/screenshots for the demo.

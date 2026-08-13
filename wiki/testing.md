@@ -3,13 +3,20 @@ title: SetuHaul Testing and Evidence
 type: topic
 status: compiled
 scope: testing
-last_verified: 2026-08-11
+last_verified: 2026-08-14
 ---
 
 # Testing
 
 Current executable evidence:
 
+- Sprint 4 Step 6 public DNS recheck: **PASS for internet / Vercel** (2026-08-14 01:04 IST). 8.8.8.8 and 1.1.1.1 resolve `se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`; `/health/live` **200**. Laptop default resolver still NXDOMAIN after flush.
+- Sprint 4 Step 6 hosted BFF: **PASS** (2026-08-14 01:00 IST). App Runner probe `SubscriptionRequiredException`. ECS Express Mode `setuhaul-api`; ALB target healthy; `GET /health/live` **200** at `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws` (via ALB IP + Host because laptop `on.aws` DNS lagged). ARN blank.
+- Sprint 4 Step 5 ECR push: **PASS** (2026-08-14 00:45 IST). `aws ecr describe-images --repository-name setuhaul-api` tag `latest` digest `sha256:250201c7605d5257fc66bb0daaf7e64f6fa1be77018a1d2adb149ceafbd6af2f` (local `setuhaul-api:step1` / `:latest`).
+- Sprint 4 Step 4 AWS identity + SSM: **PASS** (2026-08-14 00:28 IST). `aws sts get-caller-identity` owner root `us-east-1`. `get-parameters-by-path /setuhaul` returned 8 names (no `--with-decryption`). `database-url` put as pooler `:6543`. CDK bootstrap already present. Helper: `docs/scripts/put_hosting_ssm.py`.
+- Sprint 4 Step 3 local Docker: **PASS** (2026-08-14 00:20 IST). `docker run` `setuhaul-api:step1` as `setuhaul-step3` `-p 18000:8000`, ARN blank, env from gitignored `.env`/`.env.local` (not logged). `GET http://127.0.0.1:18000/health/live` **200**; Docker health **healthy**. Ravi grant **200**; container `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `/api/v1/driver/context` **200** `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`. Container stopped after smoke.
+- Sprint 4 Step 2 browser Driver chat: **PASS** (2026-08-14 00:16 IST). Owner login on `http://localhost:5173/driver` as Ravi `USR001`/`DRV001`. UI composer “Do I have a current appointment?”; assistant: no active appointment; uvicorn `POST /api/v1/chat/message` **200**.
+- Sprint 4 Step 2 local smoke: **PASS** (2026-08-14 00:12 IST). ARN blank. Ravi grant **200**; `GET /health/live` **200**; `GET /api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `GET /api/v1/driver/context` **200** `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`; Vite `http://localhost:5173/` **200**. Password from gitignored `POC_TEAM_ACCOUNTS.local.md` (not logged). Interactive browser password fill not used. Units not re-run.
 - Database tests under `supabase/tests/database/` (present; not executed this session).
 - Live Supabase catalog/seed inspection: **PASS** (2026-08-10 20:23 IST, direct read-only asyncpg). Verified PostgreSQL 17.6, `auth.users=3`, public schema 23 tables + 4 views, seeded operational counts, RLS enabled flags, and Sprint 3 scheduling guard indexes. No data or schema writes were made.
 - Live same-slot concurrency proof: **PASS** (2026-08-10 20:35 IST, `SETUHAUL_RUN_LIVE_DB_TESTS=1` with `DATABASE_URL`, `$env:PYTHONPATH=(Get-Location).Path; uv --system-certs run --with pytest pytest tests\integration\test_live_scheduling_concurrency.py -q` from `backend/`). Two independent async sessions requested the same temporary live Supabase slot; exactly one won, one received conflict refresh, audit/idempotency evidence existed, and post-run cleanup found zero `CODX` rows.

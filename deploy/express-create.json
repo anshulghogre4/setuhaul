@@ -1,0 +1,30 @@
+{
+  "serviceName": "setuhaul-api",
+  "executionRoleArn": "arn:aws:iam::118490268011:role/ecsTaskExecutionRole",
+  "infrastructureRoleArn": "arn:aws:iam::118490268011:role/ecsInfrastructureRoleForExpressServices",
+  "healthCheckPath": "/health/live",
+  "scalingTarget": {
+    "minTaskCount": 1,
+    "maxTaskCount": 2
+  },
+  "primaryContainer": {
+    "image": "118490268011.dkr.ecr.us-east-1.amazonaws.com/setuhaul-api:latest",
+    "containerPort": 8000,
+    "environment": [
+      {"name": "AGENTCORE_RUNTIME_ARN", "value": ""},
+      {"name": "AWS_REGION", "value": "us-east-1"},
+      {"name": "PORT", "value": "8000"},
+      {"name": "LANGSMITH_PROJECT", "value": "setuhaul-agentcore"},
+      {"name": "CORS_ORIGINS", "value": "http://localhost:5173,http://127.0.0.1:5173"}
+    ],
+    "secrets": [
+      {"name": "GOOGLE_API_KEY", "valueFrom": "/setuhaul/google-api-key"},
+      {"name": "OPENAI_API_KEY", "valueFrom": "/setuhaul/openai-api-key"},
+      {"name": "UPSTASH_REDIS_REST_URL", "valueFrom": "/setuhaul/upstash-redis-rest-url"},
+      {"name": "UPSTASH_REDIS_REST_TOKEN", "valueFrom": "/setuhaul/upstash-redis-rest-token"},
+      {"name": "LANGSMITH_API_KEY", "valueFrom": "/setuhaul/langsmith-api-key"},
+      {"name": "DATABASE_URL", "valueFrom": "/setuhaul/database-url"},
+      {"name": "SUPABASE_URL", "valueFrom": "/setuhaul/supabase-url"}
+    ]
+  }
+}

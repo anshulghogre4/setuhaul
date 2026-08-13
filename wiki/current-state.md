@@ -3,14 +3,22 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-13
+last_verified: 2026-08-14
 ---
 
 # Current state
 
 ## Verified
 
-- **2026-08-13 23:25 IST:** Sprint 4 hosting path **locked** to `plans/sprint-4-hosting.md` (laptop command book; GitHub Actions CI-only). Still PLANNED; not deployed. App tests not run (docs-only).
+- **2026-08-14 01:20 IST:** Step 7 Git Import **held**. `origin/hosting` = `f08d012 pre hosting plan`. Local Step 1–6 + `frontend/vercel.json` not on GitHub. Import+Deploy now would miss bake-time BFF URL. Gate OPEN.
+- **2026-08-14 01:04 IST:** Pre-Vercel DNS recheck: public resolvers have the Express hostname; `/health/live` **200**. Laptop default DNS still NXDOMAIN. Step 7 can use the public URL.
+- **2026-08-14 01:00 IST:** Sprint 4 Step 6 BFF **PASS**. App Runner `SubscriptionRequiredException`. ECS Express Mode `setuhaul-api`; ARN blank; ALB idle 180s; target healthy; `GET /health/live` **200**. URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. Vercel not built. Gate OPEN.
+- **2026-08-14 00:45 IST:** Sprint 4 Step 5 ECR **PASS**. Repo `setuhaul-api` `us-east-1` tag `latest` digest `sha256:250201c7605d…` (same local Step 3 image). ARN blank. BFF not hosted yet. Gate OPEN.
+- **2026-08-14 00:28 IST:** Sprint 4 Step 4 **PASS**. Owner `aws login` as root `us-east-1`. `/setuhaul/*` SecureString names exist (8); `database-url` classified pooler `:6543`. Values not printed. CDK bootstrap already present. IAM user `setuhaul-deploy-aman` exists. Billing budgets not checked. Gate OPEN.
+- **2026-08-14 00:20 IST:** Sprint 4 Step 3 local Docker **PASS**. Image `setuhaul-api:step1` published on `127.0.0.1:18000` (ARN blank). `/health/live` **200** (healthy). Ravi `/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `/driver/context` `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `ux=answered` `list_active_shipments`. Container stopped after smoke. AWS **not run**. Gate OPEN.
+- **2026-08-14 00:16 IST:** Sprint 4 Step 2 **browser** Driver chat **PASS**. Ravi on `/driver`; UI “Do I have a current appointment?” → assistant “no active appointment”; uvicorn `POST /api/v1/chat/message` **200**. Gate OPEN.
+- **2026-08-14 00:12 IST:** Sprint 4 Step 2 local smoke **PASS** (ARN blank). Ravi password-grant **200**; `/api/v1/auth/me` **200** `USR001`/`DRIVER`/`DRV001`; `/api/v1/driver/context` **200** `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** `success=true` `ux=answered` tool `list_active_shipments`. Vite `:5173` **200**. Credentials from gitignored `POC_TEAM_ACCOUNTS.local.md` (not printed). Interactive browser password fill not used. AWS/Vercel/AgentCore **not run**. Gate OPEN.
+- **2026-08-13 23:50 IST:** Sprint 4 Step 1 code on `hosting`. Units **77 passed**. Not deployed. Gate OPEN.
 - **2026-08-13 23:15 IST:** Sprint 4 hosting scoreboard checked in as `plans/sprint-4-hosting.md` on branch `hosting`. Topology still PLANNED (not deployed). BFF: probe App Runner, else same ECR image on ECS Express Mode. Punch-list is documented, not implemented. Sprint 4 gate not struck. App tests not run (docs-only).
 - **2026-08-13 21:51 IST:** Local demo-hardening did not revert teammate (Antigravity) commits on `setuhal-santosh`. `frontend/` working tree clean; Dispatch Console, Ops resolve, extra Driver tools remain. Dispatch auto-book still calls `request_slot` and now supplies `options_result.recommendation_id`.
 - **2026-08-13 21:39 IST:** PDF demo-hardening landed: cast reset vs Phase B, chat cancel→rebook idempotency, omitted-REC stale gate, reschedule orphan restore. Backend units **65 passed**. Live cast reset `--confirm` not run.

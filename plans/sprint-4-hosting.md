@@ -17,11 +17,11 @@ Work **down this list**. Do not start a later step until the earlier one is done
 | Order | What | Done when | Commands |
 |---|---|---|---|
 | **1 FIRST** | Code punch-list on `hosting` | Chat alias, CORS setting, Dockerfile, `vercel.json`, `AGENTCORE_RUNTIME_ARN` (blank), LangSmith project name `setuhaul-agentcore` | Application work — see §1 punch-list |
-| **2** | Prove **local** (ARN blank) | Login + REST + Driver chat on Vite `:5173` / uvicorn `:8000` | §5.10 |
-| **3** | Prove **Docker** on the laptop | `GET /health/live` 200; same chat through the container | §5.4 local `docker run` |
-| **4** | AWS once: CLI, CDK bootstrap, billing $20/$50, SSM secrets | `aws sts get-caller-identity` works; `/setuhaul/*` names exist (no decrypted dumps) | §5.0–5.3 |
-| **5** | Build/push ECR image (`linux/amd64`) | Image in `setuhaul-api` | §5.4 |
-| **6** | Host the BFF — **ARN still blank** | Probe App Runner; if rejected, ECS Express Mode. Health 200. ALB idle timeout 180s if Express Mode | §5.5 |
+| **2** | Prove **local** (ARN blank) | **PASS 2026-08-14 00:12 IST** — Login + REST + Driver chat on Vite `:5173` / uvicorn `:8000` | §5.10 |
+| **3** | Prove **Docker** on the laptop | **PASS 2026-08-14 00:20 IST** — `GET /health/live` 200; same chat through the container | §5.4 local `docker run` |
+| **4** | AWS once: CLI, CDK bootstrap, billing $20/$50, SSM secrets | **PASS 2026-08-14 00:28 IST** — identity + `/setuhaul/*` names (billing budgets still console) | §5.0–5.3 |
+| **5** | Build/push ECR image (`linux/amd64`) | **PASS 2026-08-14 00:45 IST** — Image in `setuhaul-api` | §5.4 |
+| **6** | Host the BFF — **ARN still blank** | **PASS 2026-08-14 01:00 IST** — Express Mode after App Runner reject; `/health/live` 200; ALB idle 180s | §5.5 |
 | **7** | Host the SPA on Vercel | `VITE_API_BASE_URL` = BFF HTTPS **before** build. Login, `/auth/me`, in-process Driver chat, Ops dashboard | §5.9 |
 | **8** | AgentCore (only after local chat already works) | `create` → `validate` → `dev` → `dry-run` → `deploy` → one CLI invoke | §5.6 |
 | **9** | Point BFF at AgentCore | Set `AGENTCORE_RUNTIME_ARN` on the BFF; one Driver chat through Runtime; CloudWatch + LangSmith | §5.5 + §5.7 |
@@ -103,13 +103,13 @@ Laptop:     ARN always blank  →  never calls AWS
 
 Login, `/auth/me`, Ops dashboard, dispatch, slot REST **never** need the ARN. Only Driver **chat** uses it, and only on the hosted BFF after step 9.
 
-Today’s [`chat.py`](../backend/app/api/v1/routers/chat.py) always calls `run_assistant` in-process. The ARN branch is Step 1 (settings field) + Step 9 (if ARN set, invoke; else in-process).
+Today’s [`chat.py`](../backend/app/api/v1/routers/chat.py) calls `run_assistant` in-process when `AGENTCORE_RUNTIME_ARN` is blank, and `InvokeAgentRuntime` when it is set.
 
 ---
 
 ## 1. Compatibility verdict (2026-08-13)
 
-**The topology works.** Same commit can stay local and go live. **The repo is not host-ready today** (no Dockerfile, CORS localhost-only, chat path mismatch). Those are punch-list items, not architecture blockers.
+**The topology works.** Same commit can stay local and go live. **Step 1 code is in** (chat alias, CORS regex, Dockerfile, vercel.json, ARN switch). **Step 2 local smoke PASS** 2026-08-14 00:12/00:16 IST. **Step 3 Docker PASS** 2026-08-14 00:20 IST. **Step 4 SSM PASS** 2026-08-14 00:28 IST. **Step 5 ECR PASS** 2026-08-14 00:45 IST. **Step 6 BFF PASS** 2026-08-14 01:00 IST. Live hosted smoke is still Steps 7–10.
 
 ```mermaid
 sequenceDiagram
@@ -143,14 +143,16 @@ BFF = App Runner if this AWS account is an **existing** App Runner customer, els
 
 ### Punch-list (Step 1 FIRST — must fix before any deploy)
 
-1. **Chat path.** `DriverHome.tsx` posts `/api/v1/chat/message`. `chat.py` only has `POST /api/v1/chat`. Keep `/api/v1/chat` and add `/api/v1/chat/message` as the same handler.
-2. **CORS.** Default is localhost only. Set `CORS_ORIGINS` to include the Vercel HTTPS origin (exact match; credentials mode cannot use `*`).
-3. **`backend/Dockerfile`.** Listen `0.0.0.0:${PORT:-8000}`. Build `--platform linux/amd64` from Windows. Install from `pyproject.toml` / `uv.lock` (not `requirements.txt` alone — `truststore` is missing there).
-4. **`frontend/vercel.json`.** Rewrite SPA routes (`/driver`, `/ops`, `/dispatch`) to `index.html`.
-5. **ALB idle timeout.** ECS Express Mode defaults to 60s. Gemini + tool rounds can exceed that. Raise to **120–300s**. First hosted chat can stay in-process (ARN unset).
-6. **Settings.** Add `AGENTCORE_RUNTIME_ARN` (blank local). Container gets secrets from process env / SSM, not `.env` files.
-7. **LangSmith project.** `run_assistant.py` currently hardcodes `setuhaul-sprint2`. Hosted project is `setuhaul-agentcore`.
-8. **AgentCore OTEL deps.** `aws-opentelemetry-distro` + langchain instrumentation on the Runtime only (ERICA cold-start dies without them).
+Code landed 2026-08-13 23:50 IST (unit tests **77 passed**). Local Driver chat **PASS** 2026-08-14 00:12 IST. Docker smoke **PASS** 2026-08-14 00:20 IST.
+
+1. **Chat path.** ~~`DriverHome.tsx` posts `/api/v1/chat/message`. `chat.py` only has `POST /api/v1/chat`.~~ Both `POST /api/v1/chat` and `/api/v1/chat/message` call the same handler.
+2. **CORS.** Localhost origins plus `CORS_ORIGIN_REGEX` default `https://.*\.vercel\.app`. Add the exact production Vercel URL to `CORS_ORIGINS` when you have it.
+3. **`backend/Dockerfile`.** Listens `0.0.0.0:${PORT:-8000}`; `uv sync` from `pyproject.toml`/`uv.lock`; `AGENTCORE_RUNTIME_ARN` blank by default. Build `--platform linux/amd64`.
+4. **`frontend/vercel.json`.** SPA rewrite to `index.html`.
+5. **ALB idle timeout.** Raised to **180s** on Express Mode ALB (2026-08-14 01:00 IST).
+6. **Settings.** `AGENTCORE_RUNTIME_ARN` blank local; if set, chat invokes AgentCore; else in-process `run_assistant`.
+7. **LangSmith project.** Default `setuhaul-agentcore` (`LANGSMITH_PROJECT`). Run name `setuhaul.chat`.
+8. **AgentCore OTEL deps.** Optional extra `agentcore` on `pyproject.toml` (not in the BFF image by default). Histograms no-op if OTEL is missing.
 
 ### Compatible with care
 
@@ -245,31 +247,31 @@ Punch-list in §1. No AWS spend.
 
 Vite + uvicorn, ARN blank. Login, REST, Driver chat.
 
-**Pass:** Ravi can chat on `localhost:5173` against `:8000`.
+**Pass:** Ravi can chat on `localhost:5173` against `:8000`. **Evidence 2026-08-14 00:12 IST API + 00:16 IST browser:** ARN blank; Ravi grant 200; `/auth/me` USR001/DRIVER/DRV001; `/driver/context` SHP-D16-RACE-A; `POST /api/v1/chat/message` 200. Browser `/driver` as Ravi; composer “Do I have a current appointment?” → no active appointment; uvicorn `POST /api/v1/chat/message` 200.
 
 ### Step 3 — local Docker
 
 `docker run` the API image. Hit `/health/live`. Chat through the container if you point Vite at it.
 
-**Pass:** health 200.
+**Pass:** health 200. **Evidence 2026-08-14 00:20 IST:** `setuhaul-api:step1` as `setuhaul-step3` `-p 18000:8000` (laptop uvicorn kept `:8000`); `/health/live` **200** healthy; Ravi `/auth/me` `USR001`/`DRV001`; `POST /api/v1/chat/message` **200** `list_active_shipments`. ARN blank. Container stopped after smoke.
 
 ### Step 4 — AWS account (once)
 
 CLI login, CDK bootstrap, billing alarms, SSM SecureString names only.
 
-**Pass:** `get-caller-identity` + SSM name list (no `--with-decryption` in chat).
+**Pass:** `get-caller-identity` + SSM name list (no `--with-decryption` in chat). **Evidence 2026-08-14 00:28 IST:** owner `aws login` as root `us-east-1`; eight `/setuhaul/*` names; `database-url` pooler `:6543`; CDK bootstrap already present; `setuhaul-deploy-aman` exists. Billing $20/$50 budgets still console. Helper `docs/scripts/put_hosting_ssm.py`.
 
 ### Step 5 — ECR
 
 `linux/amd64` build and push `setuhaul-api`.
 
-**Pass:** image in ECR.
+**Pass:** image in ECR. **Evidence 2026-08-14 00:45 IST:** `setuhaul-api:latest` in `us-east-1` digest `sha256:250201c7605d…` (same local Step 3 image).
 
 ### Step 6 — BFF host (ARN **blank**)
 
 Probe App Runner (~30s). If new-customer reject, ECS Express Mode with the **same** image. Raise ALB idle timeout to 180s. CORS will need the Vercel origin once you have it (step 7); localhost origins stay for laptop testing.
 
-**Pass:** `GET https://<bff>/health/live` 200.
+**Pass:** `GET https://<bff>/health/live` 200. **Evidence 2026-08-14 01:00 IST:** App Runner `SubscriptionRequiredException`. Express Mode URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`; ALB idle 180s; health **200**. ARN blank.
 
 ### Step 7 — Vercel
 

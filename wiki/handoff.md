@@ -3,13 +3,23 @@ title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-14 01:20 IST:** Step 7 **do not Import Git on Vercel yet**. `origin/hosting` is still `f08d012 pre hosting plan`; Step 1–6 + `frontend/vercel.json` are local-only. Import now would bake localhost API. After a push: Import with Root Directory `frontend`, Production Branch `hosting`, and `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_API_BASE_URL` (BFF HTTPS) **before** Deploy. Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 01:04 IST:** Pre-Step-7 DNS recheck: public 8.8.8.8/1.1.1.1 resolve the Express URL; `/health/live` **200**. Laptop default DNS still NXDOMAIN. Safe to start Step 7 from Vercel (public DNS). Do not `git commit` unless asked.
+- **2026-08-14 01:00 IST:** Sprint 4 **Step 6 BFF PASS**. App Runner rejected (`SubscriptionRequiredException`). ECS Express Mode `setuhaul-api` live; ARN blank; ALB idle 180s; `/health/live` **200**. URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. Next: Step 7 Vercel with `VITE_API_BASE_URL` = that URL **before** build. Delete Express Mode after demo (ALB bills idle). Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 00:45 IST:** Sprint 4 **Step 5 ECR PASS**. Pushed local `setuhaul-api:latest` (Step 3 image) to ECR `setuhaul-api` `us-east-1` tag `latest` (`sha256:250201c7605d…`). ARN blank. Next: Step 6 BFF (App Runner probe, else ECS Express Mode). Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 00:28 IST:** Sprint 4 **Step 4 PASS**. Owner `aws login` as root `us-east-1`. Eight `/setuhaul/*` SecureString names written from local env (not printed); `database-url` is pooler `:6543`. CDK bootstrap already present. `setuhaul-deploy-aman` exists. Billing budgets not checked. Next: Step 5 ECR push. Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 00:25 IST:** Step 4 **blocked**. Owner can use root in the AWS console, but this laptop CLI session is **expired** (`aws login` required). Cannot write SSM from `.env` until identity works. Do not paste access keys in chat. Gate not struck.
+- **2026-08-14 00:20 IST:** Sprint 4 **Step 3 local Docker PASS**. `setuhaul-api:step1` on `:18000`; `/health/live` **200**; Ravi `/auth/me` + `/chat/message` **200** (`list_active_shipments`). Container stopped; image kept. Next: Step 4 AWS CLI/SSM (do not set ARN). Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 00:16 IST:** Sprint 4 **Step 2 browser chat PASS**. Owner logged in as Ravi on `http://localhost:5173/driver` (`USR001`/`DRV001`). UI sent “Do I have a current appointment?” via `POST /api/v1/chat/message` **200**; reply: no active appointment. Next: Step 3 Docker. Do not `git commit` unless asked. Gate not struck.
+- **2026-08-14 00:12 IST:** Sprint 4 **Step 2 local smoke PASS** on `hosting` (ARN blank). Ravi grant **200** from `POC_TEAM_ACCOUNTS.local.md`; `/auth/me` `USR001`/`DRIVER`/`DRV001`; `/driver/context` `SHP-D16-RACE-A`; `POST /api/v1/chat/message` **200** (`list_active_shipments`, `ux=answered`). Vite `:5173` **200**. Browser password fill not used. Next: Step 3 Docker `/health/live` (+ optional container chat). Do not `git commit` unless asked. Sprint 4 gate not struck.
+- **2026-08-13 23:50 IST:** Sprint 4 **Step 1 code** on `hosting`: chat `/message` alias; ARN blank = in-process else AgentCore invoke; CORS Vercel regex; Dockerfile; vercel.json; observability.py; agentcore_main.py. Units **77 passed**. Docker image built; `/health/live` **200**. Live chat / AWS **not run**. Next: Step 2 local smoke (ARN blank). Do not `git commit` unless asked. Sprint 4 gate not struck.
 - **2026-08-13 23:32 IST:** Added day-2 update commands to [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md) §5.11 (ECR+BFF roll, AgentCore deploy, Vercel, env/ARN). Actions stays CI-only.
 - **2026-08-13 23:28 IST:** Clarified ARN vs hosted URL in [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md): Vercel never sees the ARN; SPA calls BFF via `VITE_API_BASE_URL`; ARN is BFF-only and only for chat after step 9.
 - **2026-08-13 23:25 IST:** Owner locked Sprint 4 to [`plans/sprint-4-hosting.md`](../plans/sprint-4-hosting.md). First host = this command book (not GitHub Actions CD). Existing `.github/workflows/ci.yml` stays CI-only. Next: Step 1 punch-list when asked to implement. Do not `git commit` unless asked.
@@ -111,7 +121,7 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. Start at Step 1 of `plans/sprint-4-hosting.md` (code punch-list on `hosting`). Work first→last; Locust is last. Do not strike the Sprint 4 gate until Step 10 evidence.
+1. **Step 7:** Do **not** Import+Deploy from the Vercel Git screen until `hosting` is pushed. Then Import `setuhaul` with Root Directory `frontend` and the three `VITE_*` vars (`VITE_API_BASE_URL=https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`) **before** build. Smoke login + `/auth/me` + in-process Driver chat. Do not set `AGENTCORE_RUNTIME_ARN`. Do not strike the Sprint 4 gate.
 2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
 3. Do not `git commit` unless asked.
 

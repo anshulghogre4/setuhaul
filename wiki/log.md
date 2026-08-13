@@ -3,10 +3,50 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 ---
 
 # Wiki log
+
+## 2026-08-14 01:20 IST | decision | Step 7 no Git Import yet
+
+- Do not Import `setuhaul` on Vercel until `hosting` Step 1–6 code is pushed. Synced [[handoff]], [[current-state]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:04 IST | verification | BFF public DNS ready
+
+- 8.8.8.8/1.1.1.1 resolve Express URL; health 200. Laptop resolver still NXDOMAIN. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:00 IST | verification | Sprint 4 Step 6 BFF
+
+- App Runner rejected; Express Mode health 200. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:45 IST | verification | Sprint 4 Step 5 ECR
+
+- Pushed `setuhaul-api:latest` to ECR `us-east-1`. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:28 IST | verification | Sprint 4 Step 4 SSM
+
+- Owner `aws login` root `us-east-1`. Eight `/setuhaul/*` names written; values not logged. CDK bootstrap already present. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:25 IST | blocker | Step 4 AWS CLI session expired
+
+- `get-caller-identity` failed; SSM not written. Synced [[handoff]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 00:20 IST | verification | Sprint 4 Step 3 Docker smoke
+
+- `setuhaul-api:step1` `:18000` health 200 + Ravi `/chat/message` 200. Container stopped. Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:16 IST | verification | Sprint 4 Step 2 browser chat
+
+- Owner-login Vite Driver home: composer → `POST /api/v1/chat/message` 200; no active appointment. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-14 00:12 IST | verification | Sprint 4 Step 2 local smoke
+
+- Ravi login + REST + `POST /api/v1/chat/message` on Vite `:5173` / uvicorn `:8000`, ARN blank. Roster file used for Driver bucket (no secrets written). Synced [[handoff]], [[current-state]], [[implementation]], [[testing]], CHANGELOG, master plan, scoreboard. Gate not struck.
+
+## 2026-08-13 23:50 IST | implementation | Sprint 4 Step 1 code
+
+- Host-readiness: chat alias, dual-mode ARN switch, CORS regex, Dockerfile, vercel.json, observability, thin AgentCore host. Units 77 passed. Synced [[handoff]], [[current-state]], [[implementation]], CHANGELOG, master plan (gate not struck).
 
 ## 2026-08-13 23:32 IST | ingest | Day-2 update commands
 

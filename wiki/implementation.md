@@ -3,7 +3,7 @@ title: SetuHaul Implementation Flow
 type: topic
 status: compiled
 scope: delivery
-last_verified: 2026-08-13
+last_verified: 2026-08-14
 ---
 
 # Implementation
@@ -34,7 +34,19 @@ The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Code
 
 **Living status refresh (2026-08-12 00:15 IST):** Sprint 4 **PLANNED** added as §8.1. AgentCore/CloudWatch/Locust hosting promoted from §12 deferred. Sprint 3 remains **IN PROGRESS** / gate OPEN. No hosting code deployed this turn.
 
-**Living status refresh (2026-08-13 23:15 IST):** Sprint 4 hosting scoreboard written (`plans/sprint-4-hosting.md`). App Runner new-customer cutoff → ECS Express Mode fallback documented. Punch-list not implemented. Sprint 4 gate remains OPEN.
+**Living status refresh (2026-08-13 23:50 IST):** Sprint 4 Step 1 host-readiness **code complete** (units 77 passed). Deploy/Locust remaining. Gate OPEN.
+
+**Living status refresh (2026-08-14 01:00 IST):** Sprint 4 Step 6 BFF **PASS** (Express Mode `/health/live` 200). Next Step 7 Vercel. Gate OPEN.
+
+**Living status refresh (2026-08-14 00:45 IST):** Sprint 4 Step 5 ECR **PASS** (`setuhaul-api:latest` in `us-east-1`). Next Step 6 BFF. Gate OPEN.
+
+**Living status refresh (2026-08-14 00:28 IST):** Sprint 4 Step 4 SSM + identity **PASS** (8 `/setuhaul/*` names; CDK bootstrap present). Next Step 5 ECR. Gate OPEN.
+
+**Living status refresh (2026-08-14 00:20 IST):** Sprint 4 Step 3 local Docker **PASS** (`setuhaul-api:step1` `:18000` health + chat). Next Step 4 AWS. Gate OPEN.
+
+**Living status refresh (2026-08-14 00:16 IST):** Sprint 4 Step 2 **browser** Driver chat **PASS** (Vite `/driver` → `/api/v1/chat/message` 200). Next Step 3 Docker. Gate OPEN.
+
+**Living status refresh (2026-08-14 00:12 IST):** Sprint 4 Step 2 local smoke **PASS** (ARN blank; Ravi `/chat/message` 200). Next Step 3 Docker. Gate OPEN.
 
 ## Challenge brief analysis
 
