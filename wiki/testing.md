@@ -10,6 +10,7 @@ last_verified: 2026-08-14
 
 Current executable evidence:
 
+- Sprint 4 Step 7 Vercel `main` deploy inspect: **partial** (2026-08-14 01:40 IST). Project `setuhaul` READY `https://setuhaul-roan.vercel.app` from `main` `677c218`. Vite `npm run build` PASS; JS contains Express BFF host, not localhost. `GET /` **200**. `GET /driver/login` and `/ops/login` **404** (missing `frontend/vercel.json` on `main`). Login/chat smoke **not run**.
 - Sprint 4 Step 6 public DNS recheck: **PASS for internet / Vercel** (2026-08-14 01:04 IST). 8.8.8.8 and 1.1.1.1 resolve `se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`; `/health/live` **200**. Laptop default resolver still NXDOMAIN after flush.
 - Sprint 4 Step 6 hosted BFF: **PASS** (2026-08-14 01:00 IST). App Runner probe `SubscriptionRequiredException`. ECS Express Mode `setuhaul-api`; ALB target healthy; `GET /health/live` **200** at `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws` (via ALB IP + Host because laptop `on.aws` DNS lagged). ARN blank.
 - Sprint 4 Step 5 ECR push: **PASS** (2026-08-14 00:45 IST). `aws ecr describe-images --repository-name setuhaul-api` tag `latest` digest `sha256:250201c7605d5257fc66bb0daaf7e64f6fa1be77018a1d2adb149ceafbd6af2f` (local `setuhaul-api:step1` / `:latest`).

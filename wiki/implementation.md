@@ -22,9 +22,9 @@ Sprint goals:
 1. Trusted walking skeleton: two entry screens, verified role routing, driver profile/logout shell, current-driver context, read-only ops dashboard, and CI baseline. **No chat mount.** **COMPLETE** (exit gate 2026-08-07 17:55 IST).
 2. Conversational exception and ETA/status coordination POC: `ChatOpenAI` + `bind_tools` + manual bounded invoke loop, clarification, one atomic typed ETA/exception command path, Redis 24h conversation state, LangSmith traces, and populated read-only Ops dashboard of stored schedule/dock/rule facts. **COMPLETE** (exit gate 2026-08-07 19:35 IST).
 3. Deterministic feasibility and concurrency-safe allocation. **COMPLETE** (exit gate 2026-08-12 00:25 IST).
-4. Hosting, AgentCore, observability, Locust. **PLANNED** — scoreboard `plans/sprint-4-hosting.md` (2026-08-13, branch `hosting`). Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** (same Docker image if App Runner rejects new accounts), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust suites A/B. Exit gate not struck.
+4. Hosting, AgentCore, observability, Locust. **PLANNED** — scoreboard `plans/sprint-4-hosting.md`. Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** (same Docker image if App Runner rejects new accounts), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust suites A/B. Vercel production tracks `main` (owner lifted the `hosting`-only merge lock 2026-08-14). Exit gate not struck.
 
-Do not build maps, user management, or the optional facility-wide OR-Tools engine before an owner promotion. Sprint 4 application/deploy work follows `plans/sprint-4-hosting.md` on branch `hosting`.
+Do not build maps, user management, or the optional facility-wide OR-Tools engine before an owner promotion. Sprint 4 application/deploy work follows `plans/sprint-4-hosting.md` on `main`.
 
 The plan is the **cross-IDE Living sprint scoreboard**. Every Cursor/Claude/Codex/Gemini session must report Living status at startup and strike verified checklist items on durable writeback (root `AGENTS.md`).
 

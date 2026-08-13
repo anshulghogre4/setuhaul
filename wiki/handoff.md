@@ -10,6 +10,13 @@ last_updated: 2026-08-14
 
 ## Latest work
 
+- **2026-08-14 01:46 IST:** Owner lifted the `hosting`→`main` merge lock. Vercel production tracks `main`. Owner will merge `hosting` → `main`. Step order + Actions CI-only + Sprint 4 exit-gate evidence **unchanged**. After merge, Vercel should rebuild `setuhaul-roan.vercel.app` with `vercel.json`. Then smoke `/driver/login`. Gate not struck.
+- **2026-08-14 01:43 IST:** Main-only repercussions: full `hosting`→`main` merge would fix SPA 404s via auto-deploy but puts unfinished AgentCore/Locust work on the default branch and breaks the post-smoke merge lock. Prefer `hosting` preview; if blocked, smallest main change is `frontend/vercel.json` only. Do not merge unless asked. Gate not struck.
+- **2026-08-14 01:40 IST:** Inspected existing Vercel project `setuhaul`. Production from **`main`** `677c218` is READY at `https://setuhaul-roan.vercel.app`. Vite build PASS; JS points at Express BFF (not localhost). `/` **200**; `/driver/login` and `/ops/login` **404** (no `vercel.json` on `main`). Do not merge. Next: Create Deployment from `hosting` so SPA rewrites land, then smoke login. Gate not struck.
+- **2026-08-14 01:37 IST:** Do **not** merge `hosting` → `main`. Plan lock: merge only after Steps 7–10 smoke. If Vercel Production Branch cannot leave `main`, deploy `hosting` as a **preview** (Deployments → Create Deployment → branch `hosting`). `*.vercel.app` is enough; CORS regex already allows it. Gate not struck.
+- **2026-08-14 01:32 IST:** Vercel Import `main` chip is a **GitHub link**, not a branch picker. Set `hosting` after create: Settings → Git → Production Branch, then Redeploy from `hosting`. Still: Root Directory `frontend`, no FastAPI service, three `VITE_*` only. Gate not struck.
+- **2026-08-14 01:30 IST:** Vercel Import screen is on **`main`**, Root `./`, and it detected **frontend + FastAPI backend** plus **25 env vars**. Do not Deploy like that. Switch branch to `hosting`, keep **only** the Vite frontend (Root Directory `frontend`; do not host FastAPI on Vercel), add only the three `VITE_*` values. Gate not struck.
+- **2026-08-14 01:24 IST:** Owner pushed `hosting` (`39ec4c9 mid hosting`). Step 7 next = **Vercel portal Import** (better than CLI: GitHub already linked, CLI not logged in). Root Directory `frontend`, Production Branch `hosting`, three `VITE_*` before Deploy. Gate not struck.
 - **2026-08-14 01:20 IST:** Step 7 **do not Import Git on Vercel yet**. `origin/hosting` is still `f08d012 pre hosting plan`; Step 1–6 + `frontend/vercel.json` are local-only. Import now would bake localhost API. After a push: Import with Root Directory `frontend`, Production Branch `hosting`, and `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_API_BASE_URL` (BFF HTTPS) **before** Deploy. Do not `git commit` unless asked. Gate not struck.
 - **2026-08-14 01:04 IST:** Pre-Step-7 DNS recheck: public 8.8.8.8/1.1.1.1 resolve the Express URL; `/health/live` **200**. Laptop default DNS still NXDOMAIN. Safe to start Step 7 from Vercel (public DNS). Do not `git commit` unless asked.
 - **2026-08-14 01:00 IST:** Sprint 4 **Step 6 BFF PASS**. App Runner rejected (`SubscriptionRequiredException`). ECS Express Mode `setuhaul-api` live; ARN blank; ALB idle 180s; `/health/live` **200**. URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. Next: Step 7 Vercel with `VITE_API_BASE_URL` = that URL **before** build. Delete Express Mode after demo (ALB bills idle). Do not `git commit` unless asked. Gate not struck.
@@ -121,7 +128,7 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. **Step 7:** Do **not** Import+Deploy from the Vercel Git screen until `hosting` is pushed. Then Import `setuhaul` with Root Directory `frontend` and the three `VITE_*` vars (`VITE_API_BASE_URL=https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`) **before** build. Smoke login + `/auth/me` + in-process Driver chat. Do not set `AGENTCORE_RUNTIME_ARN`. Do not strike the Sprint 4 gate.
+1. **Step 7:** Owner merges `hosting` → `main` (lock lifted). Wait for Vercel rebuild of `https://setuhaul-roan.vercel.app`, then smoke `/driver/login` + `/auth/me` + in-process chat. Do not strike the Sprint 4 gate.
 2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
 3. Do not `git commit` unless asked.
 

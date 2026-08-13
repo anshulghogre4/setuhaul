@@ -8,6 +8,34 @@ last_updated: 2026-08-14
 
 # Wiki log
 
+## 2026-08-14 01:46 IST | decision | hosting→main merge lock lifted
+
+- Vercel production tracks `main`. Exit gate still requires Steps 7–10 evidence. Synced scoreboard, master plan, [[implementation]], [[contradictions]], [[handoff]], [[current-state]], CHANGELOG.
+
+## 2026-08-14 01:43 IST | decision | main-only merge repercussions
+
+- Full merge not required. vercel.json-on-main is the small escape hatch. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:40 IST | verification | Vercel main deploy inspected
+
+- `setuhaul-roan.vercel.app` READY from main; `/` 200; login routes 404. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG.
+
+## 2026-08-14 01:37 IST | decision | no merge hosting→main
+
+- Preview-deploy `hosting` instead. Production Branch may stay `main`. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:32 IST | decision | Vercel branch via Settings → Git
+
+- Import `main` chip opens GitHub. Production Branch is set after create. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-14 01:30 IST | decision | Vercel Import must be frontend-only
+
+- Do not Deploy the default main/monorepo/25-env Import. Synced [[handoff]], CHANGELOG. Gate not struck.
+
+## 2026-08-14 01:24 IST | decision | Step 7 use Vercel portal
+
+- `origin/hosting` is `39ec4c9 mid hosting`. Prefer portal Import over CLI. Synced [[handoff]], [[current-state]], CHANGELOG. Gate not struck.
+
 ## 2026-08-14 01:20 IST | decision | Step 7 no Git Import yet
 
 - Do not Import `setuhaul` on Vercel until `hosting` Step 1–6 code is pushed. Synced [[handoff]], [[current-state]], CHANGELOG. Gate not struck.

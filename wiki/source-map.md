@@ -3,7 +3,7 @@ title: SetuHaul Source and Provenance Map
 type: provenance
 status: authoritative
 scope: repository
-last_verified: 2026-08-13
+last_verified: 2026-08-14
 ---
 
 # Source map

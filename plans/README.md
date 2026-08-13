@@ -5,7 +5,7 @@ This folder is the implementation source of truth that turns the challenge brief
 ## Start here
 
 - [Master implementation plan](implementation-master-plan.md) - architecture, decisions, sprint gates, edge cases, and acceptance criteria.
-- [Sprint 4 hosting scoreboard](sprint-4-hosting.md) - **locked Sprint 4 path.** First→last work order (code → local → Docker → AWS → ECR → BFF → Vercel → AgentCore → traces → Locust last). GitHub Actions stays CI-only. Branch `hosting`; do not strike the Sprint 4 gate until Step 10 evidence.
+- [Sprint 4 hosting scoreboard](sprint-4-hosting.md) - **locked Sprint 4 path** (step order + Actions CI-only). First→last work order (code → local → Docker → AWS → ECR → BFF → Vercel → AgentCore → traces → Locust last). Vercel production tracks `main` (owner lifted the `hosting`-only merge lock 2026-08-14). Do not strike the Sprint 4 gate until Step 10 evidence.
 - [POC design review](poc-design-review.md) - selected Stitch direction, retained POC elements, and deferred visual scope.
 - [Solution architecture branch](branches/solution-architecture.md) - boundaries, runtime topology, transaction model, and ADRs.
 - [Business analysis branch](branches/business-analysis.md) - outcomes, actors, scope, workflows, and business acceptance criteria.

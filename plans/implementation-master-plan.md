@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-14 01:00 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–6 on `hosting`; gate not struck)
+Last refreshed: 2026-08-14 01:46 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — owner lifted `hosting`→`main` merge lock; Vercel tracks `main`; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -29,7 +29,7 @@ Use this plan as a living checklist:
 | Sprint 1 - trusted walking skeleton | **COMPLETE** | Exit gate struck 2026-08-07 17:55 IST |
 | Sprint 2 - exception and ETA vertical slice | **COMPLETE** | Exit gate struck 2026-08-07 19:35 IST |
 | Sprint 3 - deterministic allocation | **COMPLETE** | Exit gate struck 2026-08-12 00:25 IST |
-| Sprint 4 - hosting, AgentCore, observability, Locust | **PLANNED** | Starts after Sprint 3 exit gate. Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** if App Runner rejects new accounts (same Docker image), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust. Command book: `plans/sprint-4-hosting.md` (branch `hosting`). Do not strike this gate until hosted smoke. |
+| Sprint 4 - hosting, AgentCore, observability, Locust | **PLANNED** | Starts after Sprint 3 exit gate. Topology: Vercel frontend, App Runner FastAPI **or ECS Express Mode** if App Runner rejects new accounts (same Docker image), Bedrock AgentCore (AWS-only), Supabase + Upstash, CloudWatch + LangSmith, Locust. Command book: `plans/sprint-4-hosting.md`. Vercel production tracks `main` (merge lock lifted 2026-08-14). Do not strike this gate until hosted smoke. |
 
 Verified repository foundation (not a completed implementation sprint):
 
@@ -417,7 +417,7 @@ Reference: ERICA at `F:\Preparation\FDE_WEEK_14\Erica` (agent-only; no React/Ver
 - [ ] TODO: Locust suite A — AgentCore chat load (`loadtests/locust_agentcore_chat.py`) via `boto3.invoke_agent_runtime` with unique session IDs (ERICA `locustfile.py` pattern).
 - [ ] TODO: Locust suite B — scarce-capacity scheduling load (`loadtests/locust_slot_contention.py`) against `SHP-D16-CONTEND-01..10` / 3–4 STANDARD evening slots; post-run assert **zero** double-booked active appointments.
 - [ ] TODO: Capture CloudWatch Locust spike evidence + LangSmith tool-backed traces/screenshots for the demo.
-- [ ] TODO: After hosted smoke, fold `plans/sprint-4-hosting.md` into `docs/HOSTING.md` (click-path + Locust how-to) and refresh demo runbook beats (login → delay → options → race → NOSLOT → open CloudWatch + LangSmith during Locust). Scoreboard already exists on branch `hosting` (2026-08-13); this item is the post-smoke docs fold, not a missing plan.
+- [ ] TODO: After hosted smoke, fold `plans/sprint-4-hosting.md` into `docs/HOSTING.md` (click-path + Locust how-to) and refresh demo runbook beats (login → delay → options → race → NOSLOT → open CloudWatch + LangSmith during Locust). Scoreboard already exists (2026-08-13); this item is the post-smoke docs fold, not a missing plan.
 - [ ] TODO: Map PDF §12.1 judge answers to hosted evidence in the demo runbook (see `docs/DEMO_DAY_READINESS.md` cast).
 
 ### Exit gate

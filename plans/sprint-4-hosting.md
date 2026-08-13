@@ -4,7 +4,7 @@ Status: **PLANNED — locked 2026-08-13 23:25 IST.** Owner: follow this file. Do
 Living sprint: Sprint 1–3 exit gates **COMPLETE**. Sprint 4 exit gate remains **OPEN** until hosted smoke.  
 Canonical delivery order: [`implementation-master-plan.md`](implementation-master-plan.md) §8.1. **This file** is the Sprint 4 hosting command book, work order, and compatibility punch-list.
 
-**Branch rule:** test hosting on `hosting`. Merge to `main` only after hosted smoke (Vercel + BFF + AgentCore + CloudWatch + LangSmith). The same git commit must still run locally.
+**Branch rule (updated 2026-08-14 01:46 IST):** Owner lifted the `hosting`-only lock. Vercel production tracks **`main`**. Merge `hosting` → `main` now so SPA rewrites and host-readiness code ride the existing production project. Further Sprint 4 work continues on `main`. The same git commit must still run locally. Do **not** strike the Sprint 4 exit gate until Steps 7–10 have evidence. Step order and “Actions stays CI-only” are unchanged.
 
 Do not put secrets, tokens, passwords, or account IDs with credentials in this file. Placeholders only: `ACCOUNT_ID`, `PASTE`, `PASTE_ARN`. Region: **us-east-1**. Who: account owner or IAM user `setuhaul-deploy-aman` (AdministratorAccess on the owner’s $100-credit trial). Daily coding is local and costs $0 AWS.
 
@@ -12,11 +12,11 @@ Do not put secrets, tokens, passwords, or account IDs with credentials in this f
 
 ## Do this first → last (do not skip)
 
-Work **down this list**. Do not start a later step until the earlier one is done. Locust is **last**. Merge/`main` and striking the Sprint 4 gate are **after last**.
+Work **down this list**. Do not start a later step until the earlier one is done. Locust is **last**. Striking the Sprint 4 gate is **after last**.
 
 | Order | What | Done when | Commands |
 |---|---|---|---|
-| **1 FIRST** | Code punch-list on `hosting` | Chat alias, CORS setting, Dockerfile, `vercel.json`, `AGENTCORE_RUNTIME_ARN` (blank), LangSmith project name `setuhaul-agentcore` | Application work — see §1 punch-list |
+| **1 FIRST** | Code punch-list (landed on `hosting`, merging to `main`) | Chat alias, CORS setting, Dockerfile, `vercel.json`, `AGENTCORE_RUNTIME_ARN` (blank), LangSmith project name `setuhaul-agentcore` | Application work — see §1 punch-list |
 | **2** | Prove **local** (ARN blank) | **PASS 2026-08-14 00:12 IST** — Login + REST + Driver chat on Vite `:5173` / uvicorn `:8000` | §5.10 |
 | **3** | Prove **Docker** on the laptop | **PASS 2026-08-14 00:20 IST** — `GET /health/live` 200; same chat through the container | §5.4 local `docker run` |
 | **4** | AWS once: CLI, CDK bootstrap, billing $20/$50, SSM secrets | **PASS 2026-08-14 00:28 IST** — identity + `/setuhaul/*` names (billing budgets still console) | §5.0–5.3 |
@@ -26,7 +26,7 @@ Work **down this list**. Do not start a later step until the earlier one is done
 | **8** | AgentCore (only after local chat already works) | `create` → `validate` → `dev` → `dry-run` → `deploy` → one CLI invoke | §5.6 |
 | **9** | Point BFF at AgentCore | Set `AGENTCORE_RUNTIME_ARN` on the BFF; one Driver chat through Runtime; CloudWatch + LangSmith | §5.5 + §5.7 |
 | **10 LAST** | Locust | Suite A chat + suite B scarce slots; **zero** double-books; CW spike; LangSmith traces | §5.8 |
-| **After last** | Save credits, then merge | Pause App Runner **or delete** Express Mode. Then merge `hosting` → `main`. Strike Sprint 4 gate only with this evidence | §6 |
+| **After last** | Save credits | Pause App Runner **or delete** Express Mode. Strike Sprint 4 gate only with Steps 7–10 evidence | §6 |
 
 ```mermaid
 flowchart TD
@@ -237,7 +237,7 @@ Same Driver, same browser session → same `runtimeSessionId` → CloudWatch ses
 
 This is the table above, spelled out. Stop at the first fail.
 
-### Step 1 — FIRST: code on branch `hosting`
+### Step 1 — FIRST: code punch-list
 
 Punch-list in §1. No AWS spend.
 
@@ -297,9 +297,9 @@ Suite A (chat) then suite B (scarce slots, zero double-books). Capture CW spike 
 
 **Pass:** ~0% system error; zero double-books.
 
-### After last — credits, then merge
+### After last — credits
 
-Pause App Runner **or delete** the Express Mode service (ALB bills idle). Then merge `hosting` → `main`. Strike the Sprint 4 gate only with steps 7–10 evidence.
+Pause App Runner **or delete** the Express Mode service (ALB bills idle). Strike the Sprint 4 gate only with steps 7–10 evidence.
 
 ---
 
@@ -616,9 +616,9 @@ later     →  optional Actions + AWS OIDC to push ECR / update Express Mode
 
 ---
 
-## 6. Merge-to-main gate (after Step 10, not before)
+## 6. Sprint 4 exit gate (after Step 10, not before)
 
-This is **after last**. Do **not** merge `hosting` → `main` and do **not** strike the Sprint 4 exit gate until all of the following have evidence:
+Owner lifted the `hosting`→`main` merge lock on 2026-08-14 01:46 IST (Vercel production tracks `main`). Do **not** strike the Sprint 4 exit gate until all of the following have evidence:
 
 - [ ] **Step 7:** Hosted Driver/Ops UI on Vercel talks to the hosted FastAPI BFF (login, `/auth/me`, Ops dashboard).
 - [ ] **Steps 7 then 9:** Driver chat works hosted (in-process first, then via AgentCore ARN).
@@ -627,4 +627,4 @@ This is **after last**. Do **not** merge `hosting` → `main` and do **not** str
 - [ ] **Step 10 LAST:** Locust contention run proves **zero** double-booking.
 - [ ] **After last:** Secrets not in git. App Runner paused **or** Express Mode deleted after the demo.
 
-Until then, Sprint 4 stays **PLANNED / IN PROGRESS** on this branch. `main` stays Sprint 1–3 complete.
+Until then, Sprint 4 stays **PLANNED / IN PROGRESS**. Further hosting work is on `main`.

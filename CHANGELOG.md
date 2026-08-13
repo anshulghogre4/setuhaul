@@ -2,6 +2,41 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-14 01:46 IST - Owner lifted hosting→main merge lock
+
+- Owner chose Vercel-on-`main` and will merge `hosting` → `main`. Removed the “merge only after Step 10” branch rule from `plans/sprint-4-hosting.md` §6 / header, `plans/README.md`, master-plan Living table, [[implementation]], [[contradictions]]. Step order, Actions CI-only, and Sprint 4 exit-gate evidence stay locked. Merge itself is owner-performed (not this turn).
+- Verification: docs update only. Git merge **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:43 IST - Step 7: main-only vs merge repercussions
+
+- Owner asked what happens if Vercel stays on `main` only. `origin/hosting` is 2 commits / 37 files ahead of `main` (incl. `frontend/vercel.json`, Docker/AgentCore, deploy JSON). Decision recorded: full merge to `main` is technically safe (dual-mode, BFF already from hosting image) but violates the post-smoke merge rule and puts unfinished Steps 8–10 on the default branch. Smaller path if portal cannot pick `hosting`: add only `frontend/vercel.json` to `main`. Do not merge unless owner asks.
+- Verification: `git diff --stat origin/main...origin/hosting`. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:40 IST - Step 7: inspected existing Vercel main deploy
+
+- Project `setuhaul` (`prj_ltWDG3ecaNYBEZQfSDuJYuMWlfQC`) production READY from **`main`** `677c218`. Alias `https://setuhaul-roan.vercel.app`. Vite build PASS. JS has BFF host (not localhost) and Supabase. `/` **200**. `/driver/login` and `/ops/login` **404** because `frontend/vercel.json` SPA rewrites are only on `hosting`. Do not merge to `main`. Next: redeploy `hosting` as preview (or add rewrites) then smoke login.
+- Verification: Vercel MCP get_project + get_deployment + build logs + URL fetch. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:37 IST - Step 7: do not merge hosting to main
+
+- Owner cannot change Vercel Production Branch off `main`. Decision: **do not merge**. Deploy `hosting` as a preview (`Deployments → Create Deployment → hosting`). CORS already allows `*.vercel.app`. Merge to `main` stays after Steps 7–10.
+- Verification: plan branch rule. Deploy **not confirmed**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:32 IST - Step 7: Import main chip is not a branch picker
+
+- Owner: clicking `main` on Vercel Import opens GitHub. Correct path: create frontend-only project, then Settings → Git → Production Branch = `hosting`, Redeploy. Do not import the 25 detected env vars.
+- Verification: UI screenshot. Deploy **not confirmed**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:30 IST - Step 7: Vercel Import defaults are unsafe
+
+- Portal Import of `setuhaul` is on `main`, Root `./`, and treats FastAPI as a second Vercel service plus 25 detected env vars (from `.env.example`, including service-role/DB/LLM placeholders). Instruction: switch to `hosting`, frontend-only, three `VITE_*` only. Deploy not clicked yet.
+- Verification: screenshot review. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
+## 2026-08-14 01:24 IST - Step 7: hosting pushed; prefer Vercel portal
+
+- Owner pushed `hosting` (`39ec4c9 mid hosting`); `origin/hosting` now includes `frontend/vercel.json` and Step 1–6 host-readiness files. Next: Vercel **portal Import** (not CLI). CLI 58.11.0 is not logged in; portal already has GitHub `setuhaul`. Configure Root Directory `frontend`, Production Branch `hosting`, three `VITE_*` before Deploy.
+- Verification: local `hosting` matches `origin/hosting` `39ec4c9`; remote tree has `frontend/vercel.json`. Deploy **not run**. Sprint 4 gate **not struck**. Agent/surface: Cursor.
+
 ## 2026-08-14 01:20 IST - Step 7: do not Import Git yet
 
 - Owner opened Vercel New Project with GitHub `anshulghogre4/setuhaul` visible. Decision: **do not Import + Deploy yet**. Local `hosting` has Step 1–6 work uncommitted; `origin/hosting` is still `f08d012 pre hosting plan`. An import would build stale `main`/`hosting` without `frontend/vercel.json` and without bake-time `VITE_API_BASE_URL`. Git import is OK **after** a push, with Root Directory `frontend` and the three `VITE_*` env vars set before the first build.

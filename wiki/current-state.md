@@ -10,7 +10,12 @@ last_verified: 2026-08-14
 
 ## Verified
 
-- **2026-08-14 01:20 IST:** Step 7 Git Import **held**. `origin/hosting` = `f08d012 pre hosting plan`. Local Step 1–6 + `frontend/vercel.json` not on GitHub. Import+Deploy now would miss bake-time BFF URL. Gate OPEN.
+- **2026-08-14 01:46 IST:** Owner lifted `hosting`→`main` merge lock. Vercel tracks `main`. Merge not yet verified on GitHub. Gate OPEN.
+- **2026-08-14 01:40 IST:** Vercel project `setuhaul` production READY from `main` at `https://setuhaul-roan.vercel.app`. JS has BFF host. `/driver/login` **404** (no SPA rewrites on `main`). Step 7 not passed. Gate OPEN.
+- **2026-08-14 01:37 IST:** Do not merge `hosting`→`main`. Step 7 can use a Vercel **preview** of `hosting` while Production Branch stays `main`. Gate OPEN.
+- **2026-08-14 01:30 IST:** Vercel Import defaults unsafe (`main`, Root `./`, FastAPI as a second service, 25 env vars). Frontend-only + `hosting` + three `VITE_*` required before Deploy. Gate OPEN.
+- **2026-08-14 01:24 IST:** `origin/hosting` = `39ec4c9 mid hosting` (includes `frontend/vercel.json`). Step 7 next is Vercel portal Import, not CLI. Deploy not run. Gate OPEN.
+- **2026-08-14 01:20 IST:** Step 7 Git Import **held** until push. Superseded 01:24 IST after owner pushed `39ec4c9`.
 - **2026-08-14 01:04 IST:** Pre-Vercel DNS recheck: public resolvers have the Express hostname; `/health/live` **200**. Laptop default DNS still NXDOMAIN. Step 7 can use the public URL.
 - **2026-08-14 01:00 IST:** Sprint 4 Step 6 BFF **PASS**. App Runner `SubscriptionRequiredException`. ECS Express Mode `setuhaul-api`; ARN blank; ALB idle 180s; target healthy; `GET /health/live` **200**. URL `https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws`. Vercel not built. Gate OPEN.
 - **2026-08-14 00:45 IST:** Sprint 4 Step 5 ECR **PASS**. Repo `setuhaul-api` `us-east-1` tag `latest` digest `sha256:250201c7605d…` (same local Step 3 image). ARN blank. BFF not hosted yet. Gate OPEN.
