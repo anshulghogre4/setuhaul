@@ -8,6 +8,7 @@ from app.services.driver_reads import (
     get_facility_rules_and_restrictions,
     report_vehicle_breakdown_or_incident,
     get_dock_maintenance_alerts,
+    get_exception_status,
 )
 
 
@@ -62,6 +63,34 @@ async def test_get_vehicle_and_carrier_details_forbidden(mock_session, driver_ct
     with pytest.raises(AppError) as exc_info:
         await get_vehicle_and_carrier_details(mock_session, driver_ctx, "SHP1002")
     assert exc_info.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_get_exception_status_returns_resolution_note(mock_session, driver_ctx):
+    mock_rows = MagicMock()
+    mock_rows.mappings.return_value.all.return_value = [
+        {
+            "exception_id": "EXC-1",
+            "shipment_id": "SHP1017",
+            "driver_id": "DRV001",
+            "thread_id": "THR-1",
+            "exception_type": "DELAY",
+            "reported_at": "2026-08-16T10:00:00Z",
+            "reported_delay_min": 30,
+            "declared_eta_ts": "2026-08-16T12:00:00Z",
+            "severity_code": "MEDIUM",
+            "exception_status": "RESOLVED",
+            "description": "Traffic delay",
+            "dedupe_key": "SHP1017:2026-08-16:DELAY",
+            "resolution_note": "Slot manually confirmed at dock",
+        }
+    ]
+    mock_session.execute.return_value = mock_rows
+
+    res = await get_exception_status(mock_session, driver_ctx, "SHP1017")
+
+    assert res["items"][0]["exception_status"] == "RESOLVED"
+    assert res["items"][0]["resolution_note"] == "Slot manually confirmed at dock"
 
 
 @pytest.mark.asyncio

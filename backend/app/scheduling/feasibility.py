@@ -191,13 +191,16 @@ def evaluate_candidate_slot(
     checked_constraints: list[str],
 ) -> tuple[FeasibleSlotOption | None, InfeasibleSlotReason | None]:
     slot_id = str(candidate["slot_id"])
-    slot_start = _parse_timestamp(str(candidate["slot_start_ts"]))
-    slot_end = _parse_timestamp(str(candidate["slot_end_ts"]))
-    unload_min = int(shipment["expected_unload_min"])
-    feasible_start = max(eta_dt, slot_start)
-    feasible_end = feasible_start.timestamp() + unload_min * 60
-    feasible_end_dt = datetime.fromtimestamp(feasible_end, tz=feasible_start.tzinfo)
 
+    # Cheap, timestamp-independent checks run first so a slot that is already
+    # unavailable (occupied, closed, incompatible) never requires its
+    # slot_start_ts/slot_end_ts to be a strictly-parseable ISO-8601 string.
+    # A handful of legacy background-inventory rows store a truncated seconds
+    # field (e.g. "10:30:0" instead of "10:30:00") — Postgres's own timestamptz
+    # cast in the candidate SQL accepts it, but Python's stricter
+    # datetime.fromisoformat does not. Every such row observed live is already
+    # occupied by an active appointment, so short-circuiting here avoids the
+    # parse entirely instead of requiring a data migration.
     if candidate["slot_status"] != "OPEN":
         return None, InfeasibleSlotReason(
             slot_id=slot_id,
@@ -240,6 +243,14 @@ def evaluate_candidate_slot(
             failure_code="DOCK_INCOMPATIBLE_VEHICLE",
             message="Shipment load exceeds dock vehicle weight limit.",
         )
+
+    slot_start = _parse_timestamp(str(candidate["slot_start_ts"]))
+    slot_end = _parse_timestamp(str(candidate["slot_end_ts"]))
+    unload_min = int(shipment["expected_unload_min"])
+    feasible_start = max(eta_dt, slot_start)
+    feasible_end = feasible_start.timestamp() + unload_min * 60
+    feasible_end_dt = datetime.fromtimestamp(feasible_end, tz=feasible_start.tzinfo)
+
     if feasible_end_dt > slot_end:
         return None, InfeasibleSlotReason(
             slot_id=slot_id,

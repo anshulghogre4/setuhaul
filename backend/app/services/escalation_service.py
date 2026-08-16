@@ -198,12 +198,19 @@ async def resolve_escalation(
                 SET escalation_status = :status,
                     updated_at = :now_iso,
                     resolved_at = :now_iso,
-                    resolved_by_user_id = :user_id
+                    resolved_by_user_id = :user_id,
+                    resolution_note = :note
                 WHERE escalation_id = :eid
-                RETURNING escalation_id, shipment_id, escalation_type, escalation_status
+                RETURNING escalation_id, shipment_id, escalation_type, escalation_status, resolution_note
                 """
             ),
-            {"status": status, "now_iso": now_iso, "eid": escalation_id, "user_id": ctx.user_id},
+            {
+                "status": status,
+                "now_iso": now_iso,
+                "eid": escalation_id,
+                "user_id": ctx.user_id,
+                "note": resolution_note,
+            },
         )
     ).mappings().first()
 
@@ -213,12 +220,14 @@ async def resolve_escalation(
                 text(
                     """
                     UPDATE public.driver_exceptions
-                    SET exception_status = :status
+                    SET exception_status = :status,
+                        resolution_note = :note
                     WHERE exception_id = :eid
-                    RETURNING exception_id AS escalation_id, shipment_id, exception_type AS escalation_type, exception_status AS escalation_status
+                    RETURNING exception_id AS escalation_id, shipment_id, exception_type AS escalation_type,
+                              exception_status AS escalation_status, resolution_note
                     """
                 ),
-                {"status": status, "eid": escalation_id},
+                {"status": status, "eid": escalation_id, "note": resolution_note},
             )
         ).mappings().first()
 
@@ -231,12 +240,13 @@ async def resolve_escalation(
             text(
                 """
                 UPDATE public.driver_exceptions
-                SET exception_status = :status
+                SET exception_status = :status,
+                    resolution_note = :note
                 WHERE shipment_id = :shipment_id
                   AND exception_status NOT IN ('RESOLVED', 'CANCELLED', 'DUPLICATE')
                 """
             ),
-            {"shipment_id": shipment_id, "status": status},
+            {"shipment_id": shipment_id, "status": status, "note": resolution_note},
         )
 
     await session.commit()

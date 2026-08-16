@@ -511,6 +511,8 @@ Changelog rules:
 
 ### Current changelog entry
 
+New deployed-migration entries now go in `supabase/CHANGELOG.md` (created 2026-08-17 per this section's own instruction), not here. The baseline entry below is retained for history.
+
 #### 2026-08-06 - SetuHaul baseline
 
 - Status: hosted baseline deployed and verified

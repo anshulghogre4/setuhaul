@@ -8,6 +8,14 @@ last_updated: 2026-08-17
 
 # Wiki log
 
+## 2026-08-17 04:35 IST | deploy | applied escalation resolution_note migration live
+
+- Applied `supabase/migrations/20260817040000_escalation_resolution_note.sql` to live project `kujffzgqjmqphkmrbawy` via direct PostgreSQL connection (Supavisor pooler) since Supabase CLI was installed but not linked/authenticated in this environment. Verified `resolution_note text NULL` on `escalation_queue` and `driver_exceptions` via `information_schema.columns`; row counts unaffected. Created `supabase/CHANGELOG.md` (new, per the migration guide's own instruction) with the full deployment record plus the moved baseline entry. Caveat recorded: applied outside CLI/MCP so Supabase's migration-history tracking doesn't know about it — reconcile before next `db push`. Synced [[handoff]], [[current-state]], CHANGELOG.
+
+## 2026-08-17 04:10 IST | fix | AgentCore event-loop TOOL_ERROR + escalation resolution-note gap
+
+- Debugged LangSmith `TOOL_ERROR` (`Task ... got Future ... attached to a different loop`) on hosted Driver-chat DB tools. Root cause: `agentcore_main.py`'s sync `invoke_agent` wrapped `asyncio.run(_run_turn(...))`, creating a new event loop per invocation while the process-level `db` asyncpg pool stayed bound to whichever loop created it first (fails once on loop mismatch, retry succeeds after pool eviction — matches reported behavior exactly). Fixed by making `invoke_agent` a native async entrypoint so it runs on the Bedrock AgentCore SDK's own persistent per-container worker loop instead of spinning a fresh one every call. Also audited freshly-pulled `be62264` (Aman) end to end: Ops "Mark Resolved" remark was accepted by the API but never persisted — added migration `20260817040000_escalation_resolution_note.sql` + threaded `resolution_note` through `resolve_escalation()` and the `get_exception_status` tool SELECT. Backend units 84 passed, 3 skipped; import smoke PASS. Not yet live-verified — needs migration apply + ECS `setuhaul-api` redeploy + AgentCore Runtime redeploy (owner deploying separately). Synced [[handoff]], [[current-state]], master plan Living deltas, CHANGELOG.
+
 ## 2026-08-17 02:39 IST | ingest | stash conflict: keep Incoming changelog
 
 - Resolved `CHANGELOG.md` stash-pop conflict by keeping Incoming (stashed 2026-08-16 21:30 IST reschedule-demo entry). Retained the already-on-main 2026-08-17 02:34 IST Driver Appointment Panel entry (append-only). Removed leftover `>>>>>>> origin/main` markers in `CHANGELOG.md` and this log. Synced [[handoff]], CHANGELOG. App tests not run.

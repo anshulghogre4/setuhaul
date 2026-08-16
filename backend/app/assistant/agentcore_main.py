@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -119,10 +118,10 @@ async def _run_turn(payload: dict[str, Any]) -> dict[str, Any]:
 if app is not None:
 
     @app.entrypoint
-    def invoke_agent(payload: dict[str, Any], context: Any) -> dict[str, Any]:
+    async def invoke_agent(payload: dict[str, Any], context: Any) -> dict[str, Any]:
         body = payload if isinstance(payload, dict) else {}
         try:
-            return asyncio.run(_run_turn(body))
+            return await _run_turn(body)
         except Exception as exc:  # noqa: BLE001
             logger.exception("AgentCore entrypoint failed")
             return {"error": str(exc)[:300]}

@@ -314,7 +314,7 @@ async def get_exception_status(
                 f"""
                 SELECT e.exception_id, e.shipment_id, e.driver_id, e.thread_id, e.exception_type,
                        e.reported_at, e.reported_delay_min, e.declared_eta_ts, e.severity_code,
-                       e.exception_status, e.description, e.dedupe_key
+                       e.exception_status, e.description, e.dedupe_key, e.resolution_note
                 FROM public.driver_exceptions e
                 {where}
                 ORDER BY e.reported_at DESC

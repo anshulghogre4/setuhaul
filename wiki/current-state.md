@@ -3,13 +3,15 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-16
+last_verified: 2026-08-17
 ---
 
 # Current state
 
 ## Verified
 
+- **2026-08-17 04:35 IST:** Applied `supabase/migrations/20260817040000_escalation_resolution_note.sql` live to project `kujffzgqjmqphkmrbawy` via direct PostgreSQL connection (CLI installed but not linked/authenticated). Verified via `information_schema.columns`: `resolution_note text NULL` present on both `public.escalation_queue` and `public.driver_exceptions`; row counts unchanged (`escalation_queue=2`, `driver_exceptions=262`). Applied outside CLI/MCP, so Supabase migration-history tracking doesn't record it — reconcile before the next CLI `db push` (same drift class as the existing baseline mapping caveat). Full record in `supabase/CHANGELOG.md`. Clears the DB-side blocker for the pending ECS/AgentCore redeploys below.
+- **2026-08-17 04:10 IST:** Root-caused and fixed the hosted-only LangSmith `TOOL_ERROR` (`Task ... got Future ... attached to a different loop`) on Driver-chat DB tools: `agentcore_main.py`'s `invoke_agent` was a sync `asyncio.run()` wrapper, creating a new event loop per Bedrock AgentCore invocation while the process-level `db` asyncpg pool stayed bound to whichever loop created it first. Fixed by making `invoke_agent` a native async entrypoint so the SDK's persistent per-container worker loop (already present in `bedrock_agentcore/runtime/app.py`, previously unused) handles every invocation consistently. Also fixed a second gap found while auditing Aman's `be62264`: Ops "Mark Resolved" resolution notes were accepted by the API but never persisted (no DB column) — added migration `20260817040000_escalation_resolution_note.sql` and threaded the note through `resolve_escalation()` into the `get_exception_status` tool response. Backend units 84 passed, 3 skipped; import smoke PASS. **Not yet live-verified** — needs migration apply + ECS `setuhaul-api` redeploy + AgentCore Runtime redeploy, which the owner is performing separately. Gate OPEN (Sprint 4 unaffected, still PLANNED).
 - **2026-08-16 21:30 IST:** Isolated reschedule-demo driver `DRV-RS-01` seeded at `FAC-GGN-01` (`supabase/demo/seed_reschedule_driver.py`; rollback script provided); never touches the `SHP-D16-*`/`CONTEND`/`RACE` cast or `FAC-JAI-01` — isolation verified live (cast shipments still have zero active appointments after the seed; total shipments 667→671). **Fixed a real bug in `reschedule_appointment`** (`backend/app/scheduling/allocation.py`): it was comparing the driver's pre-cancel recommendation hash against a freshly recomputed option set that its own cancel step had just changed, so every reschedule failed `SLOT_OPTIONS_STALE` on the first attempt — reproduced live 2/2 before the fix, confirmed fixed live 2/2 after (with a negative test proving genuine staleness is still caught). This bug also affected the live driver-chat `reschedule_appointment` tool, not just the sandbox. Runbook Phase H documents the reschedule demo. Also fixed a pre-existing `reset_demo_day.py --mode full` crash risk (`appointments.shipment_id`/`slot_id` are `ON DELETE NO ACTION`; any surviving non-`D16` appointment — live chat booking, Dispatch Console auto-book, or the sandbox — would abort the reset transaction; reproducible today via an existing Dispatch Console booking). `--mode cast` was already unaffected. `--mode full --confirm` verified via `--dry-run` only, not run live. Gate OPEN.
 - **2026-08-16 21:05 IST:** AgentCore Runtime v3 unified traces. Hosted A2 smoke grant/auth_me/chat **200** in 1.0s / 2.9s / **28.6s** (`list_active_shipments`). `aws/spans` has `AgentCore.Runtime.Invoke`. ADOT OTLP `aws_auth_session` recursion remains. Gate OPEN.
 - **2026-08-16 20:20 IST:** Hosted LLM `auto` prefers **OpenAI `gpt-4o-mini`** (SSM OpenAI + Gemini; no OpenRouter; no `LLM_PROVIDER` pin). Gate OPEN.
@@ -75,6 +77,7 @@ last_verified: 2026-08-16
 
 ## Verify before claiming
 
+- AgentCore event-loop fix and escalation resolution-note fix (2026-08-17) are code-verified (unit tests + import smoke) and the DB migration is live-applied, but the **fixes themselves are not yet live-verified** — pending ECS `setuhaul-api` backend redeploy and AgentCore Runtime redeploy (owner's to run).
 - Feasibility still truncates candidates before global rank sort (not in this demo-hardening slice).
 - Formal Playwright suite in CI (local one-shot smoke only).
 - LangSmith UI trace inspection (env tracing enabled; UI not opened this session).
