@@ -349,9 +349,7 @@ function DriverBody({
           content: res.data.response,
         },
       ])
-      if (res.data.ux_state === 'persisted_success') {
-        await refreshContext()
-      }
+      await refreshContext()
     } catch (err) {
       setUxState('error')
       setMessages((prev) => [
@@ -687,6 +685,7 @@ function DriverBody({
                     value={formatHumanDateTime(
                       getField(ctx.current_appointment, [
                         'slot_start_ts',
+                        'start_time_ts',
                         'start_time',
                       ])
                     )}
@@ -694,7 +693,11 @@ function DriverBody({
                   <DataField
                     label="End"
                     value={formatHumanDateTime(
-                      getField(ctx.current_appointment, ['slot_end_ts', 'end_time'])
+                      getField(ctx.current_appointment, [
+                        'slot_end_ts',
+                        'end_time_ts',
+                        'end_time',
+                      ])
                     )}
                   />
                 </div>

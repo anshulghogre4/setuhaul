@@ -2,6 +2,14 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 02:30 IST - Driver Appointment Panel Auto-Update Fix
+
+- Surgically updated `frontend/src/features/driver/DriverHome.tsx` to automatically trigger `refreshContext()` upon assistant chat completion (`sendChat`).
+- Expanded `getField` fallback key array for appointment time fields to include `start_time_ts` and `end_time_ts` so appointment start/end slots render and refresh in real time on the right-side context rail.
+- Backend code untouched.
+- Verification: 77 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`); Vite build **PASS** (built in 671ms).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-14 01:46 IST - Owner lifted hosting→main merge lock
 
 - Owner chose Vercel-on-`main` and will merge `hosting` → `main`. Removed the “merge only after Step 10” branch rule from `plans/sprint-4-hosting.md` §6 / header, `plans/README.md`, master-plan Living table, [[implementation]], [[contradictions]]. Step order, Actions CI-only, and Sprint 4 exit-gate evidence stay locked. Merge itself is owner-performed (not this turn).
