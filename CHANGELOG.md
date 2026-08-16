@@ -2,6 +2,14 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 02:34 IST - Driver Appointment Panel Auto-Update Fix (Main Branch)
+
+- Surgically updated `frontend/src/features/driver/DriverHome.tsx` to automatically trigger `refreshContext()` upon assistant chat completion (`sendChat`).
+- Expanded `getField` fallback key array for appointment time fields to include `start_time_ts` and `end_time_ts` so appointment start/end slots render and refresh in real time on the right-side context rail.
+- Backend code untouched.
+- Verification: 81 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-16 21:05 IST - Unified traces deploy + timed hosted A2
 
 - Runtime **v3** `UPDATE_COMPLETE` (ARN unchanged). Pinned ADOT `>=0.18.0` (live `telemetry.auto.version=0.19.0-aws`); `UNIFIED_TRACES_DESTINATION_ENABLED=true`. Portal Tracing was already on. Execution role already had `logs:PutResourcePolicy`. CLI persist-state failed after deploy (`Could not load credentials`); stack still `UPDATE_COMPLETE`.
