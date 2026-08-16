@@ -6,10 +6,10 @@ from app.services.escalation_service import EscalateExceptionCommand
 
 def test_escalation_command_rejects_unknown_fields():
     with pytest.raises(ValidationError):
-        EscalateExceptionCommand(
+        EscalateExceptionCommand(  # type: ignore[call-arg]
             shipment_id="SHP1017",
             escalation_type="NO_SLOT",
-            untrusted_override=True,
+            untrusted_override=True,  # type: ignore[call-arg]
         )
 
 

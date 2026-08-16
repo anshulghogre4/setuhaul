@@ -2,6 +2,12 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 03:26 IST - Add type ignore tag in test_escalation_service.py
+
+- Added `# type: ignore[call-arg]` annotations to `untrusted_override=True` in `backend/tests/unit/test_escalation_service.py` to suppress IDE/Pyright static analyzer warnings on invalid argument testing.
+- Verification: 82 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-17 03:16 IST - Escalation DB Resolution Status Fix
 
 - Surgically updated `resolve_escalation` in `backend/app/services/escalation_service.py` to persist `resolved_at` timestamp and `resolved_by_user_id` in `public.escalation_queue`.
