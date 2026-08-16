@@ -3,13 +3,15 @@ title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-16
+last_updated: 2026-08-17
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-17 02:39 IST:** Merge-editor stash conflict on `CHANGELOG.md` resolved by keeping Incoming (stashed 2026-08-16 21:30 IST reschedule-demo entry). The already-on-main 2026-08-17 02:34 IST Driver Appointment Panel changelog line was retained so the append-only log is not truncated. Removed leftover `>>>>>>> origin/main` markers in `CHANGELOG.md` and `wiki/log.md`. Stash application files remain staged; conflict is resolved. App tests not run. Gate not struck.
+- **2026-08-16 21:30 IST:** Owner asked to give every shipment/driver an appointment for a live reschedule demo. Live read-only sweep: 563/667 shipments terminal, only 19/104 eligible bookable, 13 of those are demo cast — bulk-booking would break Phases B/C/E/G, so built one isolated sandbox driver instead (`DRV-RS-01` at `FAC-GGN-01`, never touched by the cast): `supabase/demo/seed_reschedule_driver.py` + `rollback_reschedule_driver.py`, all writes via production `request_slot`/`confirm_appointment`. **Found and fixed a real bug**: `reschedule_appointment` re-validated the driver's pre-cancel recommendation hash against options it had just changed by cancelling the old appointment, so every reschedule failed `SLOT_OPTIONS_STALE` on the first try — this hit the live driver-chat tool identically and was previously untested. Fixed in `backend/app/scheduling/allocation.py` by not re-passing the recommendation id/policy version to the nested `request_slot` call (outer validation + fresh-option check already cover it). Appended optional Phase H to the runbook; Phases A–G unchanged. Verified live: isolation clean (cast untouched, +4 shipments only), reschedule PASS post-fix on both pending and confirmed appointments, negative stale-check still correctly rejects a bogus recommendation id, unit **81 passed**, live cast + 10×4 integration **2 passed**. Also found and fixed a pre-existing crash risk in `supabase/demo/reset_demo_day.py --mode full`: `appointments.shipment_id`/`slot_id` FKs are `ON DELETE NO ACTION`, so any surviving non-`D16`-prefixed appointment (a live chat booking, a Dispatch Console auto-booking, or the new sandbox) would abort the whole reset transaction — reproducible today via an existing Dispatch Console booking (`APT-F16FD7C41E41`). Fixed both `DELETE`s to skip still-referenced rows; verified via `--dry-run` only (did not run `--mode full --confirm` live). `--mode cast` was already unaffected. Gate not struck.
 - **2026-08-16 21:05 IST:** Executed CloudWatch span-export plan. Runtime **v3** READY, ARN unchanged. ADOT `>=0.18.0` (live 0.19.0-aws) + `UNIFIED_TRACES_DESTINATION_ENABLED=true`. IAM `logs:PutResourcePolicy` already on default Runtime policy — no extra attach. Timed Ravi A2: grant 1.0s, auth_me 2.9s, chat **28.6s** tool `list_active_shipments`. Transaction Search now has `AgentCore.Runtime.Invoke`. ADOT exporter **still** credential recursion — do not redeploy again tonight. Optional later: `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=botocore`. Latency: do not stream/blank ARN/switch model; BFF is not the 29s. LangSmith MCP still unloaded here — open `setuhaul.chat` ~15:26 UTC. Gate not struck.
 - **2026-08-16 20:25 IST:** Latency is AgentCore + multi-round LLM (23 tools), not missing LangSmith MCP. Added Cursor LangSmith remote MCP (OAuth). MCP does not reduce latency. Gate not struck.
 - **2026-08-16 20:20 IST:** Hosted LLM is `LLM_PROVIDER=auto` → **OpenAI first** (`gpt-4o-mini`). SSM has OpenAI + Gemini keys; no OpenRouter; no provider pin. Gemini only if OpenAI SSM is empty. Gate not struck.
@@ -147,7 +149,7 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. **Tomorrow 2026-08-17 presentation:** follow [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md). Ravi currently has 3 actives and an empty rail appointment — first chat line must be `I need help with shipment SHP-D16-RAVI.` Optional morning `reset_demo_day.py --mode cast --include-shp1017 --confirm` to restore golden `APT1017`. Keep 16 Aug ETA strings.
+1. **Tomorrow 2026-08-17 presentation:** follow [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md). Ravi currently has 3 actives and an empty rail appointment — first chat line must be `I need help with shipment SHP-D16-RAVI.` Optional morning `reset_demo_day.py --mode cast --include-shp1017 --confirm` to restore golden `APT1017`. Keep 16 Aug ETA strings. For a live reschedule demo, use runbook Phase H (`driver.resched@setuhaul.com`, isolated `FAC-GGN-01` sandbox) — does not touch the cast, no reset needed before/after. Roll back with `supabase/demo/rollback_reschedule_driver.py --confirm --with-auth` only if the sandbox itself should be removed post-demo.
 2. Optional hosted path: `https://setuhaul-roan.vercel.app/driver/login` as Ravi; local fallback if AgentCore 503s.
 3. **Step 10 leftover:** Locust Suite B after cast reset if asked. Do not strike the Sprint 4 gate.
 4. Do not `git commit` unless asked.

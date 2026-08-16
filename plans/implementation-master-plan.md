@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-16 21:05 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Runtime v3 unified-traces env + ADOT 0.19 live; hosted A2 chat **28.6s**; Transaction Search has platform `Invoke` span; ADOT exporter recursion remains; Locust Suite B not run; FDE presentation **2026-08-17**; gate not struck)
+Last refreshed: 2026-08-16 21:30 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — added isolated reschedule-demo sandbox driver (`FAC-GGN-01`, never touches the cast) and fixed a real `reschedule_appointment` bug that failed every reschedule with `SLOT_OPTIONS_STALE` on the first attempt; live-verified fix + cast isolation + unit 81 passed + live cast/10x4 integration 2 passed; FDE presentation **2026-08-17**; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  
@@ -53,6 +53,7 @@ Latest verified deltas since Sprint 2 gate:
 
 Latest verified deltas since Sprint 3 gate (do not unstrike the gate):
 
+- [x] ~~Isolated reschedule-demo sandbox driver (`DRV-RS-01` at `FAC-GGN-01`) and fix for a `reschedule_appointment` correctness bug that failed every reschedule with `SLOT_OPTIONS_STALE` on the first attempt (nested `request_slot` re-validated the pre-cancel recommendation hash against options its own cancel step had just changed).~~ Evidence 2026-08-16 21:30 IST: `supabase/demo/seed_reschedule_driver.py` + `rollback_reschedule_driver.py`; fix in `backend/app/scheduling/allocation.py`; live reproduction 2/2 before fix, live pass 2/2 after fix, negative stale-check still correct, cast-isolation confirmed (667→671 shipments, cast unchanged), unit 81 passed, live cast/10x4 integration 2 passed. Runbook Phase H documents the demo. Also fixed a pre-existing `reset_demo_day.py --mode full` FK-crash risk (`appointments.shipment_id`/`slot_id` are `ON DELETE NO ACTION`; a surviving non-D16 appointment from a live chat booking or Dispatch Console auto-book would abort the whole reset transaction, reproducible today independent of the new sandbox) — fixed both DELETEs to skip still-referenced rows; verified via `--dry-run` only, `--mode cast` unaffected.
 - [x] ~~Dispatch Console + auto-book of an initial appointment for a newly created shipment.~~ Evidence 2026-08-13: `dispatch_service.py` + `/dispatch` UI. Auto-book now passes the just-computed `recommendation_id` (2026-08-13 21:39 IST).
 - [x] ~~Ops escalation resolve REST + Inspect & Take Decision modal.~~ Evidence 2026-08-13 02:00 IST: `POST /api/v1/operations/escalations/{id}/resolve`.
 - [x] ~~Extra Driver LangChain tools (vehicle/carrier, gate/queue, facility rules, breakdown, dock alerts).~~ Evidence 2026-08-12 02:35 IST.

@@ -3,10 +3,18 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-16
+last_updated: 2026-08-17
 ---
 
 # Wiki log
+
+## 2026-08-17 02:39 IST | ingest | stash conflict: keep Incoming changelog
+
+- Resolved `CHANGELOG.md` stash-pop conflict by keeping Incoming (stashed 2026-08-16 21:30 IST reschedule-demo entry). Retained the already-on-main 2026-08-17 02:34 IST Driver Appointment Panel entry (append-only). Removed leftover `>>>>>>> origin/main` markers in `CHANGELOG.md` and this log. Synced [[handoff]], CHANGELOG. App tests not run.
+
+## 2026-08-16 21:30 IST | fix + tooling | reschedule-demo sandbox driver + reschedule_appointment stale-hash bug
+
+- Bulk-book-every-shipment request found infeasible live (563/667 terminal, only 19/104 eligible bookable, 13 of those are demo cast). Built isolated `DRV-RS-01`/`FAC-GGN-01` sandbox instead (`supabase/demo/seed_reschedule_driver.py` + rollback), all writes via production `request_slot`/`confirm_appointment`. Found and fixed a real bug in `reschedule_appointment`: nested `request_slot` re-validated the pre-cancel recommendation hash against a post-cancel option set it had just changed itself, so every reschedule failed `SLOT_OPTIONS_STALE` on first try — affects the live driver-chat tool identically, previously uncovered by any test. Fixed by not re-passing the recommendation id/policy version to the nested call. Live verified: seed PASS, isolation PASS (cast untouched, +4 shipments only), reschedule PASS post-fix on pending + confirmed appointments, negative stale-check still PASS, unit 81 passed, live cast/10x4 integration 2 passed. Also found + fixed a pre-existing `reset_demo_day.py --mode full` FK-crash risk: `appointments.shipment_id`/`slot_id` are `ON DELETE NO ACTION`, so any surviving non-D16 appointment (live chat booking, Dispatch Console auto-book, or the new sandbox) would abort the whole reset transaction; confirmed already reproducible today via an existing Dispatch Console booking. Fixed both DELETEs to skip still-referenced rows; corrected dry-run preview counts to match. `--mode cast` unaffected. Synced [[handoff]], [[current-state]], [[testing]], CHANGELOG, master plan Living deltas.
 
 ## 2026-08-16 21:05 IST | deploy | unified traces Runtime v3
 
@@ -319,7 +327,6 @@ last_updated: 2026-08-16
 - Re-extracted all 20 pages of `docs/SetuHaul_FDE_Challenge.pdf`.
 - Compiled AI must/must-not, cannot-guess, human-control, and §11.2 stress scenarios into [[ai-system]].
 - No code change; Sprint 3 status unchanged. Verification: document analysis only.
->>>>>>> origin/main
 
 ## 2026-08-10 23:21 IST | query | Login preflight hang
 

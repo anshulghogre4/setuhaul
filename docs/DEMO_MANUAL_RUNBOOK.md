@@ -229,6 +229,38 @@ Full **10×4** concurrency is already proven by live pytest (`SETUHAUL_RUN_LIVE_
 - [ ] PASS — no double-book on sampled slot
 - [ ] FAIL — two actives on one slot
 
+---
+
+## Phase H — Reschedule (isolated sandbox driver, optional)
+
+**PDF:** §8 options/choose/status · reschedule is not covered by Phases A–G, which deliberately
+leave the cast unbound for Phase B/C/G. This phase proves reschedule live without touching the
+cast.
+
+**Prep:** `python supabase/demo/seed_reschedule_driver.py --confirm --with-auth` (see
+[`../supabase/demo/README.md`](../supabase/demo/README.md)). Creates driver `DRV-RS-01` and four
+shipments at `FAC-GGN-01` — a facility the cast never uses — with `SHP-RS-PENDING` already
+`PENDING_CONFIRMATION` and `SHP-RS-CONFIRMED` already `CONFIRMED`.
+
+**Who:** Browser A (or new window) — login `driver.resched@setuhaul.com` at `/driver/login`.
+
+| Step | Type exactly | Expect |
+|---|---|---|
+| H1 | `I need help with shipment SHP-RS-PENDING.` | Context locked |
+| H2 | `Show feasible slots.` | Ranked options, **DISPLAYED_NOT_RESERVED** |
+| H3 | `Reschedule my appointment to slot <PASTE_SLOT_ID>.` | Old appointment `CANCELLED`, new `PENDING_CONFIRMATION`, linked via `replaced_appointment_id` |
+| H4 | Repeat H1–H3 for `SHP-RS-CONFIRMED` | Moves a **confirmed** booking, not just a pending one — this appointment was confirmed by an admin script identity during seeding; confirming through the UI is not available today for any shipment (REST/Swagger-only, same as Phase F) |
+| H5 | `Find feasible slots for SHP-RS-NOSLOT.` | **Zero options**; escalation language; no invented slot (`FAC-GGN-01` has no `HEAVY` dock) |
+
+**Pass / fail**
+
+- [ ] PASS — pending and confirmed appointments both reschedule cleanly; NOSLOT still escalates
+- [ ] FAIL — reschedule rejects a fresh selection as stale, or invents a slot for NOSLOT
+
+**Cleanup:** `python supabase/demo/rollback_reschedule_driver.py --confirm --with-auth`
+
+---
+
 Hosted Locust (laptop → BFF): [`loadtests/README.md`](../loadtests/README.md). Suite A = Phases A–D chat prompts. Suite B = this CONTEND cast via REST (10 users, zero double-books). From **repo root**:
 
 ```powershell
@@ -280,6 +312,7 @@ Suite A does **not** read reply text and does **not** run C5/B4/E5 unless `SETUH
 | Stale options / cancel frees capacity | E |
 | Scarce capacity / no double-book | C, G (+ automated load proof) |
 | Multi-shipment disambiguation | D |
+| Reschedule pending/confirmed appointment | H (isolated sandbox driver, optional) |
 
 ---
 
@@ -314,6 +347,11 @@ Cancel my pending appointment request for SHP-D16-RAVI because plans changed.
 Find feasible slots for SHP-D16-NOSLOT.
 Find slots for SHP-D16-MULTI-B.
 I need help with shipment SHP-D16-CONTEND-01.
+I need help with shipment SHP-RS-PENDING.
+Show feasible slots.
+Reschedule my appointment to slot <PASTE_SLOT_ID>.
+I need help with shipment SHP-RS-CONFIRMED.
+Find feasible slots for SHP-RS-NOSLOT.
 ```
 
 ---
@@ -330,3 +368,4 @@ I need help with shipment SHP-D16-CONTEND-01.
 | E Stale/cancel | ☐ PASS ☐ FAIL | |
 | F Ops | ☐ PASS ☐ FAIL | |
 | G CONTEND sample | ☐ PASS ☐ SKIP ☐ FAIL | |
+| H Reschedule (sandbox) | ☐ PASS ☐ SKIP ☐ FAIL | |

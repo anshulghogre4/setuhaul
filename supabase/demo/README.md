@@ -76,6 +76,57 @@ not a usable password. Supabase Auth identities and passwords must be created
 separately through an approved secure workflow. Never put real passwords,
 service-role keys, access tokens, or database credentials in generated SQL.
 
+## Isolated reschedule-demo driver
+
+`seed_reschedule_driver.py` creates **one** brand-new driver (`DRV-RS-01` /
+`USR-RS-01`) with four shipments at **`FAC-GGN-01`** (Gurugram) — a facility
+the demo cast never touches. It exists to prove **reschedule** live without
+consuming any `SHP-D16-*` / `CONTEND-*` / `RACE-*` cast shipment, so
+`docs/DEMO_MANUAL_RUNBOOK.md` Phases A–G stay valid exactly as written.
+
+All `RS`-prefixed IDs (`DRV-RS-01`, `USR-RS-01`, `SHP-RS-*`) are outside the
+`D16-%` / `SHP-D16-%` namespace `reset_demo_day.py --mode full` wipes, so the
+two tools can never collide by ID. Its seeded appointments do bind to
+`D16-`-prefixed slot rows (the only slots that exist for a 2026-08-16 ETA at
+`FAC-GGN-01`) — `reset_demo_day.py --mode full` now explicitly skips deleting
+any `D16-%` shipment/slot still referenced by a surviving (non-`D16`-id)
+appointment, so this sandbox — and any live chat booking made during Phase
+B/C/G — survives a full reset instead of crashing it with a foreign-key
+violation. `--mode cast` (the default) never touched this sandbox in the
+first place.
+
+```powershell
+# Preview (no writes)
+python supabase/demo/seed_reschedule_driver.py --dry-run
+
+# Create the driver, four shipments, and book/confirm two via the real
+# request_slot / confirm_appointment services (not raw SQL)
+python supabase/demo/seed_reschedule_driver.py --confirm
+
+# Optional: create the Supabase Auth login using the shared Driver password
+python supabase/demo/seed_reschedule_driver.py --confirm --with-auth
+
+# Roll everything back (cancels active appointments through cancel_appointment
+# first, then deletes rows in FK-safe order)
+python supabase/demo/rollback_reschedule_driver.py --dry-run
+python supabase/demo/rollback_reschedule_driver.py --confirm --with-auth
+```
+
+Seeded shipments:
+
+| Shipment | Seeded state | Demonstrates |
+|---|---|---|
+| `SHP-RS-PENDING` | `PENDING_CONFIRMATION` | reschedule a pending request |
+| `SHP-RS-CONFIRMED` | `CONFIRMED` (admin-confirmed at seed time) | reschedule a confirmed booking |
+| `SHP-RS-OPEN` | no appointment, has options | book from scratch |
+| `SHP-RS-NOSLOT` | no appointment, `HEAVY` dock (GGN has none) | escalation, nothing invented |
+
+Login: `driver.resched@setuhaul.com` with the shared Driver password (after
+`--with-auth`). Reuses existing vehicle `D16-VEH-002`; no new vehicle row.
+
+**Auth boundary:** same as the contention-driver pattern above — `--with-auth`
+never resets an existing account and never prints the password.
+
 ## Capacity note
 
 All nine docks at the two hero facilities receive 30-minute slots across their

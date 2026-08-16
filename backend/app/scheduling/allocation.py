@@ -1245,11 +1245,20 @@ async def reschedule_appointment(
         ),
         {"appointment_id": command.appointment_id, "updated_at": now, "reason": "Replaced by reschedule"},
     )
+    # Recommendation freshness was already validated above against the true
+    # pre-cancel snapshot, and new_slot_id was already confirmed to be a live
+    # feasible option. Do not re-pass displayed_recommendation_id/policy_version
+    # here: cancelling the old appointment just freed its slot back into the
+    # candidate pool, so a fresh find_feasible_slots inside request_slot's own
+    # staleness check would almost always disagree with the pre-cancel hash and
+    # incorrectly reject every reschedule as SLOT_OPTIONS_STALE. Concurrency
+    # safety still comes from request_slot's row lock and the DB unique
+    # constraints, not from this hash comparison.
     result = await request_slot(
         session, ctx, shipment_id=shipment_id, slot_id=command.new_slot_id,
         command=RequestSlotCommand(
-            note=command.note, displayed_policy_version=command.displayed_policy_version,
-            displayed_recommendation_id=command.displayed_recommendation_id,
+            note=command.note, displayed_policy_version=None,
+            displayed_recommendation_id=None,
             client_message_id=command.client_message_id,
         ),
         idempotency_key=f"{idempotency_key}:claim",

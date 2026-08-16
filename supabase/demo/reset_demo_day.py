@@ -533,8 +533,54 @@ async def plan_full(conn: Any) -> PlanSummary:
         ("facility_checkins_D16", "SELECT count(*) FROM public.facility_checkins WHERE checkin_id LIKE 'D16-%'"),
         ("appointments_D16", "SELECT count(*) FROM public.appointments WHERE appointment_id LIKE 'D16-%'"),
         ("eta_updates_D16", "SELECT count(*) FROM public.eta_updates WHERE eta_update_id LIKE 'D16-%'"),
-        ("shipments_SHP_D16", "SELECT count(*) FROM public.shipments WHERE shipment_id LIKE 'SHP-D16-%'"),
-        ("slots_D16", "SELECT count(*) FROM public.appointment_slots WHERE slot_id LIKE 'D16-%'"),
+        # These previews simulate the same-transaction ordering the real wipe
+        # uses: D16-prefixed appointment rows are deleted first, so only a
+        # *non*-D16-prefixed appointment (a live chat booking, or the isolated
+        # FAC-GGN-01 reschedule-sandbox driver) counts as "still referenced".
+        (
+            "shipments_SHP_D16_deletable",
+            """
+            SELECT count(*) FROM public.shipments s
+            WHERE s.shipment_id LIKE 'SHP-D16-%'
+              AND NOT EXISTS (
+                SELECT 1 FROM public.appointments a
+                WHERE a.shipment_id = s.shipment_id AND a.appointment_id NOT LIKE 'D16-%'
+              )
+            """,
+        ),
+        (
+            "shipments_SHP_D16_kept_non_cast_referenced",
+            """
+            SELECT count(*) FROM public.shipments s
+            WHERE s.shipment_id LIKE 'SHP-D16-%'
+              AND EXISTS (
+                SELECT 1 FROM public.appointments a
+                WHERE a.shipment_id = s.shipment_id AND a.appointment_id NOT LIKE 'D16-%'
+              )
+            """,
+        ),
+        (
+            "slots_D16_deletable",
+            """
+            SELECT count(*) FROM public.appointment_slots sl
+            WHERE sl.slot_id LIKE 'D16-%'
+              AND NOT EXISTS (
+                SELECT 1 FROM public.appointments a
+                WHERE a.slot_id = sl.slot_id AND a.appointment_id NOT LIKE 'D16-%'
+              )
+            """,
+        ),
+        (
+            "slots_D16_kept_non_cast_referenced",
+            """
+            SELECT count(*) FROM public.appointment_slots sl
+            WHERE sl.slot_id LIKE 'D16-%'
+              AND EXISTS (
+                SELECT 1 FROM public.appointments a
+                WHERE a.slot_id = sl.slot_id AND a.appointment_id NOT LIKE 'D16-%'
+              )
+            """,
+        ),
         ("vehicles_D16", "SELECT count(*) FROM public.vehicles WHERE vehicle_id LIKE 'D16-%'"),
         ("drivers_D16", "SELECT count(*) FROM public.drivers WHERE driver_id LIKE 'D16-%'"),
         ("facility_rules_D16", "SELECT count(*) FROM public.facility_rules WHERE rule_id LIKE 'D16-%'"),
@@ -584,11 +630,33 @@ async def execute_full_wipe(conn: Any, *, dry_run: bool) -> PlanSummary:
         await conn.execute(
             "DELETE FROM public.eta_updates WHERE eta_update_id LIKE 'D16-%'"
         )
+        # Skip any D16 shipment still referenced by a surviving appointment (e.g.
+        # a live chat booking made during Phase B/C/G, which creates a non-D16-
+        # prefixed APT-* row the previous step does not delete). shipments.shipment_id
+        # has the same ON DELETE NO ACTION as appointment_slots below, so deleting
+        # a still-referenced shipment would abort this whole transaction.
         await conn.execute(
-            "DELETE FROM public.shipments WHERE shipment_id LIKE 'SHP-D16-%'"
+            """
+            DELETE FROM public.shipments s
+            WHERE s.shipment_id LIKE 'SHP-D16-%'
+              AND NOT EXISTS (
+                SELECT 1 FROM public.appointments a WHERE a.shipment_id = s.shipment_id
+              )
+            """
         )
+        # Skip any D16 slot still referenced by a surviving appointment — either a
+        # live chat booking on a cast shipment (non-D16-prefixed APT-* row) or the
+        # isolated FAC-GGN-01 reschedule-sandbox driver's SHP-RS-* appointments.
+        # appointments.slot_id has ON DELETE NO ACTION, so deleting a referenced
+        # slot would abort this whole transaction with a FK violation.
         await conn.execute(
-            "DELETE FROM public.appointment_slots WHERE slot_id LIKE 'D16-%'"
+            """
+            DELETE FROM public.appointment_slots sl
+            WHERE sl.slot_id LIKE 'D16-%'
+              AND NOT EXISTS (
+                SELECT 1 FROM public.appointments a WHERE a.slot_id = sl.slot_id
+              )
+            """
         )
         # Do not delete USR2% Auth-mapped users (Auth identities stay).
         await conn.execute(
