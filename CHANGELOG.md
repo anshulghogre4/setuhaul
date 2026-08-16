@@ -2,6 +2,14 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 03:16 IST - Escalation DB Resolution Status Fix
+
+- Surgically updated `resolve_escalation` in `backend/app/services/escalation_service.py` to persist `resolved_at` timestamp and `resolved_by_user_id` in `public.escalation_queue`.
+- Added fallback lookup to `public.driver_exceptions` and cross-table status sync (`exception_status = 'RESOLVED'`) for linked shipment exceptions when resolved by Operations/Admin.
+- Added unit test `test_resolve_escalation_updates_db_status` in `backend/tests/unit/test_escalation_service.py`.
+- Verification: 82 backend unit tests **PASS** (`source .venv/bin/activate && PYTHONPATH=. pytest tests/unit`).
+- Agent/surface: Google Antigravity.
+
 ## 2026-08-17 02:39 IST - Resolve CHANGELOG stash conflict (keep Incoming)
 
 - Stash pop left `CHANGELOG.md` unmerged (`Updated upstream` vs `Stashed changes`). Kept Incoming: the stashed 2026-08-16 21:30 IST reschedule-demo / `reschedule_appointment` stale-hash entry. Also retained the already-on-main 2026-08-17 02:34 IST Driver Appointment Panel entry so the append-only log is not truncated. Removed leftover `>>>>>>> origin/main` markers in `CHANGELOG.md` and `wiki/log.md`.

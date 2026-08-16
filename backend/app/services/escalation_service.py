@@ -196,16 +196,49 @@ async def resolve_escalation(
                 """
                 UPDATE public.escalation_queue
                 SET escalation_status = :status,
-                    updated_at = :now_iso
+                    updated_at = :now_iso,
+                    resolved_at = :now_iso,
+                    resolved_by_user_id = :user_id
                 WHERE escalation_id = :eid
                 RETURNING escalation_id, shipment_id, escalation_type, escalation_status
                 """
             ),
-            {"status": status, "now_iso": now_iso, "eid": escalation_id},
+            {"status": status, "now_iso": now_iso, "eid": escalation_id, "user_id": ctx.user_id},
         )
     ).mappings().first()
+
+    if row is None:
+        row = (
+            await session.execute(
+                text(
+                    """
+                    UPDATE public.driver_exceptions
+                    SET exception_status = :status
+                    WHERE exception_id = :eid
+                    RETURNING exception_id AS escalation_id, shipment_id, exception_type AS escalation_type, exception_status AS escalation_status
+                    """
+                ),
+                {"status": status, "eid": escalation_id},
+            )
+        ).mappings().first()
+
     if row is None:
         raise AppError(f"Escalation '{escalation_id}' not found.", code="NOT_FOUND", status_code=404)
+
+    shipment_id = row.get("shipment_id")
+    if shipment_id:
+        await session.execute(
+            text(
+                """
+                UPDATE public.driver_exceptions
+                SET exception_status = :status
+                WHERE shipment_id = :shipment_id
+                  AND exception_status NOT IN ('RESOLVED', 'CANCELLED', 'DUPLICATE')
+                """
+            ),
+            {"shipment_id": shipment_id, "status": status},
+        )
+
     await session.commit()
     return dict(row)
 
