@@ -28,6 +28,10 @@
         {
           "name": "AWS_REGION",
           "value": "us-east-1"
+        },
+        {
+          "name": "UNIFIED_TRACES_DESTINATION_ENABLED",
+          "value": "true"
         }
       ]
     }

@@ -3,14 +3,14 @@ title: SetuHaul Testing and Evidence
 type: topic
 status: compiled
 scope: testing
-last_verified: 2026-08-14
+last_verified: 2026-08-16
 ---
 
 # Testing
 
 Current executable evidence:
 
-- Sprint 4 Step 10 Locust Suite A: **ran, not a clean pass** (2026-08-14 03:15–03:18 IST). Web UI `http://127.0.0.1:8089` (autostart 5 users / 1/s / 3m; autoquit closed UI). Host Express BFF. `auth_me` 5/5 200. Chat: A3/A4/A5, C1, C4, D1/D2/D4 200; **C2 503** (1 fail / 17 reqs, 5.88%). Avg chat ~40s. Locust exit 1. Suite B **not run**.
+- Sprint 4 observability export: **partial** (2026-08-16 21:05 IST). Runtime v3 `UPDATE_COMPLETE`; ADOT 0.19.0-aws; `UNIFIED_TRACES_DESTINATION_ENABLED=true`. Timed `smoke_hosted_step9.py` A2: grant 1017ms, auth_me 2947ms, chat 28599ms `list_active_shipments`. Logs Insights `aws/spans` count=1 name `AgentCore.Runtime.Invoke`. Residual: OTEL `Failed to load AWS Credentials: maximum recursion depth exceeded`. CLI persist-state failed after deploy; stack still complete. App tests not run. Gate OPEN.
 - Sprint 4 Step 10 Locust files: **authored** (2026-08-14 03:20 IST). Suite A `loadtests/locust_runbook_chat.py`; Suite B `loadtests/locust_slot_contention.py`. Prompt unit `backend/tests/unit/test_locust_runbook_prompts.py`.
 - Sprint 4 Step 9 BFF → AgentCore: **PASS** (2026-08-14 02:52 IST). Express `setuhaul-api` one revision, ARN set, task role `setuhaul-bff-task-role`. `docs/scripts/smoke_hosted_step9.py` exit 0: Ravi grant **200**; `/auth/me` `USR001`/`DRIVER`/`DRV001`; `POST /chat/message` **200** tool `get_driver_operational_context`. `agentcore.cmd logs --since 15m` shows Runtime OTEL `gen_ai_agent` at 21:20 UTC. LangSmith project `setuhaul-agentcore` has `setuhaul.chat` + `get_driver_operational_context` success 21:20 UTC. Vercel not rebuilt. Locust not run. Residual OTEL exporter credential recursion in Runtime logs.
 - Sprint 4 Step 8 AgentCore Runtime: **PASS** (2026-08-14 02:28 IST). `agentcore.cmd deploy` stack `AgentCore-SetuHaulAgent-default`; status READY `SetuHaulAgent_SetuHaulAgent-18B4pX4XF1`. `agentcore.cmd invoke --prompt-file docs/scripts/agentcore_invoke_ravi.json` session `setuhaul-dev-session-000000000000000002` returned a real assistant reply (not the execution_context error): tool `list_active_shipments`, `ux=answered`, `source=postgresql`, shipments `SHP-D16-RACE-A` / `SHP-D16-RAVI` / `SHP1017`. Focused units **2 passed** (`test_agentcore_unwraps_cli_prompt_file_json`, `test_agentcore_ssm_map_is_names_only`). `agentcore dev --logs` not run. Hosted BFF ARN still blank (in-process chat).

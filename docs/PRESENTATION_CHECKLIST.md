@@ -5,6 +5,7 @@ Demo data remains a **frozen 16 Aug scenario** (`SHP-D16-*`, ETAs `2026-08-16Tâ€
 
 Judge sheet: [DEMO_DAY_READINESS.md](DEMO_DAY_READINESS.md).  
 Ordered live script: [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md).  
+Click-by-click UI: [UI_TEST_WALKTHROUGH.md](UI_TEST_WALKTHROUGH.md).  
 Ravi prompt list: [DEMO_DRIVER_CHAT_SCRIPT.md](DEMO_DRIVER_CHAT_SCRIPT.md).  
 Passwords: gitignored `POC_TEAM_ACCOUNTS.local.md` only.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -12,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BFF = "https://se-e5cad5d30b1a4f22b9aeea032827f81b.ecs.us-east-1.on.aws"
 ORIGIN = "https://setuhaul-roan.vercel.app"
 EMAIL = "ravi.kumar@setuhaul.com"
-SESSION = "step9-hosted-smoke-0000000000001"
+SESSION = os.environ.get("SETUHAUL_SMOKE_SESSION") or "step9-hosted-smoke-0000000000001"
+PROMPT = os.environ.get("SETUHAUL_SMOKE_PROMPT") or "Show my current shipments."
 
 
 def load_driver_password() -> str:
@@ -52,25 +54,29 @@ def req(url: str, *, method: str = "GET", headers: dict[str, str] | None = None,
 
 
 def main() -> int:
+    print("prompt", PROMPT)
     password = load_driver_password()
     supabase, anon = load_supabase()
+    t0 = time.perf_counter()
     grant_status, _, grant_body = req(
         f"{supabase}/auth/v1/token?grant_type=password",
         method="POST",
         headers={"apikey": anon, "Content-Type": "application/json"},
         data=json.dumps({"email": EMAIL, "password": password}).encode(),
     )
-    print("ravi_grant", grant_status)
+    print("ravi_grant", grant_status, "ms", int((time.perf_counter() - t0) * 1000))
     if grant_status != 200:
         return 1
     token = json.loads(grant_body)["access_token"]
+    t1 = time.perf_counter()
     me_status, _, me_body = req(
         f"{BFF}/api/v1/auth/me",
         headers={"Authorization": f"Bearer {token}", "Origin": ORIGIN, "Accept": "application/json"},
     )
     me = json.loads(me_body)
     data = me.get("data") or {}
-    print("auth_me", me_status, data.get("user_id"), data.get("role_name"), data.get("driver_id"))
+    print("auth_me", me_status, data.get("user_id"), data.get("role_name"), data.get("driver_id"), "ms", int((time.perf_counter() - t1) * 1000))
+    t2 = time.perf_counter()
     chat_status, _, chat_body = req(
         f"{BFF}/api/v1/chat/message",
         method="POST",
@@ -82,7 +88,7 @@ def main() -> int:
         },
         data=json.dumps(
             {
-                "message": "Step 9 hosted smoke: do I have a current appointment?",
+                "message": PROMPT,
                 "session_id": SESSION,
                 "thread_id": "default",
             }
@@ -114,6 +120,8 @@ def main() -> int:
         payload.get("ux") if isinstance(payload, dict) else None,
         "tools",
         names,
+        "ms",
+        int((time.perf_counter() - t2) * 1000),
     )
     return 0 if me_status == 200 and chat_status == 200 and chat.get("success") else 1
 

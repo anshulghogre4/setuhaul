@@ -38,7 +38,39 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 - Driver LangChain tools now also include `request_slot` (2026-08-10), which can request an exact selected `slot_id` and create `PENDING_CONFIRMATION` through deterministic backend code. It does not confirm appointments; warehouse confirm remains ops/admin REST.
 - Driver LangChain tools now also include `get_appointment_request_status` (2026-08-10), which reads the authoritative appointment request lifecycle after `request_slot` and reports pending/confirmed/closed/no-request states without mutating appointments.
 - Driver LangChain tools now also include `get_conversation_memory` (2026-08-10), which reads bounded Upstash Redis chat/session context scoped by authenticated user, browser session id, and thread id. It is infrastructure memory only, 24-hour TTL, non-authoritative, and never replaces PostgreSQL-backed operational tools.
-- **Verified Driver allowlist (2026-08-16):** `build_driver_tools` in `backend/app/assistant/tools.py` registers **23** `StructuredTool`s (22 real + leftover `scheduling_capability_disabled` for driver confirmation). Sprint 3 mutations `cancel_appointment` / `reschedule_appointment` / `escalate_exception` are registered. Extra reads (2026-08-12): vehicle/carrier, gate/queue, facility rules, breakdown incident, dock alerts. Ops/Dispatch capabilities stay REST, not model-selectable. Full names: [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md) plus the list in root changelog 2026-08-16.
+- **Verified Driver allowlist (2026-08-16):** `build_driver_tools` in `backend/app/assistant/tools.py` registers **23** `StructuredTool`s (22 real + leftover `scheduling_capability_disabled` for driver confirmation). Sprint 3 mutations `cancel_appointment` / `reschedule_appointment` / `escalate_exception` are registered. Extra reads (2026-08-12): vehicle/carrier, gate/queue, facility rules, breakdown incident, dock alerts. Ops/Dispatch capabilities stay REST, not model-selectable.
+
+## Driver tool catalog (model-selectable)
+
+All tools are scoped by the verified JWT (`ExecutionContext`). The LLM never executes SQL. Ravi currently has **3 active shipments**, so any tool that can omit `shipment_id` may default to `SHP-D16-RACE-A` (newest `updated_at`) — name `SHP-D16-RAVI` in chat.
+
+| # | Tool | Mutates? | What it does |
+|---|---|---|---|
+| 1 | `get_current_user_context` | No | Returns authenticated `user_id`, name, email, `role_name`, `driver_id`, `facility_id`, permissions. |
+| 2 | `get_conversation_memory` | No | Bounded Upstash Redis history/session/summaries for this user+browser session+thread. 24h TTL, labeled non-authoritative. Never use as shipment/ETA/slot truth. |
+| 3 | `get_driver_operational_context` | No | Full driver snapshot: all shipments, `active_shipments`, primary shipment, that primary’s appointment/ETA/facility. Rail uses this. |
+| 4 | `list_active_shipments` | No | Subset of (3): non-`COMPLETED`/`CANCELLED` shipments only. |
+| 5 | `get_shipment_details` | No | One in-scope shipment plus related driver/vehicle/carrier rows. 403 if another driver’s id. |
+| 6 | `get_latest_eta` | No | Newest `eta_updates` row for that shipment. |
+| 7 | `get_eta_history` | No | ETA history list for that shipment. |
+| 8 | `get_current_appointment` | No | Current (`is_current=1`) appointment + slot/dock window, or none. |
+| 9 | `get_facility_details` | No | Facility hours/grace + `facility_contacts`. Driver must have a shipment to that facility (`FAC-JAI-01` for Ravi). |
+| 10 | `get_exception_status` | No | Driver’s `driver_exceptions` (optional shipment filter), newest first. |
+| 11 | `get_vehicle_and_carrier_details` | No | Registration, capacity kg, reefer flag, carrier phone/email. If `shipment_id` omitted, uses first active (Ravi → RACE-A). |
+| 12 | `get_gate_and_queue_status` | No | `facility_checkins`: gate-in, yard queue, dock-in, queue position. Null if not checked in. |
+| 13 | `get_facility_rules_and_restrictions` | No | Active `facility_rules` + hours/grace/default unload. |
+| 14 | `get_dock_maintenance_alerts` | No | Open `dock_status_events` (outage/maintenance) for a facility/dock. |
+| 15 | `report_delay_or_update_eta` | Yes, after confirm | Delay/ETA write. Repair minutes are never an ETA (`REPAIR_IS_NOT_ETA`). First call returns `CONFIRMATION_REQUIRED` preview; only `confirmed=true` with matching timestamp writes (`PERSISTED`). Multiple actives → `CLARIFICATION_REQUIRED`. |
+| 16 | `report_vehicle_breakdown_or_incident` | Yes | Inserts OPEN `driver_exceptions` (`INCIDENT_REPORTED`). Does **not** book a slot or change ETA. |
+| 17 | `find_feasible_slots` | No booking; may persist NOSLOT escalation | Deterministic ranked options, labeled not reserved, with `REC-` id. Empty list → `NO_FEASIBLE_SLOTS` + durable `escalation_queue` (never invents a slot). |
+| 18 | `request_slot` | Yes | Exact `slot_id` only. Revalidates in a transaction → `PENDING_CONFIRMATION` (`SLOT_REQUESTED`). Conflict → `SLOT_CONFLICT_REFRESH_REQUIRED`. Stale `REC-` → `SLOT_OPTIONS_STALE`. Existing current apt → `ACTIVE_APPOINTMENT_EXISTS`. Never warehouse-confirms. |
+| 19 | `get_appointment_request_status` | No | Pending vs confirmed vs cancelled/rejected/none. Use after request: pending ≠ confirmed. |
+| 20 | `cancel_appointment` | Yes | Driver cancels own current apt with reason → `CANCELLED`, slot freed. Needs exact `appointment_id`. |
+| 21 | `reschedule_appointment` | Yes | Cancel-and-claim new slot in one flow → new `PENDING_CONFIRMATION`. Still not warehouse-confirmed. |
+| 22 | `escalate_exception` | Yes | Writes durable ops `escalation_queue` (NOSLOT/human). Ops UI lists it. |
+| 23 | `scheduling_capability_disabled` | No | Leftover stub: driver **cannot confirm**. Do not present as a product feature. |
+
+Warehouse confirm / reject / expire are Ops REST only, not Driver tools.
 
 ## Tool count and sprint placement
 
@@ -65,6 +97,8 @@ Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are intern
 There is no project Memory MCP workflow for SetuHaul. Redis is the only runtime memory service, and it is scoped to application chat/session continuity.
 
 LangSmith tracing is enabled when `LANGSMITH_TRACING=true` and the API key is set (gitignored env). Trace payloads must be sanitized.
+
+**CloudWatch vs LangSmith (2026-08-16 21:05 IST):** Portal Tracing Enable is the switch — do not set non-Runtime `OTEL_EXPORTER_*`. Runtime v3 has ADOT 0.19 + `UNIFIED_TRACES_DESTINATION_ENABLED=true`. Transaction Search ingests the **platform** span `AgentCore.Runtime.Invoke`. In-app LangChain/tool spans still fail ADOT `aws_auth_session` credential recursion. Use LangSmith `setuhaul-agentcore` / `setuhaul.chat` for the agent path. Timed hosted A2: chat **28.6s**, BFF `/auth/me` **2.9s**.
 
 ## Sprint 2 verified runtime (2026-08-07 19:35 IST)
 

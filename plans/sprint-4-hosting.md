@@ -499,7 +499,7 @@ Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no
 
 ### 5.7 CloudWatch / LangSmith
 
-- Console: CloudWatch → GenAI Observability → Bedrock AgentCore
+- Console: CloudWatch → GenAI Observability → Bedrock AgentCore. Portal **Tracing Enable** is the switch; Transaction Search ingest is account-wide. Spans need ADOT `>=0.18.0` and Runtime env `UNIFIED_TRACES_DESTINATION_ENABLED=true`. Execution role already has `logs:PutResourcePolicy` on `/aws/bedrock-agentcore/runtimes/*` (AgentCore default policy). Do not set non-Runtime `OTEL_EXPORTER_*` keys.
 - CLI: `agentcore.cmd logs --runtime SetuHaulAgent`
 - LangSmith UI: project `setuhaul-agentcore`, filter Run Name `setuhaul.chat`, remove `Is Trace is true`
 - Headline metadata (per turn, not warehouse totals): `last_result_code`, `eta_persisted`, `exception_touched`. Sanitize traces. No LLM-as-a-Judge.

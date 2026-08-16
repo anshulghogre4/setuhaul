@@ -25,7 +25,7 @@ def main() -> int:
 
     shutil.copytree(SRC_APP, dst_app, ignore=ignore)
     req = (ROOT / "backend" / "requirements.txt").read_text(encoding="utf-8")
-    extra = "bedrock-agentcore>=0.1.0\naws-opentelemetry-distro>=0.10.0\nopentelemetry-instrumentation-langchain>=0.40.0\n"
+    extra = "bedrock-agentcore>=0.1.0\naws-opentelemetry-distro>=0.18.0\nopentelemetry-instrumentation-langchain>=0.40.0\n"
     (DST / "requirements.txt").write_text(req + extra, encoding="utf-8")
     # AgentCore CDK CodeZip requires pyproject.toml at the codeLocation root (ERICA layout).
     pyproject = ROOT / "backend" / "pyproject.agentcore.toml"

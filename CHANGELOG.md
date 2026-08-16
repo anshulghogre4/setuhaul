@@ -2,6 +2,38 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-16 21:05 IST - Unified traces deploy + timed hosted A2
+
+- Runtime **v3** `UPDATE_COMPLETE` (ARN unchanged). Pinned ADOT `>=0.18.0` (live `telemetry.auto.version=0.19.0-aws`); `UNIFIED_TRACES_DESTINATION_ENABLED=true`. Portal Tracing was already on. Execution role already had `logs:PutResourcePolicy`. CLI persist-state failed after deploy (`Could not load credentials`); stack still `UPDATE_COMPLETE`.
+- Timed smoke `Show my current shipments.`: grant **200** 1017ms; `/auth/me` **200** USR001/DRIVER/DRV001 2947ms; chat **200** `list_active_shipments` **28599ms**. Transaction Search `aws/spans` has 1 row `AgentCore.Runtime.Invoke`. ADOT OTLP exporter **still** `maximum recursion depth exceeded` in `aws_auth_session.py` — LangChain/tool spans do not export. Do not redeploy for that tonight. Latency split: BFF is ~3s; ~29s is AgentCore+LLM (LangSmith MCP not loaded this session). App tests **not run**. Sprint 4 gate **not struck**.
+- Files: `backend/pyproject.agentcore.toml`, `backend/pyproject.toml` extra, `docs/scripts/stage_agentcore_codezip.py`, `agentcore/agentcore.json`, `docs/scripts/smoke_hosted_step9.py` (wall-clock + A2 default prompt), `plans/sprint-4-hosting.md` §5.7. Agent/surface: Cursor.
+
+## 2026-08-16 20:25 IST - Latency diagnosis + LangSmith remote MCP
+
+- Hosted chat latency is mostly **AgentCore hop + OpenAI `gpt-4o-mini` with 23 bound tools × up to 6 sequential LLM rounds** (Locust Suite A ~40–74s). LangSmith MCP **diagnoses** traces; it does not speed chat. Added Cursor remote MCP `https://api.smith.langchain.com/mcp` (OAuth, no key in git). Reload Cursor MCP and complete LangSmith login. App tests **not run**.
+- Verification: `run_assistant.py` `MAX_TOOL_ROUNDS=6`; `tools.py` 23 tools; `chat.py` AgentCore when ARN set; Locust 03:18 IST stats. Agent/surface: Cursor.
+
+## 2026-08-16 20:20 IST - Hosted LLM preference is OpenAI-first auto
+
+- Default `LLM_PROVIDER=auto` picks the first non-empty key **OpenAI → OpenRouter → Gemini** (`backend/app/assistant/llm.py`). Hosted Express + AgentCore inject SSM `OPENAI_API_KEY` and `GOOGLE_API_KEY` only (no OpenRouter, no provider override), so hosted chat uses **OpenAI `gpt-4o-mini`**. Gemini is used only if the OpenAI SSM value is empty. Local `.env` is also `auto` with all three keys present → same OpenAI-first. Values not printed. App tests **not run**.
+- Verification: `llm.py` `AUTO_ORDER`; `deploy/express-primary-container.json`; `agentcore_main._SSM_ENV`; local env names only. Agent/surface: Cursor.
+
+## 2026-08-16 20:15 IST - Ravi no current appointment: intended, what to do
+
+- Live MCP: `SHP-D16-RAVI` and `SHP-D16-RACE-A` have no current appointment; `D16-APT-RAVI-OLD` is historical CANCELLED. Context rail follows newest active (`RACE-A`) so it looks empty. `SHP1017` still has CONFIRMED `APT-A086CEB8CAB7` / `SLOT-JAI-029`. Demo path: lock `SHP-D16-RAVI` then ETA → feasible slots → `request_slot`. Optional judge line: appointment on `SHP1017`. Documented in `docs/UI_TEST_WALKTHROUGH.md`. App tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-16 20:10 IST - FDE PDF demo/stress vs UI runbook
+
+- Re-read `docs/SetuHaul_FDE_Challenge.pdf` pp. 12–19. Required §12.2 demonstration is covered by current Driver/Ops code + `DEMO_MANUAL_RUNBOOK.md` Phases A–F. §11.2 stress: 10×4 + race + NOSLOT + repair≠ETA + cancel + disambiguation **SHOW**; leave-by/32-ft compare and later-higher-priority **PARTIAL**; dock-close-after-options UI and warehouse-reply channel **NOT YET** (do not claim). Optional §7.3 OR-Tools **NOT YET**. Added click-path `docs/UI_TEST_WALKTHROUGH.md`; runbook A2 now expects Ravi’s 3 shipments. App tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-16 20:05 IST - Tools catalog PDF vs live code
+
+- Reviewed `docs/Scheduling Algo and tools/SetuHaul_AI_Complete_23_Tools_Catalog.pdf` against `build_driver_tools` and live public schema (MCP `list_tables`). All 23 tool names match the registered allowlist. Not presentation-safe as a prompt script: `SHP1002` and `SHP-D16-RACE-B` belong to Amit (`DRV002`); slot/appointment examples like `SLT-1930` / `APT-0892` are invented; there is no `facility_schedules` table; `request_slot` is pending, not warehouse-confirmed. Sibling `Scheduling_Algorithm_Report.pdf` scoring weights match `constraints.json`; hard-filter copy overclaims truck length/height/door vs `feasibility.py` (dock type, weight, reefer). App tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-16 20:00 IST - Driver tool-by-tool catalog
+
+- Walked `backend/app/assistant/tools.py` (23 `StructuredTool`s) against `driver_reads.py`, `eta_service.py`, and `allocation.py`. Wrote the mutate/read catalog into `wiki/ai-system.md`. No application code change. App tests **not run**. Agent/surface: Cursor.
+
 ## 2026-08-16 19:55 IST - Live Ravi: 3 shipments, no rail appointment
 
 - Verified via Supabase MCP: `DRV001` has three `IN_TRANSIT` rows (`SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`) plus completed `SHP1001`. Context rail uses the newest active (`SHP-D16-RACE-A`) which has no current appointment, so the UI looks empty. `SHP-D16-RAVI` unbound is intended for Phase B `request_slot`. `SHP1017` still has a current CONFIRMED apt (`APT-A086CEB8CAB7` on `SLOT-JAI-029`; golden `APT1017` is not current). Demo must lock `SHP-D16-RAVI` immediately. App tests **not run**. Agent/surface: Cursor.

@@ -20,7 +20,8 @@ last_verified: 2026-08-16
 | Agent workflow | root `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/setuhaul.mdc`, `wiki/AGENTS.md` |
 | Session history | `CHANGELOG.md`, `wiki/log.md`, `wiki/handoff.md` |
 | Hosted Locust (Step 10) | `loadtests/README.md`, `loadtests/locust_runbook_chat.py`, `loadtests/locust_slot_contention.py`, `docs/DEMO_MANUAL_RUNBOOK.md` |
-| 17 Aug presentation | `docs/PRESENTATION_CHECKLIST.md`, `docs/DEMO_MANUAL_RUNBOOK.md`, `docs/DEMO_DAY_READINESS.md` |
+| 17 Aug presentation | `docs/PRESENTATION_CHECKLIST.md`, `docs/DEMO_MANUAL_RUNBOOK.md`, `docs/DEMO_DAY_READINESS.md`, `docs/UI_TEST_WALKTHROUGH.md` |
+| Tools catalog PDF | `docs/Scheduling Algo and tools/SetuHaul_AI_Complete_23_Tools_Catalog.pdf` (names match; example IDs do not — prefer `tools.py`) |
 | Knowledge graph | `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json` when present |
 
 Executable source and fresh verification outrank summaries when they disagree.

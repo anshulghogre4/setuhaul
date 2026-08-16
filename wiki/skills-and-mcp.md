@@ -3,7 +3,7 @@ title: SetuHaul Skills and MCP
 type: topic
 status: authoritative
 scope: agent-tooling
-last_verified: 2026-08-07
+last_verified: 2026-08-16
 ---
 
 # Skills and MCP
@@ -27,6 +27,10 @@ Redis memory rules:
 **Re-verified 2026-08-07 ~15:55 IST:** `execute_sql` + `list_migrations` succeeded (live counts, `auth_user_id`, `auth.users=0`). Prefer server id `project-0-Setuhaul-supabase`.
 
 **Degraded mid-turn 2026-08-07 ~16:15 IST** (`fetch failed` / discovery error); **recovered via `mcp_auth`**. Auth create completed ~16:25 IST (`auth.users=3`, POC rows mapped).
+
+## LangSmith MCP
+
+Adopted 2026-08-16 for trace inspection (latency diagnosis). `.cursor/mcp.json` points at the hosted remote server `https://api.smith.langchain.com/mcp` (OAuth, no API key in git). Application traces remain `LANGSMITH_TRACING` → project `setuhaul-agentcore`, run name `setuhaul.chat`. MCP does not change chat latency.
 
 ## Graphify
 

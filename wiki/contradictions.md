@@ -10,6 +10,7 @@ last_updated: 2026-08-16
 
 ## Open
 
+- **Tools catalog PDF vs `tools.py` (2026-08-16)** — `docs/Scheduling Algo and tools/SetuHaul_AI_Complete_23_Tools_Catalog.pdf` names all 23 registered Driver tools correctly. Do not use its example IDs in a Ravi demo: `SHP1002` and `SHP-D16-RACE-B` are Amit (`DRV002`) → 403; `SLT-*` / `APT-0892` are invented. There is no `facility_schedules` table. `request_slot` creates `PENDING_CONFIRMATION`, not a warehouse booking. Prefer code + [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md) for live prompts.
 - **Presentation 2026-08-17 vs demo SQL 2026-08-16** — owner moved the show to 17 Aug; live slots/ETAs/cast IDs remain a frozen 16 Aug scenario. Feasibility compares `slot_end` to shipment ETA, not wall-clock now, so the 16 Aug script still works. Do not claim the data is “today” unless `generate_demo_day.py --demo-day 2026-08-17` is generated and applied.
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
 - `docs/DEPLOYMENT.md` still describes Docker Compose / local Redis as the deployment shape. Sprint 4 hosting truth is `plans/sprint-4-hosting.md` (Vercel + App Runner probe / ECS Express Mode + AgentCore). Prefer the scoreboard until `docs/HOSTING.md` is folded after hosted smoke.

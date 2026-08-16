@@ -15,6 +15,7 @@ Start every session with [[handoff]], then route through this index.
 - [[current-state]] — verified project status and active delivery point
 - [[handoff]] — latest work, verification, blockers, and next safe action
 - Presentation 17 Aug checklist — `docs/PRESENTATION_CHECKLIST.md` (demo SQL still 16 Aug)
+- UI click path — `docs/UI_TEST_WALKTHROUGH.md`
 - [[contradictions]] — unresolved drift and decisions requiring reconciliation
 - [[source-map]] — provenance and authoritative evidence paths
 

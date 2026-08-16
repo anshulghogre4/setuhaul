@@ -10,6 +10,11 @@ last_verified: 2026-08-16
 
 ## Verified
 
+- **2026-08-16 21:05 IST:** AgentCore Runtime v3 unified traces. Hosted A2 smoke grant/auth_me/chat **200** in 1.0s / 2.9s / **28.6s** (`list_active_shipments`). `aws/spans` has `AgentCore.Runtime.Invoke`. ADOT OTLP `aws_auth_session` recursion remains. Gate OPEN.
+- **2026-08-16 20:20 IST:** Hosted LLM `auto` prefers **OpenAI `gpt-4o-mini`** (SSM OpenAI + Gemini; no OpenRouter; no `LLM_PROVIDER` pin). Gate OPEN.
+- **2026-08-16 20:15 IST:** Ravi no-appointment is intended for Phase B. Optional SHP1017 `APT-A086CEB8CAB7`. Gate OPEN.
+- **2026-08-16 20:10 IST:** FDE required demo SHOW (A–F). Optional OR-Tools / dock-close UI / warehouse-reply NOT YET. UI walkthrough `docs/UI_TEST_WALKTHROUGH.md`. Gate OPEN.
+- **2026-08-16 20:05 IST:** Tools PDF 23 names match `tools.py`. Example IDs are not Ravi-safe. No `facility_schedules` table. Gate OPEN.
 - **2026-08-16 19:55 IST:** Live Ravi: 3 `IN_TRANSIT` shipments (`SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`); rail/primary has no appointment. `SHP-D16-RAVI` unbound is intended. `SHP1017` current apt is `APT-A086CEB8CAB7` not golden `APT1017`. Gate OPEN.
 - **2026-08-16 19:50 IST:** FDE presentation date is **2026-08-17**. Checklist in `docs/PRESENTATION_CHECKLIST.md`. Live demo SQL/cast remain anchored to **2026-08-16**; do not treat timestamps as calendar-today. Driver LangChain allowlist is 23 tools in `backend/app/assistant/tools.py`. Gate OPEN.
 - **2026-08-14 03:30 IST:** Root `README.md` is the teammate entry for Sprint 3–4 status, hosted URLs, and AgentCore/Locust/Docker commands. Gate OPEN.

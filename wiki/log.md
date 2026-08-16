@@ -8,6 +8,34 @@ last_updated: 2026-08-16
 
 # Wiki log
 
+## 2026-08-16 21:05 IST | deploy | unified traces Runtime v3
+
+- ADOT 0.18+ pin, UNIFIED_TRACES env, timed A2 28.6s, platform Invoke span in Transaction Search, ADOT recursion remains. Synced [[handoff]], [[current-state]], [[testing]], [[ai-system]], CHANGELOG, master plan Living.
+
+## 2026-08-16 20:25 IST | decision | latency vs LangSmith MCP
+
+- MCP for traces only. Synced [[skills-and-mcp]], [[handoff]], CHANGELOG, `docs/AI_TOOLING.md`.
+
+## 2026-08-16 20:20 IST | verification | hosted LLM is OpenAI-first auto
+
+- `AUTO_ORDER` OpenAI → OpenRouter → Gemini. Hosted SSM has OpenAI + Gemini only. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-16 20:15 IST | verification | Ravi no-appointment playbook
+
+- MCP reconfirm: DRV001 rail empty is correct (RACE-A + RAVI unbound). SHP1017 still CONFIRMED `APT-A086CEB8CAB7`. UI walkthrough updated. Synced [[handoff]], CHANGELOG.
+
+## 2026-08-16 20:10 IST | verification | FDE PDF demo/stress vs runbook
+
+- Required §12.2 beats SHOW in code + runbook Phases A–F. §11.2: 9 SHOW / 2 PARTIAL (compare/leave-by/priority-later) / 2 NOT YET (dock-close UI, warehouse-reply channel). §7.3 OR-Tools optional NOT YET. Authored `docs/UI_TEST_WALKTHROUGH.md`. Synced [[handoff]], [[current-state]], DEMO_DAY_READINESS, CHANGELOG.
+
+## 2026-08-16 20:05 IST | verification | tools catalog PDF vs code
+
+- Compared `docs/Scheduling Algo and tools/SetuHaul_AI_Complete_23_Tools_Catalog.pdf` to `backend/app/assistant/tools.py` + live MCP schema. 23 names match; example IDs and `facility_schedules` do not. Logged in [[contradictions]]. Synced [[handoff]], [[source-map]], CHANGELOG.
+
+## 2026-08-16 20:00 IST | docs | full Driver tool catalog
+
+- Documented all 23 `build_driver_tools` entries (mutate vs read, codes, Ravi 3-shipment default) on [[ai-system]]. Synced [[handoff]], CHANGELOG.
+
 ## 2026-08-16 19:55 IST | verification | live Ravi 3 shipments, no rail appointment
 
 - MCP SQL: DRV001 actives `SHP-D16-RACE-A` / `SHP-D16-RAVI` (no current apt) + `SHP1017` (`APT-A086CEB8CAB7` CONFIRMED). Context primary is RACE-A so UI shows no appointment. Phase B still valid if chat names `SHP-D16-RAVI`. Synced [[handoff]], [[current-state]], CHANGELOG, presentation checklist.

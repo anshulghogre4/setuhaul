@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 agentcore = [
-  "aws-opentelemetry-distro>=0.10.0",
+  "aws-opentelemetry-distro>=0.18.0",
   "opentelemetry-instrumentation-langchain>=0.40.0",
 ]
 

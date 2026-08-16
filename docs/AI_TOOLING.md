@@ -67,10 +67,11 @@ When adopted:
 
 Add the official LangSmith MCP when observability work begins and the team needs agents to inspect traces, runs, prompts, datasets, experiments, or usage.
 
+- **Adopted 2026-08-16 (Cursor):** remote MCP `https://api.smith.langchain.com/mcp` in `.cursor/mcp.json` (OAuth — no API key in git). Reload Cursor MCP and complete the LangSmith login once.
 - Keep `LANGSMITH_API_KEY`, workspace ID, and endpoint outside the repository.
 - Default agents to read/diagnose. Dataset, prompt, or experiment mutations require explicit task scope.
 - Redact secrets and sensitive operational payloads before tracing.
-- The MCP assists investigation; application instrumentation still uses the approved LangSmith tracing integration.
+- The MCP assists investigation; it does **not** make chat faster. Application instrumentation still uses LangSmith tracing (`setuhaul-agentcore` / `setuhaul.chat`).
 
 ### 4. Graphify MCP
 

@@ -1,12 +1,12 @@
 # Demo-day readiness vs FDE Challenge PDF
 
 Source: `docs/SetuHaul_FDE_Challenge.pdf` §8, §11.2, §12.1–12.2, §13.1.  
-Reassessed **2026-08-12 00:25 IST** after Sprint 3 exit gate close (lifecycle + stale + escalation + 10×4 live load + D16 cast smoke).
+Reassessed **2026-08-16 20:10 IST** against `docs/SetuHaul_FDE_Challenge.pdf` pages 12–19 and live `tools.py` / runbook. Required §12.2 demo + most §11.2 stress are **SHOW**. Optional §7.3 OR-Tools, dock-close-after-options UI, and warehouse-reply channel remain **NOT YET** (brief allows optional engine; do not claim them).
 
 Legend: **SHOW** / **ANSWER** / **PARTIAL** / **NOT YET**
 
 Presentation day: **2026-08-17** (`Asia/Kolkata`).  
-Demo data anchor remains **2026-08-16** (`supabase/demo/`, cast `supabase/demo/fixtures/stress_scenarios.json`). Feasibility is ETA-relative, not wall-clock, so keep using 16 Aug timestamps in chat. Live checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md).
+Demo data anchor remains **2026-08-16** (`supabase/demo/`, cast `supabase/demo/fixtures/stress_scenarios.json`). Feasibility is ETA-relative, not wall-clock, so keep using 16 Aug timestamps in chat. Live checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md). UI clicks: [UI_TEST_WALKTHROUGH.md](UI_TEST_WALKTHROUGH.md).
 
 Live volume after apply: facilities **6**, docks **25**, drivers **105**, slots **2934**, shipments **661**, Auth-mapped users **26**.
 

@@ -6,7 +6,7 @@ Ordered manual test script against `docs/SetuHaul_FDE_Challenge.pdf` (§8 chat t
 Quick Ravi prompt list: [DEMO_DRIVER_CHAT_SCRIPT.md](DEMO_DRIVER_CHAT_SCRIPT.md).  
 Cast IDs: [../supabase/demo/fixtures/stress_scenarios.json](../supabase/demo/fixtures/stress_scenarios.json).
 
-Presentation day: **2026-08-17**. Demo-data anchor remains **2026-08-16** (`Asia/Kolkata`) — use the 16 Aug ETA strings below; do not invent 17 Aug times unless SQL is regenerated. Sprint 1–3 exit gates are **COMPLETE**. Morning checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md).
+Presentation day: **2026-08-17**. Demo-data anchor remains **2026-08-16** (`Asia/Kolkata`) — use the 16 Aug ETA strings below; do not invent 17 Aug times unless SQL is regenerated. Sprint 1–3 exit gates are **COMPLETE**. Click-by-click UI: [UI_TEST_WALKTHROUGH.md](UI_TEST_WALKTHROUGH.md). Morning checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md).
 
 Passwords: gitignored `POC_TEAM_ACCOUNTS.local.md` only — never paste them here.
 
@@ -84,7 +84,7 @@ Optional later: Vikas (`vikas.sharma@setuhaul.com`), contention drivers `driver.
 | Step | Type exactly | Expect |
 |---|---|---|
 | A1 | *(after login)* Check profile rail | `USR001` / `DRV001` / `FAC-JAI-01` |
-| A2 | `Show my current shipments.` | Lists active work; if both `SHP1017` and `SHP-D16-RAVI` appear, you will pick D16 next |
+| A2 | `Show my current shipments.` | **Three** actives: `SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`. Rail appointment may be empty. Next lock RAVI. |
 | A3 | `I will be late on SHP-D16-RAVI.` | Asks for revised **arrival** time (not just “late”) |
 | A4 | `Repair will take 90 minutes.` | Repair ≠ ETA; asks for explicit timestamp **with timezone** |
 | A5 | `My new ETA for SHP-D16-RAVI is 2026-08-16T18:45:00+05:30 due to traffic.` | Confirmation preview of exact display ETA; **no write yet** |

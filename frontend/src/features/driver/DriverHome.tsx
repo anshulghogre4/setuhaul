@@ -51,6 +51,76 @@ type ChatResponse = {
   } | null
 }
 
+const SCHEDULING_TOOL_NAMES = new Set([
+  'find_feasible_slots',
+  'request_slot',
+  'get_appointment_request_status',
+  'reschedule_appointment',
+  'cancel_appointment',
+  'escalate_exception',
+])
+
+function logSchedulingEngine(tools: ChatResponse['tool_calls']) {
+  const schedulingTools = tools.filter((t) => SCHEDULING_TOOL_NAMES.has(t.name))
+  if (schedulingTools.length === 0) return
+
+  for (const tool of schedulingTools) {
+    const result = (tool.result ?? null) as Record<string, unknown> | null
+    if (!result || typeof result !== 'object') continue
+
+    if (tool.name === 'find_feasible_slots') {
+      const options = Array.isArray(result.options)
+        ? (result.options as Record<string, unknown>[])
+        : []
+      console.groupCollapsed(
+        `%c🚦 SCHEDULING ENGINE · find_feasible_slots · ${options.length} option(s) · ${String(
+          result.recommendation_id ?? 'no REC',
+        )}`,
+        'color:#0ea5e9;font-weight:bold',
+      )
+      console.log('policy_version', result.policy_version)
+      console.log('effective_eta_ts', result.effective_eta_ts)
+      if (options.length > 0) {
+        console.table(
+          options.map((opt) => {
+            const factors = (opt.ranking_factors ?? {}) as Record<string, unknown>
+            return {
+              slot_id: opt.slot_id,
+              dock_code: opt.dock_code,
+              dock_type: opt.dock_type,
+              rank_score: opt.rank_score,
+              priority: factors.priority_code,
+              lateness_min: factors.lateness_minutes,
+              wait_after_eta_min: factors.wait_after_eta_minutes,
+              fit_slack_min: factors.fit_slack_minutes,
+              dock_match: factors.dock_match,
+            }
+          }),
+        )
+        options.forEach((opt, idx) => {
+          const explanation = Array.isArray(opt.ranking_explanation) ? opt.ranking_explanation : []
+          console.log(`#${idx + 1} ${String(opt.slot_id)} — why ranked here:`, explanation)
+        })
+      }
+      const rejected = Array.isArray(result.rejected_reasons) ? result.rejected_reasons : []
+      if (rejected.length > 0) {
+        console.log('rejected_reasons', rejected)
+      }
+      if (result.escalation) {
+        console.log(
+          '%c⚠ ESCALATION — no feasible slot found',
+          'color:#dc2626;font-weight:bold',
+          result.escalation,
+        )
+      }
+      console.groupEnd()
+      continue
+    }
+
+    console.log(`%c🚦 SCHEDULING ENGINE · ${tool.name}`, 'color:#0ea5e9;font-weight:bold', result)
+  }
+}
+
 function renderFormattedText(content: string) {
   if (!content) return null
   const lines = content.split('\n')
@@ -341,6 +411,7 @@ function DriverBody({
         })
       }
       console.groupEnd()
+      logSchedulingEngine(tools)
       setMessages((prev) => [
         ...prev,
         {
