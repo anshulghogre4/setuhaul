@@ -3,13 +3,15 @@ title: SetuHaul Current Verified State
 type: state
 status: authoritative
 scope: repository
-last_verified: 2026-08-14
+last_verified: 2026-08-16
 ---
 
 # Current state
 
 ## Verified
 
+- **2026-08-16 19:55 IST:** Live Ravi: 3 `IN_TRANSIT` shipments (`SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`); rail/primary has no appointment. `SHP-D16-RAVI` unbound is intended. `SHP1017` current apt is `APT-A086CEB8CAB7` not golden `APT1017`. Gate OPEN.
+- **2026-08-16 19:50 IST:** FDE presentation date is **2026-08-17**. Checklist in `docs/PRESENTATION_CHECKLIST.md`. Live demo SQL/cast remain anchored to **2026-08-16**; do not treat timestamps as calendar-today. Driver LangChain allowlist is 23 tools in `backend/app/assistant/tools.py`. Gate OPEN.
 - **2026-08-14 03:30 IST:** Root `README.md` is the teammate entry for Sprint 3–4 status, hosted URLs, and AgentCore/Locust/Docker commands. Gate OPEN.
 - **2026-08-14 03:26 IST:** Locust copy-paste commands are in root `README.md` Testing, `loadtests/README.md`, and `docs/DEMO_MANUAL_RUNBOOK.md`. Gate OPEN.
 - **2026-08-14 03:22 IST:** Runbook Phase A–G Sign-off is **not** Locust HTTP 200. Suite A 03:18 = hosting not clean (C2 503); phases A–G remain unchecked until a human (or Suite B for G) verifies Expect. Gate OPEN.

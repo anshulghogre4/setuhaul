@@ -6,7 +6,7 @@
 Use this after signing in at `http://localhost:5173/driver/login` as `ravi.kumar@setuhaul.com`.
 
 **Verified identity (live):** `USR001` → `DRV001` → facility `FAC-JAI-01`.  
-**Demo-day hero shipment (16 Aug):** **`SHP-D16-RAVI`** — use this for slot search/request.  
+**Presentation: 17 Aug 2026.** Hero shipment still **`SHP-D16-RAVI`** (frozen 16 Aug data) — use this for slot search/request. Keep the `2026-08-16T…+05:30` ETA string below.  
 **Older seed shipment:** `SHP1017` may still appear; if asked which shipment, pick `SHP-D16-RAVI`.  
 **Seed note:** `users.full_name` is `Ravi Kumar` while `drivers.driver_name` for `DRV001` is `Rajesh Kumar`.
 

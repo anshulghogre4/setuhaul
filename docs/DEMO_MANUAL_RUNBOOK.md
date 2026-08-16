@@ -6,7 +6,7 @@ Ordered manual test script against `docs/SetuHaul_FDE_Challenge.pdf` (§8 chat t
 Quick Ravi prompt list: [DEMO_DRIVER_CHAT_SCRIPT.md](DEMO_DRIVER_CHAT_SCRIPT.md).  
 Cast IDs: [../supabase/demo/fixtures/stress_scenarios.json](../supabase/demo/fixtures/stress_scenarios.json).
 
-Demo-day anchor: **2026-08-16** (`Asia/Kolkata`). Sprint 1–3 exit gates are **COMPLETE**.
+Presentation day: **2026-08-17**. Demo-data anchor remains **2026-08-16** (`Asia/Kolkata`) — use the 16 Aug ETA strings below; do not invent 17 Aug times unless SQL is regenerated. Sprint 1–3 exit gates are **COMPLETE**. Morning checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md).
 
 Passwords: gitignored `POC_TEAM_ACCOUNTS.local.md` only — never paste them here.
 

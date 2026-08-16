@@ -139,7 +139,7 @@ These emails are seeded in Supabase Auth and mapped via `users.auth_user_id`. Sa
 
 ### Demo script (Sprint 2–3; same beats hosted)
 
-Demo-day cast anchors **2026-08-16** (`Asia/Kolkata`). **Full ordered manual test:** [docs/DEMO_MANUAL_RUNBOOK.md](docs/DEMO_MANUAL_RUNBOOK.md). Quick prompts: [docs/DEMO_DRIVER_CHAT_SCRIPT.md](docs/DEMO_DRIVER_CHAT_SCRIPT.md). Judge sheet: [docs/DEMO_DAY_READINESS.md](docs/DEMO_DAY_READINESS.md).
+Demo-day cast remains a frozen **2026-08-16** scenario (`Asia/Kolkata`); the FDE presentation is **2026-08-17** — keep 16 Aug ETA strings. Checklist: [docs/PRESENTATION_CHECKLIST.md](docs/PRESENTATION_CHECKLIST.md). **Full ordered manual test:** [docs/DEMO_MANUAL_RUNBOOK.md](docs/DEMO_MANUAL_RUNBOOK.md). Quick prompts: [docs/DEMO_DRIVER_CHAT_SCRIPT.md](docs/DEMO_DRIVER_CHAT_SCRIPT.md). Judge sheet: [docs/DEMO_DAY_READINESS.md](docs/DEMO_DAY_READINESS.md).
 
 1. Open Driver login → sign in as **Ravi**.
 2. If asked which shipment, choose **`SHP-D16-RAVI`** (not older `SHP1017`).

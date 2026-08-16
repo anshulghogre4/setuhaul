@@ -2,6 +2,15 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-16 19:55 IST - Live Ravi: 3 shipments, no rail appointment
+
+- Verified via Supabase MCP: `DRV001` has three `IN_TRANSIT` rows (`SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`) plus completed `SHP1001`. Context rail uses the newest active (`SHP-D16-RACE-A`) which has no current appointment, so the UI looks empty. `SHP-D16-RAVI` unbound is intended for Phase B `request_slot`. `SHP1017` still has a current CONFIRMED apt (`APT-A086CEB8CAB7` on `SLOT-JAI-029`; golden `APT1017` is not current). Demo must lock `SHP-D16-RAVI` immediately. App tests **not run**. Agent/surface: Cursor.
+
+## 2026-08-16 19:50 IST - Presentation moved to 17 Aug; tool inventory + checklist
+
+- Owner shifted the FDE show to **2026-08-17**. Demo-day SQL/cast remain a frozen **2026-08-16** scenario because `find_feasible_slots` filters `slot_end > shipment ETA`, not wall-clock now. Authored `docs/PRESENTATION_CHECKLIST.md` (night-before, morning-of, 12-min live order, recovery). Recorded the date split in `docs/DEMO_DAY_READINESS.md`, `docs/DEMO_MANUAL_RUNBOOK.md`, and `wiki/contradictions.md`.
+- Driver LangChain allowlist verified from `backend/app/assistant/tools.py`: **23** registered tools (22 real + leftover `scheduling_capability_disabled`). Graphify `explain` on `build_driver_tools()` used as index; source file is authoritative. App tests **not run**. Agent/surface: Cursor.
+
 ## 2026-08-14 03:30 IST - Root README Sprint 3–4 holistic refresh
 
 - Root `README.md` now matches live Sprint 3 COMPLETE + Sprint 4 in progress: hosted Vercel/BFF URLs, dual-mode ARN rule, Dispatch, remaining Locust Suite B / gate, teammate missing-files list, and copy-paste Docker / AgentCore / Locust / reset commands. Scoreboard remains the command book. No secrets. App tests **not run**.

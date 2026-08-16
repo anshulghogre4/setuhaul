@@ -3,7 +3,7 @@ title: SetuHaul Source and Provenance Map
 type: provenance
 status: authoritative
 scope: repository
-last_verified: 2026-08-14
+last_verified: 2026-08-16
 ---
 
 # Source map
@@ -20,6 +20,7 @@ last_verified: 2026-08-14
 | Agent workflow | root `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/setuhaul.mdc`, `wiki/AGENTS.md` |
 | Session history | `CHANGELOG.md`, `wiki/log.md`, `wiki/handoff.md` |
 | Hosted Locust (Step 10) | `loadtests/README.md`, `loadtests/locust_runbook_chat.py`, `loadtests/locust_slot_contention.py`, `docs/DEMO_MANUAL_RUNBOOK.md` |
+| 17 Aug presentation | `docs/PRESENTATION_CHECKLIST.md`, `docs/DEMO_MANUAL_RUNBOOK.md`, `docs/DEMO_DAY_READINESS.md` |
 | Knowledge graph | `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json` when present |
 
 Executable source and fresh verification outrank summaries when they disagree.

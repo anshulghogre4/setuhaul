@@ -3,13 +3,15 @@ title: SetuHaul Session Handoff
 type: handoff
 status: authoritative
 scope: repository
-last_updated: 2026-08-14
+last_updated: 2026-08-16
 ---
 
 # Session handoff
 
 ## Latest work
 
+- **2026-08-16 19:55 IST:** Live Ravi (`DRV001`) has **3 active shipments** and the context rail shows **no appointment**: primary by `updated_at` is `SHP-D16-RACE-A` (no current apt). `SHP-D16-RAVI` also has none (`D16-APT-RAVI-OLD` historical CANCELLED — correct for Phase B). `SHP1017` still has current `APT-A086CEB8CAB7` CONFIRMED (golden `APT1017` is CONFIRMED but `is_current=0`). Demo must name `SHP-D16-RAVI`. Gate not struck.
+- **2026-08-16 19:50 IST:** Presentation moved to **2026-08-17**. Wrote `docs/PRESENTATION_CHECKLIST.md`; Graphify `explain` on `build_driver_tools()` plus source `tools.py` (23 Driver tools). Demo SQL stays frozen **2026-08-16** (ETA-relative feasibility). Gate not struck.
 - **2026-08-14 03:30 IST:** Root `README.md` refreshed for Sprint 3–4 (hosted URLs, dual-mode, AgentCore/Locust/Docker commands, teammate missing-files). Gate not struck.
 - **2026-08-14 03:26 IST:** Locust commands copied into root `README.md` Testing, `loadtests/README.md`, and the demo runbook so teammates can run Suite A/B from repo root. Gate not struck.
 - **2026-08-14 03:22 IST:** Clarified pass/fail: runbook Sign-off ≠ Locust HTTP. Suite A 03:18 is hosting **not clean** (1× C2 503) and does **not** tick Phases A–G. Scoring box in the demo runbook + `loadtests/README.md`. Gate not struck.
@@ -138,10 +140,10 @@ See [[current-state]]. **Sprint 1–3 exit gates COMPLETE.** Sprint 4 hosting/Ag
 
 ## Next action
 
-1. **Step 10:** Suite A ran (1× C2 503). When asked: Suite B after cast reset. Do not strike the Sprint 4 gate until Locust evidence + Express delete.
-2. Optional: open `https://setuhaul-roan.vercel.app/driver/login` as Ravi and click around Ops.
-2. Classroom demo rehearsal still available: [DEMO_MANUAL_RUNBOOK.md](../docs/DEMO_MANUAL_RUNBOOK.md) after `reset_demo_day.py --mode cast`.
-3. Do not `git commit` unless asked.
+1. **Tomorrow 2026-08-17 presentation:** follow [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md). Ravi currently has 3 actives and an empty rail appointment — first chat line must be `I need help with shipment SHP-D16-RAVI.` Optional morning `reset_demo_day.py --mode cast --include-shp1017 --confirm` to restore golden `APT1017`. Keep 16 Aug ETA strings.
+2. Optional hosted path: `https://setuhaul-roan.vercel.app/driver/login` as Ravi; local fallback if AgentCore 503s.
+3. **Step 10 leftover:** Locust Suite B after cast reset if asked. Do not strike the Sprint 4 gate.
+4. Do not `git commit` unless asked.
 
 
 Related: [[current-state]], [[implementation]], [[ai-system]], [[testing]].

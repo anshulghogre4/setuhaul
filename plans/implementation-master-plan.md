@@ -7,7 +7,7 @@ Source inputs: 20-page FDE challenge, project documentation, seeded Supabase mig
 ## Living sprint status
 
 Last re-baselined: 2026-08-07 19:35 IST  
-Last refreshed: 2026-08-14 03:30 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–9 evidenced; root README refreshed for teammates; Locust Suite A ran (not clean); Suite B not run; gate not struck)
+Last refreshed: 2026-08-16 19:50 IST (Sprint 3 exit gate remains **COMPLETE**; Sprint 4 **PLANNED** — Steps 1–9 evidenced; Locust Suite A ran (not clean); Suite B not run; FDE presentation **2026-08-17** with frozen 16 Aug demo data; gate not struck)
 Active sprint: **Sprint 4 - hosting, AgentCore, observability, Locust** (PLANNED — start after owner promotes; do not implement yet unless explicitly asked)
 Next planned sprint: **Sprint 4**  
 Team POC target: **Sprint 2 exit gate (COMPLETE)**  

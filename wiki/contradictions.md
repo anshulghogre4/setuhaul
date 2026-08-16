@@ -3,13 +3,14 @@ title: SetuHaul Contradictions and Staleness Ledger
 type: ledger
 status: authoritative
 scope: repository
-last_updated: 2026-08-14
+last_updated: 2026-08-16
 ---
 
 # Contradictions and staleness ledger
 
 ## Open
 
+- **Presentation 2026-08-17 vs demo SQL 2026-08-16** — owner moved the show to 17 Aug; live slots/ETAs/cast IDs remain a frozen 16 Aug scenario. Feasibility compares `slot_end` to shipment ETA, not wall-clock now, so the 16 Aug script still works. Do not claim the data is “today” unless `generate_demo_day.py --demo-day 2026-08-17` is generated and applied.
 - `PROJECT.md` and older architecture documentation describe the intended product broadly; `plans/implementation-master-plan.md` narrows delivery to gated vertical slices. Agents must follow the master plan for implementation order.
 - `docs/DEPLOYMENT.md` still describes Docker Compose / local Redis as the deployment shape. Sprint 4 hosting truth is `plans/sprint-4-hosting.md` (Vercel + App Runner probe / ECS Express Mode + AgentCore). Prefer the scoreboard until `docs/HOSTING.md` is folded after hosted smoke.
 - `docs/AGENTS.md` names the runtime logistics assistant, while root `AGENTS.md` governs coding agents. Do not conflate them. `docs/AGENTS.md` may still contain older Gemini/AgentExecutor wording in places; prefer ADR 011 + master plan §5.2 + [[ai-system]] for runtime shape until that doc is fully refreshed.

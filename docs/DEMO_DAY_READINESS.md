@@ -5,7 +5,8 @@ Reassessed **2026-08-12 00:25 IST** after Sprint 3 exit gate close (lifecycle + 
 
 Legend: **SHOW** / **ANSWER** / **PARTIAL** / **NOT YET**
 
-Demo day anchor: **2026-08-16** (`Asia/Kolkata`). Data: `supabase/demo/`. Cast: `supabase/demo/fixtures/stress_scenarios.json`.
+Presentation day: **2026-08-17** (`Asia/Kolkata`).  
+Demo data anchor remains **2026-08-16** (`supabase/demo/`, cast `supabase/demo/fixtures/stress_scenarios.json`). Feasibility is ETA-relative, not wall-clock, so keep using 16 Aug timestamps in chat. Live checklist: [PRESENTATION_CHECKLIST.md](PRESENTATION_CHECKLIST.md).
 
 Live volume after apply: facilities **6**, docks **25**, drivers **105**, slots **2934**, shipments **661**, Auth-mapped users **26**.
 

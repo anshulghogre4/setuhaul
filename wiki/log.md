@@ -3,10 +3,19 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-14
+last_updated: 2026-08-16
 ---
 
 # Wiki log
+
+## 2026-08-16 19:55 IST | verification | live Ravi 3 shipments, no rail appointment
+
+- MCP SQL: DRV001 actives `SHP-D16-RACE-A` / `SHP-D16-RAVI` (no current apt) + `SHP1017` (`APT-A086CEB8CAB7` CONFIRMED). Context primary is RACE-A so UI shows no appointment. Phase B still valid if chat names `SHP-D16-RAVI`. Synced [[handoff]], [[current-state]], CHANGELOG, presentation checklist.
+
+## 2026-08-16 19:50 IST | decision | presentation 17 Aug + tool inventory
+
+- Owner moved the show from 16 Aug to **2026-08-17**. Demo SQL/cast stay frozen 16 Aug (ETA-relative feasibility in `feasibility.py`). Authored `docs/PRESENTATION_CHECKLIST.md`. Reconciled Driver tool allowlist (23) from `backend/app/assistant/tools.py` with Graphify `explain build_driver_tools()`. Synced [[handoff]], [[current-state]], [[ai-system]], [[contradictions]], CHANGELOG.
+- Verification: code read + Graphify explain; app tests **not run**.
 
 ## 2026-08-14 03:30 IST | docs | root README Sprint 3–4 refresh
 

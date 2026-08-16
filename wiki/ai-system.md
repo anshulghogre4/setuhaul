@@ -3,7 +3,7 @@ title: SetuHaul AI System
 type: topic
 status: compiled
 scope: ai
-last_verified: 2026-08-11
+last_verified: 2026-08-16
 ---
 
 # AI system
@@ -35,9 +35,10 @@ Locked runtime (owner clarification 2026-08-07; supersedes a brief conflicting �
 - Sprint 3 scheduling policy constraints now live in `backend/app/scheduling/constraints.json` and are loaded by deterministic backend code. LangChain tools must call services that apply this policy; the model must not interpret the JSON as permission to mutate data or invent slot facts.
 - Driver LangChain tools now include `find_feasible_slots` (2026-08-10), which calls the deterministic feasibility service and returns non-reserved options or escalation. **2026-08-12:** tool coroutines must accept expanded kwargs (`**kwargs` + Pydantic `model_validate`); a single `args: Model` parameter caused runtime `unexpected keyword argument` TOOL_ERRORs for appointment/facility/slot tools. Chat responses expose tool `result`/`result_preview` for browser console inspection.
 
-- Driver LangChain tools now also include `request_slot` (2026-08-10), which can request an exact selected `slot_id` and create `PENDING_CONFIRMATION` through deterministic backend code. It does not confirm appointments; reschedule/cancel/confirm intents remain disabled until their services exist.
+- Driver LangChain tools now also include `request_slot` (2026-08-10), which can request an exact selected `slot_id` and create `PENDING_CONFIRMATION` through deterministic backend code. It does not confirm appointments; warehouse confirm remains ops/admin REST.
 - Driver LangChain tools now also include `get_appointment_request_status` (2026-08-10), which reads the authoritative appointment request lifecycle after `request_slot` and reports pending/confirmed/closed/no-request states without mutating appointments.
 - Driver LangChain tools now also include `get_conversation_memory` (2026-08-10), which reads bounded Upstash Redis chat/session context scoped by authenticated user, browser session id, and thread id. It is infrastructure memory only, 24-hour TTL, non-authoritative, and never replaces PostgreSQL-backed operational tools.
+- **Verified Driver allowlist (2026-08-16):** `build_driver_tools` in `backend/app/assistant/tools.py` registers **23** `StructuredTool`s (22 real + leftover `scheduling_capability_disabled` for driver confirmation). Sprint 3 mutations `cancel_appointment` / `reschedule_appointment` / `escalate_exception` are registered. Extra reads (2026-08-12): vehicle/carrier, gate/queue, facility rules, breakdown incident, dock alerts. Ops/Dispatch capabilities stay REST, not model-selectable. Full names: [PRESENTATION_CHECKLIST.md](../docs/PRESENTATION_CHECKLIST.md) plus the list in root changelog 2026-08-16.
 
 ## Tool count and sprint placement
 
@@ -47,7 +48,7 @@ Matrix in `plans/implementation-master-plan.md` §5.2: **26** named capabilities
 |---|---|
 | Sprint 1 | Observational **services/REST** for ~9 read capabilities. No chat mount; no model tool registration; **Upstash not required**. |
 | Sprint 2 | Register POC tools via `bind_tools`; add ETA/exception tools; **Upstash required** (24h non-authoritative conversation/session memory). **COMPLETE** 2026-08-07 19:35 IST. |
-| Sprint 3 | `find_feasible_slots`, `request_slot`, and `get_appointment_request_status` registered 2026-08-10. `get_conversation_memory` registered as infrastructure memory context. Remaining scheduling/search/report tools require deterministic services before registration. |
+| Sprint 3 | `find_feasible_slots`, `request_slot`, `get_appointment_request_status`, `cancel_appointment`, `reschedule_appointment`, `escalate_exception` registered. Extra operational reads registered 2026-08-12. Ops search/report remain REST. |
 
 Two Sprint 2 rows (`record_eta_update`, `create_or_update_exception`) are internal—not direct model registration. Infra (history, audit, authz, idempotency, redaction) is not model-selectable.
 
