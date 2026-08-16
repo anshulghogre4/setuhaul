@@ -27,7 +27,18 @@ class Database:
         self.engine = create_async_engine(
             _normalize_async_url(settings.database_url),
             pool_pre_ping=True,
-            # Supabase transaction pooler (PgBouncer) rejects named prepared statements.
+            # DATABASE_URL must point at Supabase's Supavisor SESSION-mode pooler
+            # (port 5432), not transaction-mode (6543). In transaction mode,
+            # Supavisor can silently swap which physical Postgres backend a
+            # connection is routed to between statements without resetting session
+            # state, so prepared statements from an unrelated earlier client can
+            # still be sitting on that backend — every asyncpg connection always
+            # tries to prepare its own handshake/query statements as
+            # "__asyncpg_stmt_1__" etc, so this collided deterministically
+            # (DuplicatePreparedStatementError) regardless of statement_cache_size
+            # or SQLAlchemy-level pooling. Session mode gives each pooled
+            # SQLAlchemy connection one stable dedicated backend for its whole
+            # lifetime, which is what makes prepared statements safe again.
             connect_args={"statement_cache_size": 0},
         )
         self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False)

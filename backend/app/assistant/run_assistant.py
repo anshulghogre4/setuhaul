@@ -67,14 +67,17 @@ async def run_assistant(
     sid = normalize_memory_id(session_id) if session_id else f"SES-LIVE-{uuid4().hex[:12].upper()}"
     memory = ConversationMemory(settings)
 
-    if client_message_id and memory.seen_client_message(
-        user_id=ctx.user_id,
-        thread_id=tid,
-        session_id=sid,
-        client_message_id=client_message_id,
+    # One pipelined Upstash round trip for history + summaries + session state,
+    # reused below for the duplicate-message check instead of a second fetch.
+    turn_context = memory.load_turn_context(user_id=ctx.user_id, thread_id=tid, session_id=sid)
+    full_history = turn_context["history"]
+    summaries = turn_context["summaries"]
+    session_ctx = turn_context["session"]
+
+    if client_message_id and any(
+        m.get("client_message_id") == client_message_id for m in full_history
     ):
-        history = memory.load_history(user_id=ctx.user_id, thread_id=tid, session_id=sid)
-        last_asst = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
+        last_asst = next((m for m in reversed(full_history) if m.get("role") == "assistant"), None)
         return {
             "thread_id": tid,
             "session_id": sid,
@@ -87,11 +90,7 @@ async def run_assistant(
             "ux_state": "duplicate_ignored",
         }
 
-    history = memory.load_history(
-        user_id=ctx.user_id, thread_id=tid, session_id=sid, limit=RAW_CONTEXT_SIZE
-    )
-    summaries = memory.load_summaries(user_id=ctx.user_id, thread_id=tid, session_id=sid)
-    session_ctx = memory.load_session(user_id=ctx.user_id, thread_id=tid, session_id=sid)
+    history = full_history[-RAW_CONTEXT_SIZE:]
 
     tools = build_driver_tools(
         session=session,
@@ -295,11 +294,14 @@ async def run_assistant(
         client_message_id=client_message_id,
     )
     # Rolling summary of oldest raw turns when the thread grows (ERICA-style).
+    # known_message_count avoids a separate LLEN round trip: full_history was the
+    # pre-append count, and append_turn just pushed exactly 2 more messages.
     new_summary = await memory.maybe_summarize_history(
         user_id=ctx.user_id,
         thread_id=tid,
         session_id=sid,
         llm=base_llm,
+        known_message_count=len(full_history) + 2,
     )
 
     observe_output(content)

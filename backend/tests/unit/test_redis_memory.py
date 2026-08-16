@@ -51,6 +51,32 @@ class _FakeRedis:
         self.values[key] = value
         self.expirations[key] = ex
 
+    def pipeline(self) -> "_FakePipeline":
+        return _FakePipeline(self)
+
+
+class _FakePipeline:
+    """Minimal stand-in for upstash_redis's Pipeline: queue calls, run them
+    against the same fake client in order on exec(), matching the real
+    pipeline's "batch of commands, list of results" contract closely enough
+    for these tests."""
+
+    def __init__(self, client: "_FakeRedis") -> None:
+        self._client = client
+        self._ops: list[tuple[str, tuple, dict]] = []
+
+    def __getattr__(self, name: str):
+        def queue(*args, **kwargs):
+            self._ops.append((name, args, kwargs))
+            return self
+
+        return queue
+
+    def exec(self) -> list:
+        results = [getattr(self._client, name)(*args, **kwargs) for name, args, kwargs in self._ops]
+        self._ops = []
+        return results
+
 
 class _FakeSummarizer:
     async def ainvoke(self, messages):  # noqa: ANN001

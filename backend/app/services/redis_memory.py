@@ -253,6 +253,53 @@ class ConversationMemory:
             self.degrade_reason = f"UPSTASH_SESSION_READ_FAILED:{type(exc).__name__}"
             return {}
 
+    def load_turn_context(
+        self, *, user_id: str, thread_id: str, session_id: str | None = None
+    ) -> dict[str, Any]:
+        """Full history + summaries + session state in one pipelined round trip.
+
+        Callers should dedupe/slice the returned ``history`` locally instead of
+        issuing a second ``load_history()`` call — this replaces what used to be
+        three-to-four separate Upstash HTTP requests per turn with one.
+        """
+        empty: dict[str, Any] = {"history": [], "summaries": [], "session": {}}
+        if self._client is None:
+            return empty
+        hkey = self._history_key(user_id, thread_id, session_id)
+        skey = self._summaries_key(user_id, thread_id, session_id)
+        sekey = self._session_key(user_id, thread_id, session_id)
+        try:
+            pipe = self._client.pipeline()
+            pipe.lrange(hkey, -HISTORY_LIMIT, -1)
+            pipe.lrange(skey, -SUMMARY_CONTEXT_SIZE, -1)
+            pipe.get(sekey)
+            history_raw, summaries_raw, session_raw = pipe.exec()
+
+            summaries: list[str] = []
+            for item in summaries_raw or []:
+                if isinstance(item, str):
+                    summaries.append(item)
+                elif isinstance(item, dict):
+                    summaries.append(str(item.get("content") or item))
+                else:
+                    summaries.append(str(item))
+
+            if not session_raw:
+                session: dict[str, Any] = {}
+            elif isinstance(session_raw, dict):
+                session = session_raw
+            else:
+                session = json.loads(session_raw)
+
+            self.degraded = False
+            self.degrade_reason = None
+            return {"history": _parse_list_items(history_raw), "summaries": summaries, "session": session}
+        except Exception as exc:  # noqa: BLE001
+            self.degraded = True
+            self.degrade_reason = f"UPSTASH_PIPELINE_READ_FAILED:{type(exc).__name__}"
+            logger.warning("Upstash pipelined read failed: %s", type(exc).__name__)
+            return empty
+
     def append_turn(
         self,
         *,
@@ -279,15 +326,23 @@ class ConversationMemory:
                 "content": assistant_message,
                 "session_id": normalize_memory_id(session_id),
             }
-            self._client.rpush(hkey, json.dumps(user_payload), json.dumps(asst_payload))
-            self._client.ltrim(hkey, -HISTORY_LIMIT, -1)
-            self._client.expire(hkey, TTL_SECONDS)
+            active_payload = {
+                "user_id": normalize_memory_id(user_id, fallback="unknown-user"),
+                "session_id": normalize_memory_id(session_id),
+                "thread_id": normalize_memory_id(thread_id, fallback="unknown-thread"),
+            }
+
+            # One pipelined round trip instead of up to five separate requests.
+            pipe = self._client.pipeline()
+            pipe.rpush(hkey, json.dumps(user_payload), json.dumps(asst_payload))
+            pipe.ltrim(hkey, -HISTORY_LIMIT, -1)
+            pipe.expire(hkey, TTL_SECONDS)
             if session is not None:
                 skey = self._session_key(user_id, thread_id, session_id)
-                self._client.set(skey, json.dumps(session), ex=TTL_SECONDS)
-            self.set_active_conversation(
-                user_id=user_id, thread_id=thread_id, session_id=session_id
-            )
+                pipe.set(skey, json.dumps(session), ex=TTL_SECONDS)
+            pipe.set(self._active_key(user_id), json.dumps(active_payload), ex=TTL_SECONDS)
+            pipe.exec()
+
             self.degraded = False
             self.degrade_reason = None
         except Exception as exc:  # noqa: BLE001
@@ -390,18 +445,27 @@ class ConversationMemory:
         thread_id: str,
         session_id: str | None = None,
         llm: _SummarizerLLM,
+        known_message_count: int | None = None,
     ) -> str | None:
         """When raw history is long enough, summarize the oldest chunk (ERICA-style).
 
         Summaries are ephemeral and non-authoritative. Operational facts must still
         be verified with PostgreSQL-backed tools.
+
+        ``known_message_count`` lets a caller that just appended to this thread
+        pass the already-known post-append count instead of paying for another
+        Upstash round trip (``LLEN``) purely to re-derive it.
         """
         if self._client is None:
             return None
         hkey = self._history_key(user_id, thread_id, session_id)
         skey = self._summaries_key(user_id, thread_id, session_id)
         try:
-            message_count = int(self._client.llen(hkey) or 0)
+            message_count = (
+                known_message_count
+                if known_message_count is not None
+                else int(self._client.llen(hkey) or 0)
+            )
             if message_count < RAW_MESSAGE_LIMIT:
                 return None
 
@@ -479,11 +543,10 @@ class ConversationMemory:
                 "degrade_reason": self.degrade_reason or "UPSTASH_NOT_CONFIGURED",
             }
 
-        history = self.load_history(user_id=user_id, thread_id=thread_id, session_id=safe_session_id)
-        summaries = self.load_summaries(
-            user_id=user_id, thread_id=thread_id, session_id=safe_session_id
-        )
-        session = self.load_session(user_id=user_id, thread_id=thread_id, session_id=safe_session_id)
+        turn_context = self.load_turn_context(user_id=user_id, thread_id=thread_id, session_id=safe_session_id)
+        history = turn_context["history"]
+        summaries = turn_context["summaries"]
+        session = turn_context["session"]
         recent = history[-max(1, min(recent_limit, HISTORY_LIMIT)) :] if include_recent_messages else []
         return {
             "code": "REDIS_MEMORY_LOADED",
