@@ -1,29 +1,54 @@
 # SetuHaul AI
 
-> AI-Powered Driver Exception Management & Dock Scheduling Platform (FDE POC)
+> AI-Powered Driver Exception Management & Dock Scheduling Platform — FDE Challenge submission
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.116-green)
 ![React](https://img.shields.io/badge/React-19-blue)
-![LangChain](https://img.shields.io/badge/LangChain-ChatOpenAI-orange)
+![LangChain](https://img.shields.io/badge/LangChain-bind__tools-orange)
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)
 ![Redis](https://img.shields.io/badge/Upstash-Redis-red)
+![AWS](https://img.shields.io/badge/AWS-Bedrock%20AgentCore-orange)
+
+A messy driver delay becomes a **feasible, current dock plan** — without ever creating a conflict
+for another driver. Drivers talk in plain language; the LLM orchestrates typed tools; PostgreSQL
+and its unique indexes are the only source of truth for what actually got booked.
+
+---
+
+## For judges / presenters — start here
+
+| Need | Go to |
+|---|---|
+| One-minute pitch + live demo order + recovery steps | [docs/PRESENTATION_CHECKLIST.md](docs/PRESENTATION_CHECKLIST.md) |
+| Answer to every §11.2 stress scenario and §12.1 challenge question, with code refs | [docs/PRESENTATION_QA_ANSWERS.md](docs/PRESENTATION_QA_ANSWERS.md) |
+| Full click-by-click script with chat lines and pass/fail criteria | [docs/DEMO_MANUAL_RUNBOOK.md](docs/DEMO_MANUAL_RUNBOOK.md) |
+| Judge-facing SHOW / ANSWER / PARTIAL / NOT YET scoreboard vs the PDF | [docs/DEMO_DAY_READINESS.md](docs/DEMO_DAY_READINESS.md) |
+| Hosted URLs to open right now | [Hosted](#hosted-public-no-secrets) below |
 
 ---
 
 ## Status (read this first)
 
-Sprint 1–3 exit gates are **COMPLETE** (Sprint 3 closed 2026-08-12). Sprint 4 hosting is **in progress on `main`** — Steps 1–9 evidenced; Locust Suite A ran (not clean); Suite B not run. **Do not strike the Sprint 4 gate** until Suite B + Express cleanup. Command book: [plans/sprint-4-hosting.md](plans/sprint-4-hosting.md). Living scoreboard: [plans/implementation-master-plan.md](plans/implementation-master-plan.md).
+Sprint 1–3 exit gates are **COMPLETE** (Sprint 3 closed 2026-08-12) — this is the FDE
+challenge-ready bar: deterministic feasibility, transactional allocation, same-slot race
+handling, stale-option recovery, and no-slot escalation are all implemented and live-load-tested.
+Sprint 4 (hosting/AgentCore/observability/Locust) is **operationally live** — Vercel, the ECS BFF,
+and Bedrock AgentCore Runtime are all deployed and independently artifact-verified as of
+2026-08-17 (`agentRuntimeVersion=9`) — but the **formal exit gate is not struck**: Locust Suite B
+(hosted scarce-capacity load) has never been run, and a full hosted browser-path chat script has
+not been executed end to end. Command book: [plans/sprint-4-hosting.md](plans/sprint-4-hosting.md).
+Living scoreboard: [plans/implementation-master-plan.md](plans/implementation-master-plan.md).
 
 | Sprint | Gate | What landed |
 |---|---|---|
-| 1 – Trusted walking skeleton | COMPLETE | Two portals, JWT `/auth/me`, CI |
-| 2 – Exception / ETA vertical slice | COMPLETE | Driver chat, confirmed ETA write, Redis 24h memory |
-| 3 – Deterministic allocation | COMPLETE | Feasible options, `request_slot`, race/NOSLOT/cancel, escalation, 10×4 live pytest |
-| 3+ demo-hardening | COMPLETE | Cast reset, stale `REC-`, Dispatch Console, extra Driver tools |
-| 4 – Hosting, AgentCore, Locust | **OPEN** | Vercel + ECS Express BFF + AgentCore Runtime; Locust Suite B remaining |
+| 1 – Trusted walking skeleton | **COMPLETE** | Two portals, JWT `/auth/me`, CI |
+| 2 – Exception / ETA vertical slice | **COMPLETE** | Driver chat, confirmed ETA write, Redis 24h memory |
+| 3 – Deterministic allocation | **COMPLETE** | Feasible options, `request_slot`, race/NOSLOT/cancel, escalation, 10×4 live pytest |
+| 3+ demo-hardening | **COMPLETE** | Cast reset, stale `REC-`, Dispatch Console, extra Driver tools |
+| 4 – Hosting, AgentCore, Locust | **PLANNED / operationally live, gate open** | Vercel + ECS Express BFF + AgentCore Runtime all deployed and live-verified; Locust Suite B + full hosted browser smoke remaining |
 
-**Hosted (public — no secrets)**
+### Hosted (public, no secrets)
 
 | What | URL |
 |---|---|
@@ -51,16 +76,20 @@ The SPA never holds AWS creds. The Runtime **ARN is not a URL** and is **never**
 - NOSLOT → durable `escalation_queue` (no invented slot)
 - Same-slot race + live 10×4 pytest (zero double-books)
 - Extra Driver tools: vehicle/carrier, gate/queue, facility rules, breakdown, dock alerts
-- **Hosted:** Vercel login → Express BFF → AgentCore; CloudWatch Runtime logs + LangSmith project `setuhaul-agentcore` / run `setuhaul.chat`
+- **Hosted:** Vercel login → Express BFF → AgentCore Runtime (`agentRuntimeVersion=9`, artifact-verified live 2026-08-17); CloudWatch Runtime logs + LangSmith project `setuhaul-agentcore` / run `setuhaul.chat`
+- Per-scenario proof map for every PDF stress/judge question: [docs/PRESENTATION_QA_ANSWERS.md](docs/PRESENTATION_QA_ANSWERS.md)
 
 **Still open / do not claim**
 
 - Locust Suite B (10 CONTEND drivers, zero double-books) **not run**
-- Locust Suite A (2026-08-14): `auth_me` 5/5; one Amit C2 **503** — hosting not clean
+- Locust Suite A (2026-08-14): `auth_me` 5/5; one Amit C2 **503** — hosting not fully clean; not re-run since
+- A full hosted browser-path chat script (`docs/HOSTED_SMOKE_CHAT_SCRIPT.md`) end to end — hosted fixes are verified at the deployed-artifact/API level, not all clicked through in the browser
 - Sprint 4 exit gate + delete Express Mode after demo (ALB bills idle ~$0.08/hr)
-- Facility-wide OR-Tools (PDF §7.3 optional)
+- Facility-wide OR-Tools / facility-wide recalculation (PDF §7.3 / §12.1 Q8, optional and intentionally deferred)
+- A warehouse-reply-conflict messaging channel (PDF §11.2; lightweight escalate path exists, not this)
+- A live "dock closes mid-conversation" demo trigger (revalidation protects it; no UI to stage it)
 - Password rotation / session revocation (post-demo)
-- Maps, GPS, messaging channels
+- Maps, GPS, national routing
 - Formal Playwright suite in CI
 
 **Teammates need (or you are missing the run)**
@@ -486,8 +515,12 @@ SetuHaul/
 | [plans/implementation-master-plan.md](plans/implementation-master-plan.md) | Delivery order / living scoreboard |
 | [plans/sprint-4-hosting.md](plans/sprint-4-hosting.md) | Sprint 4 step order + AWS/Vercel/AgentCore/Locust command book |
 | [wiki/handoff.md](wiki/handoff.md) | Latest session handoff |
+| [docs/PRESENTATION_CHECKLIST.md](docs/PRESENTATION_CHECKLIST.md) | One-minute pitch, live demo order, accounts, recovery steps |
+| [docs/PRESENTATION_QA_ANSWERS.md](docs/PRESENTATION_QA_ANSWERS.md) | Every PDF §11.2 stress scenario + §12.1 judge question answered with code refs |
 | [docs/DEMO_DAY_READINESS.md](docs/DEMO_DAY_READINESS.md) | Judge-facing demo readiness vs FDE PDF |
 | [docs/DEMO_MANUAL_RUNBOOK.md](docs/DEMO_MANUAL_RUNBOOK.md) | Ordered manual demo + stress steps (chat lines + pass/fail) |
+| [docs/UI_TEST_WALKTHROUGH.md](docs/UI_TEST_WALKTHROUGH.md) | Click-by-click UI walkthrough |
+| [docs/HOSTED_SMOKE_CHAT_SCRIPT.md](docs/HOSTED_SMOKE_CHAT_SCRIPT.md) | Hosted-only browser chat verification script |
 | [loadtests/README.md](loadtests/README.md) | Locust Suite A/B commands (hosted BFF load) |
 | [docs/DEMO_DRIVER_CHAT_SCRIPT.md](docs/DEMO_DRIVER_CHAT_SCRIPT.md) | Quick Ravi chat prompts |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture |

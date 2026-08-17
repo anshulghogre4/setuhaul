@@ -15,6 +15,7 @@ Start every session with [[handoff]], then route through this index.
 - [[current-state]] — verified project status and active delivery point
 - [[handoff]] — latest work, verification, blockers, and next safe action
 - Presentation 17 Aug checklist — `docs/PRESENTATION_CHECKLIST.md` (demo SQL still 16 Aug)
+- Presentation Q&A prep — `docs/PRESENTATION_QA_ANSWERS.md` (PDF §11.2 stress scenarios + §12.1 judge questions, each with code ref + runbook phase)
 - UI click path — `docs/UI_TEST_WALKTHROUGH.md`
 - Hosted-only smoke chat script — `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` (pending: not yet run against the hosted URL)
 - [[contradictions]] — unresolved drift and decisions requiring reconciliation

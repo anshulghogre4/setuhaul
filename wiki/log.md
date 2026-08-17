@@ -8,6 +8,22 @@ last_updated: 2026-08-17
 
 # Wiki log
 
+## 2026-08-17 15:20 IST | docs | Refreshed root README.md as the presentation front door
+
+- Reworked root `README.md`: added a judges/presenters quick-nav table at the top; corrected the Status section (Sprint 4 hosting now accurately described as operationally live with the gate still open, matching AgentCore `agentRuntimeVersion=9` verification); synced "what you can demo / do not claim" with `docs/PRESENTATION_QA_ANSWERS.md`'s honest gaps; converted the bold Hosted line to a real anchorable heading; linked the four on-disk docs that weren't in the Documentation table yet. Diagrams/tech-stack/standards sections re-verified unchanged. Docs-only. Synced [[handoff]].
+
+## 2026-08-17 15:05 IST | docs | Added presentation Q&A prep doc for PDF §11.2/§12.1
+
+- Added `docs/PRESENTATION_QA_ANSWERS.md`: every §11.2 stress scenario and §12.1 judge question answered with a code reference and the exact `docs/DEMO_MANUAL_RUNBOOK.md` phase to demo it. Two honest out-of-scope gaps flagged (§12.1 Q8 OR-Tools, §11.2 #11 warehouse-reply-conflict); two scenarios flagged as tested-but-not-staged (§11.2 #2, #9). Grounded in the existing PDF re-read in [[current-state]]/`docs/DEMO_DAY_READINESS.md` (poppler unavailable this session for a fresh PDF render) plus fresh greps confirming code references. Linked from [[index]]. Docs-only. Synced [[handoff]].
+
+## 2026-08-17 (post-09:25 IST) | correction | AgentCore v9 confirmed genuinely fixed; prior "still stale" claim was outdated
+
+- Owner said they'd already deployed and were still seeing the bug, contradicting the prior entry's claim that AgentCore was on stale `agentRuntimeVersion=7`. Re-checked directly via AWS CLI (`get-agent-runtime`, `list-agent-runtime-endpoints`) and by downloading and grepping the live S3 artifact zip: `agentRuntimeVersion=9`, DEFAULT endpoint live on `9`, and both the wording fix (`prompts.py`) and pool_size fix (`session.py`) are genuinely present in the deployed code. The earlier claim was accurate when written but the owner's subsequent redeploy made it stale before it was corrected. If the bug still shows up live now, the leading suspect is session-level (Redis 24h history or AgentCore warm-container stickiness) rather than a deploy gap — retest on a fresh chat session. Synced [[handoff]] and [[current-state]].
+
+## 2026-08-17 (post-09:25 IST) | diagnosis | Confirmed live screenshot repro is the known wording-regression bug, not new
+
+- Owner shared a chat screenshot reproducing the 09:25 IST "confirm updating the ETA to None" wording bug against the hosted driver chat, then replied `None` to the confirmation prompt. Diagnosed as expected: the fix (commit `a590663`) shipped to ECS (`:10`) but AgentCore Runtime is still on `agentRuntimeVersion=7` (08:40 IST), predating the fix — confirmed via `git log`/`CHANGELOG.md` showing no `agentcore.cmd deploy` since. Flagged risk of continuing to confirm the `None` ETA prompt (real two-step write). Next action: `agentcore.cmd deploy --yes` (codezip already re-staged), then re-test live. No code changed. Synced [[handoff]] and [[current-state]] "Verify before claiming".
+
 ## 2026-08-17 09:25 IST | fix + incident | Escalation wording regression + live DB connection-pool exhaustion
 
 - Wording regression: escalate_exception replies borrowed ETA vocabulary ("confirm updating the ETA to None") because the confirm-gate prompt explicitly compared it to `report_delay_or_update_eta`. Confirmed via direct `escalation_queue` query that zero rows were written — confirm-gate held, this was cosmetic. Made the escalate_exception description fully self-contained, forbidding ETA/timestamp language.
