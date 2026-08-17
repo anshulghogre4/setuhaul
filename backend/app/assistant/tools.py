@@ -140,6 +140,14 @@ class EscalateExceptionArgs(BaseModel):
     shipment_id: str
     escalation_type: str = Field(default="NO_SLOT")
     reason: str | None = None
+    confirmed: bool = Field(
+        default=False,
+        description=(
+            "Leave false on the first call to get a CONFIRMATION_REQUIRED preview with no write. "
+            "Only set true after the driver has explicitly confirmed they want this shipment "
+            "escalated to human operations."
+        ),
+    )
 
 
 class ConversationMemoryArgs(BaseModel):
@@ -558,6 +566,7 @@ def build_driver_tools(
                     shipment_id=parsed_args.shipment_id,
                     escalation_type=parsed_args.escalation_type,
                     payload={"reason": parsed_args.reason, "source": "driver_chat"},
+                    confirmed=parsed_args.confirmed,
                 ),
             )
             return _json(result)

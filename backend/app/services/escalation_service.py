@@ -26,6 +26,11 @@ class EscalateExceptionCommand(BaseModel):
     severity_code: str = Field(default="HIGH", max_length=30)
     policy_version: str | None = Field(default=None, max_length=100)
     recommendation_id: str | None = Field(default=None, max_length=100)
+    # Defaults True so existing deterministic/system callers (persist_noslot_escalation,
+    # the ops REST route) keep writing immediately. Only the driver-chat tool passes
+    # confirmed=False on its first call so an LLM misjudgment surfaces as a preview,
+    # not a real escalation_queue row.
+    confirmed: bool = Field(default=True)
 
 
 def _as_of() -> str:
@@ -61,6 +66,22 @@ async def escalate_exception(
     escalation_type = command.escalation_type.upper()
     if escalation_type not in ESCALATION_TYPES:
         raise AppError("Unsupported escalation type.", code="INVALID_ESCALATION_TYPE", status_code=422)
+
+    if not command.confirmed:
+        return {
+            "status": "CONFIRMATION_REQUIRED",
+            "code": "CONFIRMATION_REQUIRED",
+            "shipment_id": command.shipment_id,
+            "escalation_type": escalation_type,
+            "reason": command.payload.get("reason"),
+            "requires_confirmation": True,
+            "note": (
+                "Escalating creates a durable human-operations case for this shipment. "
+                "No case has been created yet. Confirm with the driver before calling "
+                "escalate_exception again with confirmed=true."
+            ),
+        }
+
     shipment = await _shipment_scope(session, command.shipment_id)
     if ctx.is_driver:
         if shipment["driver_id"] != ctx.driver_id:

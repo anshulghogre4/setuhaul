@@ -2,6 +2,36 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 08:40 IST - Both hosted targets redeployed for the confirm-gate, verified by inspecting actual deployed artifacts
+
+- Owner ran `agentcore.cmd deploy --yes` for AgentCore. This agent independently verified the deploy actually shipped the confirm-gate code — not just trusted `agentcore.cmd status` — by downloading the live S3 artifact zip directly (`agentRuntimeVersion=7`, `lastUpdatedAt=2026-08-17T08:02:52Z`, bucket `cdk-hnb659fds-assets-118490268011-us-east-1`) and grepping the extracted `app/assistant/tools.py`, `app/services/escalation_service.py`, and `app/assistant/prompts.py`: `EscalateExceptionArgs.confirmed` defaults `False`, the `CONFIRMATION_REQUIRED` gate is present, and the sharpened prompt text is present.
+- This agent rebuilt `setuhaul-api` (`docker build --platform linux/amd64`), pushed to ECR, and rolled the ECS Express service (`aws ecs update-express-gateway-service`). Canary rollout completed cleanly: task-def `default-setuhaul-api:9` is the sole `PRIMARY` deployment, old `:8` fully drained, `/health/live` **200** throughout.
+- This artifact-level verification approach (download and inspect the real deployed zip, not just CLI status) is deliberate given the 07:20 IST incident where a deploy reported success but had actually shipped stale code due to a skipped staging step.
+- **Not yet live-verified**: nobody has sent an actual hosted chat turn against this deploy to confirm the confirm-gate surfaces a preview instead of a write when the LLM misjudges intent.
+- Agent/surface: Claude Code (both redeploys and verification) + owner (AgentCore deploy trigger).
+
+## 2026-08-17 08:10 IST - escalate_exception hardened to a two-step confirm write after prompt-only fix failed live twice
+
+- Root-caused whether the 07:35 IST codezip re-staging actually solved the false-escalation bug: downloaded the exact S3 artifact zip AWS reports as deployed to the Runtime (`agentRuntimeVersion=6`, `lastUpdatedAt=2026-08-17T07:38:12Z`, after the re-stage) and extracted `app/assistant/prompts.py` directly from it — it has the fixed text, confirming this was not another stale-deploy problem.
+- Owner re-tested Phase B on a genuinely fresh chat session (empty history, so no conversation-memory bias from before the fix) and the bug reproduced identically anyway. Conclusion: the hosted default LLM (`gpt-4o-mini`) is still choosing to call `escalate_exception`, most likely blending the context-lock line with the immediately-preceding ETA/delay-report turn, despite the explicit corrected instruction. Prompt wording alone is confirmed an unreliable guard for this after failing live twice.
+- Added a structural fix instead of a third prompt tweak: `escalate_exception` (`backend/app/services/escalation_service.py`) is now a two-step confirm write, mirroring the existing `report_delay_or_update_eta` pattern. `EscalateExceptionCommand.confirmed` defaults to `True` so the two existing deterministic/system callers — `persist_noslot_escalation` and the ops `/operations/escalate` REST route — keep writing immediately with no code changes needed there. `EscalateExceptionArgs.confirmed` (`backend/app/assistant/tools.py`) on the **driver-chat tool only** defaults to `False`: an unconfirmed call now returns a `CONFIRMATION_REQUIRED` preview with zero DB writes (not even the shipment-scope lookup runs) instead of silently creating a real `escalation_queue` row.
+- Sharpened `backend/app/assistant/prompts.py` further alongside the structural fix: explicitly states a delay/ETA report the turn before does not imply consent to escalate on the very next message, and that the tool must not be called even as a preview outside the two allowed conditions.
+- Added `backend/tests/unit/test_escalation_service.py::test_escalate_exception_requires_confirmation_before_write`, asserting zero `session.execute` calls when `confirmed=False`.
+- Verified: backend units **87 passed** (up from 86); `python -m compileall app` PASS; `python docs/scripts/stage_agentcore_codezip.py` re-run per the staging rule added earlier this session.
+- **Not yet redeployed to either hosted target and not live-verified.** AgentCore needs `agentcore.cmd deploy --yes`; ECS needs an image rebuild/push/roll since `tools.py`, `prompts.py`, and `escalation_service.py` all changed. Even after redeploy, "fixed" means a misfired call now surfaces a confirmation preview instead of a real write — it does not guarantee the LLM stops attempting the call in the first place.
+- Agent/surface: Claude Code.
+
+## 2026-08-17 07:35 IST - Correction: AgentCore "redeploy" at 07:20 IST did not ship the fix; codezip staging gap found and closed
+
+- The 07:20 IST entry below claimed AgentCore Runtime carried the 06:35 IST false-escalation fix after `agentcore.cmd deploy --yes` reported success. That claim was **wrong**: owner re-tested Phase B live afterward and the bug reproduced identically (same "issue while escalating your request" failure mode).
+- Root cause: `agentcore.cmd deploy` does not build from `backend/app/` directly — it packages `agentcore/codezip/app/`, a separate staged copy of the backend source maintained by `docs/scripts/stage_agentcore_codezip.py`. That staging script was never run before the 07:20 IST deploy, so the deploy silently shipped the **stale, pre-fix** `prompts.py` while `agentcore.cmd status`/`deploy` both reported `READY`/success — there is no built-in staleness check.
+- Confirmed via `grep escalate_exception agentcore/codezip/app/assistant/prompts.py`: the codezip copy still had the old unfixed line ("...when the driver asks for help or escalation") even though `backend/app/assistant/prompts.py` had the fix and `agentcore.cmd status` showed Runtime `READY`.
+- Fix: re-ran `python docs/scripts/stage_agentcore_codezip.py` (local file copy only, no AWS calls) — confirmed via grep that the codezip copy now carries the fixed prompt text. **The owner still needs to run `agentcore.cmd deploy --yes` one more time** to actually ship it; this correction entry is not itself a live fix.
+- Process fix to prevent recurrence: added a mandatory rule to `AGENTS.md` Delivery rules and `plans/sprint-4-hosting.md` (§5.6 first-deploy block, §5.11 day-2 table row, and the day-2 "AgentCore code" command block) that `python docs/scripts/stage_agentcore_codezip.py` must run immediately before every `agentcore.cmd deploy`, no exceptions.
+- Corrected `wiki/contradictions.md`'s entry on this bug with the accurate two-part root cause (prompt wording bug + stale codezip staging).
+- ECS BFF is unaffected by this correction — it was built directly from `backend/` via `docker build`, not through `agentcore/codezip/`, so its 07:20 IST redeploy is accurate as recorded.
+- Agent/surface: Claude Code.
+
 ## 2026-08-17 07:05 IST - README scheduling algorithm section + diagram
 
 - Added a new `## Scheduling algorithm` section to root `README.md` documenting `find_feasible_slots` (`backend/app/scheduling/feasibility.py`) as a pure, deterministic function of PostgreSQL state plus the editable `backend/app/scheduling/constraints.json` policy — explicit that the LLM never ranks or picks a slot.

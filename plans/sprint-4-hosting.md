@@ -477,6 +477,14 @@ Vercel `VITE_API_BASE_URL` is whichever HTTPS URL won.
 
 Do not generate or deploy AgentCore until local assistant chat works.
 
+**Every `agentcore.cmd deploy` — first or day-2 — must be preceded by re-staging `agentcore/codezip/`.** `agentcore.cmd deploy` packages `agentcore/codezip/app/`, a **separate copied snapshot** of `backend/app/`, not the live source. Editing `backend/app/**` alone does nothing for AgentCore until that snapshot is refreshed — this silently shipped a stale prompt fix on 2026-08-17 (deploy reported success, bug kept reproducing, because the copy was never re-staged). Always run:
+
+```powershell
+python docs/scripts/stage_agentcore_codezip.py
+```
+
+immediately before `agentcore.cmd deploy`, every time, no exceptions.
+
 ```powershell
 agentcore.cmd create --name SetuHaulAgent --framework LangChain_LangGraph --protocol HTTP --model-provider Gemini --memory none --build CodeZip
 # set aws-targets.json account from sts
@@ -488,6 +496,7 @@ agentcore.cmd dev --logs
 $SESSION = "setuhaul-dev-session-000000000000000001"
 # CLI-only sticky id. Not used in the hosted Driver UI.
 
+python docs/scripts/stage_agentcore_codezip.py
 agentcore.cmd deploy --dry-run --yes
 agentcore.cmd deploy --yes
 agentcore.cmd status
@@ -495,7 +504,7 @@ agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION --prompt-file
 agentcore.cmd logs --runtime SetuHaulAgent
 ```
 
-Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package plus `backend/pyproject.agentcore.toml` staged to `agentcore/codezip/pyproject.toml` (CDK requires it). CLI `--prompt-file` wraps JSON as a string prompt; `agentcore_main._normalize_runtime_payload` unwraps it. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only** (Step 9). Do not set it on Express Mode during Step 8.
+Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package plus `backend/pyproject.agentcore.toml` staged to `agentcore/codezip/pyproject.toml` (CDK requires it) — via `docs/scripts/stage_agentcore_codezip.py`, not by hand. CLI `--prompt-file` wraps JSON as a string prompt; `agentcore_main._normalize_runtime_payload` unwraps it. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only** (Step 9). Do not set it on Express Mode during Step 8.
 
 ### 5.7 CloudWatch / LangSmith
 
@@ -548,7 +557,7 @@ Day-2 updates stay the **same PowerShell** as first deploy. Prove local (step 2)
 | What you changed | Rebuild Vercel? | Command |
 |---|---|---|
 | FastAPI / tools / `run_assistant` (BFF image) | No | Build/push ECR, then roll the BFF |
-| AgentCore entrypoint / assistant code on Runtime | No | `agentcore.cmd deploy --yes` |
+| AgentCore entrypoint / assistant code on Runtime | No | `python docs/scripts/stage_agentcore_codezip.py` then `agentcore.cmd deploy --yes` — staging first is mandatory, see §5.6 |
 | `AGENTCORE_RUNTIME_ARN` or other **BFF env** | No | Update BFF env + redeploy service (no new image required if image unchanged) |
 | SSM secret value | No | `ssm put-parameter --overwrite`, then restart/redeploy BFF and/or AgentCore so they re-read it |
 | React UI only, **same** BFF URL | Yes | `npx vercel --cwd frontend` (or Vercel Git if connected) |
@@ -596,6 +605,7 @@ App Runner equivalent: console or `aws apprunner update-service` with RuntimeEnv
 **3. AgentCore code**
 
 ```powershell
+python docs/scripts/stage_agentcore_codezip.py
 agentcore.cmd deploy --dry-run --yes
 agentcore.cmd deploy --yes
 agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION "Show my shipment"

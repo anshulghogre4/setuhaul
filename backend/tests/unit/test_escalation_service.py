@@ -101,6 +101,41 @@ async def test_resolve_escalation_persists_resolution_note():
 
 
 @pytest.mark.asyncio
+async def test_escalate_exception_requires_confirmation_before_write():
+    from unittest.mock import AsyncMock
+    from app.services.escalation_service import EscalateExceptionCommand, escalate_exception
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR001",
+        email="ravi.kumar@setuhaul.com",
+        full_name="Ravi Kumar",
+        role_id="ROL001",
+        role_name=RoleName.DRIVER,
+        driver_id="DRV001",
+    )
+    mock_session = AsyncMock()
+
+    res = await escalate_exception(
+        mock_session,
+        ctx,
+        EscalateExceptionCommand(
+            shipment_id="SHP-D16-RAVI",
+            escalation_type="NO_SLOT",
+            payload={"reason": "driver asked for help"},
+            confirmed=False,
+        ),
+    )
+
+    assert res["status"] == "CONFIRMATION_REQUIRED"
+    assert res["requires_confirmation"] is True
+    # No DB call at all — not even the shipment-scope lookup — until confirmed=True.
+    assert mock_session.execute.await_count == 0
+
+
+@pytest.mark.asyncio
 async def test_get_pending_confirmations_forbids_cross_facility_operator():
     from unittest.mock import AsyncMock
     from app.services.escalation_service import get_pending_confirmations

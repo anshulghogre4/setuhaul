@@ -28,6 +28,7 @@ If two documents disagree, do not silently choose one. Prefer verified code/migr
 - Never commit secrets, tokens, shared demo credentials, service-role keys, or MCP credentials.
 - Database changes require the Supabase and Postgres best-practice skills, a migration, parity review, and relevant database tests.
 - Material behavior changes require proportional tests and documentation updates.
+- Any AgentCore Runtime deploy (`agentcore.cmd deploy`, first deploy or day-2) must be immediately preceded by `python docs/scripts/stage_agentcore_codezip.py`. `agentcore.cmd deploy` packages `agentcore/codezip/app/`, a separate copied snapshot of `backend/app/`, not the live source — editing `backend/app/**` alone does nothing for AgentCore until that snapshot is refreshed. Skipping this silently ships stale code while `agentcore.cmd deploy`/`status` still report success (confirmed live 2026-08-17: a prompt bug fix was "redeployed" successfully but kept reproducing because the codezip copy was never re-staged). No exceptions, no "it's a small change so skip it."
 
 ## Mandatory writeback and changelog
 
