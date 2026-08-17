@@ -8,6 +8,14 @@ last_updated: 2026-08-17
 
 # Wiki log
 
+## 2026-08-17 09:25 IST | fix + incident | Escalation wording regression + live DB connection-pool exhaustion
+
+- Wording regression: escalate_exception replies borrowed ETA vocabulary ("confirm updating the ETA to None") because the confirm-gate prompt explicitly compared it to `report_delay_or_update_eta`. Confirmed via direct `escalation_queue` query that zero rows were written — confirm-gate held, this was cosmetic. Made the escalate_exception description fully self-contained, forbidding ETA/timestamp language.
+- Live incident: `cancel_appointment` and `escalate_exception` both started failing with generic "system limitation" errors. Diagnosed as `EMAXCONNSESSION` — the session-mode pooler's fixed 15-connection budget was fully exhausted; confirmed by being unable to get a debug connection through the app's own `DATABASE_URL` after 5 retries. Root cause: `backend/app/db/session.py` never set explicit `pool_size`/`max_overflow`, so SQLAlchemy's defaults let one process alone claim the entire budget. Fixed: `pool_size=3, max_overflow=2`.
+- Immediate relief: connected via Supavisor's transaction-mode port (a separate pool) to inspect `pg_stat_activity`, found 12 stuck Supavisor-proxied backends (9 leaked `idle in transaction` on a bare `BEGIN;`), terminated all via `pg_terminate_backend`; verified the session-mode pooler works again.
+- Added `docs/scripts/free_stuck_db_connections.py` (dry-run default, `--confirm` to act) as a self-serve fix, wired into `docs/PRESENTATION_CHECKLIST.md` §7 Recovery.
+- ECS redeployed for both fixes (`:10` wording, `:11` pool-size). AgentCore redeploy for the pool-size fix still owed. Leak's root cause not fully diagnosed — smaller pool_size caps blast radius, doesn't prevent recurrence. Synced CHANGELOG, [[handoff]], [[current-state]], [[contradictions]].
+
 ## 2026-08-17 08:40 IST | deploy | AgentCore v7 + ECS :9 redeployed and artifact-verified for the confirm-gate
 
 - Owner ran `agentcore.cmd deploy --yes`; this agent independently verified by downloading the actual live S3 zip (`agentRuntimeVersion=7`) and grepping the extracted source — `EscalateExceptionArgs.confirmed=False` default, `CONFIRMATION_REQUIRED` gate, and sharpened prompt all present. This agent rebuilt/pushed `setuhaul-api:latest` and rolled ECS Express (task-def `:9`, canary completed cleanly, `/health/live` 200). Given the earlier 07:20 IST false-positive, this round both sides were confirmed by inspecting deployed artifact content rather than trusting CLI status alone. Still open: an actual hosted chat turn re-testing Phase B against this deploy. Synced CHANGELOG and [[handoff]]/[[current-state]].

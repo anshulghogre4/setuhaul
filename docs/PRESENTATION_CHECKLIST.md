@@ -124,6 +124,7 @@ Cast IDs: `SHP-D16-RAVI`, `SHP-D16-RACE-A/B`, `D16-SLT-RACE`, `SHP-D16-NOSLOT`, 
 | Race slot already taken | Cancel that pending first, or race a different open evening `slot_id` both can see |
 | Assistant invents a slot_id | Stop; copy an exact id from `find_feasible_slots` only |
 | `*.on.aws` NXDOMAIN on laptop | Use Vercel SPA or public DNS 8.8.8.8 |
+| Chat says "system limitation" on any write (cancel/escalate/ETA/request), or the assistant is vague/generic on a normally-working action | Database session-mode pooler may be connection-exhausted (`EMAXCONNSESSION`). Run `python docs/scripts/free_stuck_db_connections.py --confirm` from repo root (needs `DATABASE_URL` in `.env`/`.env.local`) — lists then terminates leaked/stuck app connections; safe, never touches Supabase's own internal services or your other terminal's connection. Re-test after. |
 
 ---
 

@@ -40,6 +40,19 @@ class Database:
             # SQLAlchemy connection one stable dedicated backend for its whole
             # lifetime, which is what makes prepared statements safe again.
             connect_args={"statement_cache_size": 0},
+            # Session-mode pooling caps the WHOLE database at a fixed global
+            # connection budget (Supavisor's configured pool_size, currently 15 —
+            # unlike transaction mode, which multiplexes many app connections onto
+            # few backend ones). SQLAlchemy's unset defaults (pool_size=5,
+            # max_overflow=10 => up to 15 per engine) let a single ECS task or
+            # AgentCore container exhaust that entire global budget alone — this
+            # was live-reproduced 2026-08-17 (EMAXCONNSESSION, every connection
+            # attempt failing, including ad-hoc debug scripts). Kept small and
+            # explicit so multiple concurrent ECS tasks and AgentCore Runtime
+            # containers can share the 15-connection budget instead of one process
+            # claiming all of it.
+            pool_size=3,
+            max_overflow=2,
         )
         self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False)
 
