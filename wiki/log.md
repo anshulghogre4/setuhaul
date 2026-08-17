@@ -8,6 +8,23 @@ last_updated: 2026-08-17
 
 # Wiki log
 
+## 2026-08-17 07:20 IST | deploy | AgentCore + ECS BFF redeployed for the false-escalation fix
+
+- Split deploy: owner ran `agentcore.cmd deploy --yes` (Runtime `READY` confirmed via `agentcore.cmd status`, ARN unchanged); this agent built/pushed `setuhaul-api:latest` to ECR (`118490268011.dkr.ecr.us-east-1.amazonaws.com`) and rolled ECS Express via `aws ecs update-express-gateway-service` on `service/default/setuhaul-api`. Canary rollout (5%/3min bake) completed cleanly: new task-def `default-setuhaul-api:8` is the sole PRIMARY deployment, old `:7` fully drained, `/health/live` 200 throughout. Still open: an actual hosted chat verification of the fix (`docs/HOSTED_SMOKE_CHAT_SCRIPT.md` §1 step 3), and cleanup of the stray `ESC-53B8A6EA0A37` escalation. Synced CHANGELOG and [[handoff]].
+
+## 2026-08-17 07:05 IST | docs | README scheduling algorithm section + Mermaid diagram
+
+- Added a `## Scheduling algorithm` section to root `README.md` explaining `find_feasible_slots` (`backend/app/scheduling/feasibility.py`) as a pure deterministic function of PostgreSQL state plus editable `backend/app/scheduling/constraints.json` policy weights, with a Mermaid flowchart tracing the exact implemented pipeline: facility-scoped candidate query → six ordered hard constraints (slot open/unoccupied, dock active/no overlapping event, dock-type match, refrigeration/weight, ETA+unload fits window, facility hours) → deterministic `rank_score` (priority + lateness×4 capped 720m + wait-after-ETA×-6 + fit-slack×1 capped 120m ± dock-match penalty) → sort → `REC-` fingerprinted options or `escalation_queue` NOSLOT → transactional `request_slot`/`reschedule_appointment` revalidation. Every node was cross-checked against current source, not inferred from names. Docs-only; no application code or policy weights changed. Synced CHANGELOG.
+- Agent/surface: Claude Code.
+
+## 2026-08-17 06:35 IST | fix | False-escalation prompt bug (context-lock line mis-firing escalate_exception)
+
+- Live hosted chat testing caught `I need help with shipment SHP-D16-RAVI.` (the standard Phase B/C/H context-lock line) creating a real `OPEN`/`HIGH` escalation (`ESC-53B8A6EA0A37`) instead of a zero-write context lock. Root cause: `prompts.py`'s escalate_exception rule treated "driver asks for help" as an independent trigger instead of gating on `NO_FEASIBLE_SLOTS`. Fixed: escalate_exception now requires an explicit escalate ask or a just-returned NO_FEASIBLE_SLOTS; naming/opening a shipment is explicitly non-escalating. Backend units 86 passed (text-only change; no deterministic test possible for LLM tool selection — live chat is the verification). **Not yet redeployed**; stray escalation record not yet cleaned up. Updated the runbook (Phase B1), driver chat script (row A), hosted smoke script (§1), and contradictions ledger. Synced CHANGELOG and master-plan Living deltas (added as TODO, not struck).
+
+## 2026-08-17 06:20 IST | implementation | Ops dashboard appointment-confirm button
+
+- Added `GET /api/v1/operations/pending-confirmations` (facility-scoped, admin can pass `facility_id`, 403 cross-facility) and wired an Ops dashboard **Pending confirmations** panel (`OpsHomes.tsx`) with a **Confirm** button calling the pre-existing `POST .../appointments/{id}/confirm` route (idempotency-keyed). Reject/expire remain REST/`/docs`-only. Backend units 86 passed (2 new); frontend build PASS. Corrected stale "Swagger-only" guidance in the runbook (Phase F4/H4), driver chat script §7, and demo-day readiness. Extended `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` §4 to cover this button hosted — unverified there so far, same as the 05:35 IST infra fixes. Master plan Living deltas updated; Sprint 3 gate unchanged, Sprint 4 gate still OPEN. Synced CHANGELOG and [[handoff]]/[[current-state]].
+
 ## 2026-08-17 06:05 IST | docs | Hosted-only smoke chat script
 
 - Authored `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` after reading the runbook, driver chat script, and presentation checklist. Targets the verification gap in the 05:35 IST entry: the four hosted fixes (event-loop entrypoint, Upstash region+batching, Supavisor session-mode pooler, resolution-note persistence) are live-verified only via `agentcore.cmd invoke` CLI, not the real hosted browser path. Script: hosted health prep, read-path smoke on the two exact previously-broken tools, ETA write path, Mark-Resolved→`get_exception_status` resolution-note round trip, multi-tool scheduling turn, and a latency check vs the 28.6s baseline. Docs-only; no hosted run performed this turn. Synced CHANGELOG and [[handoff]]/[[current-state]]/[[index]].

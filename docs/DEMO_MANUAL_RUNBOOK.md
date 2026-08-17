@@ -105,9 +105,11 @@ Optional later: Vikas (`vikas.sharma@setuhaul.com`), contention drivers `driver.
 
 After `--mode cast` reset, `D16-APT-RAVI-OLD` is **historical** (`CANCELLED` / not current). `SHP-D16-RAVI` has **no** current appointment, so Phase B can use bare `request_slot`. `APT1017` on `SHP1017` stays CONFIRMED for disambiguation.
 
+**Known bug, fixed 2026-08-17 06:35 IST, needs redeploy to take effect live:** the B1 context-lock line was mis-triggering `escalate_exception` (creating a real `OPEN`/`HIGH` escalation) because `backend/app/assistant/prompts.py`'s escalation rule matched on the bare word "help" instead of gating on NO_FEASIBLE_SLOTS or an explicit escalate ask. Fixed in code; not yet redeployed to hosted/local-restarted. If you still see B1 create an escalation, the fix hasn't reached the running process yet — that is not a new bug. A stray escalation `ESC-53B8A6EA0A37` for `SHP-D16-RAVI` already exists in `FAC-JAI-01` from this — expect an extra row in Phase F's escalation list until it's resolved or ignored.
+
 | Step | Type exactly | Expect |
 |---|---|---|
-| B1 | `I need help with shipment SHP-D16-RAVI.` | Locks context to demo hero shipment |
+| B1 | `I need help with shipment SHP-D16-RAVI.` | Locks context to demo hero shipment. **Zero writes** — must not call `escalate_exception` or any other write tool. |
 | B2 | `Show feasible slots after 6 PM.` | `find_feasible_slots` → ranked options, **DISPLAYED_NOT_RESERVED**, includes `REC-…` / policy version if shown |
 | B3 | Copy one exact `slot_id` from the reply (do not invent) | Keep it for B4 |
 | B4 | `Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.` | `request_slot` → `PENDING_CONFIRMATION` **or** conflict refresh with new options |

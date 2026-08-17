@@ -18,7 +18,7 @@ Passwords stay in gitignored `POC_TEAM_ACCOUNTS.local.md` only.
 
 | # | Type this | Expected tools / outcome |
 |---|---|---|
-| A | `I need help with shipment SHP-D16-RAVI.` | Locks context to demo hero shipment. |
+| A | `I need help with shipment SHP-D16-RAVI.` | Locks context to demo hero shipment. **Zero writes** — must not create an escalation or any other write (see fix note below). |
 | B | `Show feasible slots after 6 PM.` | `find_feasible_slots` → ranked options labeled **not reserved**. |
 | C | `Request slot …` with an exact returned `slot_id` (or `D16-SLT-RACE`). | `request_slot` → `PENDING_CONFIRMATION` or conflict refresh. |
 | D | `Has the warehouse confirmed my new slot?` | `get_appointment_request_status` → pending ≠ confirmed. |
@@ -28,6 +28,8 @@ Passwords stay in gitignored `POC_TEAM_ACCOUNTS.local.md` only.
 | H | After cancel: `Show feasible slots after 6 PM.` | Freed slot can reappear. |
 
 Multi-browser race, Ops takeover, and CONTEND sample: see [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md) Phases C–G.
+
+**Fix note (2026-08-17 06:35 IST, needs redeploy):** row A previously mis-triggered `escalate_exception` because `prompts.py` matched the bare word "help" instead of gating on `NO_FEASIBLE_SLOTS`/an explicit escalate ask. Fixed in code; not yet redeployed. A stray `ESC-53B8A6EA0A37` escalation for `SHP-D16-RAVI` may still show up in Ops until cleared.
 
 ---
 

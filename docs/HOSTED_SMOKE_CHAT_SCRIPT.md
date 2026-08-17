@@ -1,11 +1,14 @@
 # Hosted smoke chat script (Vercel → ECS BFF → AgentCore)
 
 Purpose-built subset of [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md) for testing **only the
-hosted path**. The 2026-08-17 05:35 IST fixes (async event-loop entrypoint, Upstash migrated to
-`us-east-1` + Redis call batching, Supavisor session-mode pooler, escalation `resolution_note`
-persistence) are so far verified only via `agentcore.cmd invoke` CLI against an isolated sandbox
-driver — **not yet exercised through the real browser → Vercel → ECS BFF → AgentCore Runtime
-path**. That gap is what this script closes. See [[handoff]] / [[current-state]] for the full
+hosted path**. Three things are pending hosted browser verification: the 2026-08-17 05:35 IST
+infra fixes (async event-loop entrypoint, Upstash migrated to `us-east-1` + Redis call batching,
+Supavisor session-mode pooler, escalation `resolution_note` persistence — verified only via
+`agentcore.cmd invoke` CLI so far); the Ops **Pending confirmations** dashboard panel with a
+one-click **Confirm** button (local-verified only: backend units + frontend build); and a
+2026-08-17 06:35 IST prompt fix for a live-caught bug where the standard context-lock line
+("I need help with shipment X") mis-triggered `escalate_exception` (code fixed, not yet
+redeployed). That's the gap this script closes. See [[handoff]] / [[current-state]] for the full
 fix writeup.
 
 Hosted and local share the **same** Supabase Postgres and Upstash Redis — this is not a separate
@@ -33,10 +36,10 @@ Passwords: gitignored `POC_TEAM_ACCOUNTS.local.md` only — never paste them her
 |---|---|---|---|
 | 1 | *(after login)* Check profile rail | `USR001` / `DRV001` / `FAC-JAI-01` | Auth path healthy |
 | 2 | `Show my current shipments.` | Three actives: `SHP-D16-RACE-A`, `SHP-D16-RAVI`, `SHP1017`. No 500/503, no `DuplicatePreparedStatementError` in the reply. | `get_driver_operational_context` — the exact tool that hit the live Postgres pooler bug |
-| 3 | `I need help with shipment SHP-D16-RAVI.` | Context locks cleanly | Repeats the same tool path on a second turn (catches "fails once, retry succeeds" pooler symptoms) |
+| 3 | `I need help with shipment SHP-D16-RAVI.` | Context locks cleanly, **zero writes** | Repeats the same tool path on a second turn (catches "fails once, retry succeeds" pooler symptoms) |
 | 4 | `What is my current exception status?` | Clean status reply, no error | `get_exception_status` — the other tool that hit the bug |
 
-**Fail signal:** any 5xx, a reply that surfaces a raw exception string, or the *first* message failing while a retry succeeds (classic stale-event-loop-connection symptom).
+**Fail signal:** any 5xx, a reply that surfaces a raw exception string, or the *first* message failing while a retry succeeds (classic stale-event-loop-connection symptom). **Also fail** if step 3 creates an escalation instead of just locking context — that was a live bug (`prompts.py` matched the bare word "help") fixed 2026-08-17 06:35 IST but not yet redeployed; a stray `ESC-53B8A6EA0A37` for `SHP-D16-RAVI` may already be sitting in the Ops queue from before the fix.
 
 ---
 
@@ -70,18 +73,41 @@ clicked through end to end in the browser.
 
 ---
 
-## 4. Multi-tool-call stress (Phase B happy path — exercises several tool calls in one AgentCore session)
+## 4. Ops appointment-confirm UI (brand new — no hosted verification yet)
 
-| Step | Type exactly | Expect |
+A **Pending confirmations** panel with a one-click **Confirm** button was just added to the Ops
+dashboard (`GET /api/v1/operations/pending-confirmations` + `POST
+/api/v1/shipments/{shipment_id}/appointments/{appointment_id}/confirm`, facility-scoped,
+idempotency-keyed). Local backend units (86 passed, incl. 2 new tests) and `npm run build` pass,
+but this has **not been clicked through on the hosted URL** — it goes through the same ECS
+BFF → Postgres path the pooler fix touched, so it's worth hitting here too. **Reject still has
+no UI button** — that stays REST/`/docs`-only.
+
+**Who:** Ops — `/ops/login` → `priya.mehta@setuhaul.com` (Jaipur facility)
+
+| Step | Action | Expect |
 |---|---|---|
-| 12 | `Show feasible slots after 6 PM.` | Ranked options, **DISPLAYED_NOT_RESERVED**, `REC-…` |
-| 13 | Copy one exact `slot_id` from the reply | — |
-| 14 | `Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.` | `PENDING_CONFIRMATION` or conflict refresh with fresh options — never "confirmed" |
-| 15 | `Has the warehouse confirmed my new slot?` | Pending ≠ confirmed |
+| 12 | First create a fresh pending appointment: as Ravi, run section 5 below through `Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.` | Appointment status `PENDING_CONFIRMATION` |
+| 13 | Back in Ops, refresh the dashboard | New row appears in **Pending confirmations** for `SHP-D16-RAVI` |
+| 14 | Click **Confirm** on that row | Button shows "Confirming…", row disappears/list refreshes, no error alert |
+| 15 | Back in Ravi's chat: `Has the warehouse confirmed my new slot?` | `get_appointment_request_status` now reports **confirmed** |
+
+**Fail signal:** the row never appears (facility-scope query broken hosted), the Confirm click alerts an error, or the driver-side status still reads pending after a confirmed click.
 
 ---
 
-## 5. Timing check (Redis batching win — not yet numerically confirmed)
+## 5. Multi-tool-call stress (Phase B happy path — exercises several tool calls in one AgentCore session)
+
+| Step | Type exactly | Expect |
+|---|---|---|
+| 16 | `Show feasible slots after 6 PM.` | Ranked options, **DISPLAYED_NOT_RESERVED**, `REC-…` |
+| 17 | Copy one exact `slot_id` from the reply | — |
+| 18 | `Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.` | `PENDING_CONFIRMATION` or conflict refresh with fresh options — never "confirmed" |
+| 19 | `Has the warehouse confirmed my new slot?` | Pending ≠ confirmed (until section 4 is run against this same request) |
+
+---
+
+## 6. Timing check (Redis batching win — not yet numerically confirmed)
 
 For each chat turn above, note wall-clock reply time. Prior hosted baseline before batching:
 **28.6s** for a `list_active_shipments`-class turn (2026-08-16 21:05 IST, pre-fix). After Redis
@@ -98,6 +124,7 @@ that closes the one still-open item from the 05:35 IST fix entry.
 | Hosted read-path (event-loop/pooler fix) | ☐ PASS ☐ FAIL | |
 | Hosted write-path (ETA) | ☐ PASS ☐ FAIL | |
 | Resolution-note round trip | ☐ PASS ☐ FAIL | |
+| Ops confirm-button round trip (new, hosted-untested) | ☐ PASS ☐ FAIL | |
 | Multi-tool scheduling turn | ☐ PASS ☐ FAIL | |
 | Latency vs 28.6s baseline | ☐ Faster ☐ Same ☐ Slower ☐ Not measured | |
 | AgentCore 503 encountered | ☐ Yes (fell back to local) ☐ No | |
@@ -117,6 +144,10 @@ Show feasible slots after 6 PM.
 Request slot <PASTE_SLOT_ID> for SHP-D16-RAVI.
 Has the warehouse confirmed my new slot?
 ```
+
+(Send the last two lines once before section 4 — to create the pending appointment the Ops
+Confirm button needs — then repeat `Has the warehouse confirmed my new slot?` after clicking
+Confirm to see it flip to confirmed.)
 
 Full stress phases (race, NOSLOT, cancel/stale, CONTEND, reschedule) are unaffected by these
 hosted infra fixes — run them from [DEMO_MANUAL_RUNBOOK.md](DEMO_MANUAL_RUNBOOK.md) directly

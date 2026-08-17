@@ -2,6 +2,42 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-08-17 07:05 IST - README scheduling algorithm section + diagram
+
+- Added a new `## Scheduling algorithm` section to root `README.md` documenting `find_feasible_slots` (`backend/app/scheduling/feasibility.py`) as a pure, deterministic function of PostgreSQL state plus the editable `backend/app/scheduling/constraints.json` policy — explicit that the LLM never ranks or picks a slot.
+- Added a Mermaid flowchart tracing the exact implemented pipeline: candidate slot query (facility-scoped, `slot_end_ts > effective ETA`, `LIMIT 200`), the six ordered hard constraints (`slot OPEN`/no active appointment, dock `ACTIVE`/no overlapping event, dock-type compatibility, refrigeration/weight compatibility, ETA+unload fits the slot window, facility operating hours), the deterministic `rank_score` formula read from `constraints.json` `score_weights` (priority score, lateness × 4 capped 720m, wait-after-ETA × -6, fit slack × 1 capped 120m, ±dock-match penalty), the sort key, and the `REC-` fingerprint / `escalation_queue` NOSLOT branches, ending at the transactional `request_slot`/`reschedule_appointment` revalidation.
+- Content is docs-only and describes already-implemented Sprint 3 behavior; no application code, policy weights, or algorithm behavior changed.
+- Verification: cross-checked every diagram node against current `feasibility.py` and `constraints.json` source (read in full this turn); no application tests applicable to a documentation-only README change.
+- Agent/surface: Claude Code.
+
+## 2026-08-17 07:20 IST - Redeployed AgentCore + ECS BFF for the false-escalation prompt fix
+
+- Redeployed both hosted targets to pick up the 06:35 IST `prompts.py` fix, split by side: owner ran `agentcore.cmd deploy --yes` (AgentCore Runtime confirmed `READY`, ARN unchanged via `agentcore.cmd status`); this agent handled ECS.
+- ECS side: `docker build --platform linux/amd64 -t setuhaul-api .` from `backend/`, `docker push` to `118490268011.dkr.ecr.us-east-1.amazonaws.com/setuhaul-api:latest`, then `aws ecs update-express-gateway-service` on `arn:aws:ecs:us-east-1:118490268011:service/default/setuhaul-api`.
+- Verified: canary rollout (5% canary, 3-min bake) completed cleanly — new task-def `default-setuhaul-api:8` is the sole `PRIMARY` deployment (`rolloutState=COMPLETED`), 1/1 running, old `:7` fully drained, `GET /health/live` **200** throughout the rollout and after.
+- AWS session used: root account `118490268011`, region `us-east-1` (already authenticated in this environment; no credentials pasted or committed).
+- **Not yet verified**: an actual hosted chat turn proving the prompt fix behaves correctly live (`docs/HOSTED_SMOKE_CHAT_SCRIPT.md` §1 step 3), and the stray `ESC-53B8A6EA0A37` escalation record is still sitting unresolved in the Ops queue.
+- Agent/surface: Claude Code (ECS) + owner (AgentCore).
+
+## 2026-08-17 06:35 IST - Fixed false-escalation prompt bug caught in live driver-chat testing
+
+- Owner's live hosted chat testing (screenshots, following `DEMO_MANUAL_RUNBOOK.md` Phase A into B) caught the standard context-lock line `I need help with shipment SHP-D16-RAVI.` mis-triggering `escalate_exception` and creating a real `OPEN`/`HIGH` escalation record (`ESC-53B8A6EA0A37`, `FAC-JAI-01`) instead of just setting chat context, which Phase B1 requires to be a zero-write step.
+- Root cause: `backend/app/assistant/prompts.py`'s escalation rule ("If no feasible option is returned, use escalate_exception ... when the driver asks for help or escalation") let the LLM treat "asks for help" as an independent trigger disjoint from the "no feasible option" gate, so it matched the literal word "help" in the context-lock phrase used to open Phases B, C, and H throughout the runbook.
+- Fix: reworded the rule so `escalate_exception` only fires on (a) a just-returned `NO_FEASIBLE_SLOTS` result the driver wants raised, or (b) an explicit ask to escalate/raise-to-human/contact-operations; naming or opening a shipment is explicitly called out as context-only with no write tool call.
+- Updated `docs/DEMO_MANUAL_RUNBOOK.md` (Phase B1 + fix note), `docs/DEMO_DRIVER_CHAT_SCRIPT.md` (row A + fix note), `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` (§1 step 3 + fail signal + intro), `wiki/contradictions.md` (new Open entry), and `plans/implementation-master-plan.md` Living deltas (added as TODO, not struck — fix is code-only so far).
+- Verification: backend unit tests **86 passed** (unaffected, text-only prompt change); `python -m compileall app` PASS. This is an LLM tool-selection behavior change, so there is no deterministic unit test that can assert the fix — the actual verification is the live chat itself (same mechanism that caught the bug). **Not yet redeployed** to hosted (ECS/AgentCore) or picked up by a local restart, and the stray `ESC-53B8A6EA0A37` escalation record has not been cleaned up — both are still owner follow-ups.
+- Agent/surface: Claude Code.
+
+## 2026-08-17 06:20 IST - Ops dashboard appointment-confirm button + hosted script updated
+
+- Added `GET /api/v1/operations/pending-confirmations` (`backend/app/api/v1/routers/operations.py`, service `get_pending_confirmations` in `backend/app/services/escalation_service.py`): facility-scoped list of `PENDING_CONFIRMATION` appointments (Operator's own facility; Admin can pass `facility_id`), 403 on cross-facility access for non-admins.
+- Wired a new **Pending confirmations** panel into `frontend/src/features/operator/OpsHomes.tsx` with a **Confirm** button per row, calling the existing `POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/confirm` route with a generated idempotency key. This is a UI wire-up only — the confirm REST endpoint already existed (`backend/app/api/v1/routers/scheduling.py`); previously Ops had to use Swagger `/docs` for it. Reject/expire still have no UI button and remain REST-only.
+- Added 2 new unit tests (`backend/tests/unit/test_escalation_service.py`): facility-scope enforcement and own-facility listing. Verified: backend units **86 passed** (up from 84); frontend `npm run build` PASS.
+- Corrected the now-stale "use Swagger, no confirm button yet" guidance in `docs/DEMO_MANUAL_RUNBOOK.md` (Phase F4, F-note, H4), `docs/DEMO_DRIVER_CHAT_SCRIPT.md` (§7), and `docs/DEMO_DAY_READINESS.md`. Extended `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` with a new §4 covering the confirm-button round trip hosted, since this UI change — like the 05:35 IST infra fixes — has only been verified locally, never against the hosted ECS BFF path.
+- Updated `plans/implementation-master-plan.md` Living sprint deltas with this item (Sprint 3 gate stays struck; Sprint 4 gate stays OPEN — hosted browser verification of this button is still outstanding).
+- Not run this turn: the hosted click-through itself (that's `docs/HOSTED_SMOKE_CHAT_SCRIPT.md` §4, still pending).
+- Agent/surface: Claude Code.
+
 ## 2026-08-17 06:05 IST - Hosted-only smoke chat script authored
 
 - Read `docs/DEMO_MANUAL_RUNBOOK.md`, `docs/DEMO_DRIVER_CHAT_SCRIPT.md`, and `docs/PRESENTATION_CHECKLIST.md`, then authored `docs/HOSTED_SMOKE_CHAT_SCRIPT.md`: a hosted-only subset targeted at the gap identified in the 05:35 IST entry — the event-loop entrypoint fix, Upstash `us-east-1` migration + Redis batching, Supavisor session-mode pooler fix, and escalation `resolution_note` persistence are so far verified only via `agentcore.cmd invoke` CLI against an isolated sandbox driver, not through the real browser → Vercel → ECS BFF → AgentCore Runtime path.

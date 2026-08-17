@@ -391,6 +391,54 @@ Packages: `backend/app/assistant/` (LLM factory, `run_assistant`, tools, prompts
 
 ---
 
+## Scheduling algorithm
+
+`find_feasible_slots` (`backend/app/scheduling/feasibility.py`) is a pure, deterministic function of PostgreSQL state plus the editable policy in `backend/app/scheduling/constraints.json` (`policy_version: sprint3_constraints_v1`). The LLM never ranks or picks a slot — it only calls this tool and shows the result. Every candidate slot at the shipment's destination facility with `slot_end_ts` after the **latest authoritative ETA** (`v_latest_eta`, not chat memory) is checked against hard constraints in order; a candidate that passes all of them gets a deterministic `rank_score` from the weighted policy. Options are explicitly `DISPLAYED_NOT_RESERVED` and carry a `REC-<hash>` fingerprint (`shipment_id` + `policy_version` + ETA + option set) that `request_slot`/`reschedule_appointment` revalidate against inside the claiming transaction — a stale fingerprint returns `409 SLOT_OPTIONS_STALE` instead of booking a option the driver was no longer looking at. Zero feasible options after checking every candidate produces a reasoned `escalation_queue` entry, never an invented slot.
+
+```mermaid
+flowchart TD
+  Start["find_feasible_slots(shipment_id)"] --> Ctx["Load shipment + latest ETA (v_latest_eta)<br/>+ facility + current active appointment"]
+  Ctx --> Scope{"Scope check<br/>driver owns / operator facility / admin global"}
+  Scope -->|forbidden| Deny["403 FORBIDDEN"]
+  Scope -->|ok| Cand["Candidate slots at destination facility<br/>slot_end_ts &gt; effective ETA, ORDER BY slot_start, LIMIT 200"]
+
+  Cand --> HC
+
+  subgraph HC["Hard constraints — evaluated per candidate, in order"]
+    direction TB
+    H1["Slot status OPEN<br/>and no active appointment on it"] --> H2["Dock ACTIVE<br/>and no overlapping dock_status_event"]
+    H2 --> H3["Dock type compatible<br/>(ANY or exact match)"]
+    H3 --> H4["Refrigeration + max vehicle weight compatible"]
+    H4 --> H5["ETA + expected_unload_min fits<br/>inside the slot window"]
+    H5 --> H6["Slot inside facility open/close hours<br/>(facility timezone)"]
+  end
+
+  HC -->|fails any check| Reject["InfeasibleSlotReason<br/>failure_code (ETA_AFTER_SLOT_WINDOW, FACILITY_CLOSED,<br/>DOCK_UNAVAILABLE, DOCK_INCOMPATIBLE_*, …) — up to 20 kept"]
+  HC -->|passes all checks| Rank
+
+  subgraph Rank["Deterministic rank_score — constraints.json score_weights"]
+    direction TB
+    R1["+ priority_scores[priority_code]<br/>CRITICAL 4000 · HIGH 3000 · NORMAL 2000 · LOW 1000"]
+    R2["+ min(lateness_minutes, 720) × 4"]
+    R3["+ wait_after_eta_minutes × -6"]
+    R4["+ min(fit_slack_minutes, 120) × 1"]
+    R5["+ 0 if exact dock match, else -25"]
+  end
+
+  Rank --> Sort["Sort all evaluated options:<br/>-rank_score → priority rank → wait time →<br/>disruption score → slot_start_ts → slot_id"]
+  Sort --> Any{"Any options survived?"}
+  Any -->|yes| Options["Top-N options returned<br/>DISPLAYED_NOT_RESERVED + REC-&lt;hash&gt; recommendation_id"]
+  Any -->|no| Escalate["escalation_queue NOSLOT<br/>policy_version + checked_constraints + blocking_reasons<br/>→ Ops takeover queue, zero writes, zero invented slots"]
+
+  Options --> Claim["request_slot / reschedule_appointment<br/>revalidates REC- + row locks inside one transaction"]
+  Claim -->|fingerprint stale or slot taken| StaleOut["409 SLOT_OPTIONS_STALE /<br/>SLOT_CONFLICT_REFRESH_REQUIRED + fresh options"]
+  Claim -->|still valid| Won["PENDING_CONFIRMATION<br/>unique-index guarded"]
+```
+
+Source of truth for the weights/constraints themselves: [`backend/app/scheduling/constraints.json`](backend/app/scheduling/constraints.json). Implementation: [`backend/app/scheduling/feasibility.py`](backend/app/scheduling/feasibility.py) (ranking) and [`backend/app/scheduling/allocation.py`](backend/app/scheduling/allocation.py) (transactional claim).
+
+---
+
 ## Technology stack
 
 | Layer | Technology |
