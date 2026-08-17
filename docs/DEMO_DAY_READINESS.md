@@ -40,7 +40,7 @@ Passwords: Driver / Ops / Admin buckets in gitignored `POC_TEAM_ACCOUNTS.local.m
 7. “Has warehouse confirmed?” → pending ≠ confirmed (`get_appointment_request_status`).
 8. **Two browsers:** Ravi on `SHP-D16-RACE-A` and Amit on `SHP-D16-RACE-B` both request **`D16-SLT-RACE`** → one winner, one conflict refresh.
 9. **Vikas:** ask slots for **`SHP-D16-NOSLOT`** → zero options + escalation language (no invented slot).
-10. **Ops login** → escalations list; confirm/reject pending (REST/ops path).
+10. **Ops login** → escalations list; **confirm** pending via the dashboard **Pending confirmations** panel button; reject still REST/ops path (`/docs`).
 11. Cancel a pending request as driver → slot frees for another search.
 
 API already verified: Ravi `SHP-D16-RAVI` feasible **200** with options; Vikas `SHP-D16-NOSLOT` **200** with `options=[]` + `escalation`; cross-driver IDOR **403**. Sprint 3 gate live cast smoke (2026-08-12): options→request→status→stale reject→cancel frees; NOSLOT escalation persisted; ops reject/confirm PASS. Automated 10-driver / 4-slot load PASS (4 winners / 6 conflicts / zero double-books).
@@ -70,7 +70,7 @@ API already verified: Ravi `SHP-D16-RAVI` feasible **200** with options; Vikas `
 | 3 Revised arrival / uncertainty | **SHOW** | Confirm ETA flow |
 | 4 Feasibility | **SHOW** | `feasibility.py` + constraints.json |
 | 5 Available while considering | **SHOW** | Displayed not reserved; claim in transaction |
-| 6 Hold / request / confirmed | **SHOW** | Pending via request; confirm/reject/expire ops paths implemented |
+| 6 Hold / request / confirmed | **SHOW** | Pending via request; confirm has an Ops dashboard button, reject/expire remain REST-only ops paths |
 | 7 Simultaneous scarce capacity | **SHOW** | Ranking + unique indexes + race cast + 10×4 load |
 | 8 Facility-wide recalculation | **NOT YET** | Optional extension (deferred design note in master plan) |
 | 9 Stale / cancel / duplicates | **SHOW** | Dedupe + cancel frees capacity + stale recommendation rejection |

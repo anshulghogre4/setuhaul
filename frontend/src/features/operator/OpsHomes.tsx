@@ -32,6 +32,18 @@ type EscalationItem = {
   payload?: Record<string, any>
 }
 
+type PendingConfirmationItem = {
+  appointment_id: string
+  shipment_id: string
+  driver_id: string | null
+  order_reference: string | null
+  facility_id: string
+  dock_id: string | null
+  slot_start_ts: string | null
+  slot_end_ts: string | null
+  booked_at: string | null
+}
+
 function extractEscalationReason(item: EscalationItem): string {
   const p = item.payload || {}
   if (p.reason) return String(p.reason)
@@ -106,6 +118,7 @@ function OpsBody({
   const [summary, setSummary] = useState<Summary | null>(null)
   const [exceptions, setExceptions] = useState<ExceptionItem[]>([])
   const [escalations, setEscalations] = useState<EscalationItem[]>([])
+  const [pendingConfirmations, setPendingConfirmations] = useState<PendingConfirmationItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -114,6 +127,7 @@ function OpsBody({
   const [selectedEscalation, setSelectedEscalation] = useState<EscalationItem | null>(null)
   const [decisionNote, setDecisionNote] = useState('')
   const [submittingDecision, setSubmittingDecision] = useState(false)
+  const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -129,12 +143,39 @@ function OpsBody({
       setEscalations(queue.data.items || [])
       setAsOf(sum.data.as_of)
       setError(null)
+      // Pending confirmations require an explicit facility scope (own facility for
+      // an Operator, or a chosen one for global/Admin) — skip the call rather than
+      // let the backend 403 when a global user hasn't picked a facility yet.
+      if (facilityId || !global) {
+        const pending = await apiGet<{ as_of: string; items: PendingConfirmationItem[] }>(
+          `/api/v1/operations/pending-confirmations${q}`,
+        )
+        setPendingConfirmations(pending.data.items || [])
+      } else {
+        setPendingConfirmations([])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
   }, [facilityId, global])
+
+  async function handleConfirmAppointment(item: PendingConfirmationItem) {
+    setConfirmingAppointmentId(item.appointment_id)
+    try {
+      await apiPost(
+        `/api/v1/shipments/${item.shipment_id}/appointments/${item.appointment_id}/confirm`,
+        { warehouse_confirmation_ref: `WH-OPS-${item.appointment_id}` },
+        { idempotencyKey: `confirm-${item.appointment_id}-${Date.now()}` },
+      )
+      void load()
+    } catch (err) {
+      alert('Failed to confirm appointment: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setConfirmingAppointmentId(null)
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -285,6 +326,68 @@ function OpsBody({
           )}
         </article>
       </div>
+
+      <article className="ops-status-panel exception-panel">
+        <div className="card-heading">
+          <div>
+            <h2>Pending confirmations</h2>
+          </div>
+          <span className="chip secondary">{pendingConfirmations.length} awaiting</span>
+        </div>
+        {global && !facilityId ? (
+          <div className="empty-state">
+            <strong>Pick a facility</strong>
+            <span>Global scope needs a specific facility to list pending confirmations for.</span>
+          </div>
+        ) : pendingConfirmations.length === 0 ? (
+          <div className="empty-state">
+            <strong>Nothing waiting</strong>
+            <span>New driver-booked appointments needing warehouse confirmation appear here.</span>
+          </div>
+        ) : (
+          <ul className="exception-list">
+            {pendingConfirmations.slice(0, 8).map((item) => (
+              <li
+                key={item.appointment_id}
+                style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                  <div>
+                    <strong>{item.shipment_id}</strong>
+                    <span style={{ marginLeft: '10px' }}>{item.dock_id || 'Dock TBD'}</span>
+                    <small style={{ display: 'block', marginTop: '2px' }}>
+                      Slot {formatTimestamp(item.slot_start_ts)} - {formatTimestamp(item.slot_end_ts)}
+                    </small>
+                  </div>
+                  <div className="exception-meta" style={{ textAlign: 'right' }}>
+                    {item.driver_id ? <span>{item.driver_id}</span> : null}
+                    <span>Booked {formatTimestamp(item.booked_at)}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      fontSize: '0.8rem',
+                      padding: '6px 14px',
+                      background: 'var(--accent)',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                    onClick={() => void handleConfirmAppointment(item)}
+                    disabled={confirmingAppointmentId === item.appointment_id}
+                  >
+                    {confirmingAppointmentId === item.appointment_id ? 'Confirming…' : 'Confirm'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
 
       <article className="ops-status-panel exception-panel">
         <div className="card-heading">

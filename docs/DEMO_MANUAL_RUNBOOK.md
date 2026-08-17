@@ -199,10 +199,10 @@ After `--mode cast` reset, `D16-APT-RAVI-OLD` is **historical** (`CANCELLED` / n
 | F1 | Open Operations dashboard | Facility-scoped summary loads |
 | F2 | Click **Refresh** | Freshness timestamp updates |
 | F3 | Find **escalation / exception** list | Open NOSLOT escalation from Phase D visible (or open exceptions) |
-| F4 | Confirm path: use API `/docs` or available ops UI to **confirm** a `PENDING_CONFIRMATION` with warehouse ref | Status → `CONFIRMED`; never label conflict as confirmed |
-| F5 | Optional reject: reject another pending with reason | Status → `REJECTED`; slot freed |
+| F4 | Find the new **Pending confirmations** panel on the Ops dashboard; click **Confirm** on a `PENDING_CONFIRMATION` row | Card disappears/refreshes; appointment status → `CONFIRMED`; never label conflict as confirmed |
+| F5 | Optional reject: reject another pending via API `/docs` (no reject button in the UI yet) with reason | Status → `REJECTED`; slot freed |
 
-**Note:** Warehouse **confirm/reject/expire** are ops/admin REST paths (not Driver chat tools). Use Swagger at `/docs` with an Ops bearer token if the UI has no confirm button yet.
+**Note:** Warehouse **confirm** now has an Ops dashboard button (`GET /api/v1/operations/pending-confirmations` + `POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/confirm`, facility-scoped, idempotency-keyed). **Reject/expire** remain ops/admin REST-only (not Driver chat tools) — use Swagger at `/docs` with an Ops bearer token for those.
 
 **Pass / fail**
 
@@ -249,7 +249,7 @@ shipments at `FAC-GGN-01` — a facility the cast never uses — with `SHP-RS-PE
 | H1 | `I need help with shipment SHP-RS-PENDING.` | Context locked |
 | H2 | `Show feasible slots.` | Ranked options, **DISPLAYED_NOT_RESERVED** |
 | H3 | `Reschedule my appointment to slot <PASTE_SLOT_ID>.` | Old appointment `CANCELLED`, new `PENDING_CONFIRMATION`, linked via `replaced_appointment_id` |
-| H4 | Repeat H1–H3 for `SHP-RS-CONFIRMED` | Moves a **confirmed** booking, not just a pending one — this appointment was confirmed by an admin script identity during seeding; confirming through the UI is not available today for any shipment (REST/Swagger-only, same as Phase F) |
+| H4 | Repeat H1–H3 for `SHP-RS-CONFIRMED` | Moves a **confirmed** booking, not just a pending one — this appointment was confirmed by an admin script identity during seeding; confirming a fresh pending through the UI is now possible via the Ops dashboard **Pending confirmations** panel (Phase F4) for shipments at an Ops user's facility |
 | H5 | `Find feasible slots for SHP-RS-NOSLOT.` | **Zero options**; escalation language; no invented slot (`FAC-GGN-01` has no `HEAVY` dock) |
 
 **Pass / fail**

@@ -253,6 +253,34 @@ async def resolve_escalation(
     return dict(row)
 
 
+async def get_pending_confirmations(
+    session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
+) -> dict[str, Any]:
+    scope = facility_id if ctx.is_admin else ctx.facility_id
+    if not scope or (not ctx.is_admin and facility_id and facility_id != scope):
+        raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT a.appointment_id, a.shipment_id, s.driver_id, s.order_reference,
+                       sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
+                       a.booked_at
+                FROM public.appointments a
+                JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                WHERE a.appointment_status = 'PENDING_CONFIRMATION'
+                  AND sl.facility_id = :facility_id
+                ORDER BY a.booked_at ASC
+                LIMIT 100
+                """
+            ),
+            {"facility_id": scope},
+        )
+    ).mappings().all()
+    return {"as_of": _as_of(), "source": "postgresql", "facility_id": scope, "items": [dict(r) for r in rows]}
+
+
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
     scope = facility_id if ctx.is_admin else ctx.facility_id
     if not scope or (not ctx.is_admin and facility_id and facility_id != scope):

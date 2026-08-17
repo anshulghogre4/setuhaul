@@ -101,7 +101,7 @@ Ops **confirm / reject / expire** are ops/admin REST (not Driver chat). Use [DEM
 1. Logout from driver portal.
 2. Login at `/ops/login` as `priya.mehta@setuhaul.com`.
 3. **Refresh** → matching exception/ETA and escalation list.
-4. Confirm or reject pending via API `/docs` if UI has no button yet.
+4. **Confirm** a pending appointment via the **Pending confirmations** panel button; reject via API `/docs` (no reject button yet).
 
 ---
 

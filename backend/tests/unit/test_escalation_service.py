@@ -98,3 +98,69 @@ async def test_resolve_escalation_persists_resolution_note():
     # First call is the escalation_queue update; its bound params must carry the note.
     first_call_params = mock_session.execute.call_args_list[0].args[1]
     assert first_call_params["note"] == "Slot manually confirmed at dock"
+
+
+@pytest.mark.asyncio
+async def test_get_pending_confirmations_forbids_cross_facility_operator():
+    from unittest.mock import AsyncMock
+    from app.services.escalation_service import get_pending_confirmations
+    from app.core.execution_context import ExecutionContext, RoleName
+    from app.core.errors import AppError
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR-OPS-TEST",
+        email="ops@setuhaul.com",
+        full_name="Ops User",
+        role_id="ROL002",
+        role_name=RoleName.OPERATIONS_EXECUTIVE,
+        facility_id="FAC-GGN-01",
+    )
+    mock_session = AsyncMock()
+
+    with pytest.raises(AppError) as exc_info:
+        await get_pending_confirmations(mock_session, ctx, "FAC-JAI-01")
+    assert exc_info.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_get_pending_confirmations_scopes_to_own_facility():
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import get_pending_confirmations
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR-OPS-TEST",
+        email="ops@setuhaul.com",
+        full_name="Ops User",
+        role_id="ROL002",
+        role_name=RoleName.OPERATIONS_EXECUTIVE,
+        facility_id="FAC-GGN-01",
+    )
+    mock_rows = MagicMock()
+    mock_rows.mappings.return_value.all.return_value = [
+        {
+            "appointment_id": "APT-1",
+            "shipment_id": "SHP-RS-PENDING",
+            "driver_id": "DRV-RS-01",
+            "order_reference": "ORD-RS-001",
+            "facility_id": "FAC-GGN-01",
+            "dock_id": "DOCK-GGN-D2",
+            "slot_start_ts": "2026-08-16T09:00:00+05:30",
+            "slot_end_ts": "2026-08-16T09:30:00+05:30",
+            "booked_at": "2026-08-16T21:25:23+00:00",
+        }
+    ]
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_rows
+
+    res = await get_pending_confirmations(mock_session, ctx, None)
+
+    assert res["facility_id"] == "FAC-GGN-01"
+    assert len(res["items"]) == 1
+    assert res["items"][0]["appointment_id"] == "APT-1"
+    params = mock_session.execute.call_args.args[1]
+    assert params["facility_id"] == "FAC-GGN-01"

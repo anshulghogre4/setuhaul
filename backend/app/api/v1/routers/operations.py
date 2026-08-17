@@ -15,6 +15,7 @@ from app.services.escalation_service import (
     escalate_exception,
     get_dock_status,
     get_exception_queue,
+    get_pending_confirmations,
     get_queue_status,
     resolve_escalation,
 )
@@ -88,6 +89,16 @@ async def queue_status(
     facility_id: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
     return ok(await get_queue_status(session, ctx, facility_id), get_request_id(request))
+
+
+@router.get("/operations/pending-confirmations")
+async def pending_confirmations(
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    facility_id: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    return ok(await get_pending_confirmations(session, ctx, facility_id), get_request_id(request))
 
 
 @router.post("/operations/escalate")
