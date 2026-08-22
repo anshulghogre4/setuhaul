@@ -1,0 +1,2308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Console Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from ../00-foundations/color.md and
+   ../00-foundations/typography.md. Same construction as the
+   other five mockups (U96).
+   ============================================================ */
+:root {
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+
+  --blue-50:#EFF6FF;  --blue-500:#3B82F6; --blue-600:#2563EB;
+  --amber-50:#FFFBEB; --amber-500:#F59E0B; --amber-600:#D97706; --amber-700:#B45309;
+  --green-50:#ECFDF5; --green-600:#059669; --green-700:#047857;
+  --red-50:#FEF2F2;   --red-500:#EF4444;  --red-600:#DC2626; --red-700:#B91C1C;
+
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+
+  --feedback-warning-bg:var(--amber-50); --feedback-warning-text:var(--amber-700); --feedback-warning-border:var(--amber-500);
+  --feedback-danger-bg:var(--red-50);    --feedback-danger-text:var(--red-700);    --feedback-danger-border:var(--red-500);
+
+  --board-bg:var(--neutral-200);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono',Consolas,monospace;
+
+  --r-sm:4px; --r-md:6px; --r-lg:8px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface-base:var(--neutral-950);
+    --surface-raised:var(--neutral-900);
+    --surface-hover:var(--neutral-800);
+    --text-primary:var(--neutral-50);
+    --text-secondary:var(--neutral-300);
+    --text-tertiary:var(--neutral-400);
+    --border-subtle:var(--neutral-800);
+    --border-default:var(--neutral-700);
+    --feedback-warning-bg:#3a2c10; --feedback-warning-text:#FBBF24; --feedback-warning-border:var(--amber-500);
+    --feedback-danger-bg:#3f1414;  --feedback-danger-text:#F87171;  --feedback-danger-border:var(--red-500);
+    --board-bg:var(--neutral-950);
+    --board-ink:var(--neutral-50);
+    --board-muted:var(--neutral-400);
+  }
+}
+:root[data-theme="dark"]{
+  --surface-base:var(--neutral-950);
+  --surface-raised:var(--neutral-900);
+  --surface-hover:var(--neutral-800);
+  --text-primary:var(--neutral-50);
+  --text-secondary:var(--neutral-300);
+  --text-tertiary:var(--neutral-400);
+  --border-subtle:var(--neutral-800);
+  --border-default:var(--neutral-700);
+  --feedback-warning-bg:#3a2c10; --feedback-warning-text:#FBBF24; --feedback-warning-border:var(--amber-500);
+  --feedback-danger-bg:#3f1414;  --feedback-danger-text:#F87171;  --feedback-danger-border:var(--red-500);
+  --board-bg:var(--neutral-950);
+  --board-ink:var(--neutral-50);
+  --board-muted:var(--neutral-400);
+}
+
+*{box-sizing:border-box;}
+body{ margin:0; background:var(--board-bg); color:var(--board-ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased; }
+
+.board-head{ max-width:1120px; margin:0 auto; padding:40px 24px 8px; }
+.board-head h1{ font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700; margin:0 0 4px; }
+.board-head p{ margin:0; color:var(--board-muted); font-size:14px; max-width:70ch; line-height:1.55; }
+.eyebrow{ font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--board-muted); margin:0 0 4px; }
+.screen-label{ max-width:1120px; margin:32px auto 8px; padding:0 24px; font-size:13px; font-weight:600; color:var(--board-muted); }
+.screen-label span{ color:var(--board-ink); font-weight:700; }
+
+/* comfortable density: 44px rows, 12/16 cell padding — spacing-and-layout.md */
+.frame{
+  max-width:1120px; margin:0 auto 48px; border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.10);
+  border:1px solid var(--border-subtle);
+  background:var(--surface-base); font-size:14px;
+}
+.topbar{ height:56px; display:flex; align-items:center; gap:4px; padding:0 20px; background:var(--surface-raised); border-bottom:1px solid var(--border-subtle); }
+.topbar .brand{ font-weight:700; font-size:16px; margin-right:20px; }
+.tab{ padding:8px 12px; font-size:13px; font-weight:600; color:var(--text-tertiary); border-radius:var(--r-sm); }
+.tab.active{ background:var(--surface-hover); color:var(--blue-600); }
+.topbar-icons{ margin-left:auto; display:flex; gap:16px; color:var(--text-tertiary); font-size:20px; align-items:center; line-height:1; }
+.avatar{ width:32px; height:32px; border-radius:50%; background:var(--blue-600); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+
+.body{ display:grid; grid-template-columns:56px 1fr; }
+.rail{ background:var(--surface-raised); border-right:1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; gap:20px; padding-top:16px; color:var(--text-tertiary); font-size:20px; }
+.rail .active{ color:var(--blue-600); }
+/* DEVIATION FIX: was 20px. spacing-and-layout.md's content-padding table
+   specifies 24px for `comfortable`, which admin runs. */
+.main{ padding:24px; }
+
+.toolbar{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+.filter{ font-size:12px; color:var(--text-tertiary); border:1px solid var(--border-default); border-radius:var(--r-sm); padding:8px 12px; }
+.searchbar{ flex:1; font-size:13px; color:var(--text-tertiary); background:var(--surface-hover); border-radius:var(--r-sm); padding:8px 12px; }
+.btn{ font-size:13px; font-weight:600; padding:8px 16px; border-radius:var(--r-sm); border:1px solid transparent; }
+.btn-primary{ background:var(--blue-600); color:#fff; }
+.btn-neutral{ background:var(--surface-raised); border-color:var(--border-default); color:var(--text-primary); }
+
+table.a{ width:100%; border-collapse:collapse; font-size:14px; }
+table.a th{ text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); padding:12px 16px; border-bottom:1px solid var(--border-subtle); }
+table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); height:44px; vertical-align:middle; }
+.mono{ font-family:var(--font-data); }
+.status-active{ color:var(--green-700); font-weight:600; }
+.status-inactive{ color:var(--text-tertiary); }
+.overflow{ color:var(--text-tertiary); font-weight:700; }
+
+.policy-header{ font-size:13px; color:var(--text-tertiary); margin-bottom:20px; padding-bottom:12px; border-bottom:1px solid var(--border-subtle); }
+.weight-row{ display:flex; align-items:center; gap:12px; padding:8px 0; }
+.weight-row .label{ width:220px; font-size:14px; font-weight:600; }
+.weight-row input{
+  width:80px; height:36px; border:1px solid var(--border-default); border-radius:var(--r-sm);
+  font-family:var(--font-data); font-size:14px; text-align:right; padding:0 8px; color:var(--text-primary); background:var(--surface-raised);
+}
+.weight-row .unit{ font-size:12px; color:var(--text-tertiary); }
+
+.dangerbox{
+  margin:16px 0; padding:16px; background:var(--feedback-warning-bg); border:1px solid var(--feedback-warning-border);
+  border-radius:var(--r-md);
+}
+.dangerbox .head{ font-weight:700; color:var(--feedback-warning-text); font-size:13px; margin-bottom:4px; }
+.dangerbox p{ font-size:13px; color:var(--text-secondary); margin:0 0 12px; }
+
+.simresult{ background:var(--surface-hover); border-radius:var(--r-md); padding:20px; margin-top:16px; }
+.simresult .headline{ font-size:20px; font-weight:700; margin-bottom:12px; }
+.simresult .case{ font-size:13px; color:var(--text-secondary); padding:6px 0; border-top:1px solid var(--border-subtle); }
+</style>
+
+<style>
+/* ============================================================
+   ADDED — full state gallery (Part B).
+   Nothing above this line was rewritten. The token block above is
+   preserved verbatim except the documented 20px→24px padding fix.
+   Every value below traces to ../00-foundations/. Token tiers per
+   tokens.md (U85): primitives are consumed only through the
+   functional tokens declared beneath them.
+   ============================================================ */
+:root{
+  /* primitives present in color.md but absent from the block above */
+  --blue-400:#60A5FA;
+  --amber-400:#FBBF24;  --amber-900:#78350F;
+  --green-400:#34D399;  --green-500:#10B981;  --green-900:#064E3B;
+  --red-400:#F87171;    --red-900:#7F1D1D;
+
+  /* functional — color.md */
+  --surface-overlay:var(--neutral-0);
+  --surface-sunken:var(--neutral-100);
+  --text-disabled:var(--neutral-400);
+  --border-strong:var(--neutral-400);
+  --border-focus:var(--blue-600);
+  --interactive-disabled-bg:var(--neutral-200);
+  --interactive-disabled-text:var(--neutral-400);
+  --feedback-success-bg:var(--green-50);
+  --feedback-success-text:var(--green-700);
+  --feedback-success-border:var(--green-600);
+  /* DEVIATION FIX: the preserved block sets this to red-500 in BOTH themes.
+     color.md's feedback table is red-600 light / red-500 dark. */
+  --feedback-danger-border:var(--red-600);
+  --status-active:var(--green-700);
+
+  /* elevation-and-depth.md */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,.10);
+  --shadow-lg:0 12px 32px rgba(15,23,42,.14);
+  --scrim:rgba(15,23,42,.5);
+
+  /* spacing-and-layout.md */
+  --r-xl:12px;
+  --skeleton:var(--neutral-200);
+
+  --chev:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface-overlay:var(--neutral-800);
+    --surface-sunken:var(--neutral-950);
+    --text-disabled:var(--neutral-600);
+    --border-strong:var(--neutral-600);
+    --border-focus:var(--blue-400);
+    --interactive-disabled-bg:var(--neutral-800);
+    --interactive-disabled-text:var(--neutral-600);
+    --feedback-success-bg:#0D252E; /* green-900 @25% over neutral-900 */
+    --feedback-success-text:var(--green-400);
+    --feedback-success-border:var(--green-500);
+    --feedback-danger-border:var(--red-500);
+    --status-active:var(--green-400);
+    --shadow-sm:none;
+    --shadow-md:0 4px 12px rgba(0,0,0,.40);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+    --scrim:rgba(0,0,0,.65);
+    --skeleton:var(--neutral-700);
+    --chev:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+}
+:root[data-theme="dark"]{
+  --surface-overlay:var(--neutral-800);
+  --surface-sunken:var(--neutral-950);
+  --text-disabled:var(--neutral-600);
+  --border-strong:var(--neutral-600);
+  --border-focus:var(--blue-400);
+  --interactive-disabled-bg:var(--neutral-800);
+  --interactive-disabled-text:var(--neutral-600);
+  --feedback-success-bg:#0D252E;
+  --feedback-success-text:var(--green-400);
+  --feedback-success-border:var(--green-500);
+  --feedback-danger-border:var(--red-500);
+  --status-active:var(--green-400);
+  --shadow-sm:none;
+  --shadow-md:0 4px 12px rgba(0,0,0,.40);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  --scrim:rgba(0,0,0,.65);
+  --skeleton:var(--neutral-700);
+  --chev:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* ---------- utilities ---------- */
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+.tnum{font-variant-numeric:tabular-nums;}
+.screen-note{max-width:1120px;margin:0 auto 12px;padding:0 24px;font-size:13px;line-height:1.55;color:var(--board-muted);}
+.screen-note code{font-family:var(--font-data);font-size:12px;}
+.stack{max-width:1120px;margin:0 auto 48px;padding:0 24px;}
+
+/* ---------- iconography.md: Lucide, stroke 2 at every size ---------- */
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.ic-xs{width:14px;height:14px;}
+.ic-md{width:20px;height:20px;}
+.ic-lg{width:24px;height:24px;}
+.ic-xl{width:32px;height:32px;}
+
+/* ---------- app shell (spacing-and-layout.md, U39/U101) ---------- */
+.tabs{display:flex;gap:4px;}
+.tab2{appearance:none;border:0;background:transparent;font:600 13px/1 var(--font-ui);color:var(--text-tertiary);
+      padding:8px 12px;height:44px;border-radius:var(--r-sm);cursor:pointer;}
+.tab2[aria-selected="true"]{background:var(--surface-hover);color:var(--blue-600);}
+.tbicons{margin-left:auto;display:flex;align-items:center;gap:16px;}
+.ibtn{appearance:none;background:transparent;border:0;color:var(--text-tertiary);width:44px;height:44px;
+      display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-md);cursor:pointer;}
+.ibtn.is-hover{background:var(--surface-hover);color:var(--text-secondary);}
+.rail2{background:var(--surface-raised);border-right:1px solid var(--border-subtle);
+       display:flex;flex-direction:column;align-items:stretch;gap:20px;padding-top:16px;}
+.railitem{position:relative;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);}
+.railitem[aria-current="page"]{color:var(--blue-600);}
+.railitem[aria-current="page"]::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--blue-600);}
+.main2{padding:24px;min-height:280px;}
+.pagetitle{font:600 24px/1.33 var(--font-ui);letter-spacing:-.01em;margin:0 0 16px;color:var(--text-primary);}
+
+/* ---------- toolbar ---------- */
+.tb{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.pill{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;font:400 12px/1 var(--font-ui);
+      color:var(--text-tertiary);background:var(--surface-raised);border:1px solid var(--border-default);
+      border-radius:var(--r-sm);cursor:pointer;}
+.srch{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
+      background:var(--surface-hover);border-radius:var(--r-sm);color:var(--text-tertiary);font-size:13px;}
+.srch input{border:0;background:transparent;font:400 13px/1 var(--font-ui);color:var(--text-primary);width:100%;outline:none;}
+.popwrap{position:relative;}
+
+/* ---------- buttons (components.md §1) ---------- */
+.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;min-width:80px;
+   font:600 13px/1 var(--font-ui);border:1px solid transparent;border-radius:var(--r-md);
+   background:transparent;color:var(--text-primary);cursor:pointer;}
+.b-con{background:var(--blue-600);color:#fff;}
+.b-neu{background:var(--surface-raised);border-color:var(--border-default);color:var(--text-primary);}
+.b-neu.is-hover{background:var(--surface-hover);}
+.b-des{background:var(--red-600);color:#fff;}
+.b-cau{background:var(--feedback-warning-bg);border-color:var(--feedback-warning-border);color:var(--feedback-warning-text);}
+.b:disabled{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text);border-color:transparent;cursor:not-allowed;}
+.b-link{min-width:0;height:auto;padding:0;background:transparent;border:0;color:var(--text-secondary);
+        font:600 13px/1.4 var(--font-ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+.is-kbfocus{box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus);}
+.footer-actions{display:flex;justify-content:flex-end;align-items:center;gap:16px;margin-top:24px;}
+
+/* ---------- tables (components.md §6, comfortable density) ---------- */
+.tablecard{background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-lg);
+           box-shadow:var(--shadow-sm);overflow:hidden;}
+table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:14px;table-layout:fixed;}
+table.tbl th{position:sticky;top:0;background:var(--surface-raised);text-align:left;
+             font:600 12px/1.33 var(--font-ui);letter-spacing:.04em;text-transform:uppercase;
+             color:var(--text-tertiary);padding:12px 16px;border-bottom:1px solid var(--border-subtle);}
+table.tbl td{padding:12px 16px;height:44px;border-bottom:1px solid var(--border-subtle);
+             color:var(--text-primary);vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+table.tbl tbody tr:last-child td{border-bottom:0;}
+tr.is-hover td{background:var(--surface-hover);}
+tr.is-focus{box-shadow:inset 0 0 0 2px var(--surface-raised),inset 0 0 0 4px var(--border-focus);}
+.enum{font-family:var(--font-data);font-weight:500;font-size:13px;color:var(--text-primary);}
+.val{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-data);font-variant-numeric:tabular-nums;}
+.st-on{color:var(--status-active);font-weight:600;}
+.st-off{color:var(--text-tertiary);}
+.actor-sys{color:var(--text-tertiary);}
+.rowactions{display:flex;gap:8px;justify-content:flex-end;}
+.badge-invited{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-sm);
+               font:600 12px/1.33 var(--font-ui);background:var(--feedback-warning-bg);
+               color:var(--feedback-warning-text);border:1px solid var(--feedback-warning-border);white-space:nowrap;}
+
+/* ---------- floating layer (elevation tier 3) ---------- */
+.menu{position:absolute;z-index:400;background:var(--surface-overlay);border:1px solid var(--border-subtle);
+      border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:4px;min-width:200px;}
+.menu button,.menu label{display:flex;width:100%;align-items:center;gap:8px;height:44px;padding:0 12px;
+      font:400 13px/1 var(--font-ui);color:var(--text-primary);background:transparent;border:0;
+      border-radius:var(--r-sm);text-align:left;cursor:pointer;}
+.menu button.is-hover{background:var(--surface-hover);}
+.menu .sep{height:1px;background:var(--border-subtle);margin:4px 0;}
+.menu .danger{color:var(--feedback-danger-text);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .menu{border-color:var(--border-default);}}
+:root[data-theme="dark"] .menu{border-color:var(--border-default);}
+
+/* ---------- overlay layer (tier 4) ---------- */
+.scrim{background:var(--scrim);display:flex;justify-content:center;padding:40px 24px;min-height:320px;}
+.modal{width:640px;max-width:100%;background:var(--surface-overlay);border:1px solid transparent;
+       border-radius:var(--r-xl);box-shadow:var(--shadow-lg);padding:24px;}
+.modal-sm{width:480px;}
+.modal h2{font:600 20px/1.4 var(--font-ui);letter-spacing:-.01em;margin:0 0 16px;color:var(--text-primary);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .modal{border-color:var(--border-default);}}
+:root[data-theme="dark"] .modal{border-color:var(--border-default);}
+
+/* ---------- form controls (components.md §12) ---------- */
+.fld{margin-bottom:16px;}
+.lbl{display:block;font:500 13px/1.4 var(--font-ui);color:var(--text-secondary);margin-bottom:8px;}
+.lbl .reqmark{color:var(--feedback-danger-text);font-weight:600;}
+.inp{width:100%;height:40px;padding:8px 12px;font:400 14px/1.5 var(--font-ui);color:var(--text-primary);
+     background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--r-md);}
+select.inp{appearance:none;background-image:var(--chev);background-repeat:no-repeat;
+           background-position:right 12px center;padding-right:36px;}
+.inp-mono{font-family:var(--font-data);font-variant-numeric:tabular-nums;}
+.inp-num{width:80px;text-align:right;padding:8px;font-family:var(--font-data);font-variant-numeric:tabular-nums;}
+.is-inpfocus{border-color:var(--border-focus);box-shadow:0 0 0 2px var(--surface-overlay),0 0 0 4px var(--border-focus);}
+.is-inperr{border-color:var(--feedback-danger-border);background:var(--feedback-danger-bg);}
+.err{display:flex;align-items:flex-start;gap:6px;margin-top:8px;font:400 13px/1.4 var(--font-ui);color:var(--feedback-danger-text);}
+.err .ic{margin-top:2px;}
+.unit{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);}
+.chipfield{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:40px;padding:6px 8px;
+           background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--r-md);}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:var(--r-sm);
+      background:var(--surface-hover);font:400 13px/1.4 var(--font-ui);color:var(--text-primary);}
+.chipx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+       border:0;background:transparent;color:var(--text-secondary);border-radius:var(--r-sm);cursor:pointer;}
+/* 20px glyph, 44px hit area — spacing-and-layout.md's comfortable min target */
+.chipx::after{content:"";position:absolute;inset:-12px;}
+.addchip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border:1px dashed var(--border-default);
+         background:transparent;border-radius:var(--r-sm);font:600 13px/1 var(--font-ui);color:var(--blue-600);cursor:pointer;}
+.group{border-top:1px solid var(--border-subtle);padding-top:16px;margin-top:16px;}
+.grouplabel{font:600 12px/1.33 var(--font-ui);letter-spacing:.04em;text-transform:uppercase;
+            color:var(--text-tertiary);margin:0 0 12px;}
+.frow{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.frow .lbl{margin:0;width:160px;flex:none;}
+details.disc{margin-top:12px;}
+details.disc>summary{display:flex;align-items:center;gap:8px;height:44px;font:600 13px/1 var(--font-ui);
+                     color:var(--blue-600);cursor:pointer;list-style:none;}
+details.disc>summary::-webkit-details-marker{display:none;}
+details.disc[open]>summary .ic{transform:rotate(90deg);}
+.dow{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0;}
+.dow label{display:inline-flex;align-items:center;gap:6px;height:44px;font:400 14px/1 var(--font-ui);color:var(--text-primary);}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue-600);}
+
+/* ---------- panels and banners ---------- */
+.panel{display:flex;gap:12px;padding:16px;border-radius:var(--r-md);}
+.panel-warn{background:var(--feedback-warning-bg);border:1px solid var(--feedback-warning-border);}
+.panel-warn .ic,.panel-warn .ph{color:var(--feedback-warning-text);}
+.panel-dang{background:var(--feedback-danger-bg);border:1px solid var(--feedback-danger-border);}
+.panel-dang .ic,.panel-dang .pb{color:var(--feedback-danger-text);}
+.ph{font:700 13px/1.4 var(--font-ui);margin:0 0 4px;}
+.pb{font:400 14px/1.5 var(--font-ui);margin:0;}
+.pb+.pb{margin-top:8px;}
+.panel-warn .pb{color:var(--text-secondary);}
+.banner{display:flex;align-items:flex-start;gap:8px;padding:12px 16px;border-radius:var(--r-md);
+        font:400 13px/1.5 var(--font-ui);}
+.banner-warn{background:var(--feedback-warning-bg);border:1px solid var(--feedback-warning-border);color:var(--feedback-warning-text);}
+.banner-dang{background:var(--feedback-danger-bg);border:1px solid var(--feedback-danger-border);color:var(--feedback-danger-text);}
+.banner-ok{background:var(--feedback-success-bg);border:1px solid var(--feedback-success-border);color:var(--feedback-success-text);}
+.banner .ic{margin-top:1px;}
+.banner .b-link{color:inherit;}
+
+/* ---------- policy editor ---------- */
+.col800{max-width:800px;}
+.verhdr{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);padding-bottom:12px;
+        border-bottom:1px solid var(--border-subtle);margin-bottom:20px;}
+.tiers{display:flex;flex-wrap:wrap;align-items:baseline;gap:24px;margin-bottom:20px;}
+.tiers dt{font:600 12px/1.33 var(--font-ui);letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary);}
+.tiers .tier{display:flex;gap:8px;font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);}
+.tiers .tier b{font-family:var(--font-data);font-weight:500;font-variant-numeric:tabular-nums;color:var(--text-primary);}
+.wrow{display:flex;align-items:center;gap:12px;padding:8px 0;}
+.wrow .wlabel{width:220px;flex:none;font:600 14px/1.5 var(--font-ui);color:var(--text-primary);}
+
+/* ---------- simulation panel ---------- */
+.sim{background:var(--surface-hover);border-radius:var(--r-md);padding:20px;margin-top:16px;}
+.sim .cap{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);margin:0 0 4px;}
+.sim .head{font:700 20px/1.25 var(--font-ui);letter-spacing:-.01em;color:var(--text-primary);margin:0 0 12px;
+           font-variant-numeric:tabular-nums;}
+.sim.is-stale .head,.sim.is-stale .cap,.sim.is-stale .caselist{color:var(--text-tertiary);}
+.caselist{border-top:1px solid var(--border-subtle);}
+details.case{border-bottom:1px solid var(--border-subtle);}
+details.case>summary{display:flex;align-items:flex-start;gap:8px;padding:6px 0;list-style:none;cursor:pointer;
+                     font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);}
+details.case>summary::-webkit-details-marker{display:none;}
+details.case[open]>summary .ic{transform:rotate(90deg);}
+.moreline{padding:6px 0;font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);}
+.simfoot{display:flex;gap:8px;margin-top:24px;}
+.sk{background:var(--skeleton);border-radius:var(--r-sm);animation:skpulse 1600ms ease-in-out infinite;}
+@keyframes skpulse{0%,100%{opacity:1}50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none;}}
+
+/* ---------- empty / error states (components.md §13) ---------- */
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 24px;}
+.empty .ic-xl{color:var(--text-tertiary);}
+.empty h3{font:600 16px/1.5 var(--font-ui);color:var(--text-primary);margin:16px 0 0;}
+.empty p{font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:8px 0 0;max-width:60ch;}
+.empty .act{margin-top:24px;display:flex;gap:8px;}
+
+:root{ color-scheme:light dark; }
+
+/* ---------- helper text ----------
+   `.hint` was used in the markup above before it was ever declared. 13px/1.4/400
+   is typography.md's `text-sm` (Secondary/supporting text); colour is the
+   existing `--text-tertiary` functional token. No new value introduced. */
+.hint{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);margin:8px 0 0;}
+.pb-sm{font-size:13px;line-height:1.5;}
+.tiers dd{margin:0;}
+.wlabel-note{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);}
+
+/* ---------- U87 forced-colors fallback (elevation-and-depth.md) ---------- */
+@media (forced-colors:active){
+  .frame,.tablecard,.modal,.menu,.sim,.panel,.banner,.badge-invited{border:1px solid CanvasText;}
+  .sk{background:GrayText;}
+}
+</style>
+</head>
+<body>
+
+<div class="board-head">
+  <p class="eyebrow">06 · Admin console — mockup</p>
+  <h1>Three key states, tokens verbatim from 00-foundations</h1>
+  <p>
+    Four-tab shell: Users · Facility Rules · Policy · Audit. Density <code>comfortable</code>, light theme
+    (U69). Policy publishing goes through simulate-then-publish (U27); the fairness term gets its own
+    Danger-zone-style gate, distinct from every other weight field.
+  </p>
+</div>
+
+<p class="screen-label">State 1 — <span>Users tab</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tab active">Users</div><div class="tab">Facility Rules</div><div class="tab">Policy</div><div class="tab">Audit</div>
+      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+    </div>
+    <div class="body">
+      <div class="rail"><div class="active">▤</div><div>👤</div></div>
+      <div class="main">
+        <div class="toolbar">
+          <span class="filter">Filter: role ▾</span>
+          <span class="filter">Filter: facility ▾</span>
+          <span class="searchbar">🔍 Search</span>
+          <button class="btn btn-primary">Invite user</button>
+        </div>
+        <table class="a">
+          <tr><th>Name</th><th>Email</th><th>Role</th><th>Scope</th><th>Status</th><th></th></tr>
+          <tr><td>Neha B.</td><td class="mono">neha@...</td><td>Ops</td><td>Jaipur, Gurugram</td><td class="status-active">Active</td><td class="overflow">⋯</td></tr>
+          <tr><td>Ramesh K.</td><td class="mono">ramesh@...</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-active">Active</td><td class="overflow">⋯</td></tr>
+          <tr><td>Priya S.</td><td class="mono">priya@...</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-inactive">Inactive</td><td class="overflow">⋯</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 2 — <span>Policy tab — fairness term Danger-zone box, simulation result</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tab">Users</div><div class="tab">Facility Rules</div><div class="tab active">Policy</div><div class="tab">Audit</div>
+      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+    </div>
+    <div class="body">
+      <div class="rail"><div>▤</div><div class="active">👤</div></div>
+      <div class="main">
+        <div class="policy-header">Current policy: v3 · published 2026-08-11 · Anshul G.</div>
+        <div class="weight-row"><span class="label">Lateness (w_lateness)</span><input value="4"><span class="unit">/min, cap 720</span></div>
+        <div class="weight-row"><span class="label">Wait (w_wait)</span><input value="-6"><span class="unit">/min</span></div>
+        <div class="weight-row"><span class="label">Slack (w_slack)</span><input value="1"><span class="unit">/min, cap 120</span></div>
+        <div class="weight-row"><span class="label">Dock mismatch (P_dock)</span><input value="-25"><span class="unit"></span></div>
+
+        <div class="dangerbox">
+          <div class="head">⚠ Fairness term (w_fairness) — currently disabled (0)</div>
+          <p>Enabling this is a business-risk decision, not routine tuning — see the carrier-concentration canary on the Audit tab.</p>
+          <button class="btn btn-neutral">Enable fairness term</button>
+        </div>
+
+        <button class="btn btn-primary">Simulate against last 30 days</button>
+
+        <div class="simresult">
+          <div class="headline">12 of 340 decisions in the last 30 days would flip</div>
+          <div class="case">▶ SHP1014 vs SHP1009 — under these weights, SHP1014 loses to SHP1009</div>
+          <div class="case">▶ SHP1002 vs SHP1021 — under these weights, SHP1002 wins (was: loses)</div>
+          <div style="margin-top:16px;display:flex;gap:8px;">
+            <button class="btn btn-neutral">Discard</button>
+            <button class="btn btn-primary">Publish as v4</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 3 — <span>Audit tab</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tab">Users</div><div class="tab">Facility Rules</div><div class="tab">Policy</div><div class="tab active">Audit</div>
+      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+    </div>
+    <div class="body">
+      <div class="rail"><div>▤</div><div class="active">👤</div></div>
+      <div class="main">
+        <div class="toolbar">
+          <span class="filter">Date range: last 7 days ▾</span>
+          <span class="filter">Actor ▾</span>
+          <span class="filter">Event type ▾</span>
+          <span class="searchbar">🔍</span>
+          <button class="btn btn-neutral">Export</button>
+        </div>
+        <table class="a">
+          <tr><th>Time</th><th>Actor</th><th>Event</th><th>Resource</th></tr>
+          <tr><td class="mono">14:02 today</td><td>Anshul G.</td><td>Policy published</td><td class="mono">policy_versions v4</td></tr>
+          <tr><td class="mono">13:40 today</td><td>Neha B.</td><td>User removed</td><td class="mono">priya@... (Gate/Yard, Jaipur)</td></tr>
+          <tr><td class="mono">11:15 today</td><td style="color:var(--text-tertiary);">(system)</td><td>Rule updated</td><td class="mono">Jaipur · NEW_START_CUTOFF</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PART B — full state gallery. Every screen and state enumerated in
+     stitch-prompts.md, in that file's order. Part A above is retained
+     unchanged (it predates this pass and uses emoji glyphs where Part B
+     uses Lucide inline SVG; the three tabs it shows are re-rendered
+     correctly below).
+     ============================================================ -->
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" focusable="false">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-search-x" viewBox="0 0 24 24"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-clock-fade" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></symbol>
+  <symbol id="i-tri-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-circle-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-snowflake" viewBox="0 0 24 24"><path d="m10 20-1.25-2.5L6 18"/><path d="M10 4 8.75 6.5 6 6"/><path d="m14 20 1.25-2.5L18 18"/><path d="m14 4 1.25 2.5L18 6"/><path d="m17 21-3-6h-4"/><path d="m17 3-3 6 1.5 3"/><path d="M2 12h6.5L10 9"/><path d="m20 10-1.5 2 1.5 2"/><path d="M22 12h-6.5L14 15"/><path d="m4 10 1.5 2L4 14"/><path d="m7 21 3-6-1.5-3"/><path d="m7 3 3 6h4"/></symbol>
+  <symbol id="i-weight" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+</svg>
+
+<div class="board-head" style="padding-top:64px;">
+  <p class="eyebrow">06 · Admin console — full state gallery</p>
+  <h1>Every screen and state in <code style="font-family:var(--font-data);font-size:.75em;">stitch-prompts.md</code>, in that file's order</h1>
+  <p>
+    Density <code>comfortable</code> throughout (44px rows, 12/16 cell padding, 40px buttons, 24px content
+    padding), light theme default with dark at full parity (U69). Modal states render on a flat
+    <code>rgba(15,23,42,0.5)</code> scrim — dimming, never blurring — with the originating tab named in each
+    caption rather than redrawn twelve times. Icons are Lucide, 2px stroke, inline SVG. No JavaScript: every
+    disclosure is a native <code>&lt;details&gt;</code>, every field a real labelled control, and hover /
+    focus / disabled are shown as static classes.
+  </p>
+</div>
+
+<!-- ─────────── 1 · Console shell ─────────── -->
+<p class="screen-label">1 — <span>Console shell (four-tab frame)</span></p>
+<p class="screen-note">
+  Chrome only; the content region is deliberately empty so the shell reads on its own. Two rail
+  destinations (U101 — grounded in what §7.5.7 actually gives this role, not invented icons). Active tab
+  carries two channels, colour <em>and</em> fill. No facility switcher, no facility accent stripe, no
+  top-bar global search, no tab badges — all four excluded per the prompt's own list, and gaps 2–4 in that
+  file's closing table.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#1" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#1" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 2 · Users tab ─────────── -->
+<p class="screen-label">2.1 — <span>Users tab — list, filters, pending invitation</span></p>
+<p class="screen-note">
+  Row 2 shows hover, row 3 the two-ring keyboard focus indicator. Status dims only in the status cell — the
+  rest of an inactive user's row stays at full legibility. The pending-invitation row is a badge, not a
+  status word: an invitation is not an account state. Its Name cell is an em dash (not-yet-known), which
+  <code>data-formatting.md</code> keeps distinct from a genuine zero and from a scope-hidden value.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#2" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#2" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="u1-q">Search users</label>
+            <input id="u1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-con">Invite user</button>
+        </div>
+        <div class="tablecard">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:30%"><col style="width:13%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Neha B.</td><td class="mono">neha.bansal@setuhaul.example</td><td>Ops</td>
+                <td>Jaipur, Gurugram</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Neha B."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr class="is-hover">
+                <td>Ramesh K.</td><td class="mono">ramesh.kumar@setuhaul.example</td><td>Gate/Yard</td>
+                <td>Jaipur</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Ramesh K."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr class="is-focus">
+                <td>Priya S.</td><td class="mono">priya.sharma@setuhaul.example</td><td>Gate/Yard</td>
+                <td>Jaipur</td><td class="st-off">Inactive</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Priya S."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr>
+                <td aria-label="Name not yet known">—</td><td class="mono">amit.d@setuhaul.example</td><td>Ops</td>
+                <td>Gurugram</td>
+                <td><span class="badge-invited"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-clock-fade"/></svg>Invited, awaiting acceptance</span></td>
+                <td><div class="rowactions"><button type="button" class="b-link">Resend</button><button type="button" class="b-link">Revoke</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">2.2 — <span>Users tab — row overflow menu open</span></p>
+<p class="screen-note">
+  Open on the inactive user, so the middle item reads “Reactivate” (it reads “Deactivate” on an active
+  user). Remove sits below a divider — the one genuinely hard-to-reverse action here.
+  <strong>Re-flagging gap 9, unresolved:</strong> <code>screens.md</code> calls Deactivate “immediate,
+  reversible via Reactivate, no typed confirmation” while <code>components.md</code> §19's Moderate tier is
+  “acts immediately, 5-second undo, no modal.” Those are two different affordances. This frame renders
+  <em>neither</em> an undo toast nor a confirmation, exactly as the prompt file did. It needs one call from
+  the owner; nothing here invents it.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#2b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#2b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="u2-q">Search users</label>
+            <input id="u2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-con">Invite user</button>
+        </div>
+        <div class="tablecard" style="position:relative;">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:30%"><col style="width:13%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Neha B.</td><td class="mono">neha.bansal@setuhaul.example</td><td>Ops</td><td>Jaipur, Gurugram</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Neha B."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+              <tr><td>Ramesh K.</td><td class="mono">ramesh.kumar@setuhaul.example</td><td>Gate/Yard</td><td>Jaipur</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Ramesh K."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+              <tr class="is-hover"><td>Priya S.</td><td class="mono">priya.sharma@setuhaul.example</td><td>Gate/Yard</td><td>Jaipur</td><td class="st-off">Inactive</td>
+                <td><div class="rowactions"><button type="button" class="ibtn is-hover" aria-label="Actions for Priya S." aria-expanded="true"><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+              <tr><td aria-label="Name not yet known">—</td><td class="mono">amit.d@setuhaul.example</td><td>Ops</td><td>Gurugram</td>
+                <td><span class="badge-invited"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-clock-fade"/></svg>Invited, awaiting acceptance</span></td>
+                <td><div class="rowactions"><button type="button" class="b-link">Resend</button><button type="button" class="b-link">Revoke</button></div></td></tr>
+            </tbody>
+          </table>
+          <div class="menu" role="menu" aria-label="Actions for Priya S." style="right:16px;top:152px;">
+            <button type="button" role="menuitem">Edit</button>
+            <button type="button" role="menuitem" class="is-hover">Reactivate</button>
+            <div class="sep" role="separator"></div>
+            <button type="button" role="menuitem" class="danger">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 3 · Invite / edit user modal ─────────── -->
+<p class="screen-label">3.1 — <span>Invite user — idle</span></p>
+<p class="screen-note">
+  Opens over the Users tab from “Invite user”. Role and scope are <strong>one submission</strong> — no
+  wizard, no stepper: a user who exists with a role but no scope is a security hole, however brief. Focus
+  lands on Email, never on a submit button. Cancel is first in reading and tab order (U79, safer-action
+  first). The primary button carries an idempotency key (U70).
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv1-t">
+        <h2 id="inv1-t">Invite user</h2>
+        <div class="fld">
+          <label class="lbl" for="inv1-email">Email <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <input class="inp inp-mono is-inpfocus" id="inv1-email" type="email" required autocomplete="off" spellcheck="false">
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv1-role">Role <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv1-role" required>
+            <option value="">Select a role</option>
+            <option>Ops coordinator</option><option>Planner</option>
+            <option>Gate–Yard officer</option><option>Carrier manager</option><option>Administrator</option>
+          </select>
+        </div>
+        <p class="hint" style="margin:0;">The scope field appears once a role is selected — its shape depends on the role.</p>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Send invite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">3.2 — <span>Invite user — Role = Ops coordinator (facility multi-select)</span></p>
+<p class="screen-note">
+  The scope control changes <em>shape</em> with the role rather than presenting one generic picker.
+  Facility roles get removable chips plus “+ Add facility”. Each chip's remove glyph is 20px with a 44px hit
+  area — <code>spacing-and-layout.md</code>'s comfortable minimum target, met without inflating the chip.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv2-t">
+        <h2 id="inv2-t">Invite user</h2>
+        <div class="fld">
+          <label class="lbl" for="inv2-email">Email <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <input class="inp inp-mono" id="inv2-email" type="email" value="amit.d@setuhaul.example" required autocomplete="off" spellcheck="false">
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv2-role">Role <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv2-role" required>
+            <option selected>Ops coordinator</option><option>Planner</option>
+            <option>Gate–Yard officer</option><option>Carrier manager</option><option>Administrator</option>
+          </select>
+        </div>
+        <div class="fld">
+          <span class="lbl" id="inv2-scopelbl">Facility scope <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></span>
+          <div class="chipfield" role="group" aria-labelledby="inv2-scopelbl">
+            <span class="chip">Jaipur <button type="button" class="chipx" aria-label="Remove Jaipur"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-x"/></svg></button></span>
+            <span class="chip">Gurugram <button type="button" class="chipx" aria-label="Remove Gurugram"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-x"/></svg></button></span>
+            <button type="button" class="addchip"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>Add facility</button>
+          </div>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Send invite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">3.3 — <span>Invite user — Role = Carrier manager (single-carrier select)</span></p>
+<p class="screen-note">
+  Exactly one value, no multi-select affordance. This is the one role whose scope unit is
+  <code>carrier_id</code> rather than a facility set.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv3-t">
+        <h2 id="inv3-t">Invite user</h2>
+        <div class="fld">
+          <label class="lbl" for="inv3-email">Email <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <input class="inp inp-mono" id="inv3-email" type="email" value="ops@rajasthanroadlines.example" required autocomplete="off" spellcheck="false">
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv3-role">Role <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv3-role" required>
+            <option>Ops coordinator</option><option>Planner</option>
+            <option>Gate–Yard officer</option><option selected>Carrier manager</option><option>Administrator</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv3-carrier">Carrier <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv3-carrier" required>
+            <option selected>Rajasthan Roadlines Pvt Ltd</option>
+            <option>Northline Freight</option>
+            <option>Deccan Cargo Movers</option>
+          </select>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Send invite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">3.4 — <span>Invite user — validation error on Email</span></p>
+<p class="screen-note">
+  Validated on blur, not on keystroke. Error text sits below the field with a <code>circle-alert</code>
+  icon and an <code>aria-describedby</code> link — never colour alone. Copy is verbatim from the spec.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv4-t">
+        <h2 id="inv4-t">Invite user</h2>
+        <div class="fld">
+          <label class="lbl" for="inv4-email">Email <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <input class="inp inp-mono is-inperr" id="inv4-email" type="email" value="neha.bansal@setuhaul.example"
+                 aria-invalid="true" aria-describedby="inv4-err" required autocomplete="off" spellcheck="false">
+          <p class="err" id="inv4-err"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-circle-alert"/></svg>This email already has an account.</p>
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv4-role">Role <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv4-role" required>
+            <option selected>Ops coordinator</option><option>Planner</option>
+            <option>Gate–Yard officer</option><option>Carrier manager</option><option>Administrator</option>
+          </select>
+        </div>
+        <div class="fld">
+          <span class="lbl" id="inv4-scopelbl">Facility scope <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></span>
+          <div class="chipfield" role="group" aria-labelledby="inv4-scopelbl">
+            <span class="chip">Jaipur <button type="button" class="chipx" aria-label="Remove Jaipur"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-x"/></svg></button></span>
+            <button type="button" class="addchip"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>Add facility</button>
+          </div>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Send invite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">3.5 — <span>Edit user — pre-filled, Role = Administrator (no scope field at all)</span></p>
+<p class="screen-note">
+  Same modal, different copy: title “Edit user”, primary “Save changes”. Administrator renders
+  <strong>no scope field</strong> — absent from the layout, not shown disabled. The row that assigns scope
+  to everyone else does not itself carry one.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv5-t">
+        <h2 id="inv5-t">Edit user</h2>
+        <div class="fld">
+          <label class="lbl" for="inv5-email">Email <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <input class="inp inp-mono" id="inv5-email" type="email" value="anshul.g@setuhaul.example" required autocomplete="off" spellcheck="false">
+        </div>
+        <div class="fld">
+          <label class="lbl" for="inv5-role">Role <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="inv5-role" required>
+            <option>Ops coordinator</option><option>Planner</option>
+            <option>Gate–Yard officer</option><option>Carrier manager</option><option selected>Administrator</option>
+          </select>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 4 · Remove user — typed confirmation ─────────── -->
+<p class="screen-label">4.1 — <span>Remove user — field empty, destructive action genuinely disabled</span></p>
+<p class="screen-note">
+  §19's <strong>High</strong> tier: typed confirmation, not the 5-second undo this product uses for
+  Moderate actions. The typed value is the user's own email, which forces the admin to read who they are
+  removing. The consequence panel states what will be lost <em>including</em> the part the admin would
+  otherwise discover later (2 orphaned escalations). Title is not red — the title states the action, the
+  button carries the consequence. Focus opens on the input, never the destructive button; 16px minimum
+  separates Cancel from Remove.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="rm1-t">
+        <h2 id="rm1-t">Remove Priya Sharma</h2>
+        <div class="panel panel-dang">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb">This account will be removed permanently and will not appear in user search again.</p>
+            <p class="pb">This user owns 2 active escalations — they will show as unowned once removed.</p>
+            <p class="pb">Their past actions stay attributable in the Audit tab.</p>
+          </div>
+        </div>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="rm1-c">Type <span class="mono">priya.sharma@setuhaul.example</span> to confirm</label>
+          <input class="inp inp-mono is-inpfocus" id="rm1-c" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-des" disabled title="Type the user's email to confirm" aria-describedby="rm1-why">Remove user</button>
+          <span class="vh" id="rm1-why">Type the user's email to confirm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">4.2 — <span>Remove user — typed value matches, action enabled</span></p>
+<p class="screen-note">
+  Disabled→enabled is a 120ms colour change, no movement. No countdown, no forced delay, no undo — undo is
+  this product's pattern for Moderate actions, deliberately not for this one.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="rm2-t">
+        <h2 id="rm2-t">Remove Priya Sharma</h2>
+        <div class="panel panel-dang">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb">This account will be removed permanently and will not appear in user search again.</p>
+            <p class="pb">This user owns 2 active escalations — they will show as unowned once removed.</p>
+            <p class="pb">Their past actions stay attributable in the Audit tab.</p>
+          </div>
+        </div>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="rm2-c">Type <span class="mono">priya.sharma@setuhaul.example</span> to confirm</label>
+          <input class="inp inp-mono" id="rm2-c" type="text" value="priya.sharma@setuhaul.example" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-des">Remove user</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">4.3 — <span>Remove user — mismatch typed, still disabled</span></p>
+<p class="screen-note">
+  A mismatch is not an error state — nothing has been submitted, so no red field border and no error
+  message. The button simply has not enabled, and its tooltip and accessible description still say why.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="rm3-t">
+        <h2 id="rm3-t">Remove Priya Sharma</h2>
+        <div class="panel panel-dang">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb">This account will be removed permanently and will not appear in user search again.</p>
+            <p class="pb">This user owns 2 active escalations — they will show as unowned once removed.</p>
+            <p class="pb">Their past actions stay attributable in the Audit tab.</p>
+          </div>
+        </div>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="rm3-c">Type <span class="mono">priya.sharma@setuhaul.example</span> to confirm</label>
+          <input class="inp inp-mono" id="rm3-c" type="text" value="priya.sharma@setuhaul.exampl" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-des" disabled title="Type the user's email to confirm" aria-describedby="rm3-why">Remove user</button>
+          <span class="vh" id="rm3-why">Type the user's email to confirm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 5 · Facility Rules tab ─────────── -->
+<p class="screen-label">5 — <span>Facility Rules tab — rule list</span></p>
+<p class="screen-note">
+  Rule types are a fixed registry, so they render as uppercase mono enum tokens — registry values, not
+  prose. Values carry their unit with a space and never a pluralised symbol (<code>60 min</code>,
+  <code>18,500 kg</code>); times are 24-hour and the effective range uses an en dash. Rows carry
+  <strong>no status colour</strong> — a rule is not a state, and colour here would dilute promise state and
+  danger. Row 2 hover, row 3 keyboard focus. No per-row toggle, no reorder handle, no simulate affordance:
+  rule changes apply immediately on save; only policy weights are simulated.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#5" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#5" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <span style="flex:1"></span>
+          <button type="button" class="b b-con"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Add rule</button>
+        </div>
+        <div class="tablecard">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:24%"><col style="width:20%"><col style="width:32%"><col style="width:8%"></colgroup>
+            <thead>
+              <tr><th scope="col">Facility</th><th scope="col">Rule type</th><th scope="col">Value</th><th scope="col">Effective</th><th scope="col"><span class="vh">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Jaipur</td><td><span class="enum">EARLY_LIMIT</span></td>
+                <td><span class="val">60 min</span></td><td>Always</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Jaipur EARLY_LIMIT"><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr class="is-hover">
+                <td>Jaipur</td><td><span class="enum">DOCK_PIN</span></td>
+                <td><span class="val"><svg class="ic" aria-hidden="true"><use href="#i-snowflake"/></svg>Reefer → D5</span></td><td>Always</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Jaipur DOCK_PIN"><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr class="is-focus">
+                <td>Jaipur</td><td><span class="enum">NEW_START_CUTOFF</span></td>
+                <td><span class="val">21:00</span></td><td>Weekdays only, 18:00–23:59</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Jaipur NEW_START_CUTOFF"><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+              <tr>
+                <td>Gurugram</td><td><span class="enum">WEIGHT_LIMIT</span></td>
+                <td><span class="val"><svg class="ic" aria-hidden="true"><use href="#i-weight"/></svg>18,500 kg</span></td><td>Always</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Gurugram WEIGHT_LIMIT"><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 6 · Facility rule editor ─────────── -->
+<p class="screen-label">6.1 — <span>Rule editor — DOCK_PIN selected, effective window collapsed at “Always”</span></p>
+<p class="screen-note">
+  The value fields render <em>per selected rule type</em>; there is no generic “value” field, ever. Fields
+  for other types do not render at all — not disabled, absent. The type-specific block is separated by a 1px
+  divider so it reads as “fields that belong to the choice above”. Effective defaults to “Always” because
+  most rules genuinely are.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="re1-t">
+        <h2 id="re1-t">Add rule</h2>
+        <div class="fld">
+          <label class="lbl" for="re1-fac">Facility <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="re1-fac" required><option selected>Jaipur</option><option>Gurugram</option></select>
+        </div>
+        <div class="fld">
+          <label class="lbl" for="re1-type">Rule type <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp inp-mono" id="re1-type" required>
+            <option>EARLY_LIMIT</option><option selected>DOCK_PIN</option>
+            <option>WEIGHT_LIMIT</option><option>NEW_START_CUTOFF</option>
+          </select>
+        </div>
+        <div class="group">
+          <p class="grouplabel">DOCK_PIN values</p>
+          <div class="frow">
+            <label class="lbl" for="re1-dock">Dock</label>
+            <select class="inp inp-mono" id="re1-dock" style="width:160px;"><option>D1</option><option>D4</option><option selected>D5</option></select>
+          </div>
+          <div class="frow">
+            <label class="lbl" for="re1-cargo">Cargo type</label>
+            <select class="inp" id="re1-cargo" style="width:220px;"><option selected>Reefer</option><option>Standard</option><option>Heavy</option></select>
+            <svg class="ic" aria-hidden="true" style="color:var(--text-tertiary)"><use href="#i-snowflake"/></svg>
+            <span class="unit">Temperature-controlled</span>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">Effective window</span>
+          <p style="margin:0;font:400 14px/1.5 var(--font-ui);color:var(--text-primary);">Always</p>
+          <details class="disc">
+            <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg>Narrow to specific days and hours</summary>
+            <p class="hint">Day-of-week and a 24-hour from/to range.</p>
+          </details>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Save rule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">6.2 — <span>Rule editor — EARLY_LIMIT selected (one numeric field)</span></p>
+<p class="screen-note">
+  Selecting a different type swaps the value block once, at 200ms ease-out — no staggering, no looping. The
+  number is mono with tabular figures, right-aligned in an 80px input, and the unit sits outside the input
+  so the field never contains a bare number.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="re2-t">
+        <h2 id="re2-t">Edit rule</h2>
+        <div class="fld">
+          <label class="lbl" for="re2-fac">Facility <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="re2-fac" required><option selected>Jaipur</option><option>Gurugram</option></select>
+        </div>
+        <div class="fld">
+          <label class="lbl" for="re2-type">Rule type <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp inp-mono" id="re2-type" required>
+            <option selected>EARLY_LIMIT</option><option>DOCK_PIN</option>
+            <option>WEIGHT_LIMIT</option><option>NEW_START_CUTOFF</option>
+          </select>
+        </div>
+        <div class="group">
+          <p class="grouplabel">EARLY_LIMIT value</p>
+          <div class="frow">
+            <label class="lbl" for="re2-min">Early arrival limit</label>
+            <input class="inp inp-num" id="re2-min" type="text" inputmode="numeric" value="60" autocomplete="off" spellcheck="false">
+            <span class="unit">minutes</span>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">Effective window</span>
+          <p style="margin:0;font:400 14px/1.5 var(--font-ui);color:var(--text-primary);">Always</p>
+          <details class="disc">
+            <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg>Narrow to specific days and hours</summary>
+            <p class="hint">Day-of-week and a 24-hour from/to range.</p>
+          </details>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Save rule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">6.3 — <span>Rule editor — effective window expanded</span></p>
+<p class="screen-note">
+  Day-of-week checkboxes plus a 24-hour from/to pair, en dash between them. No calendar month grid — this
+  is a day-of-week and time-of-day narrowing, not a date-range browser. No 12-hour times anywhere.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="re3-t">
+        <h2 id="re3-t">Edit rule</h2>
+        <div class="fld">
+          <label class="lbl" for="re3-fac">Facility <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp" id="re3-fac" required><option selected>Jaipur</option><option>Gurugram</option></select>
+        </div>
+        <div class="fld">
+          <label class="lbl" for="re3-type">Rule type <span class="reqmark" aria-hidden="true">*</span><span class="vh">(required)</span></label>
+          <select class="inp inp-mono" id="re3-type" required>
+            <option>EARLY_LIMIT</option><option>DOCK_PIN</option>
+            <option>WEIGHT_LIMIT</option><option selected>NEW_START_CUTOFF</option>
+          </select>
+        </div>
+        <div class="group">
+          <p class="grouplabel">NEW_START_CUTOFF value</p>
+          <div class="frow">
+            <label class="lbl" for="re3-cut">No new unload starts after</label>
+            <input class="inp inp-mono" id="re3-cut" type="time" value="21:00" step="900" style="width:140px;" autocomplete="off">
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">Effective window</span>
+          <details class="disc" open>
+            <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg>Narrow to specific days and hours</summary>
+            <fieldset style="border:0;padding:0;margin:0;">
+              <legend class="lbl" style="padding:0;">Days</legend>
+              <div class="dow">
+                <label><input type="checkbox" checked> Mon</label>
+                <label><input type="checkbox" checked> Tue</label>
+                <label><input type="checkbox" checked> Wed</label>
+                <label><input type="checkbox" checked> Thu</label>
+                <label><input type="checkbox" checked> Fri</label>
+                <label><input type="checkbox"> Sat</label>
+                <label><input type="checkbox"> Sun</label>
+              </div>
+            </fieldset>
+            <div class="frow" style="align-items:flex-end;">
+              <div>
+                <label class="lbl" for="re3-from">From</label>
+                <input class="inp inp-mono" id="re3-from" type="time" value="18:00" step="900" style="width:140px;" autocomplete="off">
+              </div>
+              <span aria-hidden="true" style="padding-bottom:10px;color:var(--text-tertiary);">–</span>
+              <div>
+                <label class="lbl" for="re3-to">To</label>
+                <input class="inp inp-mono" id="re3-to" type="time" value="23:59" step="60" style="width:140px;" autocomplete="off">
+              </div>
+              <span class="unit" style="padding-bottom:10px;">18:00–23:59, facility-local</span>
+            </div>
+          </details>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="submit" class="b b-con">Save rule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 7 · Dependent-appointment confirmation ─────────── -->
+<p class="screen-label">7.1 — <span>Rule edit — dependent-appointment confirmation, disabled</span></p>
+<p class="screen-note">
+  Tightening a cut-off can strand appointments already confirmed. The system does not auto-cancel or
+  auto-flag them; it names the count before the edit commits. Every affected appointment carries
+  <strong>its dock and its date</strong> alongside the time — a time without a date is a wrong-day booking
+  waiting to happen. Before/after values are right-aligned mono with tabular figures so the digits line up.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="dep1-t">
+        <h2 id="dep1-t">Tighten <span class="enum" style="font-size:20px;">NEW_START_CUTOFF</span> at Jaipur</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
+          <tbody>
+            <tr><th scope="row" style="text-align:left;font-weight:400;color:var(--text-secondary);padding:2px 0;">Current</th>
+                <td class="mono tnum" style="text-align:right;">21:00</td></tr>
+            <tr><th scope="row" style="text-align:left;font-weight:400;color:var(--text-secondary);padding:2px 0;">New</th>
+                <td class="mono tnum" style="text-align:right;">20:00</td></tr>
+          </tbody>
+        </table>
+        <div class="panel panel-dang">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb">3 already-confirmed appointments start after 20:00 and will no longer comply with this rule.</p>
+            <p class="pb">They will not be cancelled or rescheduled automatically. This rule governs future scheduling only.</p>
+            <ul style="list-style:none;margin:12px 0 0;padding:0;font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);">
+              <li style="margin-bottom:8px;"><span class="mono">APT-1042</span> · Dock D4 · Tue 4 Aug · 20:30–21:45</li>
+              <li style="margin-bottom:8px;"><span class="mono">APT-1051</span> · Dock D2 · Tue 4 Aug · 20:15–21:00</li>
+              <li><span class="mono">APT-1063</span> · Dock D4 · Wed 5 Aug · 20:45–22:00</li>
+            </ul>
+          </div>
+        </div>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="dep1-c">Type <span class="mono">NEW_START_CUTOFF</span> to confirm</label>
+          <input class="inp inp-mono is-inpfocus" id="dep1-c" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-des" disabled title="Type the rule type to confirm" aria-describedby="dep1-why">Apply rule change</button>
+          <span class="vh" id="dep1-why">Type the rule type to confirm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">7.2 — <span>Rule edit — dependent-appointment confirmation, enabled</span></p>
+<p class="screen-note">
+  No “cancel the affected appointments too” checkbox and no “notify the affected drivers” toggle — this
+  dialog does not reach into appointments at all.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="dep2-t">
+        <h2 id="dep2-t">Tighten <span class="enum" style="font-size:20px;">NEW_START_CUTOFF</span> at Jaipur</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
+          <tbody>
+            <tr><th scope="row" style="text-align:left;font-weight:400;color:var(--text-secondary);padding:2px 0;">Current</th>
+                <td class="mono tnum" style="text-align:right;">21:00</td></tr>
+            <tr><th scope="row" style="text-align:left;font-weight:400;color:var(--text-secondary);padding:2px 0;">New</th>
+                <td class="mono tnum" style="text-align:right;">20:00</td></tr>
+          </tbody>
+        </table>
+        <div class="panel panel-dang">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb">3 already-confirmed appointments start after 20:00 and will no longer comply with this rule.</p>
+            <p class="pb">They will not be cancelled or rescheduled automatically. This rule governs future scheduling only.</p>
+            <ul style="list-style:none;margin:12px 0 0;padding:0;font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);">
+              <li style="margin-bottom:8px;"><span class="mono">APT-1042</span> · Dock D4 · Tue 4 Aug · 20:30–21:45</li>
+              <li style="margin-bottom:8px;"><span class="mono">APT-1051</span> · Dock D2 · Tue 4 Aug · 20:15–21:00</li>
+              <li><span class="mono">APT-1063</span> · Dock D4 · Wed 5 Aug · 20:45–22:00</li>
+            </ul>
+          </div>
+        </div>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="dep2-c">Type <span class="mono">NEW_START_CUTOFF</span> to confirm</label>
+          <input class="inp inp-mono" id="dep2-c" type="text" value="NEW_START_CUTOFF" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-des">Apply rule change</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 8 · Policy tab — weight editor + fairness Danger Zone ─────────── -->
+<p class="screen-label">8 — <span>Policy tab — weight editor and fairness Danger Zone</span></p>
+<p class="screen-note">
+  Nothing on this tab saves on its own: the whole editor is a staging area and there is deliberately no Save
+  or Apply button and no autosave indicator. Values reach the system only through simulate-then-publish
+  (U27). The priority tiers are read-only with zero interactive affordance — they are the tiers themselves,
+  not tuning coefficients. <code>w_slack</code> shows the focused state. The fairness term is separated into
+  its own panel because the separation <em>is</em> the signal; a note buried in copy would be skimmed past,
+  and a toggle switch is something a cursor can slip onto.
+  <br><strong>Deviation, stated not silent:</strong> the weight inputs render at the shared 40px / 6px-radius
+  <code>.inp</code> metrics, not the 36px / 4px in <code>stitch-prompts.md</code> §8. That 36px came from this
+  file's own Part A and has no source in <code>spacing-and-layout.md</code>, whose <code>comfortable</code>
+  column is 40px control height and a 44px minimum target — the same provenance as the 20px→24px padding fix.
+  <br><strong>Gap 7, re-flagged:</strong> the canary cross-reference points to two different places across
+  this surface's files and no carrier-concentration canary is designed on any of the four tabs. The copy
+  below is <code>screens.md</code>'s minus the location pointer; the canary itself is still an undesigned
+  surface element.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#8" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#8" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="col800">
+          <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
+          <dl class="tiers">
+            <dt>Priority weights</dt>
+            <dd class="tier"><span>CRITICAL</span><b class="tnum">4000</b></dd>
+            <dd class="tier"><span>HIGH</span><b class="tnum">3000</b></dd>
+            <dd class="tier"><span>NORMAL</span><b class="tnum">2000</b></dd>
+            <dd class="tier"><span>LOW</span><b class="tnum">1000</b></dd>
+          </dl>
+
+          <div class="wrow">
+            <label class="wlabel" for="p8-late">Lateness (<span class="mono">w_lateness</span>)</label>
+            <input class="inp inp-num" id="p8-late" type="text" inputmode="numeric" value="4" aria-describedby="p8-late-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p8-late-u">per minute, cap 720</span>
+          </div>
+          <div class="wrow">
+            <label class="wlabel" for="p8-wait">Wait (<span class="mono">w_wait</span>)</label>
+            <input class="inp inp-num" id="p8-wait" type="text" inputmode="numeric" value="-6" aria-describedby="p8-wait-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p8-wait-u">per minute</span>
+          </div>
+          <div class="wrow">
+            <label class="wlabel" for="p8-slack">Slack (<span class="mono">w_slack</span>)</label>
+            <input class="inp inp-num is-inpfocus" id="p8-slack" type="text" inputmode="numeric" value="1" aria-describedby="p8-slack-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p8-slack-u">per minute, cap 120</span>
+          </div>
+          <div class="wrow">
+            <label class="wlabel" for="p8-dock">Dock mismatch (<span class="mono">P_dock</span>)</label>
+            <input class="inp inp-num" id="p8-dock" type="text" inputmode="numeric" value="-25" aria-describedby="p8-dock-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p8-dock-u">flat penalty, unitless</span>
+          </div>
+          <div class="wrow">
+            <label class="wlabel" for="p8-churn">Churn (<span class="mono">P_churn</span>)</label>
+            <input class="inp inp-num" id="p8-churn" type="text" inputmode="numeric" value="30" aria-describedby="p8-churn-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p8-churn-u">weighted-min-equivalent per moved promise</span>
+          </div>
+
+          <div class="panel panel-warn" style="margin-top:16px;">
+            <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+            <div>
+              <p class="ph">Fairness term (<span class="mono">w_fairness</span>) — currently disabled (0)</p>
+              <p class="pb pb-sm">Enabling this is a business-risk decision, not routine tuning — see the carrier-concentration canary.</p>
+              <button type="button" class="b b-neu" style="margin-top:12px;">Enable fairness term</button>
+            </div>
+          </div>
+
+          <div style="margin-top:24px;">
+            <button type="button" class="b b-con">Simulate against last 30 days</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 9 · Enable fairness term — Danger Zone typed confirmation ─────────── -->
+<p class="screen-label">9.1 — <span>Enable fairness term — field empty, action genuinely disabled</span></p>
+<p class="screen-note">
+  <strong>Amber, not red, and the distinction is deliberate:</strong> red in this product means danger —
+  expiry, conflict, an action that ends something for another person. Enabling a policy term escalates risk;
+  it does not destroy anything. So the confirm button is cautionary (amber fill, amber border, amber text),
+  not destructive. The dialog <em>publishes nothing</em> — enabling the term and publishing a policy that
+  uses a non-zero value stay two separate steps, which the body copy states outright rather than leaving the
+  admin to discover.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="fz1-t">
+        <h2 id="fz1-t">Enable the fairness term</h2>
+        <div class="panel panel-warn">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb pb-sm">This changes how every future ranking decision balances urgency against carrier concentration.</p>
+            <p class="pb pb-sm">Watch the carrier-concentration canary after publishing — if the data turns ugly, set the weight back to 0.</p>
+          </div>
+        </div>
+        <p style="font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:16px 0 0;">
+          Enabling makes <span class="mono">w_fairness</span> editable in the weight editor. It does not publish anything.
+        </p>
+        <p style="font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:8px 0 0;">
+          Any non-zero value still has to be simulated and published like every other weight.
+        </p>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="fz1-c">Type <span class="mono">ENABLE FAIRNESS</span> to confirm</label>
+          <input class="inp inp-mono is-inpfocus" id="fz1-c" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-cau" disabled title="Type ENABLE FAIRNESS to confirm" aria-describedby="fz1-why">Enable fairness term</button>
+          <span class="vh" id="fz1-why">Type ENABLE FAIRNESS to confirm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">9.2 — <span>Enable fairness term — typed value matches, action enabled</span></p>
+<p class="screen-note">
+  Disabled→enabled is a 120ms colour change with no movement. No slider or numeric input for the fairness
+  value here — the value is set afterwards, in the ordinary weight editor, and published like any other.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="scrim">
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="fz2-t">
+        <h2 id="fz2-t">Enable the fairness term</h2>
+        <div class="panel panel-warn">
+          <svg class="ic ic-md" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+          <div>
+            <p class="pb pb-sm">This changes how every future ranking decision balances urgency against carrier concentration.</p>
+            <p class="pb pb-sm">Watch the carrier-concentration canary after publishing — if the data turns ugly, set the weight back to 0.</p>
+          </div>
+        </div>
+        <p style="font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:16px 0 0;">
+          Enabling makes <span class="mono">w_fairness</span> editable in the weight editor. It does not publish anything.
+        </p>
+        <p style="font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:8px 0 0;">
+          Any non-zero value still has to be simulated and published like every other weight.
+        </p>
+        <div class="fld" style="margin-top:16px;">
+          <label class="lbl" for="fz2-c">Type <span class="mono">ENABLE FAIRNESS</span> to confirm</label>
+          <input class="inp inp-mono" id="fz2-c" type="text" value="ENABLE FAIRNESS" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="b b-neu">Cancel</button>
+          <button type="button" class="b b-cau">Enable fairness term</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 10 · Policy simulation — four states ─────────── -->
+<p class="screen-label">10.A — <span>Simulation — running</span></p>
+<p class="screen-note">
+  A 30-day replay is not instant, so this state carries real weight. The skeleton matches the final layout
+  rather than a centred spinner — a spinner followed by content is a layout jump, and a jump under a cursor
+  is a mis-click. Past roughly ten seconds the status line becomes “Still working — replaying the last 30
+  days”, because a spinner looks identical at 2 seconds and at 40. Pulse is 1600ms ease-in-out and goes
+  static under <code>prefers-reduced-motion</code>; it is the only looping motion permitted on this surface.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#10a" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#10a" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="col800">
+          <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
+          <div class="wrow"><span class="wlabel">Lateness (<span class="mono">w_lateness</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">4</span><span class="unit">per minute, cap 720</span></div>
+          <div class="wrow"><span class="wlabel">Wait (<span class="mono">w_wait</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">-6</span><span class="unit">per minute</span></div>
+          <div class="wrow"><span class="wlabel">Slack (<span class="mono">w_slack</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">2</span><span class="unit">per minute, cap 120</span></div>
+          <div style="margin-top:24px;">
+            <button type="button" class="b b-con" disabled title="A simulation is already running">Simulate against last 30 days</button>
+          </div>
+          <div class="sim" aria-busy="true" aria-labelledby="sim-a-status">
+            <div class="sk" style="height:20px;width:62%;"></div>
+            <div class="sk" style="height:13px;width:80%;margin-top:12px;"></div>
+            <div class="sk" style="height:13px;width:74%;margin-top:8px;"></div>
+            <div class="sk" style="height:13px;width:78%;margin-top:8px;"></div>
+            <p class="cap" id="sim-a-status" role="status" style="margin:16px 0 0;">Replaying the last 30 days…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">10.B — <span>Simulation — result</span></p>
+<p class="screen-note">
+  The headline an admin needs first is the <em>scale</em> of the change, not one plausible example, so the
+  aggregate count is the 20px/700 headline and individual cases sit under it at 13px. Counts use tabular
+  figures and <code>en-IN</code> grouping. No charts, no before/after visualisation, no diff heatmap — and
+  no count-up animation, because these are values, not scores. Publishing creates a new immutable version
+  rather than editing the current one, which is why the button names the version it will create.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#10b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#10b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="col800">
+          <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
+          <div class="wrow">
+            <label class="wlabel" for="p10b-slack">Slack (<span class="mono">w_slack</span>)</label>
+            <input class="inp inp-num" id="p10b-slack" type="text" inputmode="numeric" value="2" aria-describedby="p10b-slack-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p10b-slack-u">per minute, cap 120</span>
+          </div>
+          <div style="margin-top:24px;">
+            <button type="button" class="b b-con">Simulate against last 30 days</button>
+          </div>
+          <div class="sim">
+            <p class="cap">Simulation: proposed weights vs. current policy <span class="mono">v3</span></p>
+            <p class="head"><span class="tnum">12</span> of <span class="tnum">340</span> decisions in the last 30 days would flip</p>
+            <div class="caselist">
+              <details class="case">
+                <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg><span><span class="enum">SHP1014</span> vs <span class="enum">SHP1009</span> — under these weights, SHP1014 loses to SHP1009</span></summary>
+                <p class="hint" style="margin:0 0 8px 22px;">Expands to both shipments' score terms under the current and the proposed weights, rendered from the stored decision receipt. Never composed prose.</p>
+              </details>
+              <details class="case">
+                <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg><span><span class="enum">SHP1002</span> vs <span class="enum">SHP1021</span> — under these weights, SHP1002 wins (was: loses)</span></summary>
+                <p class="hint" style="margin:0 0 8px 22px;">Expands to both shipments' score terms under the current and the proposed weights, rendered from the stored decision receipt. Never composed prose.</p>
+              </details>
+              <p class="moreline">… 10 more</p>
+            </div>
+            <div class="simfoot">
+              <button type="button" class="b b-neu">Discard</button>
+              <button type="button" class="b b-con">Publish as v4</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">10.C — <span>Simulation — stale</span></p>
+<p class="screen-note">
+  A weight changed after this simulation ran, so the preview no longer matches the fields above it. The whole
+  result block drops to reduced emphasis and Publish is <strong>genuinely disabled</strong>, with the reason
+  stated rather than left to be guessed. There is deliberately no “publish anyway” override — re-running is
+  the only path, which is the entire point of U27's simulate-before-publish gate. The banner copy is verbatim.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#10c" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#10c" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="col800">
+          <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
+          <div class="wrow">
+            <label class="wlabel" for="p10c-slack">Slack (<span class="mono">w_slack</span>)</label>
+            <input class="inp inp-num" id="p10c-slack" type="text" inputmode="numeric" value="3" aria-describedby="p10c-slack-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p10c-slack-u">per minute, cap 120 — changed since the run below</span>
+          </div>
+          <div style="margin-top:24px;">
+            <button type="button" class="b b-con">Simulate against last 30 days</button>
+          </div>
+          <div class="sim is-stale">
+            <div class="banner banner-warn" style="margin-bottom:12px;" role="status">
+              <svg class="ic" aria-hidden="true"><use href="#i-tri-alert"/></svg>
+              <span>Weights changed since this simulation — re-run before publishing.</span>
+            </div>
+            <p class="cap">Simulation: proposed weights vs. current policy <span class="mono">v3</span></p>
+            <p class="head"><span class="tnum">12</span> of <span class="tnum">340</span> decisions in the last 30 days would flip</p>
+            <div class="caselist">
+              <details class="case">
+                <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg><span><span class="enum">SHP1014</span> vs <span class="enum">SHP1009</span> — under these weights, SHP1014 loses to SHP1009</span></summary>
+                <p class="hint" style="margin:0 0 8px 22px;">Expands to both shipments' score terms under the current and the proposed weights, rendered from the stored decision receipt. Never composed prose.</p>
+              </details>
+              <p class="moreline">… 11 more</p>
+            </div>
+            <div class="simfoot">
+              <button type="button" class="b b-neu">Discard</button>
+              <button type="button" class="b b-con" disabled title="Re-run the simulation against the current weights" aria-describedby="sim-c-why">Publish as v4</button>
+              <span class="vh" id="sim-c-why">Re-run the simulation against the current weights</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">10.D — <span>Simulation — published</span></p>
+<p class="screen-note">
+  The panel is replaced by a confirmation block and the version header above the editor updates in the same
+  moment, so the admin can see what they are now editing <em>from</em>. The green here is feedback about an
+  action succeeding, rendered as a banner — never as a status chip, because in this product a green chip
+  means a confirmed dock promise and the two must not be confusable. Position disambiguates what colour
+  cannot. No confetti, no celebration: a capacity system does not celebrate.
+  <br><strong>Gap 8, re-flagged:</strong> <code>edge-cases.md</code> #3 specifies the concurrent-publish
+  conflict behaviour but no string exists for it, so none is rendered here. It needs a copy template.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#10d" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#10d" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="col800">
+          <p class="verhdr">Current policy: <span class="mono tnum">v4</span> · published <span class="mono tnum">2026-08-21</span> · Anshul G.</p>
+          <div class="wrow">
+            <label class="wlabel" for="p10d-slack">Slack (<span class="mono">w_slack</span>)</label>
+            <input class="inp inp-num" id="p10d-slack" type="text" inputmode="numeric" value="2" aria-describedby="p10d-slack-u" autocomplete="off" spellcheck="false">
+            <span class="unit" id="p10d-slack-u">per minute, cap 120</span>
+          </div>
+          <div style="margin-top:24px;">
+            <button type="button" class="b b-con">Simulate against last 30 days</button>
+          </div>
+          <div class="banner banner-ok" style="margin-top:16px;" role="status">
+            <svg class="ic" aria-hidden="true"><use href="#i-circle-check"/></svg>
+            <span>Published as v4. Every decision from now on is scored against this version.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 11 · Audit tab ─────────── -->
+<p class="screen-label">11.1 — <span>Audit tab — filtered log, row focused, Export hovered</span></p>
+<p class="screen-note">
+  Recent-first is the default and not a sort the user has to choose, so the Time column carries no sort
+  control suggesting otherwise. Export always respects the current filter set — never a silent full-table
+  dump. The Resource column is plain reference text with <strong>no interactive affordance at all</strong>:
+  no underline, no hover, no cursor change — a read-only value that looks clickable and does nothing reads
+  as broken, and the tab that owns a resource already is its detail view. System events are the literal
+  string “(system)”, never a blank actor: a blank reads as a data-quality problem, “(system)” reads as a
+  fact. Human actors carry a stable user id in a title tooltip, so a renamed user's history stays
+  attributable. Row 3 shows the two-ring keyboard focus; Export shows hover.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#11" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#11" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Date range: last 7 days <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Actor <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Event type <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="a1-q">Search the audit log</label>
+            <input id="a1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-neu is-hover"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+        </div>
+        <div class="tablecard">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:18%"><col style="width:22%"><col style="width:44%"></colgroup>
+            <thead>
+              <tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono tnum">14:02 today</td>
+                <td title="user_id 8f2c…a417">Anshul G.</td>
+                <td>Policy published</td>
+                <td class="mono">policy_versions v4</td>
+              </tr>
+              <tr class="is-hover">
+                <td class="mono tnum">13:40 today</td>
+                <td title="user_id 41b9…c022">Neha B.</td>
+                <td>User removed</td>
+                <td class="mono" title="priya.sharma@setuhaul.example (Gate/Yard, Jaipur)">priya.sharma@… (Gate/Yard, Jaipur)</td>
+              </tr>
+              <tr class="is-focus">
+                <td class="mono tnum">11:15 today</td>
+                <td class="actor-sys">(system)</td>
+                <td>Rule updated</td>
+                <td class="mono">Jaipur · NEW_START_CUTOFF</td>
+              </tr>
+              <tr>
+                <td class="mono tnum">09:52 today</td>
+                <td title="user_id 8f2c…a417">Anshul G.</td>
+                <td>Rule created</td>
+                <td class="mono">Gurugram · WEIGHT_LIMIT</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">11.2 — <span>Audit tab — filter dropdown open</span></p>
+<p class="screen-note">
+  When a filter changes, focus <strong>stays on the filter control</strong> — results update beneath it and
+  focus never jumps into the result set. Event type is a controlled vocabulary in sentence case, never free
+  text and never a raw enum; the options carry no severity colour and no per-event icon, because colour in
+  this product is rationed to promise state and danger, and an audit event is neither.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#11b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#11b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Date range: last 7 days <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Actor <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="popwrap">
+            <button type="button" class="pill is-kbfocus" aria-expanded="true">Event type <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+            <div class="menu" role="group" aria-label="Filter by event type" style="left:0;top:44px;">
+              <label><input type="checkbox" checked> Policy published</label>
+              <label><input type="checkbox" checked> User removed</label>
+              <label><input type="checkbox"> User invited</label>
+              <label><input type="checkbox" checked> Rule created</label>
+              <label><input type="checkbox" checked> Rule updated</label>
+            </div>
+          </div>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="a2-q">Search the audit log</label>
+            <input id="a2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-neu"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+        </div>
+        <div class="tablecard">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:18%"><col style="width:22%"><col style="width:44%"></colgroup>
+            <thead>
+              <tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="mono tnum">14:02 today</td><td title="user_id 8f2c…a417">Anshul G.</td><td>Policy published</td><td class="mono">policy_versions v4</td></tr>
+              <tr><td class="mono tnum">13:40 today</td><td title="user_id 41b9…c022">Neha B.</td><td>User removed</td><td class="mono" title="priya.sharma@setuhaul.example (Gate/Yard, Jaipur)">priya.sharma@… (Gate/Yard, Jaipur)</td></tr>
+              <tr><td class="mono tnum">11:15 today</td><td class="actor-sys">(system)</td><td>Rule updated</td><td class="mono">Jaipur · NEW_START_CUTOFF</td></tr>
+              <tr><td class="mono tnum">09:52 today</td><td title="user_id 8f2c…a417">Anshul G.</td><td>Rule created</td><td class="mono">Gurugram · WEIGHT_LIMIT</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────── 12 · Empty, loading and error states ─────────── -->
+<p class="screen-label">12.A — <span>Users list — nothing yet</span></p>
+<p class="screen-note">
+  Every empty and error state on this console uses one stack: icon, headline naming what is true right now,
+  one line explaining why, then the next action — or nothing at all if none is needed. The icon is the only
+  graphic; no illustration, spot art or mascot anywhere. “Nothing yet” and “no results” are deliberately
+  <em>not</em> the same treatment — <code>inbox</code> versus <code>search-x</code>, and different copy,
+  because a working-but-empty system and a filter that matched nothing are different facts.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12a" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12a" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="empty">
+          <svg class="ic ic-xl" aria-hidden="true"><use href="#i-inbox"/></svg>
+          <h3>No users have been invited yet.</h3>
+          <p>Once you invite someone, they will show up here.</p>
+          <div class="act"><button type="button" class="b b-con">Invite user</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.B — <span>Users search returned nothing</span></p>
+<p class="screen-note">
+  The search term is quoted back in the headline so the admin can see exactly what was matched against, and
+  the explanation names the three fields that <em>are</em> searched rather than leaving them to be guessed.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="e2-q">Search users</label>
+            <input id="e2-q" type="search" value="rj14" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-con">Invite user</button>
+        </div>
+        <div class="empty">
+          <svg class="ic ic-xl" aria-hidden="true"><use href="#i-search-x"/></svg>
+          <h3>No user matches “rj14”.</h3>
+          <p>Try a different name, email, or role.</p>
+          <div class="act"><button type="button" class="b b-neu">Clear search</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.C — <span>Audit log — filter matches nothing, Export genuinely disabled</span></p>
+<p class="screen-note">
+  Export is disabled here <strong>with its reason stated</strong>, not silently allowed to produce an empty
+  file. An admin must never receive a download and be left guessing whether it is empty because nothing
+  happened or because something went wrong. A disabled control with no stated reason is a dead end, so the
+  tooltip and the accessible description both carry the cause.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12c" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12c" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Date range: today <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Actor: Ramesh K. <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Event type: Policy published <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="e3-q">Search the audit log</label>
+            <input id="e3-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-neu" disabled title="There is nothing to export with this filter" aria-describedby="e3-why"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+          <span class="vh" id="e3-why">There is nothing to export with this filter</span>
+        </div>
+        <div class="empty">
+          <svg class="ic ic-xl" aria-hidden="true"><use href="#i-search-x"/></svg>
+          <h3>No events match this filter.</h3>
+          <p>Widen the date range, or clear the actor and event-type filters.</p>
+          <div class="act"><button type="button" class="b b-neu">Clear filters</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.D — <span>Table loading</span></p>
+<p class="screen-note">
+  Not a centred spinner. Skeleton rows match the final table exactly — same 44px row height, same fixed
+  column widths, a block in each cell at roughly the width of the real value — so nothing reflows when data
+  lands. The shell stays fully rendered; only the content region loads, and there is no global top-of-page
+  progress bar. Pulse is 1600ms ease-in-out and becomes a static block under
+  <code>prefers-reduced-motion</code>.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12d" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12d" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="tb">
+          <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="vh" for="e4-q">Search users</label>
+            <input id="e4-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="button" class="b b-con">Invite user</button>
+        </div>
+        <div class="tablecard" aria-busy="true" aria-describedby="e4-status">
+          <span class="vh" id="e4-status" role="status">Loading the user list</span>
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:30%"><col style="width:13%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sk" style="display:block;height:14px;width:70%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:88%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:60%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:78%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:54%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:20px;margin-left:auto;"></span></td>
+              </tr>
+              <tr>
+                <td><span class="sk" style="display:block;height:14px;width:62%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:80%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:72%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:48%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:54%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:20px;margin-left:auto;"></span></td>
+              </tr>
+              <tr>
+                <td><span class="sk" style="display:block;height:14px;width:66%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:84%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:72%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:48%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:60%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:20px;margin-left:auto;"></span></td>
+              </tr>
+              <tr>
+                <td><span class="sk" style="display:block;height:14px;width:58%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:76%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:60%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:66%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:54%;"></span></td>
+                <td><span class="sk" style="display:block;height:14px;width:20px;margin-left:auto;"></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.E — <span>Load failed</span></p>
+<p class="screen-note">
+  Scoped to the content region, not the whole app: the rail, top bar and tabs stay rendered and usable, so a
+  failed user list does not strand the admin on a dead page. The headline names the likeliest cause instead
+  of “Something went wrong”, and the only action is the one that can actually help.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12e" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12e" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="empty" role="alert">
+          <svg class="ic ic-xl" aria-hidden="true"><use href="#i-octagon-alert"/></svg>
+          <h3>Couldn't load the user list — usually a connection problem.</h3>
+          <div class="act"><button type="button" class="b b-neu">Try again</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.F — <span>Write failed</span></p>
+<p class="screen-note">
+  A banner across the top of the content region rather than a full-region state, because the table beneath is
+  still valid and still readable. <strong>“Nothing has changed” is essential phrasing, not optional</strong>:
+  in a system where a click commits warehouse capacity, an admin must know that a failure left no partial
+  state behind. It carries weight 600 for exactly that reason.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Admin</div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections">
+        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
+        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+      </div>
+      <div class="tbicons">
+        <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="rail2" aria-label="Primary">
+        <a href="#12f" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
+        <a href="#12f" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
+      </nav>
+      <div class="main2">
+        <div class="banner banner-dang" role="alert" style="margin-bottom:16px;">
+          <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+          <span>That didn't save. <strong style="font-weight:600;">Nothing has changed.</strong>
+            <button type="button" class="b-link" style="margin-left:8px;">Try again</button></span>
+        </div>
+        <div class="tablecard">
+          <table class="tbl">
+            <colgroup><col style="width:16%"><col style="width:30%"><col style="width:13%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Neha B.</td><td class="mono">neha.bansal@setuhaul.example</td><td>Ops</td><td>Jaipur, Gurugram</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Neha B."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+              <tr><td>Ramesh K.</td><td class="mono">ramesh.kumar@setuhaul.example</td><td>Gate/Yard</td><td>Jaipur</td><td class="st-on">Active</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Ramesh K."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+              <tr><td>Priya S.</td><td class="mono">priya.sharma@setuhaul.example</td><td>Gate/Yard</td><td>Jaipur</td><td class="st-off">Inactive</td>
+                <td><div class="rowactions"><button type="button" class="ibtn" aria-label="Actions for Priya S."><svg class="ic ic-md" aria-hidden="true"><use href="#i-ellipsis"/></svg></button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">12.G — <span>Maintenance (full page)</span></p>
+<p class="screen-note">
+  The one state that replaces the whole page rather than the content region. It always states an estimated
+  duration — a maintenance page that doesn't say how long reads as indefinite, which is worse than the wait
+  — and it names what happened to work in progress, because that is the actual question. No action button:
+  there is nothing the admin can usefully do, and a dead “Retry” would pretend otherwise.
+</p>
+<div class="stack">
+  <div class="frame">
+    <div style="background:var(--surface-base);padding:24px;">
+      <div class="empty" role="status">
+        <svg class="ic ic-xl" aria-hidden="true"><use href="#i-wrench"/></svg>
+        <h3>SetuHaul Dock Command is being updated.</h3>
+        <p>Expect this to take about 15 minutes.</p>
+        <p style="margin-top:8px;">Anything you were doing has been saved — just come back and pick up where you left off.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

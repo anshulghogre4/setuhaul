@@ -16,18 +16,6 @@ and its unique indexes are the only source of truth for what actually got booked
 
 ---
 
-## For judges / presenters — start here
-
-| Need | Go to |
-|---|---|
-| One-minute pitch + live demo order + recovery steps | [docs/PRESENTATION_CHECKLIST.md](docs/PRESENTATION_CHECKLIST.md) |
-| Answer to every §11.2 stress scenario and §12.1 challenge question, with code refs | [docs/PRESENTATION_QA_ANSWERS.md](docs/PRESENTATION_QA_ANSWERS.md) |
-| Full click-by-click script with chat lines and pass/fail criteria | [docs/DEMO_MANUAL_RUNBOOK.md](docs/DEMO_MANUAL_RUNBOOK.md) |
-| Judge-facing SHOW / ANSWER / PARTIAL / NOT YET scoreboard vs the PDF | [docs/DEMO_DAY_READINESS.md](docs/DEMO_DAY_READINESS.md) |
-| Hosted URLs to open right now | [Hosted](#hosted-public-no-secrets) below |
-
----
-
 ## Status (read this first)
 
 Sprint 1–3 exit gates are **COMPLETE** (Sprint 3 closed 2026-08-12) — this is the FDE

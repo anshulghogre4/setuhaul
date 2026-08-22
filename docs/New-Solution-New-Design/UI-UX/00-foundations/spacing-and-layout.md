@@ -1,0 +1,197 @@
+# Spacing and layout
+
+> Structure follows Checklist Design's *Spacing / Grid* checklist. Decisions follow `../README.md` U8, U20, U39, U43.
+
+## Base unit
+
+**4px.** Every spacing, sizing and radius value is a multiple. Nothing is arbitrary.
+
+```
+space-0    0px      space-4    16px     space-10   40px
+space-1    4px      space-5    20px     space-12   48px
+space-2    8px      space-6    24px     space-16   64px
+space-3    12px     space-8    32px     space-20   80px
+```
+
+`space-2` (8px) and `space-4` (16px) do most of the work. `space-6` (24px) separates sections. Values
+above `space-8` are rare outside empty states and login.
+
+---
+
+## Density scale — one system, three calibrations
+
+U8: the same components at three densities rather than three design languages. Density changes **padding
+and row height only** — never type size, never border width, never icon size.
+
+| | `compact` | `comfortable` | `spacious` |
+|---|---|---|---|
+| **Used by** | Planner, ops console | Carrier, admin, driver chat | Gate kiosk |
+| **Row height** | 36px | 44px | 64px |
+| **Cell padding (y/x)** | 8px / 12px | 12px / 16px | 20px / 24px |
+| **Card padding** | 12px | 16px | 24px |
+| **Stack gap** | 8px | 12px | 16px |
+| **Min tap target** | 32px¹ | 44px | 56px |
+| **Button height** | 32px | 40px | 56px |
+
+¹ **The one exception to the 44px rule, and it is deliberate.** `compact` is desktop-and-pointer only,
+where 32px is comfortable for a mouse. It is never used on a touch surface. Every touch context —
+driver, gate, and any tablet use of the consoles — runs `comfortable` or `spacious`, where the 44×44px
+target holds without exception.
+
+**Be precise about what the standard actually requires.** WCAG 2.2 **SC 2.5.8 Target Size (Minimum) is
+24×24px and is Level AA**. The **44×44px** figure used here is **SC 2.5.5 Target Size (Enhanced), which is
+Level AAA**. We exceed AA on the field surfaces deliberately — gloved hands on a tablet and one-handed use
+at a roadside justify it — but it is a self-imposed bar, not a conformance requirement. It is recorded
+this way so that a later "we only need AA" review does not shrink the kiosk to 24px believing it still
+meets our stated standard. `compact`'s 32px still clears the actual AA minimum comfortably.
+
+**Density is a surface-level setting, not a user preference toggle** in v1. A planner cannot switch their
+queue to spacious. If that becomes a request, it is a preference on top of the surface default, not a
+replacement for it.
+
+---
+
+## Radius
+
+```
+radius-sm    4px     Chips, badges, small inputs
+radius-md    6px     Buttons, inputs, table row hover
+radius-lg    8px     Cards, panels, option cards
+radius-xl    12px    Modals, drawers
+radius-full  9999px  Avatars, count badges, toggle switches
+```
+
+Restrained on purpose. Heavy rounding reads as consumer software and costs perceived precision, which is
+the wrong signal for a system making capacity commitments. Nothing in the operational surfaces exceeds
+`radius-lg`.
+
+**Toggle switches added to `radius-full` 2026-08-22** — found missing during the mockup gate pass
+(`components.md` §12's toggle control is pill-shaped by convention, and had no permitted radius to reach
+for). A switch is a binary physical-analogue control, the same category as an avatar or a count badge
+in the sense that a fully-rounded shape is the control's identity rather than a decoration — it does not
+open the door `radius-lg`'s restraint exists to hold shut for cards, panels, or option cards.
+
+---
+
+## App shell (U39, U43)
+
+```
+┌──┬──────────────────────────────────────────────────────────────┐
+│  │  TOP BAR                                              56px   │
+│  ├──────────────────────────────────────────────────────────────┤
+│IR│                                                              │
+│56│  CONTENT                                                     │
+│px│                                                              │
+│  │                                                              │
+│  ├──────────────────────────────────────────────────────────────┤
+│  │  STATUS BAR                                           28px   │
+└──┴──────────────────────────────────────────────────────────────┘
+   ▲
+   └─ 4px facility accent stripe on the rail's outer edge (U40)
+```
+
+The stripe's colour comes from `color.md`'s **Facility accent** section (U59) — six hues drawn from
+outside the four semantic colours, safe to use here precisely because this stripe and the facility
+switcher swatch are the *only* two places that palette is permitted to appear.
+
+| Region | Size | Contents |
+|---|---|---|
+| **Icon rail** | 56px fixed, expands to 240px overlay on hover/focus | Role-scoped destinations, icon + tooltip. Active item marked by a 2px inner accent bar, not a fill. |
+| **Top bar** | 56px | Facility switcher (left) · global search (centre) · notifications, help, user menu (right) |
+| **Status bar** | 28px | Connection state · last sync · active facility · pending count · policy version |
+| **Content** | fills | Per-surface |
+
+The rail **expands as an overlay**, not by pushing content. A planner hovering the rail must not cause the
+queue to reflow — reflow under the cursor is the same class of error as U19's re-sorting under the click.
+
+### Content padding
+
+| Density | Padding |
+|---|---|
+| `compact` | 16px |
+| `comfortable` | 24px |
+| `spacious` | 32px |
+
+---
+
+## Grid
+
+**12 columns, 16px gutters** for content areas that need one — carrier portal, admin console, empty
+states. Operational surfaces (planner queue, dock board, gate kiosk) are **not** grid-driven; their layout
+is dictated by data, and forcing a 12-column grid onto a Gantt chart produces worse results than laying it
+out directly.
+
+State plainly which surfaces use the grid rather than claiming a universal system that half the product
+ignores.
+
+---
+
+## Breakpoints (U20)
+
+Shared token scale; each surface declares the range it actually supports.
+
+```
+bp-sm    640px
+bp-md    768px
+bp-lg    1024px
+bp-xl    1280px
+bp-2xl   1536px
+```
+
+| Surface | Supported range | Primary target | Below range |
+|---|---|---|---|
+| **Driver chat** | 320–768px | 390×844 phone | Scales up to 768px, capped content width 640px |
+| **Gate kiosk** | 1024–1366px, landscape locked | 1280×800 tablet | Not supported — shows an orientation prompt |
+| **Planner / ops** | 1280px+ | 1600×900 | 1024–1280px degrades to a reduced column set; below 1024px shows "use a larger screen" |
+| **Carrier portal** | 768px+ | 1280×800 | Responsive down to 768px |
+| **Admin console** | 1024px+ | 1440×900 | Below 1024px, tables scroll horizontally |
+
+**The planner console honestly does not work on a phone.** Seven fields, keyboard operation and a 30-second
+decision budget do not survive 390px. Rather than shipping a degraded version that invites confirming
+decisions with insufficient information, it states the requirement. A planner who needs to triage from a
+phone is a real need — and the right answer is a purpose-built mobile triage view later, not a squeezed
+table now.
+
+---
+
+## Table layout rules
+
+The planner queue is the hardest layout in the product (§7.3). Rules that make it work:
+
+- **Sticky header**, always. A planner 30 rows deep must still know which column is which.
+- **Fixed first column** (shipment identity) when horizontal scrolling occurs, so a scrolled row never
+  becomes anonymous.
+- **Column widths are fixed, not auto.** Auto-width causes reflow as data changes, and reflow under a live
+  queue is the U19 problem again.
+- **Text truncates with ellipsis; the displacement warning never truncates.** If it does not fit, the
+  column grows. §7.3 calls it the single most important field, so it does not get to be the one that is cut.
+- **Row expansion pushes rows down** (U44), never overlays them.
+
+---
+
+## Z-index scale
+
+```
+z-base          0     Content
+z-sticky       100    Sticky table headers
+z-shell        200    Icon rail, top bar, status bar
+z-rail-expand  300    Expanded rail overlay
+z-dropdown     400    Menus, comboboxes, facility switcher
+z-drawer       500    Side drawers
+z-modal        600    Modal dialogs
+z-toast        700    Toasts — above modals, so an undo is never hidden
+z-tooltip      800    Tooltips
+```
+
+**Toasts sit above modals deliberately.** The undo toast (U41) must be reachable even if something else
+has opened, since undo is time-boxed and a hidden undo is no undo.
+
+---
+
+## Safe areas and field conditions
+
+- Driver PWA respects `env(safe-area-inset-*)`; the composer sits above the home indicator.
+- Gate kiosk assumes no notch but does assume a case — 24px minimum edge padding so a bezel or grip
+  does not obscure a control.
+- **Nothing interactive within 16px of a viewport edge** on touch surfaces. Edge-adjacent targets are hard
+  to hit accurately with gloves and easy to trigger accidentally with a palm.

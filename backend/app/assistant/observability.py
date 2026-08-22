@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 ENVIRONMENT = "poc"
 APP_VERSION = "sprint4"
@@ -91,7 +92,13 @@ def tool_outcome_metadata(tool_calls: list[dict[str, Any]], ux_state: str) -> di
     }
 
 
-def observe_input(message_count: int, extra_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def observe_input(
+    message_count: int,
+    extra_metadata: dict[str, Any] | None = None,
+    *,
+    thread_id: str | None = None,
+    session_id: str | None = None,
+) -> dict[str, Any]:
     if messages_loaded_metric is not None:
         messages_loaded_metric.record(message_count, COMMON_ATTRIBUTES)
     metadata = {
@@ -99,6 +106,10 @@ def observe_input(message_count: int, extra_metadata: dict[str, Any] | None = No
         "history_size_bucket": get_history_size_bucket(message_count),
         **COMMON_ATTRIBUTES,
     }
+    if thread_id:
+        metadata["thread_id"] = thread_id
+    if session_id:
+        metadata["session_id"] = session_id
     if extra_metadata:
         metadata.update(sanitize_for_trace(extra_metadata))
     return {
@@ -106,6 +117,41 @@ def observe_input(message_count: int, extra_metadata: dict[str, Any] | None = No
         "metadata": metadata,
         "tags": ["setuhaul", "agentcore", "driver-chat"],
     }
+
+
+def child_invoke_config(
+    parent_config: dict[str, Any],
+    extra_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Nested LLM/tool config. No run_name so children keep their own span names."""
+    metadata = dict(parent_config.get("metadata") or {})
+    if extra_metadata:
+        metadata.update(sanitize_for_trace(extra_metadata))
+    return {
+        "metadata": metadata,
+        "tags": list(parent_config.get("tags") or []),
+    }
+
+
+@contextmanager
+def chat_turn_trace(
+    config: dict[str, Any],
+    inputs: dict[str, Any] | None = None,
+) -> Iterator[Any]:
+    """One parent LangSmith run per user turn. No-op if langsmith is unavailable."""
+    try:
+        from langsmith import trace
+    except Exception:  # noqa: BLE001
+        yield None
+        return
+    with trace(
+        name=str(config.get("run_name") or "setuhaul.chat"),
+        run_type="chain",
+        metadata=dict(config.get("metadata") or {}),
+        tags=list(config.get("tags") or []),
+        inputs=sanitize_for_trace(inputs or {}),
+    ) as run:
+        yield run
 
 
 def observe_output(response_text: str) -> None:

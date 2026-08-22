@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#E2E8F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
+<title>Shared shell, auth and account mockups — SetuHaul Dock Command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from 00-foundations/color.md
+   (copied unchanged from 01-driver-chat/mockup.html)
+   Light palette on bare :root. Dark redefines tokens only.
+   ============================================================ */
+:root {
+  /* neutral — slate-tinted */
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+  /* semantic ramps */
+  --blue-50:#EFF6FF;  --blue-400:#60A5FA; --blue-500:#3B82F6; --blue-600:#2563EB; --blue-900:#1E3A8A;
+  --amber-50:#FFFBEB; --amber-400:#FBBF24;--amber-500:#F59E0B;--amber-600:#D97706;--amber-700:#B45309;--amber-900:#78350F;
+  --green-50:#ECFDF5; --green-400:#34D399;--green-500:#10B981;--green-600:#059669;--green-700:#047857;--green-900:#064E3B;
+  --red-50:#FEF2F2;   --red-400:#F87171;  --red-500:#EF4444;  --red-600:#DC2626;  --red-900:#7F1D1D;
+  --violet-500:#8B5CF6;
+
+  /* surfaces + text */
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --surface-selected:var(--blue-50);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+  --border-focus:var(--blue-600);
+
+  /* promise state */
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
+  --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
+  --urgent:var(--red-600);
+
+  /* board chrome — deliberately not app surface, so screens read as objects */
+  --board-bg:var(--neutral-200);
+  --board-panel:var(--neutral-0);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+  --board-line:var(--neutral-300);
+  --board-accent:var(--violet-500);
+
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono',Consolas,monospace;
+
+  --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --surface-base:var(--neutral-950);
+    --surface-raised:var(--neutral-900);
+    --surface-hover:var(--neutral-800);
+    --surface-selected:#12203c;
+    --text-primary:var(--neutral-50);
+    --text-secondary:var(--neutral-300);
+    --text-tertiary:var(--neutral-400);
+    --border-subtle:var(--neutral-800);
+    --border-default:var(--neutral-700);
+    --border-focus:var(--blue-400);
+    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
+    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
+    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
+    --urgent:var(--red-400);
+    --board-bg:var(--neutral-950);
+    --board-panel:var(--neutral-900);
+    --board-ink:var(--neutral-50);
+    --board-muted:var(--neutral-400);
+    --board-line:var(--neutral-800);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --surface-base:var(--neutral-950);
+  --surface-raised:var(--neutral-900);
+  --surface-hover:var(--neutral-800);
+  --surface-selected:#12203c;
+  --text-primary:var(--neutral-50);
+  --text-secondary:var(--neutral-300);
+  --text-tertiary:var(--neutral-400);
+  --border-subtle:var(--neutral-800);
+  --border-default:var(--neutral-700);
+  --border-focus:var(--blue-400);
+  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+  --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
+  --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
+  --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
+  --urgent:var(--red-400);
+  --board-bg:var(--neutral-950);
+  --board-panel:var(--neutral-900);
+  --board-ink:var(--neutral-50);
+  --board-muted:var(--neutral-400);
+  --board-line:var(--neutral-800);
+}
+
+/* ============================================================
+   FUNCTIONAL TOKENS this board needs on top of the copied block.
+   Every one maps to an existing entry in color.md / elevation-and-depth.md
+   / motion.md — none reaches into a primitive from a component (U85).
+   ============================================================ */
+:root{
+  color-scheme:light;
+  /* elevation-and-depth.md — shadow tokens */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,.10);
+  --shadow-lg:0 12px 32px rgba(15,23,42,.14);
+  --scrim:rgba(15,23,42,.5);
+
+  /* elevation-and-depth.md — layer surfaces */
+  --surface-sunken:var(--neutral-100);
+  --surface-floating:var(--neutral-0);      /* tier 3 */
+  --border-floating:var(--border-subtle);
+  --surface-overlay:var(--neutral-0);       /* tier 4 */
+
+  /* color.md — interactive state colors */
+  --interactive-default:var(--blue-600);
+  --interactive-hover:#1D4ED8;              /* blue-700 */
+  --interactive-on:var(--neutral-0);
+  --interactive-disabled-bg:var(--neutral-200);
+  --interactive-disabled-text:var(--neutral-400);
+  --text-disabled:var(--neutral-400);
+  --text-link:var(--blue-600);
+
+  /* color.md — feedback colors (never rendered in a promise-state slot) */
+  --fb-danger-bg:var(--red-50);   --fb-danger-text:#B91C1C; --fb-danger-border:var(--red-600);
+  --fb-info-bg:var(--blue-50);    --fb-info-text:#1D4ED8;   --fb-info-border:var(--blue-500);
+  --destructive-bg:var(--red-600);--destructive-on:var(--neutral-0);
+
+  /* color.md — facility accent (rail stripe + switcher swatch only) */
+  --facility-1:var(--violet-500);
+
+  --skeleton:var(--neutral-200);
+  --avatar-bg:var(--neutral-600);
+
+  /* motion.md — duration and easing */
+  --d-instant:0ms; --d-fast:120ms; --d-base:200ms; --d-slow:320ms;
+  --e-out:cubic-bezier(0.16,1,0.3,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --shadow-sm:none;
+    --shadow-md:0 4px 12px rgba(0,0,0,.40);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+    --scrim:rgba(0,0,0,.65);
+    --surface-sunken:var(--neutral-950);
+    --surface-floating:var(--neutral-800);
+    --border-floating:var(--border-default);
+    --surface-overlay:var(--neutral-800);
+    --interactive-default:var(--blue-500);
+    --interactive-hover:var(--blue-400);
+    --interactive-on:var(--neutral-950);
+    --interactive-disabled-bg:var(--neutral-800);
+    --interactive-disabled-text:var(--neutral-600);
+    --text-disabled:var(--neutral-600);
+    --text-link:var(--blue-400);
+    --fb-danger-bg:#3a1414;  --fb-danger-text:var(--red-400); --fb-danger-border:var(--red-500);
+    --fb-info-bg:#122040;    --fb-info-text:var(--blue-400);  --fb-info-border:var(--blue-500);
+    --destructive-bg:var(--red-500); --destructive-on:var(--neutral-950);
+    --skeleton:var(--neutral-800);
+  }
+}
+:root[data-theme="dark"]{
+  --shadow-sm:none;
+  --shadow-md:0 4px 12px rgba(0,0,0,.40);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  --scrim:rgba(0,0,0,.65);
+  --surface-sunken:var(--neutral-950);
+  --surface-floating:var(--neutral-800);
+  --border-floating:var(--border-default);
+  --surface-overlay:var(--neutral-800);
+  --interactive-default:var(--blue-500);
+  --interactive-hover:var(--blue-400);
+  --interactive-on:var(--neutral-950);
+  --interactive-disabled-bg:var(--neutral-800);
+  --interactive-disabled-text:var(--neutral-600);
+  --text-disabled:var(--neutral-600);
+  --text-link:var(--blue-400);
+  --fb-danger-bg:#3a1414;  --fb-danger-text:var(--red-400); --fb-danger-border:var(--red-500);
+  --fb-info-bg:#122040;    --fb-info-text:var(--blue-400);  --fb-info-border:var(--blue-500);
+  --destructive-bg:var(--red-500); --destructive-on:var(--neutral-950);
+  --skeleton:var(--neutral-800);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--board-bg); color:var(--board-ink);
+  font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+  touch-action:manipulation;
+}
+button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transparent;}
+
+/* skip link */
+.skip{
+  position:absolute; left:-9999px; top:8px;
+  background:var(--board-panel); color:var(--board-ink);
+  border:1px solid var(--board-line); border-radius:var(--r-md);
+  padding:10px 16px; font-size:14px; font-weight:500; z-index:10;
+}
+.skip:focus{left:16px;}
+
+/* ---------- board chrome ---------- */
+.board-head{
+  max-width:1280px; margin:0 auto; padding:40px 24px 8px;
+  display:flex; flex-wrap:wrap; gap:24px; align-items:flex-end; justify-content:space-between;
+}
+.board-head h1{
+  font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700; margin:0 0 6px;
+  text-wrap:balance;
+}
+.board-head p{margin:0; color:var(--board-muted); font-size:14px; max-width:62ch; line-height:1.55;}
+.eyebrow{
+  font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--board-accent); margin:0 0 10px;
+}
+.toggle{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  background:var(--board-panel); color:var(--board-ink);
+  border:1px solid var(--board-line); border-radius:999px;
+  padding:9px 16px; font:inherit; font-size:13px; font-weight:500;
+}
+.toggle:hover{background:var(--surface-hover);}
+.toggle:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px;}
+
+.legend{
+  max-width:1280px; margin:20px auto 0; padding:0 24px;
+  display:flex; flex-wrap:wrap; gap:10px;
+}
+.legend-item{
+  display:inline-flex; align-items:center; gap:7px;
+  font-size:12px; color:var(--board-muted);
+  background:var(--board-panel); border:1px solid var(--board-line);
+  border-radius:999px; padding:6px 12px;
+}
+.sw{width:11px;height:11px;border-radius:3px;flex:none;}
+
+.grid{
+  max-width:1280px; margin:0 auto; padding:32px 24px 72px;
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:44px 32px; align-items:start;
+}
+.cell{display:flex; flex-direction:column; gap:12px; grid-column:span 2; min-width:0;}
+.cell.s3{grid-column:span 3;}
+.cell.s5{grid-column:1/-1;}
+.sec{grid-column:1/-1; border-top:1px solid var(--board-line); padding-top:24px; margin-top:8px;}
+.sec h2{font-size:19px; font-weight:600; letter-spacing:-.01em; margin:0 0 6px; text-wrap:balance;}
+.sec p{margin:0; font-size:13.5px; line-height:1.55; color:var(--board-muted); max-width:78ch;}
+.cap{display:flex; flex-direction:column; gap:4px;}
+.cap h3{font-size:14px; font-weight:600; letter-spacing:-.01em; margin:0; text-wrap:balance;}
+.cap span{font-size:12.5px; color:var(--board-muted); line-height:1.5;}
+.ref{font-family:var(--font-data); font-size:10.5px; color:var(--board-accent); letter-spacing:.02em;}
+.note{margin:0; font-size:12px; line-height:1.5; color:var(--board-muted);}
+.flag{
+  margin:0; font-size:12px; line-height:1.5; color:var(--board-muted);
+  border-left:3px solid var(--amber-500); padding-left:10px;
+}
+.foot-note{
+  max-width:1280px; margin:0 auto; padding:0 24px 72px;
+  font-size:13px; line-height:1.6; color:var(--board-muted); max-width:80ch;
+}
+.foot-note code, .sec code{font-family:var(--font-data); font-size:12px;}
+
+/* ---------- app plate: a slice of real app surface ---------- */
+.plate{
+  background:var(--surface-base); color:var(--text-primary);
+  border:1px solid var(--board-line); border-radius:var(--r-xl);
+  padding:24px; display:flex; justify-content:center; overflow:hidden;
+}
+.plate.auth{padding:40px 24px;}     /* login is one of two places >32px is allowed */
+.plate.pad0{padding:0;}
+.plate.left{justify-content:flex-start;}
+
+/* ---------- icons (Lucide, 2px stroke, inline) ---------- */
+.ic{
+  width:16px; height:16px; flex:none; fill:none; stroke:currentColor;
+  stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+.ic.s14{width:14px;height:14px;} .ic.s20{width:20px;height:20px;}
+.ic.s24{width:24px;height:24px;} .ic.s32{width:32px;height:32px;}
+
+/* ---------- card chassis (tier 1 · Raised) ---------- */
+.card{
+  width:400px; max-width:100%;
+  background:var(--surface-raised); border:1px solid var(--border-subtle);
+  border-radius:var(--r-lg); box-shadow:var(--shadow-sm); padding:32px;
+}
+.wordmark{font-size:32px; line-height:1.25; font-weight:700; letter-spacing:-.02em;}
+.wordmark + .submark{font-size:14px; line-height:1.5; color:var(--text-secondary); margin-top:4px;}
+.h2{font-size:20px; line-height:1.4; font-weight:600; letter-spacing:-.01em; text-wrap:balance;}
+.h3{font-size:16px; line-height:1.5; font-weight:600;}
+.lead{font-size:14px; line-height:1.5; color:var(--text-secondary);}
+.helper{font-size:13px; line-height:1.4; color:var(--text-tertiary);}
+.mono{font-family:var(--font-data); font-variant-numeric:tabular-nums;}
+.stack-40{margin-top:40px;} .stack-24{margin-top:24px;} .stack-16{margin-top:16px;}
+.stack-12{margin-top:12px;} .stack-8{margin-top:8px;} .stack-4{margin-top:4px;}
+
+/* ---------- form controls (components.md §12) ---------- */
+.field{display:block;}
+.field + .field{margin-top:16px;}
+.lbl{display:block; font-size:13px; line-height:1.4; font-weight:500; color:var(--text-secondary); margin-bottom:8px;}
+.inp{
+  width:100%; height:44px; padding:0 12px;
+  font:400 14px/1.5 var(--font-ui); color:var(--text-primary);
+  background:var(--surface-raised); border:1px solid var(--border-default); border-radius:var(--r-md);
+  transition:border-color var(--d-fast) var(--e-out);
+}
+.inp::placeholder{color:var(--text-tertiary);}
+.inp:hover{border-color:var(--neutral-400);}
+.pwwrap{position:relative;}
+.pwwrap .inp{padding-right:40px;}
+.pwbtn{
+  position:absolute; right:0; top:0; width:40px; height:44px;
+  display:grid; place-items:center; padding:0;
+  background:none; border:0; border-radius:var(--r-md);
+  color:var(--text-secondary); cursor:pointer;
+}
+.pwbtn:hover{color:var(--text-primary);}
+
+/* ---------- buttons (components.md §1) ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-width:80px; height:44px; padding:0 16px;
+  font:500 14px/1 var(--font-ui); border:1px solid transparent; border-radius:var(--r-md);
+  cursor:pointer; transition:background-color var(--d-fast) var(--e-out);
+}
+.btn{text-decoration:none;}
+.btn.full{width:100%;}
+.btn.sm{height:40px;}
+.btn.constructive{background:var(--interactive-default); color:var(--interactive-on);}
+.btn.constructive:hover{background:var(--interactive-hover);}
+.btn.neutral{background:transparent; border-color:var(--border-default); color:var(--text-primary);}
+.btn.neutral:hover{background:var(--surface-hover);}
+.btn.destructive{background:var(--destructive-bg); color:var(--destructive-on);}
+.btn[disabled]{
+  background:var(--interactive-disabled-bg); color:var(--interactive-disabled-text);
+  border-color:transparent; cursor:not-allowed;
+}
+.tlink{
+  display:inline-block; background:none; border:0; padding:0;
+  font:400 14px/1.5 var(--font-ui); color:var(--text-link); cursor:pointer; text-decoration:underline;
+  text-underline-offset:2px; transition:color var(--d-fast) var(--e-out);
+}
+.tlink:hover{color:var(--interactive-hover);}
+.tlink.sm{font-size:13px;}
+
+/* ---------- alerts (color.md · feedback tokens — never in a state slot) ---------- */
+.alert{
+  display:flex; gap:8px; align-items:flex-start;
+  padding:12px; border-radius:var(--r-md);
+  font-size:13px; line-height:1.45;
+}
+.alert .ic{margin-top:1px;}
+.alert.danger{background:var(--fb-danger-bg); border:1px solid var(--fb-danger-border); color:var(--fb-danger-text);}
+.alert.info{background:var(--fb-info-bg); border:1px solid var(--fb-info-border); color:var(--fb-info-text);}
+.errline{
+  display:flex; gap:8px; align-items:flex-start; margin-top:8px;
+  font-size:13px; line-height:1.45; color:var(--fb-danger-text);
+}
+
+/* ---------- list rows (role picker) ---------- */
+.rows{margin-top:24px; border-top:1px solid var(--border-subtle);}
+.row{
+  display:block; width:100%; text-align:left;
+  min-height:44px; padding:12px 16px;
+  background:none; border:0; border-bottom:1px solid var(--border-subtle);
+  cursor:pointer; transition:background-color var(--d-fast) var(--e-out);
+}
+.row:hover,.row.hov{background:var(--surface-hover);}
+.row .r1{font-size:14px; line-height:1.5; font-weight:600; color:var(--text-primary);}
+.row .r2{font-size:13px; line-height:1.4; color:var(--text-secondary); margin-top:2px;}
+
+/* ---------- requirements list ---------- */
+.reqs{margin:8px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px;}
+.reqs li{display:flex; gap:8px; align-items:center; font-size:13px; line-height:1.4; color:var(--text-tertiary);}
+.reqs li.met{color:var(--text-secondary);}
+.dot{width:6px; height:6px; border-radius:50%; background:var(--neutral-400); flex:none; margin:0 5px;}
+
+/* ---------- app shell: top bar (components.md §7) ---------- */
+.topbar{
+  width:100%; height:56px; flex:none;
+  display:flex; align-items:center; gap:16px; padding:0 16px;
+  background:var(--surface-raised); border-bottom:1px solid var(--border-default);
+}
+.fsw{
+  display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 12px;
+  background:none; border:1px solid var(--border-subtle); border-radius:var(--r-md);
+  font:500 14px/1 var(--font-ui); color:var(--text-primary); cursor:pointer;
+}
+.fsw:hover{background:var(--surface-hover);}
+.fswatch{width:12px; height:12px; border-radius:var(--r-sm); background:var(--facility-1); flex:none;}
+.gsearch{
+  flex:1; min-width:0; max-width:420px; margin:0 auto; height:40px;
+  display:flex; align-items:center; gap:8px; padding:0 12px;
+  background:var(--surface-base); border:1px solid var(--border-subtle); border-radius:var(--r-md);
+  color:var(--text-tertiary); font:400 14px/1 var(--font-ui); cursor:pointer; text-align:left;
+}
+.gsearch:hover{border-color:var(--border-default);}
+.gsearch .grow{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.kbd{
+  font:500 11px/1 var(--font-data); color:var(--text-tertiary);
+  border:1px solid var(--border-default); border-radius:var(--r-sm);
+  padding:4px 8px; background:var(--surface-raised);
+}
+.tbcluster{display:flex; align-items:center; gap:4px; margin-left:auto;}
+.iconbtn{
+  position:relative; width:32px; height:32px; display:grid; place-items:center; padding:0;
+  background:none; border:0; border-radius:var(--r-md);
+  color:var(--text-secondary); cursor:pointer;
+  transition:background-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.iconbtn:hover,.iconbtn.hov{background:var(--surface-hover); color:var(--text-primary);}
+.badge{
+  position:absolute; top:-2px; right:-2px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:9999px; background:var(--interactive-default); color:var(--neutral-0);
+  font:600 10px/16px var(--font-data); text-align:center;
+}
+.avatar{
+  width:32px; height:32px; border-radius:50%; border:0; padding:0; cursor:pointer;
+  background:var(--avatar-bg); color:var(--neutral-0);
+  font:600 12px/1 var(--font-ui); display:grid; place-items:center;
+  transition:box-shadow var(--d-fast) var(--e-out);
+}
+.avatar:hover{box-shadow:0 0 0 2px var(--border-default);}
+.tip{
+  margin-top:8px; align-self:center;
+  background:var(--neutral-900); color:var(--neutral-50);
+  font:500 12px/1.3 var(--font-ui); padding:6px 8px; border-radius:var(--r-md);
+}
+:root[data-theme="dark"] .tip{background:var(--neutral-200); color:var(--neutral-900);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tip{background:var(--neutral-200); color:var(--neutral-900);}}
+
+/* ---------- popover (tier 3 · Floating) ---------- */
+.popwrap{width:100%; display:flex; flex-direction:column; align-items:flex-end; padding:0 16px 24px;}
+.pop{
+  width:280px; margin-top:8px;
+  background:var(--surface-floating); border:1px solid var(--border-floating);
+  border-radius:var(--r-md); box-shadow:var(--shadow-md); overflow:hidden;
+}
+.pop.wide{width:400px;}
+.pop-id{padding:12px 16px;}
+.pop-id .n{font-size:14px; line-height:1.5; font-weight:600;}
+.pop-id .r{font-size:13px; line-height:1.4; color:var(--text-secondary); margin-top:2px;}
+.sep{height:1px; background:var(--border-subtle); border:0; margin:0;}
+.mi{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  width:100%; min-height:44px; padding:10px 16px; text-align:left;
+  background:none; border:0; font:400 14px/1.5 var(--font-ui); color:var(--text-primary);
+  cursor:pointer; transition:background-color var(--d-fast) var(--e-out);
+}
+.mi{text-decoration:none;}
+.mi:hover,.mi.hov{background:var(--surface-hover);}
+.mi.danger{color:var(--fb-danger-text);}
+.mi .ic{color:var(--text-tertiary);}
+.miblock{padding:12px 16px;}
+.miblock .mlbl{font-size:14px; line-height:1.5; margin-bottom:8px;}
+.confirmblock{padding:12px 16px; background:var(--surface-hover);}
+.confirmblock p{margin:0 0 12px; font-size:13px; line-height:1.45; color:var(--text-secondary);}
+
+/* ---------- segmented control ---------- */
+.seg{
+  display:flex; gap:4px; padding:4px;
+  background:var(--surface-sunken); border:1px solid var(--border-subtle); border-radius:var(--r-md);
+}
+.seg button{
+  flex:1; height:32px; padding:0 8px; border:0; border-radius:var(--r-sm);
+  background:none; color:var(--text-secondary); font:400 13px/1 var(--font-ui); cursor:pointer;
+}
+.seg button:hover{color:var(--text-primary);}
+.seg button[aria-checked="true"]{
+  background:var(--surface-raised); color:var(--text-primary); font-weight:600; box-shadow:var(--shadow-sm);
+}
+
+/* ---------- notifications feed ---------- */
+.pop-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 16px;}
+.feed{max-height:432px; overflow:hidden;}
+.nitem{
+  display:block; width:100%; text-align:left; padding:12px 16px;
+  background:none; border:0; border-bottom:1px solid var(--border-subtle); cursor:pointer;
+  color:inherit; text-decoration:none;
+  transition:background-color var(--d-fast) var(--e-out);
+}
+.nitem:hover,.nitem.hov{background:var(--surface-hover);}
+.nrow{display:flex; align-items:baseline; gap:8px;}
+.ndot{width:6px; height:6px; border-radius:50%; background:var(--interactive-default); flex:none; align-self:center;}
+.ndot.blank{background:transparent;}
+.ntitle{
+  font-size:14px; line-height:1.5; color:var(--text-primary); flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.nitem.unread .ntitle{font-weight:600;}
+.nts{font-family:var(--font-data); font-size:11px; line-height:1.3; font-weight:500; color:var(--text-tertiary); flex:none;}
+.nbody{
+  font-size:13px; line-height:1.45; color:var(--text-secondary); margin:2px 0 0 14px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+
+/* ---------- empty / error states (components.md §13) ---------- */
+.est{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+  padding:40px 24px;
+}
+.est .ic{color:var(--text-tertiary);}
+.est .t{font-size:16px; line-height:1.5; font-weight:600; margin-top:16px; text-wrap:balance;}
+.est .b{font-size:14px; line-height:1.5; color:var(--text-secondary); margin-top:8px; max-width:44ch;}
+.est .acts{margin-top:24px; display:flex; gap:16px; flex-wrap:wrap; justify-content:center;}
+
+/* ---------- skeleton (components.md §13, U78 · motion.md shimmer) ---------- */
+.sk{background:var(--skeleton); border-radius:var(--r-sm); height:12px; animation:shim 1600ms ease-in-out infinite;}
+.sk.t{height:14px;} .sk.w40{width:40%;} .sk.w70{width:70%;} .sk.w25{width:25%;} .sk.w55{width:55%;}
+@keyframes shim{0%,100%{opacity:1;} 50%{opacity:.55;}}
+
+/* ---------- search palette (tier 4 · Overlay) ---------- */
+.scrimplate{background:var(--scrim); padding:24px; display:flex; justify-content:center;}
+.palette{
+  width:640px; max-width:100%;
+  background:var(--surface-overlay); border-radius:var(--r-xl); box-shadow:var(--shadow-lg);
+  border:1px solid transparent; overflow:hidden; overscroll-behavior:contain;
+}
+:root[data-theme="dark"] .palette{border-color:var(--border-default);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .palette{border-color:var(--border-default);}}
+.qrow{display:flex; align-items:center; gap:12px; height:56px; padding:0 16px;}
+.qrow .qin{
+  flex:1; border:0; background:none; padding:0;
+  font:400 16px/1.5 var(--font-ui); color:var(--text-primary);
+}
+.qrow .qin::placeholder{color:var(--text-tertiary);}
+.scope{padding:0 16px 12px; font-size:12px; line-height:1.33; color:var(--text-tertiary);}
+.results{max-height:400px; overflow:hidden; padding-bottom:8px;}
+.ghead{
+  padding:12px 16px 4px; font-size:12px; line-height:1.33; font-weight:600;
+  letter-spacing:.04em; text-transform:uppercase; color:var(--text-tertiary);
+}
+.res{
+  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+  min-height:44px; padding:10px 16px; background:none; border:0; border-left:2px solid transparent;
+  cursor:pointer; color:inherit; text-decoration:none;
+  transition:background-color var(--d-fast) var(--e-out);
+}
+.res:hover{background:var(--surface-hover);}
+.res.hi{background:var(--surface-selected); border-left-color:var(--interactive-default);}
+.res .id{font-family:var(--font-data); font-size:14px; font-weight:500; color:var(--text-primary); flex:none; min-width:88px;}
+.res .meta{
+  font-size:13px; line-height:1.4; color:var(--text-secondary); min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.res .meta b{font-weight:600; color:var(--text-primary);}
+.res .meta .mono{font-size:13px;}
+
+/* ---------- settings page ---------- */
+.region{width:100%; background:var(--surface-base); padding:24px;}
+.col{max-width:720px;}
+.ptitle{font-size:24px; line-height:1.33; font-weight:600; letter-spacing:-.01em; text-wrap:balance;}
+.scard{
+  background:var(--surface-raised); border:1px solid var(--border-subtle);
+  border-radius:var(--r-lg); box-shadow:var(--shadow-sm); padding:16px; margin-top:24px;
+}
+.scard .h3{margin-bottom:12px;}
+.ro{display:flex; flex-direction:column; gap:12px;}
+.ro .pair{display:flex; flex-direction:column; gap:2px;}
+.ro .k{font-size:13px; line-height:1.4; font-weight:500; color:var(--text-secondary);}
+.ro .v{font-size:14px; line-height:1.5; color:var(--text-primary);}
+.ntable{width:100%; border-collapse:collapse;}
+.ntable th{
+  font-size:12px; line-height:1.33; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--text-tertiary); text-align:right; padding:8px 0 8px 16px; white-space:nowrap;
+}
+.ntable th:first-child{text-align:left; padding-left:0;}
+.ntable td{padding:12px 0 12px 16px; font-size:14px; line-height:1.5; vertical-align:middle; text-align:right;}
+.ntable td:first-child{text-align:left; padding-left:0;}
+.ntable tr + tr td{border-top:1px solid var(--border-subtle);}
+.swcell{display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;}
+.swlab{font-size:13px; line-height:1.4; color:var(--text-secondary); min-width:22px; text-align:left;}
+.sw2{
+  width:36px; height:20px; border-radius:9999px; border:0; padding:0; position:relative;
+  background:var(--neutral-300); cursor:pointer; flex:none;
+  transition:background-color var(--d-base) var(--e-out), box-shadow var(--d-fast) var(--e-out);
+}
+.sw2::after{
+  content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+  background:var(--neutral-0); transition:transform var(--d-base) var(--e-out);
+}
+.sw2:hover{box-shadow:0 0 0 2px var(--border-subtle);}
+.sw2[aria-checked="true"]{background:var(--interactive-default);}
+.sw2[aria-checked="true"]::after{transform:translateX(16px);}
+.sw2[disabled]{background:var(--interactive-disabled-bg); cursor:not-allowed; box-shadow:none;}
+.sw2[disabled]::after{background:var(--neutral-100);}
+.muterow{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:12px;}
+.dim{opacity:.5;}
+.radios{display:flex; flex-direction:column; gap:12px;}
+.radios label{display:flex; align-items:center; gap:8px; font-size:14px; line-height:1.5; cursor:pointer;}
+.radios input{width:16px; height:16px; accent-color:var(--interactive-default); margin:0;}
+.faclist{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px;}
+.faclist li{font-size:14px; line-height:1.5;}
+.saverow{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:12px 0; border-top:1px solid var(--border-subtle);
+}
+
+/* ---------- modal (tier 4 · Overlay) ---------- */
+.modal{
+  width:480px; max-width:100%;
+  background:var(--surface-overlay); border-radius:var(--r-xl); box-shadow:var(--shadow-lg); padding:24px;
+  overscroll-behavior:contain;
+}
+:root[data-theme="dark"] .modal{border:1px solid var(--border-default);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .modal{border:1px solid var(--border-default);}}
+.modal .acts{display:flex; gap:16px; justify-content:flex-end; margin-top:24px;}
+
+/* ---------- focus (elevation-and-depth.md · two-ring) ---------- */
+button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-visible{
+  outline:2px solid var(--border-focus); outline-offset:2px;
+}
+.inp:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px; border-color:var(--border-focus);}
+.showfocus{outline:2px solid var(--border-focus); outline-offset:2px;}
+
+/* forced-colors fallback (U87) — restores separation when shadows are stripped */
+@media (forced-colors:active){
+  .card,.pop,.palette,.modal,.scard,.plate{border:1px solid CanvasText;}
+}
+
+/* motion.md — reduced motion keeps information, drops decoration */
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:0ms !important;}
+  .sk{animation:none;}
+}
+
+@media (max-width:1180px){
+  .grid{grid-template-columns:1fr;}
+  .cell,.cell.s3,.cell.s5{grid-column:auto;}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#artboards">Skip to the artboards</a>
+
+<!-- Lucide symbols, 2px stroke, 24x24 viewBox -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" focusable="false">
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-circle-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-link-2-off" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7"/><path d="M15 7h2a5 5 0 0 1 4 8"/><path d="M8 12h4"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-search-x" viewBox="0 0 24 24"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-circle-check-big" viewBox="0 0 24 24"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-shield-off" viewBox="0 0 24 24"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1 1 0 0 1 1.52 0C14.51 4.2 17.02 5 20 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/></symbol>
+  <symbol id="i-map-pin-off" viewBox="0 0 24 24"><path d="M12.75 7.09a3 3 0 0 1 2.16 2.16"/><path d="M17.072 17.072c-1.634 2.17-3.527 3.912-4.471 4.727a1 1 0 0 1-1.202.03C9.539 20.193 4 14.993 4 10a8 8 0 0 1 1.432-4.568"/><path d="m2 2 20 20"/><path d="M8.475 2.818A8 8 0 0 1 20 10a7.9 7.9 0 0 1-.577 2.978"/></symbol>
+  <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+</svg>
+
+<header class="board-head">
+  <div>
+    <p class="eyebrow">SetuHaul Dock Command · shared shell</p>
+    <h1>Cross-cutting screens — auth, shell chrome and account</h1>
+    <p>The surfaces every role touches and no surface owns: signing in, picking a role, resetting a
+    password, the top bar and its three popovers, global search, account settings, and the states that
+    replace a whole content region. Values are swept against <code>00-foundations/</code>; nothing here
+    is a new decision.</p>
+  </div>
+  <button class="toggle" id="tt" type="button">Switch to <span id="ttl">Dark</span></button>
+</header>
+
+<div class="legend">
+  <span class="legend-item"><span class="sw" style="background:var(--neutral-0);border:1px solid var(--board-line)"></span>Tier 1 Raised · cards</span>
+  <span class="legend-item"><span class="sw" style="background:var(--neutral-100)"></span>Tier 3 Floating · popovers</span>
+  <span class="legend-item"><span class="sw" style="background:var(--neutral-300)"></span>Tier 4 Overlay · palette, modal</span>
+  <span class="legend-item"><span class="sw" style="background:var(--blue-600)"></span>Primary action / info feedback</span>
+  <span class="legend-item"><span class="sw" style="background:var(--red-600)"></span>Danger feedback only</span>
+  <span class="legend-item"><span class="sw" style="background:var(--violet-500)"></span>Facility accent · switcher swatch only</span>
+</div>
+
+<main class="grid" id="artboards" tabindex="-1">
+
+  <!-- ============ A · SIGNING IN ============ -->
+  <div class="sec">
+    <h2>A · Signing in</h2>
+    <p>One shared sign-in for all six roles; the role decides the landing surface, never a separate login
+    page. Email and phone share one field because drivers know their number and office staff know their
+    email. Errors never disclose whether an account exists. No “Remember me”, no SSO, no “Sign up” —
+    accounts are invite-only.</p>
+  </div>
+
+  <!-- 1 · SIGN-IN DEFAULT -->
+  <div class="cell">
+    <div class="cap"><h3>Sign-in — at rest</h3>
+      <span>Centred 400px card, 32px padding, tier-1 elevation. Login is one of only two places where spacing above 32px is permitted, so the 40px gap under the wordmark is deliberate, not drift.</span>
+      <span class="ref">auth-and-scoping.md §Sign-in · spacing-and-layout.md · prompt 1</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="wordmark" translate="no">SetuHaul</div>
+        <div class="submark">Dock Command</div>
+        <form class="stack-40" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">Email or phone</span>
+            <input class="inp" type="text" name="identifier-1" autocomplete="username" inputmode="email" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="lbl">Password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="password-1" autocomplete="current-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Sign in</button>
+          </div>
+          <div class="stack-24">
+            <a class="tlink" href="#">Forgotten your password?</a>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">No illustration, no split-screen hero, no “or continue with” divider. The toggle sits
+    inside the field’s right edge and never covers typed characters — the input reserves 40px for it.</p>
+  </div>
+
+  <!-- 2 · SIGN-IN REVEALED -->
+  <div class="cell">
+    <div class="cap"><h3>Sign-in — password revealed, field focused</h3>
+      <span>The toggle is a button with <span class="mono" translate="no">aria-pressed</span>, not a checkbox; its accessible name flips between “Show password” and “Hide password”. Focus ring is the same 2px/2px-offset ring every other control gets — not a subtler treatment because it is small.</span>
+      <span class="ref">prompt 1 · color.md §Interactive · components.md §12</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="wordmark" translate="no">SetuHaul</div>
+        <div class="submark">Dock Command</div>
+        <form class="stack-40" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">Email or phone</span>
+            <input class="inp" type="text" name="identifier-2" value="priya.nair@setuhaul.in" autocomplete="username" inputmode="email" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="lbl">Password</span>
+            <span class="pwwrap">
+              <input class="inp showfocus" type="text" name="password-2" value="dock-command-2026" autocomplete="current-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="true" aria-label="Hide password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye-off"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Sign in</button>
+          </div>
+          <div class="stack-24">
+            <a class="tlink" href="#">Forgotten your password?</a>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">Password managers must work: correct <span class="mono" translate="no">autocomplete</span> values and
+    no paste blocking anywhere in this flow.</p>
+  </div>
+
+  <!-- 3 · SIGN-IN ERROR -->
+  <div class="cell">
+    <div class="cap"><h3>Sign-in — “Those details don’t match”</h3>
+      <span>Deliberately identical wording whether the identifier or the password was wrong. Neither field is singled out, because singling one out is the disclosure.</span>
+      <span class="ref">auth-and-scoping.md §Sign-in · color.md §Feedback</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="wordmark" translate="no">SetuHaul</div>
+        <div class="submark">Dock Command</div>
+        <form class="stack-40" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">Email or phone</span>
+            <input class="inp" type="text" name="identifier-3" value="priya.nair@setuhaul.in" autocomplete="username" inputmode="email" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="lbl">Password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="password-3" value="wrongpass" autocomplete="current-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="alert danger stack-16" role="alert">
+            <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+            <span>Those details don’t match.</span>
+          </div>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Sign in</button>
+          </div>
+          <div class="stack-24">
+            <a class="tlink" href="#">Forgotten your password?</a>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">The message sits below the last field and above the action, carries
+    <span class="mono" translate="no">circle-alert</span> and <span class="mono" translate="no">role="alert"</span> — never colour
+    alone, and announced assertively because an unsuccessful action always is.</p>
+  </div>
+
+  <!-- 4 · SIGN-IN RATE LIMITED -->
+  <div class="cell">
+    <div class="cap"><h3>Sign-in — rate limited</h3>
+      <span>A cause and a next action, never a silent failure. The button is Disabled — the one legitimate use of that state: temporary, self-resolving, and paired with the reason directly above it.</span>
+      <span class="ref">auth-and-scoping.md §Sign-in · components.md §1, §18</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="wordmark" translate="no">SetuHaul</div>
+        <div class="submark">Dock Command</div>
+        <form class="stack-40" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">Email or phone</span>
+            <input class="inp" type="text" name="identifier-4" value="priya.nair@setuhaul.in" autocomplete="username" inputmode="email" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="lbl">Password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="password-4" autocomplete="current-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="alert danger stack-16" role="alert">
+            <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+            <span>Too many attempts. Try again in 5 minutes.</span>
+          </div>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit" disabled
+              title="Locked for 5 minutes after too many attempts">Sign in</button>
+          </div>
+          <div class="stack-24">
+            <a class="tlink" href="#">Forgotten your password?</a>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">“Forgotten your password?” stays live — a locked-out user still has a route forward.</p>
+  </div>
+
+  <!-- 5 · ROLE PICKER -->
+  <div class="cell">
+    <div class="cap"><h3>Role picker — multi-role accounts only</h3>
+      <span>Same chassis as sign-in on purpose: this is the second beat of one flow, not a new place. An account resolving to a single role never sees this screen.</span>
+      <span class="ref">auth-and-scoping.md §Role landing · prompt 2</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="h2">Choose how to sign in</div>
+        <p class="lead stack-8">You have more than one role. This decides what you see.</p>
+        <div class="rows">
+          <button class="row" type="button">
+            <span class="r1">Warehouse Planner</span>
+            <span class="r2">Jaipur DC</span>
+          </button>
+          <button class="row hov" type="button">
+            <span class="r1">Operations Manager</span>
+            <span class="r2">All facilities</span>
+          </button>
+          <button class="row showfocus" type="button">
+            <span class="r1">Gate Officer</span>
+            <span class="r2">Gurugram Cross-Dock</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="note">Row two shows hover, row three keyboard focus. The whole row is the target; choosing
+    proceeds immediately — no radio, no selected state, no “Continue”. Hover changes background only, never
+    lifts or shifts. No icons and no facility swatch: accent colour is reserved for the rail stripe and the
+    switcher.</p>
+  </div>
+
+  <!-- ============ B · PASSWORD RESET ============ -->
+  <div class="sec">
+    <h2>B · Password reset</h2>
+    <p>Two screens sharing one card chassis. Screen A is reached from sign-in; screen B is a cold entry from
+    an emailed link, with no session and no context. Neither screen ever confirms that an account exists,
+    and the “sent” state is informational blue, not success green — nothing has succeeded yet.</p>
+  </div>
+
+  <!-- 6 · RESET REQUEST -->
+  <div class="cell">
+    <div class="cap"><h3>Reset — request a link</h3>
+      <span>Email only, not the combined "Email or phone" field sign-in uses. Same field height, padding and button as the sign-in card otherwise, because a drifting chassis reads as a different product mid-flow.</span>
+      <span class="ref">prompt 3 artboard A · components.md §12</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="h2">Reset your password</div>
+        <p class="lead stack-8">Enter the email address you sign in with.</p>
+        <form class="stack-24" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">Email</span>
+            <input class="inp" type="email" name="identifier-6" autocomplete="username" inputmode="email" spellcheck="false">
+          </label>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Send reset link</button>
+          </div>
+          <div class="stack-24">
+            <a class="tlink" href="#">Back to sign in</a>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">Validation is on blur, not keystroke — telling someone their half-typed address is wrong
+    is noise, not help.</p>
+    <p class="note"><strong>Decided 2026-08-22: email-only for v1.</strong> A phone-registered account
+    (the driver role) has no self-service reset path here — defensible because the driver session is
+    already long-lived with silent refresh (<code>auth-and-scoping.md</code>), so re-entering a password at
+    all is rare. If ever needed, the fallback is an admin-assisted reset, not a new phone-OTP flow.</p>
+  </div>
+
+  <!-- 7 · RESET SUBMITTED -->
+  <div class="cell">
+    <div class="cap"><h3>Reset — link sent (informational, not success)</h3>
+      <span>The form is replaced in place. Wording is identical whether or not an account matched, so the screen can never be used to enumerate accounts.</span>
+      <span class="ref">prompt 3 artboard A · color.md §Feedback (info)</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="h2">Reset your password</div>
+        <div class="alert info stack-16" role="status">
+          <svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>
+          <span>If that email matches an account, a reset link is on its way. The link works once
+          and expires in 30 minutes.</span>
+        </div>
+        <div class="stack-24">
+          <a class="tlink" href="#">Back to sign in</a>
+        </div>
+      </div>
+    </div>
+    <p class="note">No checkmark animation, no confetti, no green. Green in this product means CONFIRMED
+    or “an action succeeded” — an unread email is neither.</p>
+    <p class="note"><strong>Resolved 2026-08-22:</strong> <code>iconography.md</code> now has a dedicated
+    "Informational callout" entry — <span class="mono">info</span>, distinct from <span class="mono">circle-help</span>
+    (contextual explanation) and <span class="mono">circle-alert</span> (something is wrong). This panel
+    uses it rather than borrowing the warning glyph.</p>
+  </div>
+
+  <!-- 8 · SET NEW PASSWORD -->
+  <div class="cell">
+    <div class="cap"><h3>Set a new password</h3>
+      <span>Two fields, each with its own independent show/hide toggle. Requirements are static helper text with a state marker per line — a check when met, a neutral dot when not — never colour as the only signal.</span>
+      <span class="ref">prompt 3 artboard B · components.md §12</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="h2">Set a new password</div>
+        <form class="stack-24" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">New password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="newpw-8" value="••••••••••••" autocomplete="new-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <ul class="reqs">
+            <li class="met"><svg class="ic s14" aria-hidden="true"><use href="#i-check"/></svg>At least 12 characters</li>
+            <li><span class="dot" aria-hidden="true"></span>Not a password you have used here before</li>
+          </ul>
+          <label class="field">
+            <span class="lbl">Confirm new password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="confirmpw-8" value="••••••••••••" autocomplete="new-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Set password and sign in</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="flag"><strong>Flagged:</strong> the two requirement strings are placeholders. No foundations
+    file states a password policy, so the rule text is not spec-sourced — the component, its markers and its
+    typography are; the wording is not.</p>
+  </div>
+
+  <!-- 9 · MISMATCH -->
+  <div class="cell">
+    <div class="cap"><h3>Set a new password — mismatch</h3>
+      <span>Error text below the field it belongs to, with an alert icon and <span class="mono" translate="no">aria-describedby</span>. This one <em>can</em> name the field, because which field is wrong is not a secret here.</span>
+      <span class="ref">prompt 3 artboard B · components.md §12</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="h2">Set a new password</div>
+        <form class="stack-24" onsubmit="return false">
+          <label class="field">
+            <span class="lbl">New password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="newpw-9" value="••••••••••••" autocomplete="new-password" spellcheck="false">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+          </label>
+          <div class="field">
+            <span class="lbl" id="cpw9-lbl">Confirm new password</span>
+            <span class="pwwrap">
+              <input class="inp" type="password" name="confirmpw-9" value="••••••••" aria-invalid="true"
+                aria-labelledby="cpw9-lbl" aria-describedby="cpw9-err" style="border-color:var(--fb-danger-border)">
+              <button class="pwbtn" type="button" aria-pressed="false" aria-label="Show password">
+                <svg class="ic s20" aria-hidden="true"><use href="#i-eye"/></svg>
+              </button>
+            </span>
+            <span class="errline" id="cpw9-err">
+              <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+              Those two passwords don’t match.
+            </span>
+          </div>
+          <div class="stack-24">
+            <button class="btn constructive full" type="submit">Set password and sign in</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="note">No coloured strength meter anywhere — the requirements list is the whole feedback
+    mechanism, and it says what to do rather than scoring what was typed.</p>
+  </div>
+
+  <!-- 10 · EXPIRED LINK -->
+  <div class="cell">
+    <div class="cap"><h3>Reset link expired or already used</h3>
+      <span>The most likely real outcome after the happy path. The form is not rendered at all — no disabled fields sitting behind a message, which would read as a broken page rather than an expired link.</span>
+      <span class="ref">prompt 3 artboard B · components.md §13 (cause + next action)</span></div>
+    <div class="plate auth">
+      <div class="card">
+        <div class="est" style="padding:8px 0 0">
+          <svg class="ic s32" aria-hidden="true"><use href="#i-link-2-off"/></svg>
+          <div class="t">This reset link has expired or has already been used.</div>
+          <div class="b">Links work once and last 30 minutes.</div>
+          <div class="acts"><button class="btn constructive" type="button">Request a new link</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Same wording for “expired” and “already used”, for the same reason sign-in has one error
+    string: neither state should teach an attacker anything about the account.</p>
+  </div>
+
+  <!-- ============ C · SHELL CHROME AND POPOVERS ============ -->
+  <div class="sec">
+    <h2>C · Top bar, help and the two popovers</h2>
+    <p>56px top bar: facility switcher left, global search centre, then notifications, help and the user
+    menu on the right. Both popovers are tier-3 Floating, opaque, 8px below the bar, non-modal — no scrim,
+    nothing behind them is dimmed or blocked, <span class="mono" translate="no">Escape</span> closes and returns focus to
+    the trigger. The icon rail and status bar are out of frame here; the rail’s destinations are role-scoped
+    and are not this file’s to invent.</p>
+  </div>
+
+  <!-- 11 · TOP BAR -->
+  <div class="cell s5">
+    <div class="cap"><h3>Top bar — anatomy at rest</h3>
+      <span>The facility switcher always shows the facility name, never an icon alone, and carries the only swatch of facility accent permitted outside the rail stripe. Search is a click target and a <span class="mono" translate="no">Cmd/Ctrl+K</span> target for the same palette.</span>
+      <span class="ref">components.md §7 · color.md §Facility accent (U59) · iconography.md</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar">
+          <button class="fsw" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="fswatch" aria-hidden="true"></span>
+            Jaipur DC
+            <svg class="ic s14" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+          <button class="gsearch" type="button" aria-label="Search shipments, appointments, drivers, carriers, facilities">
+            <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="grow">Search shipments, appointments, drivers, carriers, facilities</span>
+            <span class="kbd" aria-hidden="true">⌘&nbsp;K</span>
+          </button>
+          <div class="tbcluster">
+            <button class="iconbtn" type="button" aria-label="Notifications, 3 unread">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span class="badge" aria-hidden="true">3</span>
+            </button>
+            <button class="iconbtn" type="button" aria-label="Contact support">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-circle-help"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div style="height:96px;background:var(--surface-base)"></div>
+      </div>
+    </div>
+    <p class="note">The unread count is spoken in the bell’s accessible name (“Notifications, 3 unread”), so
+    the badge is never the only carrier of that fact.</p>
+  </div>
+
+  <!-- 12 · HELP -->
+  <div class="cell">
+    <div class="cap"><h3>Help — a contact route, nothing more</h3>
+      <span>This product has no help centre, no article library and no FAQ; explanations attach to the thing that confuses people, inline, elsewhere. Activating this goes straight to a human — no menu, no panel, no intermediate choice.</span>
+      <span class="ref">U73 · components.md §15 · prompt 7</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn" type="button" aria-label="Notifications, 3 unread">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span class="badge" aria-hidden="true">3</span>
+            </button>
+            <button class="iconbtn hov" type="button" aria-label="Contact support" aria-describedby="tip-help">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-circle-help"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div style="background:var(--surface-base);display:flex;justify-content:flex-end;padding:0 56px 24px 0">
+          <span class="tip" role="tooltip" id="tip-help">Contact support</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">Hover and focus both show the tooltip; the hover background is a 32px 6px-radius square.
+    No badge ever appears on this icon — it is not a feed.</p>
+  </div>
+
+  <!-- 13 · USER MENU MULTI-ROLE -->
+  <div class="cell">
+    <div class="cap"><h3>User menu — multi-role account</h3>
+      <span>Identity header is inert: no hover, no cursor change, no focus ring. Role and scope are what change what a click means, so they are shown; the email is not, because it changes nothing.</span>
+      <span class="ref">prompt 4 · components.md §10 · elevation tier 3</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn" type="button" aria-label="Notifications, 3 unread">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span class="badge" aria-hidden="true">3</span>
+            </button>
+            <button class="iconbtn" type="button" aria-label="Contact support">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-circle-help"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop" role="menu" aria-label="Account">
+            <div class="pop-id">
+              <div class="n">Priya Nair</div>
+              <div class="r">Warehouse Planner — Jaipur DC</div>
+            </div>
+            <hr class="sep">
+            <button class="mi" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false">
+              Switch role
+              <svg class="ic s14" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+            </button>
+            <div class="miblock">
+              <div class="mlbl" id="appearance-13">Appearance</div>
+              <div class="seg" role="radiogroup" aria-labelledby="appearance-13">
+                <button type="button" role="radio" aria-checked="true">Light</button>
+                <button type="button" role="radio" aria-checked="false">Dark</button>
+                <button type="button" role="radio" aria-checked="false">System</button>
+              </div>
+            </div>
+            <hr class="sep">
+            <a class="mi" href="#" role="menuitem">Settings</a>
+            <hr class="sep">
+            <button class="mi danger" type="button" role="menuitem">Sign out</button>
+            <button class="mi danger" type="button" role="menuitem" aria-expanded="false">Sign out everywhere</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">No leading icons — this shell has no menu-icon vocabulary and inventing one here would
+    commit every future menu to it. The chevron on “Switch role” is a trailing submenu indicator, not a
+    label icon.</p>
+  </div>
+
+  <!-- 14 · USER MENU SINGLE ROLE + CONFIRM -->
+  <div class="cell">
+    <div class="cap"><h3>User menu — single role, sign-out-everywhere expanded</h3>
+      <span>“Switch role” is absent from the markup entirely for a single-role account, not greyed out. “Sign out everywhere” expands in place rather than opening a dialog — one destructive step, still inside the popover it started in.</span>
+      <span class="ref">prompt 4 · components.md §18 (Hidden ≠ Disabled)</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn" type="button" aria-label="Notifications, no unread">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+            </button>
+            <button class="iconbtn" type="button" aria-label="Contact support">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-circle-help"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="Account menu — Rahul Sethi">RS</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop" role="menu" aria-label="Account">
+            <div class="pop-id">
+              <div class="n">Rahul Sethi</div>
+              <div class="r">Gate Officer — Gurugram Cross-Dock</div>
+            </div>
+            <hr class="sep">
+            <div class="miblock">
+              <div class="mlbl" id="appearance-14">Appearance</div>
+              <div class="seg" role="radiogroup" aria-labelledby="appearance-14">
+                <button type="button" role="radio" aria-checked="true">Light</button>
+                <button type="button" role="radio" aria-checked="false">Dark</button>
+                <button type="button" role="radio" aria-checked="false">System</button>
+              </div>
+            </div>
+            <hr class="sep">
+            <a class="mi" href="#" role="menuitem">Settings</a>
+            <hr class="sep">
+            <button class="mi danger" type="button" role="menuitem">Sign out</button>
+            <button class="mi danger hov" type="button" role="menuitem" aria-expanded="true">Sign out everywhere</button>
+            <div class="confirmblock">
+              <p>This signs you out on every device you’re signed in on.</p>
+              <button class="btn destructive full sm" type="button">Sign out everywhere</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">No active-sessions list and no device inventory — one button, no forensics. The
+    appearance choice is visible without opening anything, marked by fill <em>and</em> weight.</p>
+  </div>
+
+  <!-- 15 · NOTIFICATIONS POPULATED -->
+  <div class="cell">
+    <div class="cap"><h3>Notifications — unread present</h3>
+      <span>What happened, when, and take me to it. Unread is carried by three channels: the 6px dot, a weight-600 title, and an <span class="mono" translate="no">aria-label</span> beginning “Unread”. Every operational time carries its dock and its date.</span>
+      <span class="ref">prompt 5 · typography.md §Copy rules · U74</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn hov" type="button" aria-label="Notifications, 3 unread" aria-expanded="true">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span class="badge" aria-hidden="true">3</span>
+            </button>
+            <button class="iconbtn" type="button" aria-label="Contact support">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-circle-help"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop wide">
+            <div class="pop-head">
+              <span class="h3">Notifications</span>
+              <button class="tlink sm" type="button">Mark all read</button>
+            </div>
+            <hr class="sep">
+            <div class="feed">
+              <a class="nitem unread" href="#" aria-label="Unread. Escalation raised, ESC-4471, 2 minutes ago">
+                <span class="nrow">
+                  <span class="ndot" aria-hidden="true"></span>
+                  <span class="ntitle">Escalation raised · <span class="mono" translate="no">ESC-4471</span></span>
+                  <span class="nts">2m</span>
+                </span>
+                <span class="nbody">No feasible slot for the Kota load at Jaipur DC.</span>
+              </a>
+              <a class="nitem unread" href="#" aria-label="Unread. Slot confirmed, APT-1042, 18 minutes ago">
+                <span class="nrow">
+                  <span class="ndot" aria-hidden="true"></span>
+                  <span class="ntitle">Slot confirmed · <span class="mono" translate="no">APT-1042</span></span>
+                  <span class="nts">18m</span>
+                </span>
+                <span class="nbody">Dock D1 · Tue 4 Aug · <span class="mono" translate="no">13:00–14:15</span>, Jaipur DC.</span>
+              </a>
+              <a class="nitem unread hov" href="#" aria-label="Unread. Policy published, version 12, 1 hour ago">
+                <span class="nrow">
+                  <span class="ndot" aria-hidden="true"></span>
+                  <span class="ntitle">Policy published · <span class="mono" translate="no">v12</span></span>
+                  <span class="nts">1h</span>
+                </span>
+                <span class="nbody">Fairness weights changed by A. Rao.</span>
+              </a>
+              <a class="nitem" href="#" aria-label="Appointment changed, APT-1039, Tuesday">
+                <span class="nrow">
+                  <span class="ndot blank" aria-hidden="true"></span>
+                  <span class="ntitle">Appointment changed · <span class="mono" translate="no">APT-1039</span></span>
+                  <span class="nts">Tue</span>
+                </span>
+                <span class="nbody">Moved to Dock D2 · Tue 4 Aug · <span class="mono" translate="no">09:30–10:45</span>, Jaipur DC.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">No per-item buttons of any kind — no Confirm, no Dismiss, no overflow menu, no
+    hover-revealed actions. The whole item is one link to the record. And no promise-state chips here: a
+    notification is a historical event, and a live chip could contradict the record it links to.</p>
+  </div>
+
+  <!-- 16 · NOTIFICATIONS LOADING -->
+  <div class="cell">
+    <div class="cap"><h3>Notifications — loading</h3>
+      <span>Three skeleton rows shaped exactly like real items — dot, title bar, body bar, timestamp bar. Never a centred spinner, which is a layout jump waiting to happen.</span>
+      <span class="ref">components.md §13 (U78) · motion.md §Skeleton shimmer</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn hov" type="button" aria-label="Notifications" aria-expanded="true">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop wide" aria-busy="true">
+            <div class="pop-head"><span class="h3">Notifications</span></div>
+            <hr class="sep">
+            <div class="feed">
+              <div class="nitem" style="cursor:default">
+                <span class="nrow"><span class="ndot" style="background:var(--skeleton)" aria-hidden="true"></span><span class="sk t w70"></span><span class="sk w25" style="width:24px"></span></span>
+                <span class="nbody" style="display:block"><span class="sk w55" style="display:block"></span></span>
+              </div>
+              <div class="nitem" style="cursor:default">
+                <span class="nrow"><span class="ndot" style="background:var(--skeleton)" aria-hidden="true"></span><span class="sk t w40"></span><span class="sk" style="width:24px"></span></span>
+                <span class="nbody" style="display:block"><span class="sk w70" style="display:block"></span></span>
+              </div>
+              <div class="nitem" style="cursor:default">
+                <span class="nrow"><span class="ndot" style="background:var(--skeleton)" aria-hidden="true"></span><span class="sk t w55"></span><span class="sk" style="width:24px"></span></span>
+                <span class="nbody" style="display:block"><span class="sk w40" style="display:block"></span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Under reduced-motion the shimmer becomes a static block — the signal “this is loading,
+    not empty” survives without the animation.</p>
+  </div>
+
+  <!-- 17 · CAUGHT UP -->
+  <div class="cell">
+    <div class="cap"><h3>Notifications — caught up</h3>
+      <span>An account with history, currently at zero. Reassuring: this is a good state, and it needs no action.</span>
+      <span class="ref">U74 · iconography.md §App-level states</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn hov" type="button" aria-label="Notifications, no unread" aria-expanded="true">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Priya Nair">PN</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop wide">
+            <div class="pop-head"><span class="h3">Notifications</span></div>
+            <hr class="sep">
+            <div class="est">
+              <svg class="ic s32" aria-hidden="true"><use href="#i-circle-check-big"/></svg>
+              <div class="t">You’re all caught up.</div>
+              <div class="b">New notifications appear here automatically.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">“Mark all read” is absent because nothing is unread — a control with nothing to act on
+    is not a control.</p>
+  </div>
+
+  <!-- 18 · NOTHING YET -->
+  <div class="cell">
+    <div class="cap"><h3>Notifications — nothing yet</h3>
+      <span>A newly provisioned account with no history at all. Different icon, different copy, neutral rather than reassuring tone — the same visual emptiness means two opposite things and showing the wrong one makes a working system look broken.</span>
+      <span class="ref">U74 · components.md §13 (first-run vs. caught-up)</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar" style="justify-content:flex-end">
+          <div class="tbcluster">
+            <button class="iconbtn hov" type="button" aria-label="Notifications, no unread" aria-expanded="true">
+              <svg class="ic s24" aria-hidden="true"><use href="#i-bell"/></svg>
+            </button>
+            <button class="avatar" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu — Devi Menon">DM</button>
+          </div>
+        </div>
+        <div class="popwrap" style="background:var(--surface-base)">
+          <div class="pop wide">
+            <div class="pop-head"><span class="h3">Notifications</span></div>
+            <hr class="sep">
+            <div class="est">
+              <svg class="ic s32" aria-hidden="true"><use href="#i-inbox"/></svg>
+              <div class="t">No notifications yet.</div>
+              <div class="b">You’ll see escalations, appointment changes and policy updates here.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Distinguishing the two is a server-side data check on whether history exists — never
+    inferred from “count is zero” on the client.</p>
+  </div>
+
+  <!-- ============ D · SEARCH PALETTE ============ -->
+  <div class="sec">
+    <h2>D · Search palette</h2>
+    <p>Opened by the top bar’s search field or <span class="mono" translate="no">Cmd/Ctrl+K</span>. 640px, offset from the
+    top rather than vertically centred, over a flat scrim — dimming, never blur. Facility-scoped for v1:
+    the scope line states it, and there is deliberately no control to change it here.</p>
+  </div>
+
+  <!-- 19 · PALETTE RESULTS -->
+  <div class="cell s3">
+    <div class="cap"><h3>Search palette — grouped results</h3>
+      <span>Group order is fixed: Shipments · Appointments · Drivers · Carriers · Facilities. Carriers and Facilities are absent entirely here rather than rendered as empty headers. Identifiers, times and dates are mono; time ranges use an en dash.</span>
+      <span class="ref">prompt 6 · typography.md §When mono is mandatory</span></div>
+    <div class="plate scrimplate">
+      <div class="palette">
+        <div class="qrow">
+          <svg class="ic s24" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="qin" type="search" name="palette-19" value="kota" autocomplete="off" spellcheck="false" aria-label="Search shipments, appointments, drivers, carriers, facilities">
+          <span class="kbd" aria-hidden="true">Esc</span>
+        </div>
+        <div class="scope">Jaipur DC only</div>
+        <hr class="sep">
+        <div class="results">
+          <div class="ghead" id="g-shp">Shipments</div>
+          <a class="res" href="#">
+            <span class="id" translate="no">SHP1015</span>
+            <span class="meta"><b>Kota</b> load · Reefer · due <span class="mono" translate="no">Tue 4 Aug 08:45</span></span>
+          </a>
+          <a class="res" href="#">
+            <span class="id" translate="no">SHP1004</span>
+            <span class="meta"><b>Kota</b> load → IndustrialHub · Standard · due <span class="mono" translate="no">Tue 4 Aug 18:00</span></span>
+          </a>
+          <div class="ghead">Appointments</div>
+          <a class="res hi" href="#" aria-current="true">
+            <span class="id" translate="no">APT-1042</span>
+            <span class="meta">Dock D1 · <span class="mono" translate="no">Tue 4 Aug · 13:00–14:15</span> · Jaipur DC</span>
+          </a>
+          <div class="ghead">Drivers</div>
+          <a class="res" href="#">
+            <span class="id" translate="no">DRV-207</span>
+            <span class="meta">Manoj Kumar · <b>Kota</b> depot</span>
+          </a>
+        </div>
+      </div>
+    </div>
+    <p class="note">The keyboard highlight is background <em>and</em> a 2px left edge — never colour alone.
+    Matched substrings are marked by weight, not by a coloured highlight, so a match never looks like a
+    state. No result counts, no pagination, no “see all results”.</p>
+  </div>
+
+  <!-- 20 · PALETTE EMPTY QUERY -->
+  <div class="cell s3">
+    <div class="cap"><h3>Search palette — first open</h3>
+      <span>The empty-query state is the recent-searches list. No trending, no “suggested for you”, no promoted records — this is an operations tool, and the most useful guess about what someone wants is what they last looked for.</span>
+      <span class="ref">prompt 6 · components.md §10</span></div>
+    <div class="plate scrimplate">
+      <div class="palette">
+        <div class="qrow">
+          <svg class="ic s24" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="qin" type="search" name="palette-20" autocomplete="off" spellcheck="false" placeholder="Search shipments, appointments, drivers, carriers, facilities"
+            aria-label="Search shipments, appointments, drivers, carriers, facilities">
+          <span class="kbd" aria-hidden="true">Esc</span>
+        </div>
+        <div class="scope">Jaipur DC only</div>
+        <hr class="sep">
+        <div class="results">
+          <div class="ghead">Recent</div>
+          <a class="res" href="#">
+            <svg class="ic" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="meta"><span class="mono" translate="no">SHP1015</span></span>
+          </a>
+          <a class="res" href="#">
+            <svg class="ic" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="meta">Dock D1 Tue</span>
+          </a>
+          <a class="res" href="#">
+            <svg class="ic" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="meta">Manoj</span>
+          </a>
+        </div>
+      </div>
+    </div>
+    <p class="flag"><strong>Flagged:</strong> the palette input is the one control in this file with no
+    visible label, against the product-wide “labels always visible” rule. Prompt 6 specifies it that way
+    for the palette specifically; it carries an <span class="mono" translate="no">aria-label</span>, and the exception
+    stops at this component.</p>
+  </div>
+
+  <!-- 21 · PALETTE NO RESULTS -->
+  <div class="cell s3">
+    <div class="cap"><h3>Search palette — no results</h3>
+      <span>Echoes the actual query, then gives a concrete suggestion and restates the scope, because “nothing found” and “found nothing here” are different problems with different fixes.</span>
+      <span class="ref">components.md §13 · iconography.md (<span class="mono" translate="no">search-x</span>)</span></div>
+    <div class="plate scrimplate">
+      <div class="palette">
+        <div class="qrow">
+          <svg class="ic s24" style="color:var(--text-tertiary)" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="qin" type="search" name="palette-21" value="RJ14" autocomplete="off" spellcheck="false" aria-label="Search shipments, appointments, drivers, carriers, facilities">
+          <span class="kbd" aria-hidden="true">Esc</span>
+        </div>
+        <div class="scope">Jaipur DC only</div>
+        <hr class="sep">
+        <div class="est">
+          <svg class="ic s32" aria-hidden="true"><use href="#i-search-x"/></svg>
+          <div class="t">No shipment matches ‘RJ14’.</div>
+          <div class="b">Try a shipment number, a dock code, or a driver’s name. Search covers Jaipur DC only.</div>
+          <div class="acts"><button class="tlink" type="button">Clear search</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Loading only appears past one second, as four skeleton result rows. Under a second,
+    nothing renders at all — a flash of loading is worse than a pause.</p>
+  </div>
+
+  <!-- ============ E · ACCOUNT SETTINGS ============ -->
+  <div class="sec">
+    <h2>E · Account settings</h2>
+    <p>One route, one continuous scroll, five sections in a fixed order, rendered in the content region
+    between the rail, top bar and status bar. Deliberately small: identity comes from the auth provider and
+    account lifecycle is an admin job, so almost nothing here is editable. No security section, no danger
+    zone, no sub-navigation. Applies to the five internal roles; the driver’s Profile screen is a separate
+    surface and is untouched.</p>
+  </div>
+
+  <!-- 22 · SETTINGS FULL PAGE -->
+  <div class="cell s5">
+    <div class="cap"><h3>Settings — the whole page</h3>
+      <span>720px single column, left-aligned in a 24px-padded region, <span class="mono" translate="no">comfortable</span> density throughout. Preference changes save immediately — no Save button, no sticky save bar.</span>
+      <span class="ref">prompt 8 · spacing-and-layout.md §Density · components.md §18 (Read-only)</span></div>
+    <div class="plate pad0 left">
+      <div class="region">
+        <div class="col">
+          <div class="ptitle">Settings</div>
+
+          <section class="scard" aria-labelledby="s1">
+            <div class="h3" id="s1">Personal info</div>
+            <div class="ro">
+              <div class="pair"><span class="k">Name</span><span class="v">Priya Nair</span></div>
+              <div class="pair"><span class="k">Email</span><span class="v">priya.nair@setuhaul.in</span></div>
+              <div class="pair"><span class="k">Role</span><span class="v">Warehouse Planner</span></div>
+            </div>
+            <p class="helper stack-12">These come from your SetuHaul account. Ask an admin to change them.</p>
+          </section>
+
+          <section class="scard" aria-labelledby="s2">
+            <div class="h3" id="s2">Notification preferences</div>
+            <div class="muterow">
+              <span style="font-size:14px;line-height:1.5">Mute everything</span>
+              <span class="swcell">
+                <button class="sw2" type="button" role="switch" aria-checked="false" aria-label="Mute everything"></button>
+                <span class="swlab">Off</span>
+              </span>
+            </div>
+            <hr class="sep">
+            <table class="ntable">
+              <thead>
+                <tr><th scope="col">Category</th><th scope="col">Web push</th><th scope="col">Email</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Exception raised</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Web push — Exception raised"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="false" aria-label="Email — Exception raised"></button><span class="swlab">Off</span></span></td>
+                </tr>
+                <tr>
+                  <td>Escalation triggered</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Web push — Escalation triggered"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Email — Escalation triggered"></button><span class="swlab">On</span></span></td>
+                </tr>
+                <tr>
+                  <td>Appointment changed</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Web push — Appointment changed"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="false" aria-label="Email — Appointment changed"></button><span class="swlab">Off</span></span></td>
+                </tr>
+                <tr>
+                  <td>Policy changed</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="false" aria-label="Web push — Policy changed"></button><span class="swlab">Off</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Email — Policy changed"></button><span class="swlab">On</span></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="scard" aria-labelledby="s3">
+            <div class="h3" id="s3">Email digest</div>
+            <div class="radios" role="radiogroup" aria-labelledby="s3-lbl">
+              <span class="k" id="s3-lbl" style="font-size:13px;font-weight:500;color:var(--text-secondary)">Email delivery</span>
+              <label><input type="radio" name="digest-22" checked> As it happens</label>
+              <label><input type="radio" name="digest-22"> Once daily digest</label>
+            </div>
+            <p class="helper stack-12">Applies to email only. Web push is always sent as it happens.</p>
+          </section>
+
+          <section class="scard" aria-labelledby="s4">
+            <div class="h3" id="s4">Appearance</div>
+            <div class="seg" role="radiogroup" aria-labelledby="s4" style="max-width:320px">
+              <button type="button" role="radio" aria-checked="true">Light</button>
+              <button type="button" role="radio" aria-checked="false">Dark</button>
+              <button type="button" role="radio" aria-checked="false">System</button>
+            </div>
+            <p class="helper stack-12">This is saved to your account and follows you between devices.</p>
+          </section>
+
+          <section class="scard" aria-labelledby="s5">
+            <div class="h3" id="s5">Your access</div>
+            <div class="ro">
+              <div class="pair"><span class="k">Role</span><span class="v">Warehouse Planner</span></div>
+              <div class="pair">
+                <span class="k">Facilities</span>
+                <ul class="faclist"><li>Jaipur DC</li><li>Gurugram Cross-Dock</li></ul>
+              </div>
+            </div>
+            <p class="helper stack-12">Access is set by an admin. If this looks wrong, contact them.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="note">Read-only means zero interactive affordance — no field boxes, no hover, no cursor
+    change, no greyed-out inputs pretending to be editable. No swatch beside a facility name either:
+    facility colour lives on the rail stripe and in the switcher, and nowhere else.</p>
+  </div>
+
+  <!-- 23 · MUTE EVERYTHING ON -->
+  <div class="cell s3">
+    <div class="cap"><h3>Settings — “Mute everything” on</h3>
+      <span>Category rows dim and their toggles disable, with the reason stated inline. The digest section dims for the same reason rather than silently doing nothing when changed.</span>
+      <span class="ref">prompt 8 §2–3 · components.md §18 (Disabled + explanation)</span></div>
+    <div class="plate pad0 left">
+      <div class="region">
+        <div class="col">
+          <section class="scard" aria-labelledby="s2b" style="margin-top:0">
+            <div class="h3" id="s2b">Notification preferences</div>
+            <div class="muterow">
+              <span style="font-size:14px;line-height:1.5">Mute everything</span>
+              <span class="swcell">
+                <button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Mute everything"></button>
+                <span class="swlab">On</span>
+              </span>
+            </div>
+            <p class="helper" style="margin:0 0 12px">All notifications are off. Turn this off to use the settings below.</p>
+            <hr class="sep">
+            <table class="ntable dim">
+              <thead>
+                <tr><th scope="col">Category</th><th scope="col">Web push</th><th scope="col">Email</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Exception raised</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" disabled aria-label="Web push — Exception raised" title="Muted — turn off ‘Mute everything’ to change this"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="false" disabled aria-label="Email — Exception raised" title="Muted — turn off ‘Mute everything’ to change this"></button><span class="swlab">Off</span></span></td>
+                </tr>
+                <tr>
+                  <td>Escalation triggered</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" disabled aria-label="Web push — Escalation triggered" title="Muted — turn off ‘Mute everything’ to change this"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" disabled aria-label="Email — Escalation triggered" title="Muted — turn off ‘Mute everything’ to change this"></button><span class="swlab">On</span></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="scard dim" aria-labelledby="s3b">
+            <div class="h3" id="s3b">Email digest</div>
+            <div class="radios" role="radiogroup" aria-labelledby="s3b-lbl">
+              <span class="k" id="s3b-lbl" style="font-size:13px;font-weight:500;color:var(--text-secondary)">Email delivery</span>
+              <label><input type="radio" name="digest-23" checked disabled> As it happens</label>
+              <label><input type="radio" name="digest-23" disabled> Once daily digest</label>
+            </div>
+            <p class="helper stack-12">Everything is muted, so no email is being sent. Turn off “Mute
+            everything” above to change this.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="note">The muted toggles keep their <em>true</em> values rather than snapping to Off — the mute
+    is a switch over the top, not a wipe of what someone configured.</p>
+  </div>
+
+  <!-- 24 · SAVE FAILURE -->
+  <div class="cell">
+    <div class="cap"><h3>Settings — a preference failed to save</h3>
+      <span>Inline, on the affected row, saying explicitly that nothing changed. Never a silent revert, and never a toast carrying the only copy of that fact.</span>
+      <span class="ref">components.md §13 (“Nothing has changed”) · §8</span></div>
+    <div class="plate pad0 left">
+      <div class="region">
+        <div class="col">
+          <section class="scard" style="margin-top:0" aria-labelledby="s2c">
+            <div class="h3" id="s2c">Notification preferences</div>
+            <table class="ntable">
+              <thead><tr><th scope="col">Category</th><th scope="col">Web push</th><th scope="col">Email</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Escalation triggered</td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Web push — Escalation triggered"></button><span class="swlab">On</span></span></td>
+                  <td><span class="swcell"><button class="sw2" type="button" role="switch" aria-checked="true" aria-label="Email — Escalation triggered"></button><span class="swlab">On</span></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="saverow" role="alert">
+              <span class="errline" style="margin:0">
+                <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+                That didn’t save — nothing has changed.
+              </span>
+              <button class="tlink sm" type="button">Try again</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="note">In a system where a click can commit capacity, “nothing has changed” is the load-bearing
+    half of the message — a user must know a failure left no partial state.</p>
+  </div>
+
+  <!-- ============ F · SHELL-WIDE STATES ============ -->
+  <div class="sec">
+    <h2>F · States that replace the whole content region</h2>
+    <p>Distinct from inline empty states because they replace the content region rather than a component
+    inside it. The shell itself — rail, top bar, status bar — never unmounts; only this region changes.
+    Every one names a cause and a next action.</p>
+  </div>
+
+  <!-- 25 · SCOPE FAILURE -->
+  <div class="cell">
+    <div class="cap"><h3>Out of scope</h3>
+      <span>Reached by a stale bookmark, a shared link or a revoked assignment. Never a bare 403, and never a confirmation that the resource exists.</span>
+      <span class="ref">auth-and-scoping.md §Scope failures</span></div>
+    <div class="plate">
+      <div class="est">
+        <svg class="ic s32" aria-hidden="true"><use href="#i-shield-off"/></svg>
+        <div class="t">This facility isn’t in your access scope</div>
+        <div class="b">You have access to Jaipur DC and Gurugram Cross-Dock.</div>
+        <div class="acts"><a class="btn constructive" href="#">Go to Jaipur DC</a></div>
+      </div>
+    </div>
+    <p class="note">Naming the facilities the user <em>does</em> have is safe; naming the one they hit is
+    not. Repeated scope failures are logged — they are a signal worth having.</p>
+  </div>
+
+  <!-- 26 · 404 -->
+  <div class="cell">
+    <div class="cap"><h3>404 — resource not found</h3>
+      <span>Deliberately the same message whether the shipment genuinely doesn’t exist or exists outside the viewer’s scope. Conflating the two is the correct behaviour here, not vagueness.</span>
+      <span class="ref">components.md §13 (U72) · iconography.md</span></div>
+    <div class="plate">
+      <div class="est">
+        <svg class="ic s32" aria-hidden="true"><use href="#i-map-pin-off"/></svg>
+        <div class="t">That shipment doesn’t exist, or isn’t somewhere you have access to see.</div>
+        <div class="acts"><a class="btn constructive" href="#">Back to your queue</a></div>
+      </div>
+    </div>
+    <p class="note">Two different causes, one string — because a distinguishing 404 is an account- and
+    record-enumeration tool.</p>
+  </div>
+
+  <!-- 27 · ERROR BOUNDARY -->
+  <div class="cell">
+    <div class="cap"><h3>Error boundary — scoped, never whole-app</h3>
+      <span>The queue, the dock board and the co-pilot each have their own boundary. A planner mid-decision must not lose the queue because the board threw.</span>
+      <span class="ref">components.md §13 (U72)</span></div>
+    <div class="plate">
+      <div class="est">
+        <svg class="ic s32" aria-hidden="true"><use href="#i-octagon-alert"/></svg>
+        <div class="t">Something broke loading this.</div>
+        <div class="b">The rest of the app is unaffected.</div>
+        <div class="acts">
+          <button class="btn neutral" type="button">Report this</button>
+          <button class="btn constructive" type="button">Try again</button>
+        </div>
+      </div>
+    </div>
+    <p class="note">“Report this” attaches the region name and a trace id — never a stack trace shown to the
+    person using it. Safer action first in source order, so a fast keyboard user reaches Report before Try
+    again.</p>
+  </div>
+
+  <!-- 28 · MAINTENANCE -->
+  <div class="cell">
+    <div class="cap"><h3>Maintenance</h3>
+      <span>Not hypothetical — the planned live-database migration is exactly the event this page announces. It always states an estimated duration, because a maintenance page that doesn’t reads as indefinite.</span>
+      <span class="ref">components.md §13 (U72)</span></div>
+    <div class="plate">
+      <div class="est">
+        <svg class="ic s32" aria-hidden="true"><use href="#i-wrench"/></svg>
+        <div class="t">SetuHaul Dock Command is being updated.</div>
+        <div class="b">Expect this to take about 15 minutes. Anything you were doing has been saved — just
+        come back and pick up where you left off.</div>
+      </div>
+    </div>
+    <p class="note">No retry button: retrying does not shorten a migration, and a button that reloads into
+    the same page teaches people to distrust buttons.</p>
+  </div>
+
+  <!-- 29 · IDLE WARNING -->
+  <div class="cell s3">
+    <div class="cap"><h3>Idle warning — planner and ops</h3>
+      <span>Warning at 55 minutes, sign-out at 60. Initial focus goes to “Stay signed in” — the recoverable action — never to the countdown and never to the destructive option. Drivers never see this: a login screen at a roadside mid-exception is a product failure.</span>
+      <span class="ref">auth-and-scoping.md §Session expiry · accessibility-behaviour.md §Focus management</span></div>
+    <div class="plate scrimplate">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="idle-t" aria-describedby="idle-b">
+        <div class="h2" id="idle-t">You’ll be signed out in <span class="mono" translate="no">5:00</span></div>
+        <p class="lead stack-8" id="idle-b">You’ve been idle for a while. Anything you have typed is saved
+        and will still be here when you sign back in.</p>
+        <div class="acts">
+          <button class="btn neutral" type="button">Sign out now</button>
+          <button class="btn constructive showfocus" type="button">Stay signed in</button>
+        </div>
+      </div>
+    </div>
+    <p class="flag"><strong>Flagged:</strong> <code>auth-and-scoping.md</code> specifies the timing, the
+    modal and the “Stay signed in” button, but no foundations file carries this dialog’s copy. The two
+    sentences above are placeholder wording, consistent with the voice elsewhere but not spec-sourced. The
+    countdown’s mono/tabular treatment <em>is</em> spec-sourced.</p>
+  </div>
+
+</main>
+
+<p class="foot-note">
+  Twenty-nine artboards, one design system, six roles. What this board is testing: can a driver, a planner,
+  a gate officer, a carrier manager and an admin all pass through the same door without any of them
+  meeting a screen built for someone else? Three rules do most of the work here — an error never says
+  which half of a credential was wrong, an operational time never appears without its dock and its date,
+  and a control that is out of scope is absent rather than greyed. Tokens trace to
+  <code>00-foundations/</code>; screen contents to
+  <code>00-foundations/stitch-prompts-shared-shell.md</code>. Four items are flagged inline as gaps or
+  placeholders rather than quietly invented.
+</p>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('tt'), lbl=document.getElementById('ttl');
+  function current(){
+    var s=root.getAttribute('data-theme');
+    if(s) return s;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  }
+  function sync(){ lbl.textContent = current()==='dark' ? 'Light' : 'Dark'; }
+  btn.addEventListener('click',function(){
+    root.setAttribute('data-theme', current()==='dark'?'light':'dark'); sync();
+  });
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.assistant.agentcore_runtime import runtime_session_id
 from app.assistant.observability import (
+    child_invoke_config,
     get_history_size_bucket,
     observe_input,
     sanitize_for_trace,
@@ -74,9 +75,15 @@ def test_sanitize_redacts_secret_keys():
 
 
 def test_observe_input_langsmith_shape():
-    cfg = observe_input(9)
+    cfg = observe_input(9, thread_id="THR-1", session_id="web-1")
     assert cfg["run_name"] == "setuhaul.chat"
     assert cfg["metadata"]["history_size_bucket"] == "9+"
+    assert cfg["metadata"]["thread_id"] == "THR-1"
+    assert cfg["metadata"]["session_id"] == "web-1"
+    child = child_invoke_config(cfg, extra_metadata={"last_result_code": "answered"})
+    assert "run_name" not in child
+    assert child["metadata"]["thread_id"] == "THR-1"
+    assert child["metadata"]["last_result_code"] == "answered"
 
 
 def test_tool_outcome_metadata_eta():

@@ -12,6 +12,7 @@ Before planning, editing, or running a material command:
 4. Read `wiki/contradictions.md` and the task-specific wiki/source documents selected through `wiki/source-map.md`.
 5. Inspect `git status --short`. Preserve teammate changes and do not overwrite unrelated work.
 6. Check available skills and MCP tools. Invoke a relevant skill when its trigger matches; do not claim a skill or MCP was used when unavailable.
+7. If the task touches the New-Solution-New-Design overhaul, or references an issue/epic/milestone number, run `gh issue list --state all` (and `gh api repos/<owner>/<repo>/milestones` when milestone-level status matters) before planning further changes. **The tracker is the live source of truth for what is done, in progress, or still open** — not `EXECUTION-PLAN.md`, not a prior session's memory of having created an issue, not an issue's title alone. Re-check state at the start of every session that touches this work, not just the first time.
 
 If two documents disagree, do not silently choose one. Prefer verified code/migrations for current behavior, the master plan for intended implementation order, and record the contradiction in `docs/HANDOFF.md` before proceeding.
 
@@ -32,6 +33,16 @@ If two documents disagree, do not silently choose one. Prefer verified code/migr
 
 ## Mandatory writeback and changelog
 
+**Exception (owner-directed, 2026-08-20):** work confined to `docs/New-Solution-New-Design/` (the isolated
+candidate-redesign workspace — not yet applied to the live system) is exempt from this section. Do not
+update `CHANGELOG.md`, `wiki/handoff.md`, or `wiki/log.md` for changes scoped entirely to that folder. The
+exemption covers the whole workspace and every subfolder in it, present and future — currently
+`SOLUTION_DESIGN.md`, `UI-UX/` (all six surfaces), and `TECH-STACK/` — not just the files named here; a new
+subfolder added later for a subsequent roadmap step (deployment, etc.) is covered automatically without
+needing another edit to this rule. This exemption ends the moment any of that work is applied to the live
+codebase (`backend/`, `frontend/`, `supabase/`) — at that point normal writeback resumes for the applying
+change.
+
 At the end of **every user prompt**, run the context-sync check before responding. If the prompt changed files, implementation state, a decision, requirement, blocker, verification result, or any other durable project context, the agent must finish the same turn by updating:
 
 1. `CHANGELOG.md` with a timestamped entry describing the outcome, affected files, verification, and agent/surface when known.
@@ -46,6 +57,68 @@ The writeback targets are one atomic context-sync operation. Do not update only 
 Documentation-only changes still require a changelog entry when they alter team workflow, architecture, requirements, or implementation decisions. Trivial formatting-only edits may be grouped into the nearest material entry. Never rewrite or delete prior changelog history; correct mistakes with a new entry.
 
 Use timestamps in `YYYY-MM-DD HH:mm IST` format. Do not mark tests as passing unless they were run; use `not run` with the reason instead. Do not strike plan items from inference aloneâ€”require objective verification evidence.
+
+## AI-collaboration discipline (adopted 2026-08-22, source: *AI Collaboration Field Guide*)
+
+The owner supplied a 15-habit field guide for AI-assisted coding. Checked against this file first —
+**most of it is already implemented under different names**, and duplicating it would fragment the truth
+rather than protect it. This section states what already satisfies which habit, then adds only the
+genuinely missing pieces as real rules.
+
+**Already satisfied — do not create a parallel file for these:**
+
+| Guide habit | Already covered by |
+|---|---|
+| Handover file | `wiki/handoff.md` |
+| Decisions.md | `CHANGELOG.md` + wiki topic pages — every decision recorded with its reasoning, not a separate log |
+| Architecture.md | `SOLUTION_DESIGN.md`/`SYSTEM_DESIGN.md` (design workspace); `plans/` docs (live system) |
+| Constraints.md | This file's own "Delivery rules" section |
+| Test checklist | `TESTING_STRATEGY.md` (design workspace); "run the narrowest relevant checks" below |
+| Read every diff | "Review the diff and confirm unrelated teammate work is intact" (Verification section) |
+| Session handoff summary | The mandatory writeback below — `wiki/log.md` + `wiki/handoff.md`, every durable prompt |
+
+**Genuinely new — adopted as rules:**
+
+- **Explicit comments on non-obvious logic.** When writing or editing application code (not markdown
+  specs), comment *why* a non-obvious block exists — what calls into it, what it assumes — not what the
+  code already says. Restating code in prose is not this rule.
+- **Plan before implement, stated as a standing rule, not just a per-task habit.** Explain the approach —
+  what will change and why — before writing a non-trivial diff. Cheaper to correct a paragraph than to
+  unwind 200 lines. (This has been this project's de facto practice throughout the design phase; now
+  explicit for code changes too.)
+- **Trace execution for anything non-trivial before changing it**, the same discipline the
+  `COMPARISON-latency.md` pass used — count the actual hops/round-trips/awaits a change touches, don't
+  reason about a function in isolation from what calls it.
+- **A rollback note for any risky change to `backend/`, `frontend/`, or `supabase/`** — which commit to
+  revert to, which files to restore, what to re-check after. Required specifically for migrations,
+  auth/scope changes, and anything touching the D1 capacity-correctness path; optional for low-risk
+  changes.
+- **Version-pin decisions explicitly.** The existing "agent/surface when known" changelog field now means
+  the specific model (e.g. "Claude Sonnet 5", "Claude Opus 5") wherever it's known, not just "Claude Code"
+  generically — behavior genuinely differs between them, and knowing which one reasoned through a change
+  matters when debugging it later.
+- **Own the mental model, both directions.** Don't hand over documentation as a substitute for an
+  explanation the owner could restate themselves — when a decision is non-obvious, say what it means
+  plainly, not just where it's written down.
+- **Small requests, scaled to risk, not applied mechanically.** A read-only comparison/verification pass
+  can be broad (this project just ran six in parallel, deliberately). A *mutation* to `backend/`,
+  `frontend/`, or `supabase/` should be one logical change per step — small enough that its diff is
+  actually reviewable, not bundled because it was convenient to bundle.
+
+### UPIV — the per-issue workflow for the GitHub-tracked overhaul
+
+Every issue in the tracker (M0 onward) is worked Understand → Plan → Implement → Verify, not solved in one
+undifferentiated pass:
+
+- **Understand** — read the issue's Design citation and Evidence lines, then re-verify both against
+  current code and current design docs before touching anything. An issue's premise can go stale between
+  creation and pickup; confirm it still holds (same discipline the four comparison agents already follow:
+  never assert from memory).
+- **Plan** — state the approach before writing a non-trivial diff. Already a standing rule above; this
+  names it as the mandatory first move on every issue, not a general aspiration.
+- **Implement** — one logical change per mutation, scaled to the issue's `risk:*` label.
+- **Verify** — run the issue's stated Acceptance/gate criteria and record the actual result. Close an
+  issue on evidence, never on inference — same standard already required for the master-plan checklist.
 
 ## Skill routing
 

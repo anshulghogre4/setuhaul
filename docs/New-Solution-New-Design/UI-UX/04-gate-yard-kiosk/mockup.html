@@ -1,0 +1,1712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate/Yard Kiosk Mockups — SetuHaul Dock Command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from ../00-foundations/color.md,
+   ../00-foundations/typography.md, ../00-foundations/spacing-and-layout.md
+   and ../00-foundations/elevation-and-depth.md. Same construction as
+   ../02-ops-exception-console/mockup.html and
+   ../03-planner-dock-board/mockup.html (U96).
+
+   Four values in the previous revision of this file had no foundation
+   source. stitch-prompts.md's "Known mockup deviations" table named
+   them; all four are corrected here:
+     1. feedback-warning-border  amber-600 #D97706 -> amber-500 #F59E0B
+     2. feedback-danger-text     red-600   #DC2626 -> red-700   #B91C1C
+     3. radius                   md 8px/lg 12px    -> md 6px/lg 8px
+                                 (12px is radius-xl, modals/drawers only)
+     4. type sizes               11px tags / 13px notes -> 14px floor
+                                 (typography.md: nothing below 14px on
+                                  driver or gate surfaces)
+   ============================================================ */
+:root {
+  /* --- primitives (color.md). No component references these directly (U85). --- */
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+
+  --blue-50:#EFF6FF;  --blue-500:#3B82F6; --blue-600:#2563EB;
+  --blue-700:#1D4ED8; --blue-800:#1E40AF;
+  --amber-50:#FFFBEB; --amber-500:#F59E0B; --amber-600:#D97706; --amber-700:#B45309;
+  --green-50:#ECFDF5; --green-600:#059669; --green-700:#047857;
+  --red-50:#FEF2F2;   --red-600:#DC2626;   --red-700:#B91C1C;
+
+  /* --- surfaces, text, borders (color.md, light theme only on this surface) --- */
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --surface-sunken:var(--neutral-100);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+  --border-strong:var(--neutral-400);
+  --border-focus:var(--blue-600);
+
+  /* --- feedback (color.md "Feedback colors", light column) --- */
+  --feedback-success-bg:var(--green-50); --feedback-success-text:var(--green-700); --feedback-success-border:var(--green-600);
+  --feedback-warning-bg:var(--amber-50); --feedback-warning-text:var(--amber-700); --feedback-warning-border:var(--amber-500);
+  --feedback-danger-bg:var(--red-50);    --feedback-danger-text:var(--red-700);    --feedback-danger-border:var(--red-600);
+  --feedback-info-bg:var(--blue-50);     --feedback-info-text:var(--blue-700);     --feedback-info-border:var(--blue-500);
+
+  /* --- interactive (color.md "Interactive state colors", light column) --- */
+  --interactive-default:var(--blue-600);
+  --interactive-hover:var(--blue-700);
+  --interactive-pressed:var(--blue-800);
+  --interactive-disabled-bg:var(--neutral-200);
+  --interactive-disabled-text:var(--neutral-400);
+
+  /* --- elevation (elevation-and-depth.md, light column) --- */
+  --shadow-sm:0 1px 2px rgba(15,23,42,0.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,0.10);
+  --shadow-lg:0 12px 32px rgba(15,23,42,0.14);
+
+  /* --- spacing (spacing-and-layout.md, 4px base) --- */
+  --space-1:4px;  --space-2:8px;  --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+  --space-12:48px; --space-16:64px; --space-20:80px;
+
+  /* --- radius (spacing-and-layout.md). radius-xl is modals/drawers only
+         and is deliberately unused on this surface. --- */
+  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px;
+
+  /* --- density: `spacious` — the only surface in the product that uses it
+         (spacing-and-layout.md density table). Load-bearing, not cosmetic:
+         gloved hands, outdoors, one-handed. --- */
+  --row-h:64px;
+  --cell-pad-y:20px;
+  --cell-pad-x:24px;
+  --card-pad:24px;
+  --stack-gap:16px;
+  --tap-min:56px;
+  --btn-h:56px;
+  --content-pad:32px;
+  --edge-pad:24px;          /* safe-areas: kiosk assumes a protective case */
+
+  /* --- type (typography.md, plus this surface's 14px floor) --- */
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono','Cascadia Mono',Consolas,monospace;
+
+  /* --- gallery chrome only (not surface tokens) --- */
+  --board-bg:var(--neutral-200);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+}
+
+*{box-sizing:border-box;}
+html{font-size:16px;}
+body{
+  margin:0; background:var(--board-bg); color:var(--board-ink);
+  font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+}
+.mono{ font-family:var(--font-data); font-variant-numeric:tabular-nums; }
+
+/* ============================================================
+   GALLERY CHROME — the documentation page around the artboards.
+   Held to the same 14px floor as the surface so nothing in this
+   file renders below it.
+   ============================================================ */
+.board-head{ max-width:1696px; margin:0 auto; padding:40px 32px 8px; }
+.board-head h1{ font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700; margin:0 0 8px; }
+.board-head p{ margin:0 0 8px; color:var(--board-muted); font-size:16px; max-width:82ch; line-height:1.55; }
+.board-head code{ font-family:var(--font-data); font-size:15px; }
+.eyebrow{ font-size:14px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--board-muted); margin:0 0 8px; }
+
+.screen-label{
+  max-width:1696px; margin:48px auto 4px; padding:0 32px;
+  font-size:16px; font-weight:700; color:var(--board-ink);
+}
+.screen-label .n{ font-family:var(--font-data); color:var(--board-muted); }
+.note{
+  max-width:1696px; margin:0 auto 16px; padding:0 32px;
+  font-size:14px; line-height:1.55; color:var(--board-muted); max-width:100ch;
+}
+.note code{ font-family:var(--font-data); }
+.gallery{
+  max-width:1696px; margin:0 auto 8px; padding:0 32px;
+  display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start;
+}
+.artboard{ display:flex; flex-direction:column; gap:8px; }
+.device-tag{
+  font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--board-muted);
+}
+
+/* ============================================================
+   DEVICE FRAMES — rendered at true device size so every token
+   value in here is the real value. Gate booth is landscape-fixed
+   (mounted, never rotated). Yard tablet is portrait handheld (U108).
+   ============================================================ */
+.frame{
+  background:var(--surface-base); color:var(--text-primary);
+  border-radius:var(--radius-lg); border:1px solid var(--border-subtle);
+  box-shadow:var(--shadow-lg); overflow:hidden; flex:0 0 auto;
+}
+.frame.gate{ width:1280px; height:800px; }
+.frame.yard{ width:800px;  height:1280px; }
+
+.safe{
+  height:100%; display:flex; flex-direction:column;
+  padding:var(--content-pad);
+}
+/* Nothing interactive within 16px of a viewport edge; the case eats the
+   bezel, so 24px minimum. --content-pad (32px) clears both. */
+
+/* --- vertical placements --- */
+.v-center{ justify-content:center; align-items:center; }        /* gate shift start */
+/* Gate-booth truck and outcome cards centre in the space left under the shift
+   bar. The landscape frame is fixed at 800px tall and is not filled — the card
+   is ~720px wide and the surrounding whitespace is deliberate. */
+.gate-mid{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; }
+.yard-upper{ padding-top:288px; }                               /* card ~25% down (U108 thumb arc) */
+.spacer{ flex:1 1 auto; min-height:var(--stack-gap); }
+.thumb-pad{ flex:0 0 auto; height:200px; }                      /* keeps the button out of the bottom edge */
+
+/* ============================================================
+   SHIFT BAR — plain text on the page background with a 1px rule.
+   Not a coloured app bar: this surface has no app shell, no icon
+   rail, no top bar, and therefore no facility accent anywhere
+   (U59/U40 confine that palette to the rail stripe and switcher).
+   ============================================================ */
+.shiftbar{
+  flex:0 0 auto; min-height:var(--row-h);
+  display:flex; align-items:center; gap:var(--space-6);
+  border-bottom:1px solid var(--border-subtle);
+  margin-bottom:var(--space-8);
+}
+.shift-meta{ font-size:16px; line-height:1.5; font-weight:500; color:var(--text-secondary); }
+.shift-right{ margin-left:auto; display:flex; align-items:center; }
+
+/* Low-emphasis controls. De-emphasis comes from type style, position and the
+   absence of button chrome — never from fading, because fading is what glare
+   destroys first (stitch-prompts.md judgement call 9). Both still meet the
+   56px target and sit >=32px from any other interactive element. */
+.link-ctl{
+  appearance:none; background:none; border:0; cursor:pointer;
+  min-height:var(--tap-min); min-width:var(--tap-min);
+  padding:0 var(--space-4); margin:0;
+  display:inline-flex; align-items:center; gap:var(--space-2);
+  font-family:inherit; font-size:16px; line-height:1.5; font-weight:600;
+  color:var(--text-secondary); border-radius:var(--radius-md);
+}
+.link-ctl + .link-ctl{ margin-left:var(--space-8); }
+.link-ctl:hover{ background:var(--surface-hover); }
+.link-ctl:focus-visible{ outline:none; box-shadow:0 0 0 2px var(--surface-base),0 0 0 4px var(--border-focus); }
+
+/* ============================================================
+   CARD / IDENTITY BLOCK
+   ============================================================ */
+.card{
+  background:var(--surface-raised); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-sm);
+  padding:var(--card-pad);
+  display:flex; flex-direction:column; gap:var(--stack-gap);
+}
+.card.w560{ width:560px; }
+.card.w720{ width:720px; margin:0 auto; }
+.card.full{ width:100%; }
+
+.title{ font-size:24px; line-height:1.33; font-weight:600; letter-spacing:-.01em; margin:0; }
+.helper{ font-size:16px; line-height:1.5; font-weight:400; margin:0; }
+.product-line{ font-size:20px; line-height:1.4; font-weight:600; letter-spacing:-.01em; margin:0; }
+
+.identity{
+  background:var(--surface-hover); border-radius:var(--radius-md);
+  padding:var(--card-pad);
+  display:flex; flex-direction:column; gap:var(--stack-gap);
+}
+.id-line{ font-size:20px; line-height:1.4; font-weight:600; }
+.carrier{ font-size:16px; line-height:1.5; font-weight:400; }
+.state-row{ display:flex; align-items:center; gap:var(--space-2); font-size:20px; line-height:1.4; font-weight:600; }
+.support{ font-size:16px; line-height:1.5; font-weight:400; }
+.ruled{ border-top:1px solid var(--border-default); padding-top:var(--stack-gap); }
+.appt{ font-size:16px; line-height:1.5; font-weight:400; white-space:nowrap; }
+/* The appointment line never truncates and always carries its dock AND its
+   date. If it does not fit, the container is wrong. */
+
+/* Where a button would have sat on a terminal record — held open, not closed
+   up, and not filled with a greyed control (components.md 18). */
+.button-void{ height:var(--btn-h); }
+
+/* ============================================================
+   FORM CONTROLS — labels always visible, never placeholder-as-label.
+   ============================================================ */
+.field-group{ display:flex; flex-direction:column; gap:var(--space-2); }
+.field-label{ font-size:16px; line-height:1.5; font-weight:600; color:var(--text-primary); }
+.field{
+  width:100%; min-height:var(--tap-min);
+  border:1px solid var(--border-default); border-radius:var(--radius-md);
+  background:var(--surface-raised); color:var(--text-primary);
+  font-family:var(--font-data); font-variant-numeric:tabular-nums;
+  font-size:24px; line-height:1.4; letter-spacing:.01em;
+  padding:0 var(--space-5);
+}
+.field.ui{ font-family:var(--font-ui); font-size:20px; letter-spacing:0; }
+.field.is-focus{
+  border-color:var(--border-focus);
+  box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus);
+}
+.field:focus-visible{
+  outline:none; border-color:var(--border-focus);
+  box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus);
+}
+
+/* ============================================================
+   PRIMARY ACTION — one dominant button per screen (U110).
+   ============================================================ */
+.btn{
+  appearance:none; width:100%; min-height:var(--btn-h); min-width:80px;
+  border:none; border-radius:var(--radius-md);
+  background:var(--interactive-default); color:var(--neutral-0);
+  font-family:inherit; font-size:20px; line-height:1.4; font-weight:700;
+  display:flex; align-items:center; justify-content:center; gap:var(--space-3);
+  cursor:pointer; padding:0 var(--space-6);
+  transition:background-color 120ms cubic-bezier(0.16,1,0.3,1);
+}
+.btn:hover{ background:var(--interactive-hover); }
+.btn:focus-visible{ outline:none; box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus); }
+.btn.is-focus{ box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus); }
+/* Pressed is a colour step and nothing else. No scale, no ripple, no shadow
+   change — a transform on a 56px target under a gloved finger makes the
+   target feel unstable. */
+.btn.is-pressed{ background:var(--interactive-pressed); }
+/* Submitting: label never leaves, width frozen, spinner in the leading-icon
+   position. Rendered static here (no JS, static states only). */
+.btn.is-submitting{ background:var(--interactive-default); }
+/* Not-yet-actionable, paired with a visible reason line — never a bare
+   greyed control (components.md 1, 18). */
+.btn.is-inert{ background:var(--interactive-disabled-bg); color:var(--interactive-disabled-text); cursor:not-allowed; }
+/* Inactive (components.md 18) — full contrast on purpose. Outdoors a faded
+   grey rectangle is indistinguishable from a rendering failure, so this stays
+   focusable, operable, and legible; activating it surfaces the reason. */
+.btn.is-inactive{
+  background:var(--surface-raised); border:1px solid var(--border-default);
+  color:var(--text-primary);
+}
+.btn.is-inactive:hover{ background:var(--surface-hover); }
+.reason{ font-size:16px; line-height:1.5; font-weight:400; color:var(--text-primary); }
+
+/* ============================================================
+   FEEDBACK BLOCKS — outcome screens. Icon shape + words carry the
+   meaning; the tint is a third channel, never the only one.
+   ============================================================ */
+.block{
+  border-radius:var(--radius-md); border:1px solid transparent;
+  padding:var(--card-pad);
+  display:flex; flex-direction:column; gap:var(--stack-gap);
+}
+.block.center{ align-items:center; text-align:center; }
+.block .headline{ font-size:20px; line-height:1.4; font-weight:700; margin:0; }
+.block .fact{ font-size:16px; line-height:1.5; font-weight:400; margin:0; }
+.block.success{ background:var(--feedback-success-bg); border-color:var(--feedback-success-border); }
+.block.success .headline, .block.success .ic{ color:var(--feedback-success-text); }
+.block.warning{ background:var(--feedback-warning-bg); border-color:var(--feedback-warning-border); }
+.block.warning .headline, .block.warning .ic{ color:var(--feedback-warning-text); }
+.block.danger{  background:var(--feedback-danger-bg);  border-color:var(--feedback-danger-border); }
+.block.danger .headline, .block.danger .ic{ color:var(--feedback-danger-text); }
+.block.info{    background:var(--feedback-info-bg);    border-color:var(--feedback-info-border); }
+.block.info .headline, .block.info .ic{ color:var(--feedback-info-text); }
+.block.pad-5{ padding:var(--space-5); }
+
+/* inline message under a field: icon left of the headline, not centred */
+.block.inline-msg{ flex-direction:row; align-items:flex-start; gap:var(--space-3); }
+.block.inline-msg .body{ display:flex; flex-direction:column; gap:var(--space-1); }
+
+/* label/value pair, mono values aligned */
+.pair{ display:flex; justify-content:space-between; gap:var(--space-6); font-size:16px; line-height:1.5; width:100%; }
+.pair .v{ font-family:var(--font-data); font-variant-numeric:tabular-nums; }
+
+/* ============================================================
+   MULTIPLE-MATCH ROWS — the whole row is the target, never a chevron.
+   A dropdown or native picker is unusable with gloves.
+   ============================================================ */
+.rows{ display:flex; flex-direction:column; margin:0; padding:0; list-style:none; }
+.rows li + li{ border-top:1px solid var(--border-subtle); }
+.row{
+  appearance:none; background:none; border:0; cursor:pointer; width:100%;
+  min-height:var(--row-h); padding:var(--cell-pad-y) var(--cell-pad-x);
+  display:flex; align-items:center; gap:var(--space-6); text-align:left;
+  font-family:inherit; color:var(--text-primary);
+  transition:background-color 120ms cubic-bezier(0.16,1,0.3,1);
+}
+.row .lines{ display:flex; flex-direction:column; gap:var(--space-1); flex:1 1 auto; }
+.row .l1{ font-size:20px; line-height:1.4; font-weight:600; }
+.row .l2{ font-size:16px; line-height:1.5; font-weight:400; }
+.row .cue{ color:var(--text-secondary); flex:0 0 auto; }
+.row:hover{ background:var(--surface-hover); }
+.row.is-pressed{ background:var(--surface-hover); }
+.row:focus-visible,.row.is-focus{
+  outline:none;
+  box-shadow:inset 0 0 0 2px var(--surface-raised), inset 0 0 0 4px var(--border-focus);
+}
+
+/* ============================================================
+   COMPONENT STATE SHEET (prompt 13)
+   ============================================================ */
+.sheet{ display:flex; flex-direction:column; gap:var(--space-8); }
+.sheet-item{ display:flex; flex-direction:column; gap:var(--space-2); }
+.sheet-caption{ font-size:16px; line-height:1.5; font-weight:600; color:var(--text-secondary); }
+
+/* ============================================================
+   ICONS — Lucide, 2px stroke at every size, inline SVG. Paired with
+   visible text everywhere, so decorative-by-ARIA.
+   ============================================================ */
+.ic{ flex:0 0 auto; display:block; }
+.ic-20{ width:20px; height:20px; }
+.ic-24{ width:24px; height:24px; }
+.ic-32{ width:32px; height:32px; }
+/* Queue-state icons are drawn in text-primary — the same colour as their
+   label. Queue state is NOT colour-coded; hue is rationed to promise state
+   and danger (color.md's hue budget). */
+.ic-state{ color:var(--text-primary); }
+
+/* ============================================================
+   Reduced motion. Nothing here loops or ticks; transitions only.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce){
+  *{ transition-duration:0ms !important; animation:none !important; }
+}
+/* forced-colors strips box-shadow, which is the entire light-theme elevation
+   model. Restore separation with a system-colour border (U87). */
+@media (forced-colors: active){
+  .frame,.card,.identity,.block,.field,.btn{ border:1px solid CanvasText; }
+}
+</style>
+</head>
+<body>
+
+<!-- Lucide sprite. Stroke presentation set on each symbol so <use> inherits it. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-circle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-calendar-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></symbol>
+  <symbol id="i-door-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="i-door-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"/><path d="M2 20h20"/><path d="M14 12v.01"/></symbol>
+  <symbol id="i-bell-ring" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-loader-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+</svg>
+
+<header class="board-head">
+  <p class="eyebrow">04 · Gate/yard kiosk — mockup</p>
+  <h1>Every screen and state in <code>stitch-prompts.md</code>, at true device size</h1>
+  <p>
+    22 screen groups, 35 artboards, in <code>stitch-prompts.md</code> order. Two device contexts (U108):
+    mounted <strong>gate-booth kiosk</strong> (1280×800, landscape-fixed) and handheld
+    <strong>yard tablet</strong> (800×1280, portrait). One interaction model, one dominant button per
+    screen (U110). Frames render at true device size, so every value below is the real value — nothing is
+    scaled.
+  </p>
+  <p>
+    Density <code>spacious</code> — the only surface in the product that uses it
+    (<code>spacing-and-layout.md</code> density table): row height 64px, cell padding 20/24px, card padding
+    24px, stack gap 16px, content padding 32px, and a <strong>56px minimum tap target</strong>. That is
+    physical, not aesthetic: a gloved fingertip’s contact area is larger than a bare one, so the 44px used
+    on the driver PWA is not generous enough. WCAG 2.2 SC 2.5.8 (Minimum) is 24×24px at AA and SC 2.5.5
+    (Enhanced) is 44px at AAA — 56px exceeds both, deliberately and self-imposed (U30).
+  </p>
+  <p>
+    <strong>Light theme only.</strong> Both themes are specified at parity (U7) and light is the global
+    default (U69), but <code>color.md</code> requires dark to carry a “hard to read outdoors” warning on the
+    two field surfaces, so a dark artboard here would render a configuration officers are told not to use.
+    <strong>No app shell</strong> — no icon rail, no top bar, no status bar, no facility switcher, and
+    therefore <strong>no facility accent colour anywhere</strong> (U59/U40 confine that palette to the rail
+    stripe and the switcher swatch, neither of which exists on this device).
+    <strong>No idle timeout</strong> exists on this surface, so no session-expiry affordance renders.
+  </p>
+  <p>
+    <strong>Operational text is <code>text-primary</code> throughout.</strong> <code>color.md</code>’s
+    field-condition rule is explicit: body text on the driver and gate surfaces uses <code>text-primary</code>
+    only, and <code>text-secondary</code> is reserved for genuinely secondary content and never for anything
+    operational. So the appointment line, carrier, fact lines and supporting instructions all render at
+    <code>#0F172A</code> (17.9:1 on white). <code>text-secondary</code> appears only on shift-bar attribution,
+    the two low-emphasis controls, and this sheet’s own captions. Hierarchy is carried by weight, size and
+    family, per <code>typography.md</code>’s dense-view rule — not by fading, because fading is what glare
+    destroys first.
+  </p>
+</header>
+
+<!-- ==========================================================
+     1 · Shift start — gate-booth kiosk (landscape)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">1</span> · Shift start — gate-booth kiosk (landscape)</h2>
+<p class="note">
+  <code>screens.md</code> §1 · <code>components.md</code> §1 · Flow 0 · U111. Once per shift, not per truck.
+  Attribution, not authentication — no password, no email, no SSO, no account creation. Facility is fixed to
+  the device and renders as plain text, never a switcher. Non-visual: this is local device state, not a
+  server write, so it stays usable through a connectivity drop (<code>edge-cases.md</code> #7). No shift bar
+  yet — that appears from screen 3 onward.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">1a · Empty</p>
+    <div class="frame gate">
+      <div class="safe v-center">
+        <div class="card w560">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s1a">Officer name</label>
+            <input class="field ui" id="s1a" type="text" value="" readonly>
+            <p class="helper" id="s1a-hint">Enter your name to start</p>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn is-inert" type="button" aria-disabled="true" aria-describedby="s1a-hint">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">1b · Filled</p>
+    <div class="frame gate">
+      <div class="safe v-center">
+        <div class="card w560">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s1b">Officer name</label>
+            <input class="field ui" id="s1b" type="text" value="Ramesh K." readonly>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn" type="button">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">1c · Focused</p>
+    <div class="frame gate">
+      <div class="safe v-center">
+        <div class="card w560">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s1c">Officer name</label>
+            <input class="field ui is-focus" id="s1c" type="text" value="Ramesh" readonly>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn" type="button">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     2 · Shift start — yard tablet (portrait)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">2</span> · Shift start — yard tablet (portrait)</h2>
+<p class="note">
+  Same component, same copy, different physical device (U108 — the split is layout, not a different tool
+  contract). Portrait-specific: the card spans the full content width and sits roughly 25% down rather than
+  vertically centred, so the button falls in a one-handed thumb arc on a device gripped at the bottom. The
+  bottom third stays empty rather than being stretched into.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">2a · Empty</p>
+    <div class="frame yard">
+      <div class="safe yard-upper">
+        <div class="card full">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s2a">Officer name</label>
+            <input class="field ui" id="s2a" type="text" value="" readonly>
+            <p class="helper" id="s2a-hint">Enter your name to start</p>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn is-inert" type="button" aria-disabled="true" aria-describedby="s2a-hint">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">2b · Filled</p>
+    <div class="frame yard">
+      <div class="safe yard-upper">
+        <div class="card full">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s2b">Officer name</label>
+            <input class="field ui" id="s2b" type="text" value="Priya S." readonly>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn" type="button">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">2c · Focused</p>
+    <div class="frame yard">
+      <div class="safe yard-upper">
+        <div class="card full">
+          <p class="product-line" translate="no">SetuHaul · Gate/Yard</p>
+          <h3 class="title">Start shift</h3>
+          <div class="field-group">
+            <label class="field-label" for="s2c">Officer name</label>
+            <input class="field ui is-focus" id="s2c" type="text" value="Priya" readonly>
+          </div>
+          <p class="helper">Facility: Jaipur (fixed)</p>
+          <button class="btn" type="button">Start shift</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     3 · Search — idle, typed, in-flight (gate-booth kiosk)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">3</span> · Search — idle / typed / in-flight (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>screens.md</code> §2 · <code>components.md</code> §2 · Flow 1 · U109 — <strong>typed entry only</strong>;
+  no scan, camera or NFC path was invented, because nothing in the schema establishes that a scannable code
+  exists. One field accepts both a shipment ID and a plate: the officer may be reading paperwork or reading
+  the truck. No autocomplete, no type-ahead, no recent-searches list — this is a shared device, and surfacing
+  the previous officer’s lookups across a shift boundary leaks operational context to the wrong person.
+  Latency band (U84): nothing renders for the first second of a request; the in-flight state below is the
+  1–3s treatment.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">3a · Idle</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <h3 class="title">Search</h3>
+            <div class="field-group">
+              <label class="field-label" for="s3a">Shipment ID or plate number</label>
+              <input class="field" id="s3a" type="text" value="" readonly>
+            </div>
+            <button class="btn" type="button">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">3b · Typed, focused</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <h3 class="title">Search</h3>
+            <div class="field-group">
+              <label class="field-label" for="s3b">Shipment ID or plate number</label>
+              <input class="field is-focus" id="s3b" type="text" value="SHP1015" readonly>
+            </div>
+            <button class="btn" type="button">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">3c · In-flight (spinner static in this file)</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <h3 class="title">Search</h3>
+            <div class="field-group">
+              <label class="field-label" for="s3c">Shipment ID or plate number</label>
+              <input class="field" id="s3c" type="text" value="SHP1015" readonly>
+            </div>
+            <button class="btn is-submitting" type="button" aria-busy="true">
+              <svg class="ic ic-20" aria-hidden="true"><use href="#i-loader-circle"/></svg>
+              Search
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<p class="note">
+  The label never leaves and the button width is frozen. A label-less control under gloves invites a mis-tap
+  on whatever renders next, so the spinner takes the leading-icon position instead of replacing the word.
+</p>
+
+<!-- ==========================================================
+     4 · Search — no match (yard tablet)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">4</span> · Search — no match (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §2 · Flow 1.3 · foundations <code>components.md</code> §13 — named cause plus next
+  action, never a bare “not found”. The field keeps its failed value so the officer can retype immediately;
+  the message sits <em>below</em> the field it refers to and nothing above it shifts. A routine mistype, not
+  a system failure: no shake, no flash, no full-screen error page. Warning and error messages are not
+  dismissible, so there is no X. The value <code>SHP1O15</code> is the realistic mistype — a letter O for a
+  zero — which is what makes the mono typeface earn its place.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">4 · No match</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <h3 class="title">Search</h3>
+          <div class="field-group">
+            <label class="field-label" for="s4">Shipment ID or plate number</label>
+            <input class="field" id="s4" type="text" value="SHP1O15" readonly>
+          </div>
+          <div class="block danger inline-msg" role="alert">
+            <svg class="ic ic-20" aria-hidden="true" style="margin-top:2px"><use href="#i-triangle-alert"/></svg>
+            <div class="body">
+              <p class="headline">No shipment matches that ID or plate.</p>
+              <p class="fact">Check the number and try again.</p>
+            </div>
+          </div>
+          <button class="btn" type="button">Try again</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     5 · Search — multiple matches (yard tablet)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">5</span> · Search — multiple matches (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §2 · Flow 1.4. A plate shared across trips is unlikely but possible. Explicitly
+  <strong>a list of rows, not a dropdown</strong> — a native picker is unusable with gloves. Every row is a
+  single tap target of at least 64px and the full card width; the chevron is a direction cue and is never
+  the target. Gloved accuracy comes from the row being large, not from hitting a small affordance. No radio
+  buttons plus a Continue step: the row itself is the action. Times use an en dash, 24-hour clock, and always
+  carry both the dock and the weekday date — a bare time here is a wrong-day booking.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">5a · Default</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="card full">
+          <h3 class="title">2 trucks match RJ14 GH 2211</h3>
+          <p class="helper">Pick the right one.</p>
+          <ul class="rows">
+            <li>
+              <button class="row" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1015</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+            <li>
+              <button class="row" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1021</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D2 · Wed 5 Aug · 06:00–07:15</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">5b · Row pressed</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="card full">
+          <h3 class="title">2 trucks match RJ14 GH 2211</h3>
+          <p class="helper">Pick the right one.</p>
+          <ul class="rows">
+            <li>
+              <button class="row is-pressed" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1015</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+            <li>
+              <button class="row" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1021</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D2 · Wed 5 Aug · 06:00–07:15</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">5c · Row focused</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="card full">
+          <h3 class="title">2 trucks match RJ14 GH 2211</h3>
+          <p class="helper">Pick the right one.</p>
+          <ul class="rows">
+            <li>
+              <button class="row" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1015</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+            <li>
+              <button class="row is-focus" type="button">
+                <span class="lines">
+                  <span class="l1"><span class="mono" translate="no">SHP1021</span> · Ravi K.</span>
+                  <span class="l2">Rajasthan Roadlines · <span class="mono" translate="no">D2 · Wed 5 Aug · 06:00–07:15</span></span>
+                </span>
+                <svg class="ic ic-24 cue" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<p class="note">
+  The focus indicator is drawn <em>inside</em> the row as an inset two-ring treatment, so a row at the card
+  edge cannot clip it.
+</p>
+
+<!-- ==========================================================
+     6 · NOT_QUEUED -> Gate in (gate-booth kiosk)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">6</span> · Truck found — <code>NOT_QUEUED</code> → Gate in (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>screens.md</code> §3 (state → action table) · <code>components.md</code> §3, §4 · Flow 3 · U110.
+  <code>NOT_QUEUED</code> renders <strong>with no state icon and no state row</strong> — absence is the signal
+  (<code>iconography.md</code>, Queue state table). Exactly one button: the truck’s current state already
+  determines which action is correct, so the officer is never asked to choose, and no secondary button is
+  added “for balance”. No dock selector — the dock comes from the confirmed appointment. The button label is
+  the specific imperative verb, never “Next” or “Continue”; the verb is itself the officer’s confirmation
+  that they are about to do the right thing.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">6 · Gate in</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="identity">
+              <p class="id-line"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+              <p class="carrier">Rajasthan Roadlines</p>
+              <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></p>
+            </div>
+            <button class="btn" type="button">Gate in</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     7 · WAITING_LATE / WAITING_EARLY -> Call to dock (yard tablet)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">7</span> · Truck found — <code>WAITING_LATE</code> / <code>WAITING_EARLY</code> → Call to dock (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §3 · icon <code>door-open</code> (<code>iconography.md</code>) · Flow 4
+  (<code>update_queue_state</code> → <code>CALLED_TO_DOCK</code>) — the most frequent action on the surface.
+  The state row is drawn in <code>text-primary</code>, the same colour as its label: <strong>queue state is
+  not colour-coded.</strong> Hue is rationed to promise state and danger, and a queue state carries its
+  meaning in the icon shape and the words, which is also what keeps it legible on a washed-out screen.
+  Both variants take the same single action with the same label. The button sits in the lower-middle thumb
+  arc with dead space below it, never flush to the bottom edge.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">7a · Waiting (late)</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+            <p class="carrier">Rajasthan Roadlines</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-door-open"/></svg>Waiting (late)</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></p>
+          </div>
+          <button class="btn" type="button">Call to dock</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">7b · Waiting (early)</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+            <p class="carrier">Rajasthan Roadlines</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-door-open"/></svg>Waiting (early)</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></p>
+          </div>
+          <button class="btn" type="button">Call to dock</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     8 · WAITING_DOCK_UNAVAILABLE -> Call to dock, retried
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">8</span> · Truck found — <code>WAITING_DOCK_UNAVAILABLE</code> → Call to dock, retried (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §3 · icon <code>door-closed</code>. This truck was called before and the dock was
+  not free. The officer is <strong>not blocked from trying again</strong>: only the server knows whether the
+  dock has since cleared, so the button is not disabled and not renamed “Retry” — disabling it here would
+  tell the marshal something the kiosk does not actually know. The glyph differs from ordinary waiting;
+  the <em>colour</em> does not. The distinction has to survive a sun-washed screen and a colour-blind reader,
+  so it is carried by the drawing. No countdown, no “dock will be free at…” estimate — the kiosk does not
+  have that data — and no red banner, because nothing has gone wrong.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">8 · Waiting — dock unavailable</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="carrier">Kota Transport</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-door-closed"/></svg>Waiting — dock unavailable</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D2 · Tue 4 Aug · 14:00–14:45</span></p>
+          </div>
+          <button class="btn" type="button">Call to dock</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     9 · CALLED_TO_DOCK -> Dock in
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">9</span> · Truck found — <code>CALLED_TO_DOCK</code> → Dock in (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §3 · icon <code>bell-ring</code> · Flow 5. <strong>The dock shown in the appointment
+  line is the dock the action submits.</strong> The officer does not choose a dock: if the truck physically
+  pulled into a different bay, that mismatch is something the server reports back afterwards (screen 17), never
+  something the officer selects up front. No dock selector, no bay grid, no editable dock field. No bell
+  animation and no ring/pulse on the icon.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">9 · Called to dock</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="carrier">Kota Transport</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-bell-ring"/></svg>Called to dock</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D2 · Tue 4 Aug · 14:00–14:45</span></p>
+          </div>
+          <button class="btn" type="button">Dock in</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     10 · IN_DOCK -> Start unload / End unload
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">10</span> · Truck found — <code>IN_DOCK</code> → Start unload / End unload (yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §3 · icon <code>truck</code> on both · Flow 6. Same state icon, different verb —
+  the distinction is whether an unload start has already been recorded. The two are never shown together and
+  there is never a choice between them. “Unload started 14:12” is a <strong>recorded fact, not a live
+  counter</strong>: nothing on this screen ticks, counts or animates, and there is no progress bar,
+  percentage, pause control or pallet-count field.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">10a · Unload not yet started</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="carrier">Kota Transport</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-truck"/></svg>In dock</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D2 · Tue 4 Aug · 14:00–14:45</span></p>
+          </div>
+          <button class="btn" type="button">Start unload</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">10b · Unload in progress</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="carrier">Kota Transport</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-truck"/></svg>In dock</p>
+            <p class="support">Unload started <span class="mono" translate="no">14:12</span></p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D2 · Tue 4 Aug · 14:00–14:45</span></p>
+          </div>
+          <button class="btn" type="button">End unload</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     11 · COMPLETED -> Gate out
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">11</span> · Truck found — <code>COMPLETED</code> → Gate out (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>screens.md</code> §3 · icon <code>check</code> · Flow 7. Terminal action for a truck.
+  <strong>This check is not green and is not inside a filled circle or badge.</strong> Green in this product
+  means a confirmed capacity promise, and this row is a yard queue state, not a promise — rendering it green
+  would borrow a meaning that belongs to a different component. No success banner either: this screen is a
+  pending action, not an outcome. No celebratory animation, no checkmark draw-in; a capacity system does not
+  celebrate.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">11 · Gate out</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="identity">
+              <p class="id-line"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+              <p class="carrier">Rajasthan Roadlines</p>
+              <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-check"/></svg>Completed</p>
+              <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></p>
+            </div>
+            <button class="btn" type="button">Gate out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     12 · Terminal — no action available
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">12</span> · Truck found — terminal, no action available (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>edge-cases.md</code> #6. The card still renders so the officer can confirm what happened, but
+  <strong>no button renders at all</strong> — not a greyed one. Foundations <code>components.md</code> §18:
+  Disabled means <em>temporarily</em> unavailable pending a prerequisite; this truck’s cycle is over and there
+  is no next action, so absence is the correct treatment. Under direct sunlight a greyed control is also
+  indistinguishable from a rendering failure. Where the button would have sat, the space is held open — the
+  card is not restretched to close the gap and the space is not backfilled with a message. No accent colour
+  anywhere on this screen: nothing here is actionable, so nothing gets the interactive blue. The only
+  interactive element is the back control, at 56px.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">12 · Already gated out</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="identity">
+              <p class="id-line"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+              <p class="carrier">Rajasthan Roadlines</p>
+              <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-check"/></svg>Completed</p>
+              <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D5 · Tue 4 Aug · 18:00–19:00</span></p>
+              <p class="support ruled">Gate-out recorded <span class="mono" translate="no">19:14</span> · dwell <span class="mono" translate="no">1h&nbsp;22m</span></p>
+            </div>
+            <div class="button-void" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     13 · Primary action — state sheet
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">13</span> · Primary action — state sheet (default / focus / pressed / submitting / inactive-offline)</h2>
+<p class="note">
+  This folder’s <code>components.md</code> §4 · foundations <code>components.md</code> §1, §18 ·
+  <code>edge-cases.md</code> #7 · U70, U84. A component sheet, not a screen.
+  <strong>Submitting is the state most likely to be got wrong: the label never leaves.</strong> The spinner
+  takes the leading-icon position and the width is frozen. Nothing appears at all for the first second of a
+  request (U84’s latency bands) — an indicator that flashes for under a second is pure distraction.
+  <strong>Inactive is not a faded disabled control.</strong> It keeps full-contrast text, stays focusable and
+  tappable, and activating it surfaces the explanation rather than doing nothing: on a sun-washed outdoor
+  screen a faded, unfocusable grey rectangle is indistinguishable from a rendering failure, and an officer
+  who cannot tell <em>why</em> a button won’t respond is locked out just as thoroughly as one who cannot read
+  the screen. Buttons are separated by 32px, not the 16px stack gap, so a gloved mis-tap lands on nothing
+  rather than on the adjacent control.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">13 · Primary action, all states</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="sheet">
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Default</p>
+            <button class="btn" type="button">Gate in</button>
+          </div>
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Default — keyboard focus (two rings, 2px offset, never a soft glow)</p>
+            <button class="btn is-focus" type="button">Gate in</button>
+          </div>
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Pressed — colour step only, no scale, no ripple, no shadow change</p>
+            <button class="btn is-pressed" type="button">Gate in</button>
+          </div>
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Submitting — label stays, width frozen, spinner in the leading position</p>
+            <button class="btn is-submitting" type="button" aria-busy="true">
+              <svg class="ic ic-20" aria-hidden="true"><use href="#i-loader-circle"/></svg>
+              Gate in
+            </button>
+          </div>
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Inactive — connection unconfirmed</p>
+            <button class="btn is-inactive" type="button">
+              <svg class="ic ic-20" aria-hidden="true"><use href="#i-wifi-off"/></svg>
+              Gate in
+            </button>
+            <p class="reason">Can’t confirm this will save — check connection</p>
+          </div>
+
+          <div class="sheet-item">
+            <p class="sheet-caption">Retry message after a failed write</p>
+            <div class="block warning pad-5" role="alert">
+              <p class="headline">That didn’t record — nothing has changed.</p>
+              <p class="fact">Try again — this won’t record it twice.</p>
+            </div>
+          </div>
+
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">
+  “Try again — this won’t record it twice” is <strong>required copy, not reassurance filler</strong>: every
+  action on this surface carries an idempotency key (U70), so retrying is genuinely safe and the officer is
+  told so. “Nothing has changed” on a failed write is equally load-bearing — in a system where a tap commits
+  capacity, an officer must know a failure left no partial state.
+</p>
+
+<!-- ==========================================================
+     14 · Outcome — Gate-in recorded
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">14</span> · Outcome — Gate-in recorded (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>screens.md</code> §4 · <code>components.md</code> §5 · Flow 3. The computed <code>arrival_state</code>
+  (EARLY / ON_TIME / LATE) is surfaced rather than buried — an early truck may still have to wait. Headline
+  names the specific thing recorded: never “Success”, “Done”, “Saved” or “Great!”, and no exclamation marks
+  anywhere. A bare “Done” tells an officer nothing about what is now true. The success block uses
+  <code>green-700</code> for text, not <code>green-600</code> — the 600 step measures 3.8:1 on white and
+  fails normal-text contrast; it is a border/UI step only. No undo affordance: this is a factual record of
+  something that physically happened, not a reversible commitment. Non-visual: 15ms haptic pulse on a
+  recorded gate event (<code>motion.md</code>); the headline is announced <code>polite</code> — successful
+  writes are polite, failures are assertive (<code>accessibility-behaviour.md</code>).
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">14 · Gate-in recorded</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="block success center" role="status">
+              <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
+              <p class="headline">Gate-in recorded</p>
+              <p class="fact mono" translate="no">SHP1015 · 18:04 · ON_TIME</p>
+            </div>
+            <button class="btn" type="button">Search next truck</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     15 · Outcome — brief success family
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">15</span> · Outcome — brief success family (queue updated / dock-in / unload recorded)</h2>
+<p class="note">
+  <code>components.md</code> §5 · Flows 4, 5, 6. The highest-frequency outcomes on the surface: identical in
+  layout, differing only in headline and fact line. <strong>No auto-dismiss timer and no progress ring
+  counting down to the next screen</strong> — the officer decides when to move on, because they may be
+  interrupted mid-task by another truck. Every headline names the specific thing recorded. 24-hour time
+  throughout, and never a time without its dock.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">15a · Called to dock</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block success center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
+            <p class="headline">Called to dock</p>
+            <p class="fact mono" translate="no">SHP1009 · D2 · 14:06</p>
+          </div>
+          <button class="btn" type="button">Search next truck</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">15b · Dock-in recorded</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block success center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
+            <p class="headline">Dock-in recorded</p>
+            <p class="fact mono" translate="no">SHP1009 · D2 · 14:09</p>
+          </div>
+          <button class="btn" type="button">Search next truck</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">15c · Unload started</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block success center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
+            <p class="headline">Unload started</p>
+            <p class="fact mono" translate="no">SHP1009 · D2 · 14:12</p>
+          </div>
+          <button class="btn" type="button">Search next truck</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     16 · Outcome — Gate-out recorded, with dwell
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">16</span> · Outcome — Gate-out recorded, with dwell time (gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>components.md</code> §5 · Flow 7. Dwell (<code>gate_out − gate_in</code>) is the raw material for the
+  detention metric, so it is surfaced rather than computed silently. <strong>The dwell figure is a measured
+  fact, not an assessment</strong> — no judgement (“good”, “over target”), no coloured delta, no benchmark
+  comparison, no gauge, chart or sparkline. This surface records; other surfaces evaluate. No number
+  counting up: values are not scores.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">16 · Gate-out recorded</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="block success center" role="status">
+              <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
+              <p class="headline">Gate-out recorded</p>
+              <p class="fact mono" translate="no">SHP1015 · 19:14 · dwell 1h&nbsp;22m</p>
+            </div>
+            <button class="btn" type="button">Search next truck</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     17 · Outcome — Different dock (DOCK_MISMATCH)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">17</span> · Outcome — Different dock (<code>DOCK_MISMATCH</code>, yard tablet, portrait)</h2>
+<p class="note">
+  <code>screens.md</code> §4 · <code>components.md</code> §5 · Flow 5. <strong>Not an error.</strong> The tool
+  contract says it is “allowed, but recorded as a deviation” — the officer recorded what actually happened,
+  which is exactly what they should have done. Danger framing here would train officers to under-report
+  honest deviations. So: warning tone, <strong>no red anywhere</strong> (red means expiry, conflict,
+  escalation), no X icon, no correction affordance, no “Are you sure?”, no “This may cause a delay”. Text uses
+  <code>amber-700</code>, not <code>amber-600</code> — the 600 step measures 3.2:1 on white and fails normal
+  text; the 500/600 amber steps are border and UI only. Warning messages are not dismissible, so no X on the
+  block. Non-visual: 300ms haptic on a rejected gate action does <em>not</em> fire here — nothing was
+  rejected.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">17 · Different dock</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block warning" role="status">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:var(--stack-gap); width:100%;">
+              <svg class="ic ic-32" aria-hidden="true"><use href="#i-triangle-alert"/></svg>
+              <p class="headline">Different dock</p>
+            </div>
+            <p class="pair"><span>Confirmed dock:</span><span class="v" translate="no">D2</span></p>
+            <p class="pair"><span>Actual dock:</span><span class="v" translate="no">D4</span></p>
+            <p class="fact">Recorded as a deviation — not an error.</p>
+          </div>
+          <button class="btn" type="button">Search next truck</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     18 · Outcome — Unload overrun
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">18</span> · Outcome — Unload overrun (yard tablet, portrait)</h2>
+<p class="note">
+  <code>components.md</code> §5 · Flow 6. States the delta against <code>expected_unload_min</code> as a fact.
+  The officer is not asked to explain it, justify it or fix it — it feeds re-sequencing and churn pricing
+  downstream. So no required “reason for delay” field, no comment box, no escalation button, no over-budget
+  bar and no target-vs-actual gauge. Warning tone, no red. En dash in the range, 24-hour clock, a space
+  between number and unit (“22 min”, never “22min”), and unit symbols are never pluralised
+  (<code>data-formatting.md</code>).
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">18 · Unload ended, over expected</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block warning center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-triangle-alert"/></svg>
+            <p class="headline">Unload ended · 22&nbsp;min over expected</p>
+            <p class="fact mono" translate="no">SHP1009 · D2 · 14:12–15:34</p>
+            <p class="fact">Expected <span class="mono" translate="no">60&nbsp;min</span> · actual <span class="mono" translate="no">82&nbsp;min</span></p>
+          </div>
+          <button class="btn" type="button">Search next truck</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     19 · Outcome — Already gated in (ALREADY_CHECKED_IN)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">19</span> · Outcome — Already gated in (<code>ALREADY_CHECKED_IN</code>, gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>edge-cases.md</code> #1. States the existing check-in’s timestamp rather than a bare rejection — from
+  the officer’s position the truck genuinely <em>is</em> gated in, whoever recorded it. Informational tone:
+  not green (nothing new was recorded) and not red (nothing went wrong). Do not write “Error”, “Duplicate”,
+  “Rejected” or “You already did this” — the officer needs to know the truck’s actual state, not to be told
+  off. No “force gate-in anyway” override, no “who recorded this” audit link, no correction affordance.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">19 · Already gated in</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="block info center" role="status">
+              <svg class="ic ic-32" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+              <p class="headline">Already gated in at <span class="mono" translate="no">17:52</span></p>
+              <p class="fact"><span class="mono" translate="no">SHP1015</span> · Ravi K.</p>
+              <p class="fact">Nothing new was recorded. This truck is already checked in.</p>
+            </div>
+            <button class="btn" type="button">Search next truck</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     20 · Outcome — No active appointment (NO_ACTIVE_APPOINTMENT)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">20</span> · Outcome — No active appointment (<code>NO_ACTIVE_APPOINTMENT</code>, gate-booth kiosk, landscape)</h2>
+<p class="note">
+  <code>edge-cases.md</code> #2. Danger tone, because this genuinely blocks the truck. <strong>The kiosk
+  cannot resolve it</strong> — it has no scheduling powers and must not pretend otherwise: no “create
+  appointment”, no “book a slot”, no override, no escalation button, and no click-to-call (the phone in the
+  booth is a physical one; nothing in this product supplies a number). The officer’s real next move happens
+  off-screen. Text uses <code>red-700</code>; <code>red-600</code> is the border/UI step here. Note the button
+  label differs from the success screens: nothing was recorded, so “Search next truck” would imply this
+  truck is dealt with. It is not.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">20 · No active appointment</p>
+    <div class="frame gate">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Gate booth · Jaipur · Shift: Ramesh K.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="gate-mid">
+          <div class="card w720">
+            <div class="block danger center" role="alert">
+              <svg class="ic ic-32" aria-hidden="true"><use href="#i-calendar-x"/></svg>
+              <p class="headline">No active appointment</p>
+              <p class="fact"><span class="mono" translate="no">SHP1015</span> · Ravi K. · Rajasthan Roadlines</p>
+              <p class="fact">Nothing was recorded. This can’t be fixed from the gate — contact the facility office.</p>
+            </div>
+            <button class="btn" type="button">Back to search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     21 · Outcome — Dock occupied (DOCK_OCCUPIED)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">21</span> · Outcome — Dock occupied (<code>DOCK_OCCUPIED</code>, yard tablet, portrait)</h2>
+<p class="note">
+  <code>edge-cases.md</code> #4. A real operational conflict, not a UI bug and not the marshal’s mistake:
+  another truck’s interval is genuinely live on that dock. Warning, not danger — nothing has failed, a dock is
+  simply busy. The icon is deliberately the same <code>door-closed</code> glyph the
+  <code>WAITING_DOCK_UNAVAILABLE</code> state uses (screen 8), so the officer connects this outcome to the
+  state the truck is about to sit in. No “assign a different dock” control (the kiosk has no scheduling
+  powers), no auto-retry or polling indicator, no estimated clear time (the kiosk does not have that data).
+  The next kiosk action is naturally “Call to dock” again once it clears, which the state table already
+  offers without a special case.
+</p>
+<div class="gallery">
+  <div class="artboard">
+    <p class="device-tag">21 · Dock occupied</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block warning center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-door-closed"/></svg>
+            <p class="headline"><span class="mono" translate="no">D2</span> is occupied</p>
+            <p class="fact"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="fact">Nothing was recorded. Keep this truck in the yard and call it again when D2 clears.</p>
+          </div>
+          <button class="btn" type="button">Back to search</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     22 · Outcome — Status changed, refreshing (INVALID_TRANSITION)
+     ========================================================== -->
+<h2 class="screen-label"><span class="n">22</span> · Outcome — Status changed, refreshing (<code>INVALID_TRANSITION</code>, yard tablet, portrait)</h2>
+<p class="note">
+  <code>edge-cases.md</code> #3 and #5. Two devices acting on the same truck seconds apart is the realistic
+  cause; the server’s state machine is the coordination mechanism. The screen <strong>re-fetches and
+  re-renders the truck’s real current state — it never retries the rejected transition.</strong> Nobody did
+  anything wrong, so: informational tone, no red, no X icon, no “retry” button, no conflict-resolution dialog,
+  and no attribution line naming another officer. Artboard A has no button; the screen resolves on its own.
+  The <code>refresh-cw</code> icon is the only icon in the system permitted to spin
+  (<code>iconography.md</code>) — rendered static here, since this file carries no motion. Under
+  <code>prefers-reduced-motion</code> it becomes a static icon plus the same headline text: the information is
+  not lost, only the movement. <strong>The info block is not kept as a persistent banner</strong> — the
+  re-rendered card in B <em>is</em> the resolution.
+</p>
+<div class="gallery">
+
+  <div class="artboard">
+    <p class="device-tag">22a · Refreshing (no button)</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="block info center" role="status">
+            <svg class="ic ic-32" aria-hidden="true"><use href="#i-refresh-cw"/></svg>
+            <p class="headline">This truck’s status changed — refreshing</p>
+            <p class="fact">Nothing was recorded.</p>
+          </div>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artboard">
+    <p class="device-tag">22b · Re-rendered with the truck’s real state</p>
+    <div class="frame yard">
+      <div class="safe">
+        <div class="shiftbar">
+          <button class="link-ctl" type="button"><svg class="ic ic-20" aria-hidden="true"><use href="#i-arrow-left"/></svg>Search</button>
+          <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
+          <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="card full">
+          <div class="identity">
+            <p class="id-line"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
+            <p class="carrier">Kota Transport</p>
+            <p class="state-row"><svg class="ic ic-24 ic-state" aria-hidden="true"><use href="#i-truck"/></svg>In dock</p>
+            <p class="appt ruled" translate="no">Appointment: <span class="mono" translate="no">D2 · Tue 4 Aug · 14:00–14:45</span></p>
+          </div>
+          <button class="btn" type="button">Start unload</button>
+        </div>
+        <div class="thumb-pad"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==========================================================
+     Closing notes
+     ========================================================== -->
+<h2 class="screen-label">Deliberately not rendered</h2>
+<p class="note">
+  <strong>Flow 9 — End shift.</strong> It has no screen of its own. The low-emphasis “End shift” control is
+  inline in every screen from 3 onward; activating it clears the session name and returns to screen 1 or 2.
+  There is no confirmation modal — ending a shift has no destructive consequence, and this surface uses no
+  confirmation modals at all. Rendering a separate artboard would invent a screen the spec does not have.
+</p>
+<p class="note">
+  <strong>A dark-theme artboard for any screen above.</strong> Dark is specified at full parity product-wide,
+  but <code>screens.md</code> states it is not the expected real-world state here and <code>color.md</code>
+  requires dark to carry a “hard to read outdoors” warning on field surfaces. A dark kiosk artboard would be
+  a polished rendering of a configuration officers are told not to use.
+</p>
+<p class="note">
+  <strong>An orientation-blocked / rotate-your-device screen.</strong> <code>spacing-and-layout.md</code>’s
+  breakpoint table calls for one (“Gate kiosk 1024–1366px, landscape locked… below range shows an orientation
+  prompt”), but U108’s yard tablet is a portrait device, so the two cannot both be true. The table predates
+  U108. Flagged, not resolved here — the 800×1280 portrait frame is a plausible 10“ tablet value, not a spec
+  value.
+</p>
+<p class="note">
+  <strong>Any session-expiry affordance.</strong> No idle timeout exists on this surface. The shift name is
+  local device state that persists until “End shift” is pressed.
+</p>
+
+<h2 class="screen-label">Open items this file re-flags rather than resolves</h2>
+<p class="note">
+  <strong>Dwell as “1h&nbsp;22m”</strong> (screens 12, 16) is taken verbatim from <code>edge-cases.md</code> #6,
+  but it conflicts with <code>data-formatting.md</code>’s “space between number and unit” rule, and no grammar
+  for absolute compound durations is defined there — only countdowns (<code>M:SS</code>) and relative-time
+  bands. Rendered as written; the format still needs a ruling.
+</p>
+<p class="note">
+  <strong>Event-timestamp fact lines carry no date</strong> (screens 14, 15, 16, 19). The product-wide rule
+  “never an operational time without its dock and its date” is applied in full to every <em>appointment</em>
+  line, which is where a missing date is a wrong-day booking. Gate-in / gate-out / unload timestamps are
+  records of when an event just occurred on this device, not offers of dock time, and the prompts specify them
+  verbatim without a date. Rendered as specified; flagged as the one place the rule’s scope is being read
+  narrowly rather than applied.
+</p>
+<p class="note">
+  <strong>Type scale.</strong> <code>spacing-and-layout.md</code> says density changes padding and row height
+  only, never type size, while this surface needs a larger scale for outdoor legibility and
+  <code>typography.md</code>’s own accessibility section forbids anything below 14px here. This file uses 16px
+  for supporting text with a hard 14px floor, following the surface-specific argument, since the
+  outdoor-legibility case is the specific one. Also flagged in <code>stitch-prompts.md</code>’s judgement-call
+  table (items 1 and 2).
+</p>
+
+</body>
+</html>

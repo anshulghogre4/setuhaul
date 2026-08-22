@@ -3,10 +3,35 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-17
+last_updated: 2026-08-22
 ---
 
 # Wiki log
+
+## 2026-08-22 07:46 IST | process | Adopted the AI Collaboration Field Guide into `AGENTS.md`; installed `gh` CLI
+
+- Mapped the guide's 15 habits against existing `AGENTS.md` rules before adding anything — most already covered (handover, decisions-with-reasoning, architecture docs, constraints, test checklist, diff review, session handoff all pre-existed under other names). Added a new `## AI-collaboration discipline` section stating the mapping plus the genuinely new rules: code comments on non-obvious logic, explicit plan-before-implement for code changes, execution-tracing for non-trivial changes, a rollback note requirement for risky live-code changes, model version-pinning in changelog entries, "own the mental model," requests scaled to risk.
+- Installed GitHub CLI (`gh` 2.98.0, `winget`) for planned milestone/epic/issue tracking on the apply-to-existing work; `gh auth login` left for the owner.
+- Root `AGENTS.md` change — not workspace-exempt, hence this entry. The session's six `COMPARISON-*.md` docs stay exempt (read-only against `backend/`/`frontend`/`supabase/`).
+
+## 2026-08-20 09:48 IST | design | `02-ops-exception-console/` written; spec-kit evaluated; recompare closed a real `SOLUTION_DESIGN.md` gap
+
+- Candidate-overhaul work in `docs/New-Solution-New-Design/` (isolated workspace; production `docs/` and app untouched). Evaluated `github/spec-kit` against first-party sources — not installed (per-feature `spec.md` slicing mismatches this whole-product spec; Constitution redundant with `AGENTS.md`), two document shapes borrowed for future roadmap steps (tech-stack doc, apply-to-existing doc), Constitution Check gate adopted as a per-doc habit now.
+- Wrote `UI-UX/02-ops-exception-console/` in full: `screens`, `components`, `flows-and-states`, `edge-cases`, `accessibility`, `mockup.html` (U89–U96). Three-pane persistent layout (queue/detail+thread/co-pilot) as a scoped, recorded exception to the existing inline-expansion rule; co-pilot draft→approve→send two-gate model; explicit acknowledge/takeover/hand-back/resolve/cancel lifecycle.
+- Grep-verified recompare against `SOLUTION_DESIGN.md` found §7.5 (tool catalogs) had planner/gate/sequencer/driver but no ops catalog — every new surface action sat on an undefined backend contract. Closed by adding `### 7.5.5 Ops console` to `SOLUTION_DESIGN.md` (8 tools, one delegating to the existing sequencer-proposal tool to preserve the propose/apply split across the ops→planner handoff) plus a flagged-as-assumption reason-code enum for Resolve/Cancel.
+- Same pass closed 4 unaddressed §7.4 escalation reasons and, after the owner asked directly whether the project's design-review skills were actually running, a real (not just cited) `checklist-design` audit — found one genuine gap (escalation-queue bulk actions, resolved as deliberately none) and caught the mockup's icon rail carrying two undefined placeholder icons. `UI-UX/README.md` decisions log now U1–U101, verified no gaps. Process fix recorded in `.claude/agents/ui-ux-designer.md` and persistent memory: invoke skills via the `Skill` tool, don't recall them.
+- Docs-only. Synced CHANGELOG, [[handoff]].
+
+## 2026-08-17 18:40 IST | docs | Built a 5-slide dark-theme SetuHaul overview deck
+
+- Owner asked for a presentation (tech stack, essential tools only, whole scheduling architecture, LangSmith/AgentCore/CloudWatch tracking), 4-5 slides, styled to match the app's current dark theme. Generated `docs/SetuHaul_System_Overview.pptx` with `python-pptx`, using the real tokens from `frontend/src/App.css` (`--bg`, `--panel`, `--accent`, `--primary`, `--warn`, `--outline`) rather than an invented palette.
+- Content grounded via an Explore-agent pass over `backend/app/assistant/tools.py`, `backend/app/scheduling/{feasibility,allocation}.py`, [[ai-system]], [[architecture]], `plans/sprint-4-hosting.md`, `docs/AI_TOOLING.md`: 23 typed tools (read vs. confirm-gated write), scheduling flow React 19 → FastAPI (ECS) → bind_tools loop (no agent framework) → typed tool → feasibility/allocation services → Postgres, Upstash Redis as 24h non-authoritative memory, Ops dashboard reading the same Postgres. Observability slide states LangSmith as fully implemented, AWS AgentCore Runtime as deployed/live, and CloudWatch as only partially wired (platform span visible via Transaction Search; in-app tool-level spans still blocked by an open ADOT credential-recursion bug, so fine-grained tracing stays LangSmith-only).
+- Verified by rendering every slide to PNG via PowerPoint COM automation and visually reviewing; fixed a title-slide chip overflow, a tech-stack card/footer collision, and an architecture-diagram connector that cut through box text before finalizing. Docs/presentation-only, no application code changed. Synced CHANGELOG, [[handoff]].
+
+## 2026-08-17 15:35 IST | docs | Removed the "For judges / presenters" table added at 15:20 IST
+
+- Owner asked for the just-added judges/presenters link table removed from root `README.md` immediately after the 15:20 IST refresh introduced it. Removed the section and its links; linked docs (`PRESENTATION_CHECKLIST.md`, `PRESENTATION_QA_ANSWERS.md`, `DEMO_MANUAL_RUNBOOK.md`, `DEMO_DAY_READINESS.md`) are untouched. `git diff` confirms only that section's lines changed. Synced CHANGELOG.
+- Agent/surface: Claude Code.
 
 ## 2026-08-17 15:20 IST | docs | Refreshed root README.md as the presentation front door
 
@@ -739,3 +764,32 @@ last_updated: 2026-08-17
 - Added `REC-` feasibility fingerprints, 24-hour ephemeral Redis stale markers after ETA commits, lifecycle services/routes/tools, and operations escalation/dock/queue takeover reads with a minimal dashboard list.
 - Updated [[database]], [[implementation]], [[current-state]], [[testing]], [[handoff]], and the Living sprint scoreboard.
 - Verification: focused lifecycle/stale/escalation units PASS (29), `python -m compileall app` PASS, frontend lint/build PASS. Migration was not applied; live migration/API/E2E proof remains TODO.
+
+## 2026-08-22 15:07 IST | planning | GitHub tracking scaffold for the New-Solution-New-Design overhaul
+
+- Installed `gh` CLI, adopted the AI Collaboration Field Guide as an `AGENTS.md` section (mapped against existing files, 6 new rules added), and authored `docs/New-Solution-New-Design/APPLY-TO-EXISTING/EXECUTION-PLAN.md` from the six COMPARISON-*.md passes.
+- Created 18 labels, 7 milestones (M0-M6), 33 epics, and 7 M0 sub-issues on `anshulghogre4/setuhaul`; linked M0's two multi-item epics to their real sub-issue numbers; fixed one MSYS path-mangled issue title (#11).
+- Updated [[handoff]] and root CHANGELOG. No master-plan Living sprint status change — tracking infrastructure only, no live-codebase progress this turn. No live code read or changed.
+- Verification: `gh issue list --state all` confirms 39 issues (#6-#44) across 7 milestones, no gaps/duplicates, title fix confirmed.
+
+## 2026-08-22 15:21 IST | planning | GitHub-tracker-check and UPIV added as standing rules
+
+- Confirmed via grep that neither rule existed despite UPIV being the originally-requested framework: added `AGENTS.md` startup step 7 (check `gh issue list --state all` before planning overhaul-related work) and a new `### UPIV` subsection mapping Understand/Plan/Implement/Verify onto existing rules.
+- Cross-referenced both from `EXECUTION-PLAN.md` §5, kept in sync rather than reworded separately.
+- Updated [[handoff]] and root CHANGELOG. No master-plan Living sprint status change.
+- Verification: grep-confirmed wording present in both files.
+
+## 2026-08-22 15:34 IST | planning | Seventh comparison pass (deployment/infra) and M7
+
+- Added `.claude/agents/deployment-engineer.md` and ran it; produced `COMPARISON-deployment.md`. Confirmed AgentCore and ECS both live in `us-east-1` against a designed `ap-south-1` (AgentCore confirmed at the live-ARN layer), ECS on `amd64` not ARM64, Sentry entirely absent, Vercel confirmed as the live (non-gap) frontend host.
+- New original finding: Upstash Redis is live-wired to `us-east-1`; the `ap-south-1` instance `TECH_STACK.md` "confirmed" is almost certainly the orphaned, superseded instance per `wiki/handoff.md`'s 2026-08-17 migration record.
+- Added M7 to `EXECUTION-PLAN.md` (E7.1 region-correctness migration, blocked on #31/#32; E7.2 Sentry, independent). Created GitHub milestone M7 and issues #45-#46.
+- Updated [[handoff]] and root CHANGELOG. No master-plan Living sprint status change.
+- Verification: `gh issue list --state all` confirms 8 milestones, 41 issues (#6-#46), no gaps/duplicates/mangled titles.
+
+## 2026-08-22 15:38 IST | planning | Full-repo file inventory: loadtests/ epic fix, two blockers surfaced
+
+- Full `git ls-files` inventory across every top-level directory (not just backend/frontend/supabase) found `loadtests/` (real Locust suites overlapping M6/E6.1, never cited) and `designs/` (dead Stitch exports, confirmed superseded, not a gap). Updated issue #42 (E6.1) to cite and extend `loadtests/locust_slot_contention.py` rather than rebuild from scratch.
+- Surfaced two real blockers, not yet fixed, both needing an owner decision: `docs/New-Solution-New-Design/` + `.claude/` + `.mcp.json` are entirely untracked by git (74+ files, no backup beyond the working directory); `backend/app/assistant/observability.py`/`run_assistant.py` carry real uncommitted work (the 2026-08-20 LangSmith upgrade #32 already cites as "landed") that overlaps M0/E0.2's target file.
+- No commit made — requires explicit owner request per standing instruction.
+- Updated [[handoff]] and root CHANGELOG.

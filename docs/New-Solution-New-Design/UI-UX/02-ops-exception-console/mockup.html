@@ -1,0 +1,2600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#E2E8F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
+<title>Ops Console Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from ../00-foundations/color.md and
+   ../00-foundations/typography.md. Light palette on bare :root.
+   Dark redefines tokens only. Same construction as
+   ../01-driver-chat/mockup.html (U96).
+   ============================================================ */
+:root {
+  /* neutral — slate-tinted */
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+  /* semantic ramps */
+  --blue-50:#EFF6FF;  --blue-400:#60A5FA; --blue-500:#3B82F6; --blue-600:#2563EB; --blue-700:#1D4ED8; --blue-900:#1E3A8A;
+  --amber-50:#FFFBEB; --amber-400:#FBBF24;--amber-500:#F59E0B;--amber-600:#D97706;--amber-700:#B45309;--amber-900:#78350F;
+  --green-50:#ECFDF5; --green-400:#34D399;--green-500:#10B981;--green-600:#059669;--green-700:#047857;--green-900:#064E3B;
+  --red-50:#FEF2F2;   --red-400:#F87171;  --red-500:#EF4444;  --red-600:#DC2626;  --red-900:#7F1D1D;
+  --violet-500:#8B5CF6; --violet-400:#A78BFA;
+
+  /* surfaces + text */
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --surface-selected:var(--blue-50);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+  --border-focus:var(--blue-600);
+
+  /* escalation severity — color.md §Escalation severity, U60 */
+  --escalation-sla-ok:var(--text-secondary);
+  --escalation-sla-warning:var(--amber-600);
+  --escalation-sla-breach:var(--red-600);
+
+  /* feedback — color.md §Feedback colors */
+  --feedback-warning-bg:var(--amber-50);
+  --feedback-warning-text:var(--amber-700);
+  --feedback-warning-border:var(--amber-500);
+  --feedback-info-bg:var(--blue-50);
+  --feedback-info-text:var(--blue-700);
+  --feedback-info-border:var(--blue-500);
+
+  /* facility accent — color.md §Facility accent (U59), neutral under "All facilities" (U91) */
+  --facility-accent:var(--neutral-300);
+
+  /* board chrome — deliberately not app surface, so the console reads as an object on the page */
+  --board-bg:var(--neutral-200);
+  --board-panel:var(--neutral-0);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+  --board-line:var(--neutral-300);
+  --board-accent:var(--violet-500);
+
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono',Consolas,monospace;
+
+  --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
+
+  /* native form controls + scrollbars follow the theme */
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface-base:var(--neutral-950);
+    --surface-raised:var(--neutral-900);
+    --surface-hover:var(--neutral-800);
+    --surface-selected:#12203c;
+    --text-primary:var(--neutral-50);
+    --text-secondary:var(--neutral-300);
+    --text-tertiary:var(--neutral-400);
+    --border-subtle:var(--neutral-800);
+    --border-default:var(--neutral-700);
+    --border-focus:var(--blue-400);
+    --escalation-sla-warning:var(--amber-400);
+    --escalation-sla-breach:var(--red-400);
+    --feedback-warning-bg:#3a2c10;
+    --feedback-warning-text:var(--amber-400);
+    --feedback-warning-border:var(--amber-500);
+    --feedback-info-bg:#122040;
+    --feedback-info-text:var(--blue-400);
+    --feedback-info-border:var(--blue-500);
+    --facility-accent:var(--neutral-700);
+    --board-bg:var(--neutral-950);
+    --board-panel:var(--neutral-900);
+    --board-ink:var(--neutral-50);
+    --board-muted:var(--neutral-400);
+    --board-line:var(--neutral-800);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-base:var(--neutral-950);
+  --surface-raised:var(--neutral-900);
+  --surface-hover:var(--neutral-800);
+  --surface-selected:#12203c;
+  --text-primary:var(--neutral-50);
+  --text-secondary:var(--neutral-300);
+  --text-tertiary:var(--neutral-400);
+  --border-subtle:var(--neutral-800);
+  --border-default:var(--neutral-700);
+  --border-focus:var(--blue-400);
+  --escalation-sla-warning:var(--amber-400);
+  --escalation-sla-breach:var(--red-400);
+  --feedback-warning-bg:#3a2c10;
+  --feedback-warning-text:var(--amber-400);
+  --feedback-warning-border:var(--amber-500);
+  --feedback-info-bg:#122040;
+  --feedback-info-text:var(--blue-400);
+  --feedback-info-border:var(--blue-500);
+  --facility-accent:var(--neutral-700);
+  --board-bg:var(--neutral-950);
+  --board-panel:var(--neutral-900);
+  --board-ink:var(--neutral-50);
+  --board-muted:var(--neutral-400);
+  --board-line:var(--neutral-800);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--board-bg); color:var(--board-ink);
+  font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- board chrome ---------- */
+.board-head{
+  max-width:1280px; margin:0 auto; padding:40px 24px 8px;
+}
+.board-head h1, .board-head h2{
+  font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700;
+  margin:0 0 6px; text-wrap:balance;
+}
+.board-head p{margin:0; color:var(--board-muted); font-size:14px; max-width:70ch; line-height:1.55;}
+.eyebrow{
+  font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--board-muted); margin:0 0 4px;
+}
+.screen-label{
+  max-width:1280px; margin:36px auto 8px; padding:0 24px; scroll-margin-top:24px;
+  font-size:13px; font-weight:600; color:var(--board-muted);
+}
+.screen-label span{ color:var(--board-ink); font-weight:700; }
+
+/* ---------- console frame — 4px base spacing (spacing-and-layout.md) ---------- */
+.frame{
+  max-width:1280px; margin:0 auto 48px; border-radius:var(--r-lg);
+  overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.10);
+  border:1px solid var(--border-subtle);
+  display:grid; grid-template-rows:56px 1fr 28px;
+  background:var(--surface-base); font-size:13px; height:640px;
+}
+
+/* top bar */
+.topbar{
+  display:flex; align-items:center; gap:16px; padding:0 16px;
+  background:var(--surface-raised); border-bottom:1px solid var(--border-subtle);
+}
+.switcher{
+  display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--border-default);
+  border-radius:var(--r-md); font-weight:600; font-size:13px; color:var(--text-primary);
+}
+.searchbar{
+  flex:1; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface-hover);
+  border-radius:var(--r-md); color:var(--text-tertiary); font-size:13px;
+}
+/* icon-lg (24px) — top bar, per iconography.md's sizing scale */
+.topbar-icons{ display:flex; gap:16px; color:var(--text-tertiary); font-size:20px; align-items:center; line-height:1; }
+.avatar{
+  width:24px; height:24px; border-radius:50%; background:var(--blue-600); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+}
+
+/* body: rail + 3 panes */
+.body{ display:grid; grid-template-columns:56px 340px 1fr 320px; min-height:0; }
+.rail{
+  background:var(--surface-raised); border-right:4px solid var(--facility-accent);
+  display:flex; flex-direction:column; align-items:center; gap:20px; padding-top:16px;
+  color:var(--text-tertiary); font-size:20px; line-height:1;
+}
+.rail .active{ color:var(--blue-600); border-left:2px solid var(--blue-600); padding-left:8px; margin-left:-12px; }
+
+.pane{ border-right:1px solid var(--border-subtle); overflow:auto; overscroll-behavior:contain; min-height:0; }
+.pane:last-child{ border-right:none; }
+.pane-head{
+  padding:12px 14px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-tertiary); border-bottom:1px solid var(--border-subtle); background:var(--surface-raised);
+  display:flex; justify-content:space-between; align-items:center;
+  font-variant-numeric:tabular-nums;
+}
+
+/* queue rows */
+.row{
+  padding:8px 12px; border-bottom:1px solid var(--border-subtle); border-left:3px solid transparent;
+  cursor:default;
+}
+.row.selected{ background:var(--surface-selected); border-left-color:var(--blue-600); }
+.row .id{ font-family:var(--font-data); font-weight:600; font-size:13px; color:var(--text-primary);
+  font-variant-numeric:tabular-nums; }
+.row .owner{ float:right; font-size:11px; color:var(--text-tertiary); }
+.row .owner.unowned{ color:var(--feedback-warning-text); font-weight:600; }
+.row .reason{ font-size:11px; color:var(--text-secondary); margin-top:0px; }
+.row .meta{ font-size:11px; color:var(--text-tertiary); margin-top:0px; }
+.row .sla{
+  font-family:var(--font-data); font-variant-numeric:tabular-nums; font-size:12px; margin-top:4px;
+  display:flex; align-items:center; gap:4px;
+}
+.sla.ok{ color:var(--escalation-sla-ok); }
+.sla.warning{ color:var(--escalation-sla-warning); font-weight:600; }
+.sla.breach{ color:var(--escalation-sla-breach); font-weight:700; }
+
+.incident-row{ padding:8px 12px; border-bottom:1px solid var(--border-subtle); }
+.incident-row .head{ font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.incident-row .sub{ font-size:11px; color:var(--text-secondary); margin:0 0 8px 20px; }
+.pill-btn{
+  font-size:11px; font-weight:600; padding:4px 12px; border-radius:var(--r-sm);
+  border:1px solid var(--border-default); background:var(--surface-raised); color:var(--text-primary);
+  margin-left:20px;
+}
+
+/* detail pane */
+.detail-body{ padding:12px; }
+.esc-title{ font-family:var(--font-data); font-size:13px; font-weight:700; color:var(--text-primary);
+  font-variant-numeric:tabular-nums; }
+.stepper{ display:flex; align-items:center; gap:8px; margin:12px 0 4px; }
+.dot{ width:8px; height:8px; border-radius:50%; background:var(--neutral-400); }
+.dot.filled{ background:var(--neutral-600); }
+.step-line{ width:20px; height:1px; background:var(--neutral-300); }
+.stepper-row{ display:flex; justify-content:space-between; align-items:center; }
+.section-label{
+  font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--text-tertiary); margin:16px 0 6px;
+}
+.reason-text{ font-size:13px; color:var(--text-secondary); line-height:1.5; }
+.thread-msg{ font-size:13px; color:var(--text-primary); line-height:1.5; margin-bottom:8px; }
+.thread-msg .who{ font-weight:600; color:var(--text-tertiary); font-size:11px; display:block; margin-bottom:0px; }
+.takeover-divider{
+  display:flex; align-items:center; gap:8px; margin:12px 0; color:var(--feedback-info-text); font-size:11px;
+  font-weight:600;
+}
+.takeover-divider::before, .takeover-divider::after{ content:""; flex:1; height:1px; background:var(--feedback-info-border); opacity:.4; }
+.composer{
+  display:flex; gap:8px; margin-top:12px; padding:8px; border:1px solid var(--border-default);
+  border-radius:var(--r-md); background:var(--surface-raised); font-size:13px; color:var(--text-tertiary);
+}
+.composer.disabled{ background:var(--surface-hover); color:var(--text-tertiary); font-style:italic; }
+.btn{
+  font-size:12px; font-weight:600; padding:8px 12px; border-radius:var(--r-md); border:1px solid transparent;
+  cursor:default;
+}
+.btn-primary{ background:var(--blue-600); color:#fff; }
+.btn-neutral{ background:var(--surface-raised); border-color:var(--border-default); color:var(--text-primary); }
+.btn-row{ display:flex; gap:8px; margin-top:16px; }
+
+/* co-pilot pane */
+.copilot-empty{
+  padding:24px 12px; text-align:center; color:var(--text-tertiary); font-size:13px; line-height:1.6;
+}
+.copilot-body{ padding:12px; }
+.copilot-btn{
+  width:100%; text-align:left; font-size:13px; font-weight:600; padding:8px 12px; margin-bottom:8px;
+  border:1px solid var(--border-default); border-radius:var(--r-md); background:var(--surface-raised);
+  color:var(--text-primary);
+}
+.draft-card{
+  margin-top:8px; padding:12px; border:1px solid var(--border-default); border-radius:var(--r-md);
+  background:var(--surface-hover); font-size:13px; color:var(--text-primary); line-height:1.5;
+}
+.draft-actions{ display:flex; gap:8px; margin-top:8px; }
+.draft-actions .btn{ flex:1; text-align:center; }
+
+/* status bar */
+.statusbar{
+  display:flex; align-items:center; gap:16px; padding:0 12px; font-size:11px; color:var(--text-tertiary);
+  border-top:1px solid var(--border-subtle); background:var(--surface-raised);
+  font-variant-numeric:tabular-nums;
+}
+.dot-status{ width:8px; height:8px; border-radius:50%; background:var(--green-600); display:inline-block; margin-right:4px; }
+
+.tabular{ font-variant-numeric:tabular-nums; font-family:var(--font-data); }
+</style>
+</head>
+<body>
+
+<div class="board-head">
+  <p class="eyebrow">02 · Ops exception console — mockup</p>
+  <h1>Three key states, tokens verbatim from 00-foundations</h1>
+  <p>
+    Three-pane persistent shell (U89): escalation queue always visible, detail + thread centre, co-pilot
+    right. All colour, type and spacing values below trace to <code>../00-foundations/color.md</code>,
+    <code>typography.md</code> and <code>spacing-and-layout.md</code> — nothing here is a hand-picked value.
+    Density <code>compact</code>, light theme (U69). "All facilities" scope (U91): rail accent is
+    neutral, facility renders as plain text per row.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 1 — Queue at rest                                       -->
+<!-- ============================================================ -->
+<h2 class="screen-label">State 1 — <span>Queue at rest, nothing selected</span></h2>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
+    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
+      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Escalations <span>(7)</span></div>
+      <div class="row">
+        <span class="id">ESC-104</span><span class="owner unowned">Unowned</span>
+        <div class="reason">NO_FEASIBLE_SLOT</div>
+        <div class="meta">SHP1015 · Jaipur</div>
+        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+      </div>
+      <div class="row">
+        <span class="id">ESC-102</span><span class="owner">Neha B.</span>
+        <div class="reason">NOTIFICATION_FAILED</div>
+        <div class="meta">SHP1009 · Gurugram</div>
+        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">22m</span> to breach</div>
+      </div>
+      <div class="row">
+        <span class="id">ESC-099</span><span class="owner">Neha B.</span>
+        <div class="reason">AMBIGUOUS_SHIPMENT</div>
+        <div class="meta">DRV004 · Kota</div>
+        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">12m</span> (soft)</div>
+      </div>
+      <div class="incident-row">
+        <div class="head"><span aria-hidden="true">▶ 🔌</span> Capacity incident</div>
+        <div class="sub">DOCK-JAI-D3 · 4&nbsp;shipments · 09:15–13:00</div>
+        <button class="pill-btn">Review incident</button>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="text-align:center;color:var(--text-tertiary);font-size:13px;padding:24px;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Co-pilot</div>
+      <div class="copilot-empty">
+        Available once you take over a thread.<br><br>
+        Summarise, fetch context, and draft replies for your approval.
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span><span class="dot-status"></span>Online · synced 4s ago</span>
+    <span>All facilities</span>
+    <span>7&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 2 — Escalation under takeover, co-pilot active          -->
+<!-- ============================================================ -->
+<h2 class="screen-label">State 2 — <span>Escalation under takeover, co-pilot active with an approved draft</span></h2>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
+    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
+      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Escalations <span>(7)</span></div>
+      <div class="row selected">
+        <span class="id">ESC-104</span><span class="owner">You</span>
+        <div class="reason">NO_FEASIBLE_SLOT</div>
+        <div class="meta">SHP1015 · Jaipur</div>
+        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+      </div>
+      <div class="row">
+        <span class="id">ESC-102</span><span class="owner">Neha B.</span>
+        <div class="reason">NOTIFICATION_FAILED</div>
+        <div class="meta">SHP1009 · Gurugram</div>
+        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">22m</span> to breach</div>
+      </div>
+      <div class="row">
+        <span class="id">ESC-099</span><span class="owner">Neha B.</span>
+        <div class="reason">AMBIGUOUS_SHIPMENT</div>
+        <div class="meta">DRV004 · Kota</div>
+        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">12m</span> (soft)</div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="detail-body">
+        <div class="esc-title">ESC-104 · NO_FEASIBLE_SLOT</div>
+        <div class="stepper-row">
+          <div class="stepper">
+            <div class="dot filled" aria-hidden="true"></div><div class="step-line" aria-hidden="true"></div>
+            <div class="dot filled" aria-hidden="true"></div><div class="step-line" aria-hidden="true"></div>
+            <div class="dot filled" aria-hidden="true"></div><div class="step-line" aria-hidden="true"></div>
+            <div class="dot" aria-hidden="true"></div>
+          </div>
+          <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);">OPEN — ACK — IN PROGRESS — RESOLVED · Owner: You</div>
+
+        <div class="section-label">Thread</div>
+        <div class="thread-msg"><span class="who">Driver</span>Still waiting on a dock, what's happening?</div>
+        <div class="takeover-divider">You joined the thread</div>
+
+        <div class="composer">Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.</div>
+        <div class="btn-row">
+          <button class="btn btn-neutral">Resolve</button>
+          <button class="btn btn-neutral">Cancel</button>
+          <button class="btn btn-primary" style="margin-left:auto;">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Co-pilot</div>
+      <div class="copilot-body">
+        <button class="copilot-btn">Summarise thread</button>
+        <button class="copilot-btn">Fetch context</button>
+        <div class="section-label" style="margin-top:12px;">Draft reply</div>
+        <div class="draft-card">
+          “Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.”
+          <div class="draft-actions">
+            <button class="btn btn-neutral">Discard</button>
+            <button class="btn btn-primary">Approve <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span><span class="dot-status"></span>Online · synced 4s ago</span>
+    <span>All facilities</span>
+    <span>7&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 3 — Capacity incident expanded                          -->
+<!-- ============================================================ -->
+<h2 class="screen-label">State 3 — <span>Capacity incident expanded, proposal requested</span></h2>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
+    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
+      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Escalations <span>(7)</span></div>
+      <div class="row">
+        <span class="id">ESC-104</span><span class="owner unowned">Unowned</span>
+        <div class="reason">NO_FEASIBLE_SLOT</div>
+        <div class="meta">SHP1015 · Jaipur</div>
+        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+      </div>
+      <div class="incident-row" style="background:var(--surface-selected);">
+        <div class="head"><span aria-hidden="true">▼ 🔌</span> Capacity incident</div>
+        <div class="sub">DOCK-JAI-D3 · 09:15–13:00</div>
+        <div style="margin-left:20px;font-size:11px;line-height:1.8;font-family:var(--font-data);color:var(--text-primary);">
+          SHP1005&nbsp;&nbsp;CRITICAL<br>
+          SHP1009&nbsp;&nbsp;HIGH<br>
+          SHP1013&nbsp;&nbsp;NORMAL<br>
+          SHP1014&nbsp;&nbsp;CRITICAL
+        </div>
+        <div style="margin:8px 0 0 20px;font-size:11px;color:var(--feedback-info-text);">
+          Proposal requested · routed to Planner queue
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="detail-body">
+        <div class="esc-title"><span aria-hidden="true">🔌</span> Capacity incident · DOCK-JAI-D3</div>
+        <div class="section-label">Window</div>
+        <div class="reason-text tabular">09:15–13:00</div>
+        <div class="section-label">Affected shipments (4)</div>
+        <div style="font-size:13px;font-family:var(--font-data);line-height:2;color:var(--text-primary);">
+          SHP1005 · CRITICAL · read-only<br>
+          SHP1009 · HIGH · read-only<br>
+          SHP1013 · NORMAL · read-only<br>
+          SHP1014 · CRITICAL · read-only
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary">Request sequencer proposal <span aria-hidden="true">✓</span> requested</button>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">Co-pilot</div>
+      <div class="copilot-empty">
+        Available once you take over a thread.<br><br>
+        Not applicable to a capacity incident — there is no single driver thread to take over.
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span><span class="dot-status"></span>Online · synced 4s ago</span>
+    <span>All facilities</span>
+    <span>7&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================================
+     ADDITIONS — full state gallery for stitch-prompts.md Prompts 2–16.
+     Everything above this line is the original three-state board, unchanged,
+     including its token block. Nothing here redefines an existing class.
+
+     New CSS custom properties below exist only where 00-foundations names a
+     value the original block did not define; each carries its source file.
+     Type, spacing, icon and button values here are the token-true ones
+     (typography.md's scale, spacing-and-layout.md's `compact` row) rather than
+     the original board's reduced scale — see the deviation note in the gallery
+     header.
+     ============================================================================ -->
+<style>
+:root{
+  /* primitives from color.md's ramps that the block above didn't need */
+  --red-700:#B91C1C;
+
+  /* priority value ramp — color.md § Priority (never a hue) */
+  --priority-critical-marker:var(--neutral-900);
+  --priority-high-marker:var(--neutral-600);
+  --priority-normal-marker:var(--neutral-400);
+  --priority-low-marker:var(--neutral-200);
+
+  /* feedback — color.md § Feedback colors (the two the block above omitted) */
+  --feedback-danger-bg:var(--red-50);
+  --feedback-danger-text:var(--red-700);
+  --feedback-danger-border:var(--red-600);
+  --feedback-success-bg:var(--green-50);
+  --feedback-success-text:var(--green-700);
+  --feedback-success-border:var(--green-600);
+
+  /* color.md § Interactive state colors + § Surface and text tokens */
+  --interactive-default:var(--blue-600);
+  --interactive-hover:var(--blue-700);
+  --interactive-disabled-bg:var(--neutral-200);
+  --interactive-disabled-text:var(--neutral-400);
+  --border-strong:var(--neutral-400);
+  --text-disabled:var(--neutral-400);
+  --text-link:var(--blue-600);
+  --surface-overlay:var(--neutral-0);
+  --surface-sunken:var(--neutral-100);
+
+  /* elevation-and-depth.md § Shadow tokens + § No glassmorphism (flat scrim) */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,.10);
+  --shadow-lg:0 12px 32px rgba(15,23,42,.14);
+  --scrim:rgba(15,23,42,.5);
+  /* two-ring focus, drawn inset so it survives an overflow:auto pane's clip.
+     Outer ring = border-focus, inner = surface-base, per elevation-and-depth.md. */
+  --sh-focus:inset 0 0 0 2px var(--border-focus), inset 0 0 0 4px var(--surface-base);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --priority-critical-marker:var(--neutral-0);
+    --priority-high-marker:var(--neutral-300);
+    --priority-normal-marker:var(--neutral-500);
+    --priority-low-marker:var(--neutral-700);
+    --feedback-danger-bg:rgba(127,29,29,.25);
+    --feedback-danger-text:var(--red-400);
+    --feedback-danger-border:var(--red-500);
+    --feedback-success-bg:rgba(6,78,59,.25);
+    --feedback-success-text:var(--green-400);
+    --feedback-success-border:var(--green-500);
+    --interactive-default:var(--blue-500);
+    --interactive-hover:var(--blue-400);
+    --interactive-disabled-bg:var(--neutral-800);
+    --interactive-disabled-text:var(--neutral-600);
+    --border-strong:var(--neutral-600);
+    --text-disabled:var(--neutral-600);
+    --text-link:var(--blue-400);
+    --surface-overlay:var(--neutral-800);
+    --surface-sunken:var(--neutral-950);
+    --shadow-sm:none;
+    --shadow-md:0 4px 12px rgba(0,0,0,.40);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+    --scrim:rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="dark"]{
+  --priority-critical-marker:var(--neutral-0);
+  --priority-high-marker:var(--neutral-300);
+  --priority-normal-marker:var(--neutral-500);
+  --priority-low-marker:var(--neutral-700);
+  --feedback-danger-bg:rgba(127,29,29,.25);
+  --feedback-danger-text:var(--red-400);
+  --feedback-danger-border:var(--red-500);
+  --feedback-success-bg:rgba(6,78,59,.25);
+  --feedback-success-text:var(--green-400);
+  --feedback-success-border:var(--green-500);
+  --interactive-default:var(--blue-500);
+  --interactive-hover:var(--blue-400);
+  --interactive-disabled-bg:var(--neutral-800);
+  --interactive-disabled-text:var(--neutral-600);
+  --border-strong:var(--neutral-600);
+  --text-disabled:var(--neutral-600);
+  --text-link:var(--blue-400);
+  --surface-overlay:var(--neutral-800);
+  --surface-sunken:var(--neutral-950);
+  --shadow-sm:none;
+  --shadow-md:0 4px 12px rgba(0,0,0,.40);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  --scrim:rgba(0,0,0,.65);
+}
+
+/* ---------- Lucide, 2px stroke, inline sprite — no icon font, no JS ---------- */
+svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.ic{width:16px;height:16px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+.ic-xs{width:14px;height:14px}   /* iconography.md § Sizing scale */
+.ic-sm{width:16px;height:16px}
+.ic-md{width:20px;height:20px}
+.ic-lg{width:24px;height:24px}
+.ic-xl{width:32px;height:32px;vertical-align:0}
+
+/* ---------- board scaffolding for pane-only artboards ---------- */
+.wrap{position:relative;max-width:1280px;margin:0 auto}
+.strip{max-width:1280px;margin:0 auto 48px;padding:0 24px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.cardwrap{display:flex;flex-direction:column;gap:4px}
+.card{background:var(--surface-base);border:1px solid var(--border-subtle);border-radius:var(--r-lg);
+      box-shadow:var(--shadow-sm);overflow:hidden;width:340px;font-size:13px}
+.card.w-detail{width:564px}
+.card.w-copilot{width:320px}
+.card.w-modal{width:480px;background:var(--surface-overlay);border-radius:var(--r-xl);box-shadow:var(--shadow-lg)}
+.card-cap{font-size:11px;line-height:1.3;font-weight:600;letter-spacing:.02em;color:var(--board-muted)}
+.cap{max-width:1280px;margin:0 auto 8px;padding:0 24px;font-size:11px;line-height:1.45;
+     letter-spacing:.02em;color:var(--board-muted);}
+.cap b{color:var(--board-ink);font-weight:600}
+.cap code{font-family:var(--font-data);font-size:11px}
+
+/* ---------- queue rows, token-true (typography.md + compact density) ---------- */
+.qhead{padding:12px 14px;border-bottom:1px solid var(--border-subtle);background:var(--surface-raised);
+       display:flex;justify-content:space-between;align-items:center;gap:8px;
+       font-size:12px;line-height:1.33;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+       color:var(--text-tertiary)}
+.qhead .cnt{font-variant-numeric:tabular-nums}
+.qtools{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-subtle)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border-subtle)}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface-hover);
+      border:1px solid var(--border-default);border-radius:var(--r-sm);padding:4px 8px;
+      font-size:12px;line-height:1.33;color:var(--text-primary)}
+.chip .facet{color:var(--text-secondary)}
+.newpill{display:inline-flex;align-items:center;gap:4px;background:var(--feedback-info-bg);
+         border:1px solid var(--feedback-info-border);border-radius:var(--r-sm);padding:4px 8px;
+         font-size:12px;line-height:1.33;font-weight:600;color:var(--feedback-info-text);
+         font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0}
+
+.qrow{padding:8px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid transparent}
+.qrow-top{display:flex;align-items:baseline;gap:8px}
+.qid{font-family:var(--font-data);font-size:14px;line-height:1.5;font-weight:600;color:var(--text-primary);
+     font-variant-numeric:tabular-nums}
+.qowner{margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+        font-size:11px;line-height:1.3;font-weight:500;letter-spacing:.02em;color:var(--text-tertiary)}
+.qowner.unowned{color:var(--feedback-warning-text);font-weight:600}
+.qreason{display:flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;line-height:1.33;
+         font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-secondary)}
+.qmeta{margin-top:4px;font-size:13px;line-height:1.4;color:var(--text-secondary)}
+.qsla{display:flex;align-items:center;gap:4px;margin-top:4px;font-family:var(--font-data);
+      font-size:13px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--escalation-sla-ok)}
+.qsla.warn{color:var(--escalation-sla-warning);font-weight:600}
+.qsla.breach{color:var(--escalation-sla-breach);font-weight:700}
+/* motion-budget rule (U76 / motion.md): settled rows recede in contrast */
+.qrow.settled .qid{color:var(--text-secondary)}
+.qrow.settled .qreason,.qrow.settled .qmeta{color:var(--text-tertiary)}
+/* priority marker — 3px left edge, neutral value ramp (color.md) */
+.pri-crit{border-left-color:var(--priority-critical-marker)}
+.pri-high{border-left-color:var(--priority-high-marker)}
+.pri-norm{border-left-color:var(--priority-normal-marker)}
+.pri-low{border-left-color:var(--priority-low-marker)}
+/* interaction states last so they win the left edge, per Prompt 7 */
+.qrow.is-hover{background:var(--surface-hover)}
+.qrow.is-sel{background:var(--surface-selected);border-left-color:var(--blue-600)}
+.qrow.is-focus{box-shadow:var(--sh-focus)}
+
+/* ---------- buttons (components.md §1, compact = 32px) ---------- */
+.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;
+   min-width:80px;border-radius:var(--r-md);border:1px solid transparent;font-family:inherit;
+   font-size:14px;font-weight:600;line-height:1;cursor:default;white-space:nowrap}
+.b-con{background:var(--interactive-default);color:#fff}
+.b-neu{background:transparent;border-color:var(--border-default);color:var(--text-primary)}
+.b-inact{background:var(--surface-hover);border-color:var(--border-default);color:var(--text-primary)}
+.b-dis{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text);cursor:not-allowed}
+.b-ghost{background:transparent;color:var(--text-secondary);min-width:0;width:32px;padding:0}
+.b-pill{height:auto;min-width:0;padding:4px 12px;font-size:12px;border-radius:var(--r-sm);
+        border-color:var(--border-default);background:var(--surface-raised);color:var(--text-primary)}
+.b-text{height:auto;min-width:0;padding:0;background:none;color:var(--text-link);font-size:12px}
+.b-full{width:100%;justify-content:flex-start}
+.b-row{display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap}
+.b-far{margin-left:auto}
+.b-group{display:flex;gap:8px;margin-left:16px}
+
+/* ---------- detail pane ---------- */
+.dbody{padding:16px}
+.dtitle{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mono16{font-family:var(--font-data);font-size:16px;line-height:1.5;font-weight:600;color:var(--text-primary);
+        font-variant-numeric:tabular-nums}
+.enum{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1.33;font-weight:600;
+      letter-spacing:.04em;text-transform:uppercase;color:var(--text-secondary)}
+.mid{color:var(--text-tertiary)}
+.dtop{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-top:16px;flex-wrap:wrap}
+.owner{font-size:14px;line-height:1.5;color:var(--text-primary)}
+.owner.unowned{color:var(--feedback-warning-text);font-weight:600}
+.slabel{display:flex;align-items:center;gap:8px;margin:24px 0 8px;font-size:12px;line-height:1.33;
+        font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary)}
+.slabel::after{content:"";flex:1;height:1px;background:var(--border-subtle)}
+.body14{font-size:14px;line-height:1.5;color:var(--text-secondary)}
+.prim14{font-size:14px;line-height:1.5;color:var(--text-primary)}
+.mono14{font-family:var(--font-data);font-size:14px;line-height:1.5;color:var(--text-primary);
+        font-variant-numeric:tabular-nums}
+.mono-in{font-family:var(--font-data);color:var(--text-primary);font-variant-numeric:tabular-nums}
+.msg{margin-top:8px}
+.msg .who{display:flex;justify-content:space-between;gap:8px;font-size:11px;line-height:1.3;
+          font-weight:600;letter-spacing:.02em;color:var(--text-tertiary)}
+.msg .who .ts{font-weight:500}
+.msg .txt{font-size:14px;line-height:1.5;color:var(--text-primary);margin-top:4px}
+.divider-takeover{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:12px;line-height:1.33;
+                  font-weight:600;color:var(--feedback-info-text)}
+.divider-takeover::before,.divider-takeover::after{content:"";flex:1;height:1px;
+                  background:var(--feedback-info-border);opacity:.4}
+.flabel{display:block;font-size:12px;line-height:1.33;font-weight:600;letter-spacing:.04em;
+        text-transform:uppercase;color:var(--text-tertiary);margin:16px 0 4px}
+.field{border:1px solid var(--border-default);border-radius:var(--r-md);padding:8px 12px;
+       font-size:14px;line-height:1.5;background:var(--surface-raised);color:var(--text-primary);min-height:32px}
+.field.ro{background:var(--surface-hover);color:var(--text-disabled)}
+.field.ta{min-height:64px}
+.crow{display:flex;gap:8px;align-items:flex-end}
+.crow .field{flex:1;min-width:0}
+
+/* stepper — components.md §16, neutral dots, no hue */
+.stepper4{display:inline-grid;grid-template-columns:repeat(7,auto);align-items:center;justify-items:center;row-gap:4px}
+.s-dot{width:8px;height:8px;border-radius:50%;border:1px solid var(--border-strong)}
+.s-dot.on{background:var(--text-secondary);border-color:var(--text-secondary)}
+.s-line{width:20px;height:1px;background:var(--border-default)}
+.s-lab{font-size:11px;line-height:1.3;font-weight:500;letter-spacing:.02em;color:var(--text-tertiary)}
+.g1{grid-column:1;grid-row:2}.g3{grid-column:3;grid-row:2}
+.g5{grid-column:5;grid-row:2}.g7{grid-column:7;grid-row:2}
+
+/* empty / loading / error — components.md §13 */
+.state-block{display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px;text-align:center}
+.state-block .ic-xl{color:var(--text-tertiary)}
+.state-block .hl{font-size:14px;line-height:1.5;color:var(--text-primary);max-width:40ch}
+.state-block .sub{font-size:13px;line-height:1.4;color:var(--text-secondary);max-width:44ch}
+.skelrow{padding:8px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid transparent}
+.skel{background:var(--surface-hover);border-radius:var(--r-sm);height:14px}
+.skel+.skel{margin-top:4px}
+
+/* inline notices */
+.notice{display:flex;gap:8px;align-items:flex-start;padding:12px;border-radius:var(--r-md);
+        border-left:3px solid;font-size:14px;line-height:1.5;margin-top:16px}
+.notice-warn{background:var(--feedback-warning-bg);border-left-color:var(--feedback-warning-border);
+             color:var(--feedback-warning-text)}
+.notice-danger{background:var(--feedback-danger-bg);border-left-color:var(--feedback-danger-border);
+               color:var(--feedback-danger-text)}
+.notice-info{background:var(--feedback-info-bg);border-left-color:var(--feedback-info-border);
+             color:var(--feedback-info-text)}
+
+/* conflict columns — both sides identically styled, zero affordance */
+.twocol{display:grid;grid-template-columns:1fr 1px 1fr;gap:16px;margin-top:8px}
+.twocol .rule{background:var(--border-subtle)}
+.col-lab{font-size:12px;line-height:1.33;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+         color:var(--text-tertiary);margin-bottom:8px}
+.ro-block{background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);padding:12px}
+.ro-block div+div{margin-top:4px}
+
+/* co-pilot */
+.cp-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+.cp-btn{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;width:100%;
+        border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--surface-raised);
+        color:var(--text-primary);font-family:inherit;font-size:14px;font-weight:600;line-height:1;text-align:left}
+.cp-btn.inact{background:var(--surface-hover)}
+.cp-lead{width:16px;height:16px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
+.draft{background:var(--surface-hover);border:1px solid var(--border-default);border-radius:var(--r-md);
+       padding:12px;font-size:14px;line-height:1.5;color:var(--text-primary)}
+.draft-row{display:flex;gap:8px;margin-top:8px}
+.draft-row .b{flex:1;min-width:0}
+.stale{display:flex;align-items:center;gap:4px;background:var(--feedback-warning-bg);
+       color:var(--feedback-warning-text);border-radius:var(--r-sm);padding:4px 8px;
+       font-size:12px;line-height:1.33;font-weight:600;margin-bottom:8px}
+.inline-err{display:flex;gap:4px;align-items:flex-start;font-size:13px;line-height:1.4;
+            color:var(--feedback-danger-text)}
+.cp-result{background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);
+           padding:12px;font-size:13px;line-height:1.5;color:var(--text-secondary)}
+.cp-note{font-size:13px;line-height:1.6;color:var(--text-tertiary);padding:24px 12px;text-align:center}
+
+/* capacity incident */
+.inc-row{padding:8px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid transparent}
+.inc-head{display:flex;align-items:center;gap:4px;font-size:14px;line-height:1.5;font-weight:600;color:var(--text-primary)}
+.inc-sub{margin:4px 0 8px 24px;font-size:13px;line-height:1.4;color:var(--text-secondary)}
+.inc-act{margin-left:24px}
+.shiprow{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-subtle);
+         border-left:3px solid transparent}
+.shiprow .sid{font-family:var(--font-data);font-size:14px;line-height:1.5;font-weight:600;color:var(--text-primary);
+               font-variant-numeric:tabular-nums}
+.shiprow .spri{font-size:12px;line-height:1.33;font-weight:600;letter-spacing:.04em;color:var(--text-secondary)}
+.shiprow .sfac{margin-left:auto;font-size:13px;line-height:1.4;color:var(--text-secondary)}
+
+/* modal — components.md §10, flat scrim, no blur */
+.scrim{position:absolute;inset:0;background:var(--scrim);border-radius:var(--r-lg);
+       display:flex;align-items:center;justify-content:center}
+.modal{width:480px;background:var(--surface-overlay);border:1px solid var(--border-subtle);
+       border-radius:var(--r-xl);box-shadow:var(--shadow-lg);padding:24px}
+.modal .mtitle{margin:0 0 24px;font-size:20px;line-height:1.4;font-weight:600;letter-spacing:-.01em;text-wrap:balance;
+       color:var(--text-primary);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.radio-row{display:flex;align-items:center;gap:8px;min-height:32px;font-size:14px;line-height:1.5;color:var(--text-primary)}
+.radio{width:16px;height:16px;border-radius:50%;border:1px solid var(--border-strong);flex:0 0 auto}
+.radio.on{border:2px solid var(--interactive-default)}
+.radio.on i{display:block;width:8px;height:8px;border-radius:50%;background:var(--interactive-default);margin:2px}
+.modal-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:24px}
+.consequence{background:var(--surface-sunken);border-radius:var(--r-md);padding:12px;
+             font-size:14px;line-height:1.5;color:var(--text-secondary)}
+
+/* toasts — components.md §8, bottom-left, above modals */
+.toasts{position:absolute;left:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;width:360px}
+.toast{background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-lg);
+       box-shadow:var(--shadow-md);padding:12px;font-size:14px;line-height:1.5;color:var(--text-primary)}
+.toast .trow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.undo-track{height:3px;background:var(--border-subtle);flex:1}
+.undo-fill{height:3px;background:var(--interactive-default)}
+.toast-more{font-size:12px;line-height:1.33;font-weight:600;color:var(--text-secondary);
+            background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-lg);
+            box-shadow:var(--shadow-md);padding:8px 12px}
+.sb{display:inline-flex;align-items:center;gap:4px}
+.tab{font-variant-numeric:tabular-nums}
+/* ============================================================
+   QUALITY-GATE PASS (web-interface-guidelines).
+   Interactive states, accessible-name scaffolding and document
+   semantics only. No token value, copy string, density or
+   layout number changed — every colour below is an existing
+   functional token from ../00-foundations/color.md.
+   ============================================================ */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+         clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* buttons inherit the UI font — UA default otherwise */
+.btn,.pill-btn,.copilot-btn,.newpill,.chip-x,.tb-btn{font-family:inherit}
+.newpill,.pill-btn,.copilot-btn,.btn{cursor:default}
+
+/* new control anatomy for affordances that were bare svg / div */
+.tb-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;
+        border:0;border-radius:var(--r-md);background:none;color:inherit;font-size:inherit;line-height:1;
+        cursor:default}
+.chip-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;
+        border:0;border-radius:var(--r-sm);background:none;color:var(--text-tertiary);cursor:default}
+.rail a{display:inline-flex;align-items:center;justify-content:center;color:inherit;text-decoration:none}
+
+/* hover — background/border only, never a lift or a scale (motion.md) */
+.b-con:hover,.btn-primary:hover{background:var(--interactive-hover)}
+.b-neu:hover,.b-pill:hover,.btn-neutral:hover,.pill-btn:hover,
+.cp-btn:hover,.copilot-btn:hover{background:var(--surface-hover)}
+/* Inactive controls already sit on surface-hover, so hover moves the border, not the fill —
+   a fill change here would read as selection (surface-selected is blue-tinted). */
+.b-inact:hover,.cp-btn.inact:hover{border-color:var(--border-strong)}
+.newpill:hover{border-color:var(--feedback-info-text)}
+.b-ghost:hover,.tb-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+/* the chip's own fill is surface-hover, so its remove control lifts to surface-raised instead */
+.chip-x:hover{background:var(--surface-raised);color:var(--text-primary)}
+.b-text:hover{text-decoration:underline}
+.rail a:hover{color:var(--text-secondary)}
+/* b-dis is the one control that must not react — U83's Disabled, not Inactive */
+.b-dis:hover{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text)}
+
+/* focus-visible — two-ring, outline replaced not removed (elevation-and-depth.md) */
+.b:focus-visible,.btn:focus-visible,.cp-btn:focus-visible,.copilot-btn:focus-visible,
+.pill-btn:focus-visible,.newpill:focus-visible,.chip-x:focus-visible,
+.tb-btn:focus-visible{outline:none;
+  box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus)}
+/* inset inside the rail and inside overflow:auto panes so the ring survives the clip */
+.rail a:focus-visible,.qrow:focus-visible,.row:focus-visible{outline:none;box-shadow:var(--sh-focus)}
+
+/* lifecycle position is never carried by dot fill alone */
+.s-lab[aria-current]{font-weight:700;color:var(--text-secondary)}
+
+/* long-content resilience in the flex notice/toast bodies */
+.notice>div,.msg .who>span,.inc-head{min-width:0}
+.modal{overscroll-behavior:contain}
+</style>
+
+
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-search-x" viewBox="0 0 24 24"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-settings-2" viewBox="0 0 24 24"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-cloud-alert" viewBox="0 0 24 24"><path d="M12 12v4"/><path d="M12 20h.01"/><path d="M17 18h.5a1 1 0 0 0 0-9h-1.79A7 7 0 1 0 7 17.708"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4"/><path d="M12 14 15 11"/><circle cx="12" cy="14" r="8"/></symbol>
+  <symbol id="i-calendar-x" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></symbol>
+  <symbol id="i-mail-warning" viewBox="0 0 24 24"><path d="M22 10.5V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h12.5"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="M20 14v4"/><path d="M20 22v.01"/></symbol>
+  <symbol id="i-mail-x" viewBox="0 0 24 24"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m17 17 4 4"/><path d="m21 17-4 4"/></symbol>
+  <symbol id="i-circle-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-git-compare" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></symbol>
+  <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-circle-check-big" viewBox="0 0 24 24"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+</svg>
+
+<div class="board-head">
+  <p class="eyebrow">02 · Ops exception console — full state gallery</p>
+  <h2>Every screen and state the surface spec enumerates</h2>
+  <p>
+    One artboard per state in <code>stitch-prompts.md</code>, in that file's order, Prompts 2–16.
+    Prompt 1 (shell at rest) is <b>State 1</b> above. States 2–3 above are the original abbreviated
+    takes on Prompts 8 and 14; both are rendered here again at full prompt fidelity.
+    <br><br>
+    <b>Three deliberate deviations from the board above, all in the direction of the foundations.</b>
+    (1) Type is token-true — mono 14px/600 IDs, <code>text-label</code> 12px reason enums,
+    <code>text-sm</code> 13px shipment lines, mono 13px SLA clocks — rather than the original board's
+    reduced 13/11/11/12px scale, which has no foundation source. (2) Icons are Lucide inline SVG at 2px
+    stroke, not emoji. (3) The status bar's connection group carries the <code>wifi</code> /
+    <code>wifi-off</code> / <code>cloud-alert</code> icon plus text, per <code>components.md</code> §7,
+    and reads "synced just now" rather than "synced 4s ago" — <code>data-formatting.md</code>'s
+    relative-time bands render anything under 60 s as "Just now", never a seconds count.
+    <br><br>
+    Loading and expiry states render in their <code>prefers-reduced-motion</code> form (static block, no
+    shimmer) because this file is a static reference: <code>motion.md</code> specifies that form
+    explicitly, so it is the only animation-free rendering with a foundation source.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- A — Queue row interaction states (Prompt 1, "states to show")  -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 1 · <span>Queue row — default, hover, keyboard focus, selected</span></h2>
+<p class="cap">
+  Hover changes background and border only — <b>no lift, no scale</b> (<code>motion.md</code>). Focus is the
+  two-ring treatment (<code>elevation-and-depth.md</code>), drawn inset here so it isn't clipped by the
+  pane's own overflow; the ring stays legible against a selected row, which is the case it exists for.
+  Selection takes the 3px left edge in <code>blue-600</code>, overriding the priority marker that edge is
+  otherwise reserved for (Prompt 7).
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">Default</div>
+    <div class="card">
+      <div class="qrow">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">Hover</div>
+    <div class="card">
+      <div class="qrow is-hover">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">Keyboard focus</div>
+    <div class="card">
+      <div class="qrow is-focus">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">Selected · and focus on a selected row</div>
+    <div class="card">
+      <div class="qrow is-sel">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">You</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+      <div class="qrow is-sel is-focus">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- B — Prompt 2 · Queue filtered, active filter chips             -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 2 · <span>Queue pane filtered — active filter chips</span></h2>
+<p class="cap">
+  The chips are the load-bearing part: without them a coordinator reading "(5)" cannot tell whether that
+  count is the whole queue or an already-narrowed view. Filtering changes membership only — never sort
+  order, so <code>ESC-091</code> (1:48) still precedes <code>ESC-102</code> (22m) under the fixed
+  time-to-SLA-ascending policy. Focus stays on the filter control after applying
+  (<code>accessibility-behaviour.md</code>, focus-management contract, "Filtering a list").
+  <b>Two things worth stating plainly:</b> the status bar still reads "7 pending" because a view filter
+  narrows the view, not the facts; and the prompt specifies both a "(5)" count and two rows in view, so
+  three of the five sit below the fold.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(5)</span></span></div>
+      <div class="qtools">
+        <button class="b b-neu">Filter: reason <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></button>
+        <button class="b b-ghost" aria-label="Queue display settings" title="Queue display settings"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-settings-2"/></svg></button>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="facet">Reason:</span> NOTIFICATION_FAILED <button class="chip-x" aria-label="Remove reason filter"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button></span>
+        <span class="chip"><span class="facet">Owner:</span> mine <button class="chip-x" aria-label="Remove owner filter"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button></span>
+        <button class="b b-text">Clear all</button>
+      </div>
+      <div class="qrow">
+        <div class="qrow-top"><span class="qid">ESC-091</span><span class="qowner">You</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1002 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">1:48</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">You</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- C — Prompt 2 · Filtered to zero                                -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 2 · <span>Queue pane filtered to zero — empty-search treatment</span></h2>
+<p class="cap">
+  <code>search-x</code>, not <code>circle-check-big</code>: a filtered-to-zero queue and a genuinely empty
+  queue are different facts (<code>iconography.md</code> § App-level states, U74). The caught-up copy is
+  <b>not</b> reused here, and the action clears the filters rather than offering anything to create. The
+  header renders a genuine, known <code>0</code>.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
+      <div class="qtools">
+        <button class="b b-neu">Filter: reason <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></button>
+        <button class="b b-ghost" aria-label="Queue display settings" title="Queue display settings"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-settings-2"/></svg></button>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="facet">Reason:</span> SAFETY_OR_REGULATED <button class="chip-x" aria-label="Remove reason filter"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button></span>
+        <span class="chip"><span class="facet">Owner:</span> mine <button class="chip-x" aria-label="Remove owner filter"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button></span>
+      </div>
+      <div class="state-block">
+        <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-search-x"/></svg>
+        <div class="hl">No escalations match these filters.</div>
+        <button class="b b-neu">Clear filters</button>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- D — Prompt 3 · Live arrivals held behind the frozen sort       -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 3 · <span>Live arrivals held behind the frozen sort</span></h2>
+<p class="cap">
+  Focus is on the third row, so <b>order is pinned — nothing above it moves</b> (U19). Arrivals accumulate
+  behind the header pill instead of inserting. Nothing on screen has animated: the two rows above and the
+  one below have <b>settled</b>, so their ID, reason and metadata recede toward
+  <code>text-secondary</code>/<code>text-tertiary</code> and the focused row plus the pill are the only two
+  things carrying full visual weight (U76, <code>motion.md</code>'s motion-budget rule, rendered here as the
+  static contrast difference it resolves to). On re-sort the list re-renders <b>instantly</b>, focus follows
+  the same row by id, and that row flashes once at 200 ms; under <code>prefers-reduced-motion</code> the
+  flash is replaced by a persistent "new" badge. Announcement is <code>polite</code>, count only —
+  "2 new escalations" — never each arriving row's content.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead">
+        <span>Escalations <span class="cnt">(9)</span></span>
+        <button class="newpill"><span class="tab">2</span>&nbsp;new · press&nbsp;R</button>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+      <div class="qrow is-focus">
+        <div class="qrow-top"><span class="qid">ESC-099</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-help"/></svg> AMBIGUOUS_SHIPMENT</div>
+        <div class="qmeta">DRV004 · Kota</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-088</span><span class="qowner">Ravi K.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-shield-alert"/></svg> SAFETY_OR_REGULATED</div>
+        <div class="qmeta">SHP0994 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">41m</span> to breach</div>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">9</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- E — Prompt 4 · Queue loading                                   -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 4 · <span>Queue pane loading — shell never unmounts</span></h2>
+<p class="cap">
+  Six skeleton rows at the real row's shape and height, because the skeleton <i>is</i> the real row rendered
+  invisible with a block drawn over it (U78). The header count is <b>absent</b>, not "(0)" — a zero during
+  load is a fabricated fact — and the status bar's pending group reads <b>"—"</b> for the same reason
+  (<code>data-formatting.md</code> § Absence). No spinner, no global progress bar, no dimming of the shell.
+  Rendered here in the <code>prefers-reduced-motion</code> form: a static block rather than the 1600 ms
+  shimmer, which is the only animation <code>motion.md</code> permits to loop and the only one this static
+  file can't show. Detail and co-pilot panes keep their ordinary empty copy — they aren't loading.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane" aria-busy="true">
+      <span class="sr-only" role="status">Loading escalations…</span>
+      <div class="qhead"><span>Escalations <span class="skel" style="display:inline-block;width:28px;height:12px;vertical-align:middle;"></span></span></div>
+      <div class="skelrow"><div class="skel" style="width:38%"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:46%"></div><div class="skel" style="width:30%"></div></div>
+      <div class="skelrow"><div class="skel" style="width:34%"></div><div class="skel" style="width:66%"></div><div class="skel" style="width:52%"></div><div class="skel" style="width:26%"></div></div>
+      <div class="skelrow"><div class="skel" style="width:40%"></div><div class="skel" style="width:54%"></div><div class="skel" style="width:44%"></div><div class="skel" style="width:32%"></div></div>
+      <div class="skelrow"><div class="skel" style="width:36%"></div><div class="skel" style="width:62%"></div><div class="skel" style="width:48%"></div><div class="skel" style="width:28%"></div></div>
+      <div class="skelrow"><div class="skel" style="width:42%"></div><div class="skel" style="width:58%"></div><div class="skel" style="width:50%"></div><div class="skel" style="width:30%"></div></div>
+      <div class="skelrow"><div class="skel" style="width:34%"></div><div class="skel" style="width:64%"></div><div class="skel" style="width:42%"></div><div class="skel" style="width:26%"></div></div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span>—&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- F — Prompt 5 · Queue load failed                               -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 5 · <span>Queue pane load failed — regional, not global</span></h2>
+<p class="cap">
+  Icon is <code>text-tertiary</code>, <b>not red</b>: nothing is in danger, a fetch failed. Copy is verbatim
+  and unapologetic — no "Oops", no auto-retry countdown, no error code on screen. The status bar's
+  connection group switches to <code>cloud-alert</code> + "Sync failed" (icon <i>and</i> text, never a
+  coloured dot alone) and the pending count renders <b>"—", not "0"</b> — unknown and zero must never look
+  the same. Announced <code>assertive</code> via <code>role="alert"</code>: silence on failure is the worst
+  available outcome (<code>accessibility-behaviour.md</code>).
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations</span></div>
+      <div class="state-block" role="alert">
+        <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-cloud-alert"/></svg>
+        <div class="hl">Couldn't load escalations — usually a connection problem.</div>
+        <button class="b b-neu">Retry</button>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-cloud-alert"/></svg> Sync failed</span>
+    <span>All facilities</span>
+    <span>—&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- G — Prompt 5 · Error boundary, scoped to the queue pane        -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 5 · <span>Error boundary — scoped per pane, never whole-app</span></h2>
+<p class="cap">
+  The more severe variant: the pane crashed rather than failed to fetch, so the icon is
+  <code>octagon-alert</code> and there are two actions. <b>Boundaries are per pane</b> — the detail and
+  co-pilot panes behind it are still fully rendered and usable, which is the whole point of scoping them
+  (<code>components.md</code> §13). "Report this" carries the region name and a trace id invisibly; no stack
+  trace reaches the coordinator.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations</span></div>
+      <div class="state-block" role="alert">
+        <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-octagon-alert"/></svg>
+        <div class="hl">Something broke loading this. The rest of the app is unaffected.</div>
+        <div class="b-row" style="margin-top:0;">
+          <button class="b b-neu">Try again</button>
+          <button class="b b-neu">Report this</button>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-104</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">Owner: <b>You (Anshul G.)</b></div>
+          <div class="qsla warn" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="slabel">Thread</div>
+        <div class="msg">
+          <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+          <div class="txt">Still waiting on a dock, what's happening?</div>
+        </div>
+        <div class="crow" style="margin-top:16px;">
+          <div class="field">Composer is unaffected — the crash is scoped to the queue pane.</div>
+          <button class="b b-con">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span>—&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- H / I — Prompt 6 · Empty, two variants                        -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 6 · <span>Empty queue — variant A, caught up</span></h2>
+<p class="cap">
+  <code>circle-check-big</code>, reassuring tone, <b>no button</b> — there is nothing for the coordinator to
+  do, and offering an action would imply otherwise. Header renders a genuine, known <code>0</code> (unlike
+  the load-failure state's "—"), status bar reads "0 pending". No celebratory graphic and no exclamation
+  mark: a capacity system does not celebrate.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> Jaipur <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
+      <div class="state-block">
+        <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-circle-check-big"/></svg>
+        <div class="hl">No open escalations.</div>
+        <div class="sub">New ones appear here automatically.</div>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>Jaipur</span>
+    <span><span class="tab">0</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<h2 class="screen-label">Prompt 6 · <span>Empty queue — variant B, nothing yet</span></h2>
+<p class="cap">
+  Same emptiness, opposite fact. <code>inbox</code>, neutral/informational tone — an expected state, not a
+  good one and not a problem. The distinguishing signal is whether the facility has any prior record at all,
+  which is a server-side data check, <b>not</b> "count is zero" (U74). No "Create escalation" button in
+  either variant: escalations are raised by the engine, never by a coordinator. This facility runs its own
+  accent hue on the rail edge, unlike the "All facilities" screens above — the accent's two permitted
+  locations are the rail stripe and the switcher swatch, nowhere else (U59).
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> Kota <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail" style="border-right-color:var(--board-accent);">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
+      <div class="state-block">
+        <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-inbox"/></svg>
+        <div class="hl">No escalations recorded for this facility yet.</div>
+        <div class="sub">Once shipments start arriving, they'll show up here.</div>
+      </div>
+    </div>
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+        Select an escalation to see its detail and thread.
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>Kota</span>
+    <span><span class="tab">0</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- J — Prompt 7 · Detail pane, escalation selected, pre-takeover  -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 7 · <span>Detail pane — escalation selected, before takeover</span></h2>
+<p class="cap">
+  Selecting a row is <b>never destructive or committing</b>, and it opens no overlay: queue and co-pilot stay
+  fully visible, because this is a persistent three-pane layout (U89, the scoped exception to U44 — it does
+  not generalise to any other queue-bearing surface). The stepper's dots are <b>neutral, never hued</b>
+  (<code>components.md</code> §16): lifecycle position and trouble are different questions, and colouring the
+  steps would blur both. The SLA clock is the <b>only</b> danger-colour-eligible element in the pane, and its
+  text carries the fact independent of colour. <code>Acknowledge</code> is the single primary action and
+  claims ownership <i>and</i> advances the stepper in one click (U92) — there is no separate assignment step;
+  Escalate, Reassign and Cancel sit in the overflow so the pane foregrounds exactly two decisions. The
+  composer is <b>Read-only, not Disabled</b> — it carries a visible label saying why it is inert, since
+  taking over is the explicit unlock and a read-only composer that looks broken is worse than one that
+  explains itself (<code>flows-and-states.md</code> Flow 2, states).
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+      <div class="qrow is-sel">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-099</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-help"/></svg> AMBIGUOUS_SHIPMENT</div>
+        <div class="qmeta">DRV004 · Kota</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
+      </div>
+      <div class="inc-row">
+        <div class="inc-head"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-right"/></svg><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg> Capacity incident</div>
+        <div class="inc-sub"><span class="mono-in">DOCK-JAI-D3</span> · 4&nbsp;shipments · <span class="mono-in">09:15–13:00</span></div>
+        <div class="inc-act"><button class="b b-pill">Review incident</button></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-104</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner unowned">Unowned</div>
+          <div class="qsla warn" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="b-row">
+          <button class="b b-con">Acknowledge</button>
+          <button class="b b-ghost b-far" aria-label="More actions — Escalate, Reassign, Cancel" title="Escalate · Reassign · Cancel"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-ellipsis"/></svg></button>
+        </div>
+        <div class="slabel">Reason</div>
+        <div class="body14">
+          Reefer <span class="mono-in">SHP1015</span> pinned to D5 (<span class="mono-in">RULE003</span>);
+          D5 down <span class="mono-in">18:00–22:00</span> (<span class="mono-in">DEVT002</span>).
+          No feasible slot in the search horizon.
+        </div>
+        <div class="slabel">Shipment</div>
+        <div class="prim14"><span class="mono-in">SHP1015</span> · Jaipur · Reefer · Priority CRITICAL</div>
+        <div class="slabel">Thread (read-only until takeover)</div>
+        <div class="msg">
+          <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+          <div class="txt">Still waiting on a dock, what's happening?</div>
+        </div>
+        <div class="flabel">Composer — disabled until takeover</div>
+        <div class="field ro">&nbsp;</div>
+        <div class="b-row"><button class="b b-neu">Take over thread</button></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- K — Prompt 7 · Reason-specific variants, FAILED vs UNROUTABLE  -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 7 · <span>Reason-specific Reason section — <code>NOTIFICATION_FAILED</code> vs <code>NOTIFICATION_UNROUTABLE</code></span></h2>
+<p class="cap">
+  These two <b>must not look alike</b> (<code>edge-cases.md</code> #6, straight from §7.4's own distinction):
+  one fails in flight, the other fails before a send is attempted because there is no valid recipient.
+  Different icons — <code>mail-warning</code> vs <code>mail-x</code>, chosen deliberately distinct in
+  <code>iconography.md</code>. <code>FAILED</code> names the failed channel and offers
+  <code>[ Retry send ]</code> inline; <code>UNROUTABLE</code> names the missing contact field and
+  <b>offers no retry at all</b> — retrying against a NULL recipient is pointless, and rendering the action
+  would mislead the coordinator about what the fix even is. The action is <b>absent</b>, not greyed:
+  a disabled Retry would still assert that retry is the shape of the answer.
+  The reason <i>strings</i> below are illustrative — the surface spec fixes the anatomy (channel named +
+  retry offered / contact field named + no retry), not the wording.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">NOTIFICATION_FAILED · retry offered</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-102</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">Neha B.</div>
+          <div class="qsla" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+        </div>
+        <div class="slabel">Reason</div>
+        <div class="body14">
+          Push notification to <span class="mono-in">DRV002</span> failed in flight at
+          <span class="mono-in">09:38</span>. The channel is reachable; the send did not complete.
+        </div>
+        <div class="b-row" style="margin-top:8px;"><button class="b b-neu">Retry send</button></div>
+        <div class="slabel">Shipment</div>
+        <div class="prim14"><span class="mono-in">SHP1009</span> · Gurugram · Dry · Priority HIGH</div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">NOTIFICATION_UNROUTABLE · no retry exists</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-095</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-mail-x"/></svg> NOTIFICATION_UNROUTABLE</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">Ravi K.</div>
+          <div class="qsla" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">34m</span> to breach</div>
+        </div>
+        <div class="slabel">Reason</div>
+        <div class="body14">
+          No contact on record for <span class="mono-in">DRV007</span> — the driver's phone field is empty,
+          so no send was attempted. Fixing the contact record is the resolution.
+        </div>
+        <div class="slabel">Shipment</div>
+        <div class="prim14"><span class="mono-in">SHP1011</span> · Kota · Dry · Priority NORMAL</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- L — Prompt 8 · Detail pane under takeover, co-pilot active     -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 8 · <span>Under takeover — a human is now in the driver's conversation</span></h2>
+<p class="cap">
+  Third dot filled, owner reads "You (Anshul G.)" in <code>text-primary</code> and no longer in the warning
+  colour. The takeover marker is a <b>divider, not a message bubble</b> — it is an event, not a message —
+  and the symmetric divider is visible to the driver in their own conversation at the same moment, because a
+  silent takeover reads as the bot ignoring them (§7.4). It announces <code>assertive</code>: a coordinator
+  who doesn't register they've taken over may not realise the composer just became live. Focus moves to the
+  composer on takeover; on hand-back completing it moves to the stepper/status area instead, since the
+  composer just became non-interactive again. <code>Resolve</code> and <code>Cancel</code> sit ≥16px from
+  <code>Send</code> and visually grouped apart from it — two terminal states with two different
+  consequences, not interchangeable "done" buttons; <b>both open the reason picker, neither commits
+  directly</b>. <code>Hand back</code> is offered only from <code>IN_PROGRESS</code> onward
+  (<code>components.md</code> §5) — handing back an unacknowledged escalation is meaningless because nobody
+  has it. No attachment control, no emoji picker, no reactions, no read receipts, no typing indicator: the
+  delivery-state question is unspecified and is <b>not</b> invented here.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+      <div class="qrow is-sel">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">You</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-099</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-help"/></svg> AMBIGUOUS_SHIPMENT</div>
+        <div class="qmeta">DRV004 · Kota</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-104</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+          <span class="b-far"><button class="b b-neu">Hand back</button></span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span class="s-lab g3">ACK</span><span aria-current="step" class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">You (Anshul G.)</div>
+          <div class="qsla warn" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="slabel">Thread</div>
+        <div class="msg">
+          <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+          <div class="txt">Still waiting on a dock, what's happening?</div>
+        </div>
+        <div class="divider-takeover" role="status">You joined the thread</div>
+        <div class="crow" style="margin-top:12px;">
+          <div class="field" style="color:var(--text-tertiary);">Write a reply…</div>
+          <button class="b b-con">Send</button>
+        </div>
+        <div class="b-row">
+          <button class="b b-neu">Resolve</button>
+          <button class="b b-neu">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+        <div class="draft">
+          “Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.”
+          <div class="draft-row">
+            <button class="b b-neu">Discard</button>
+            <button class="b b-con">Approve <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-arrow-right"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- M — Prompt 9 · WAREHOUSE_REPLY_CONFLICT, side by side          -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 9 · <span><code>WAREHOUSE_REPLY_CONFLICT</code> — two accounts, no auto-reconcile</span></h2>
+<p class="cap">
+  <b>The exclusion is the entire screen.</b> There is no "Accept warehouse's version", no "Keep our
+  version", no "Reconcile", no merge control, no radio pair choosing between the columns, and no primary
+  button adjacent to either one — reconciling two conflicting accounts of a schedule is a judgment call that
+  must not be automated even partially, because a wrong auto-merge is indistinguishable from a correct one
+  until it is too late (<code>edge-cases.md</code> #10). Both columns get <b>identical treatment</b>:
+  neither is styled as correct or preferred, and there is no red/green diff colouring, because red means
+  danger in this system and neither column is dangerous. Both are <b>Read-only in the strict sense</b> —
+  zero hover, zero focus ring, zero accent, no cursor change (U83's fourth state); they were never controls,
+  and a read-only view that looks clickable reads as broken rather than as scoped. Every operational time
+  carries <b>its dock and its date</b> — never a bare time. The only path forward is the ordinary
+  Acknowledge → Take over thread flow, identical to every other reason.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+      <div class="qrow is-sel">
+        <div class="qrow-top"><span class="qid">ESC-097</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-git-compare"/></svg> WAREHOUSE_REPLY_CONFLICT</div>
+        <div class="qmeta">SHP1007 · Jaipur</div>
+        <div class="qsla breach"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">6m</span> past breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-097</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-git-compare"/></svg> WAREHOUSE_REPLY_CONFLICT</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner unowned">Unowned</div>
+          <div class="qsla breach" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">6m</span> past breach</div>
+        </div>
+        <div class="slabel">Conflict</div>
+        <div class="twocol">
+          <div>
+            <div class="col-lab">Stored schedule</div>
+            <div class="ro-block">
+              <div class="mono14">Dock D2 · Tue 4 Aug</div>
+              <div class="mono14">13:00–14:15</div>
+              <div class="body14">Source: appointment <span class="mono-in">APT-1042</span></div>
+            </div>
+          </div>
+          <div class="rule"></div>
+          <div>
+            <div class="col-lab">Warehouse reply</div>
+            <div class="ro-block">
+              <div class="mono14">Dock D4 · Tue 4 Aug</div>
+              <div class="mono14">15:30–16:45</div>
+              <div class="body14">Received <span class="mono-in">09:31</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="b-row">
+          <button class="b b-con">Acknowledge</button>
+          <button class="b b-ghost b-far" aria-label="More actions — Escalate, Reassign, Cancel" title="Escalate · Reassign · Cancel"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-ellipsis"/></svg></button>
+        </div>
+        <div class="b-row" style="margin-top:8px;"><button class="b b-neu">Take over thread</button></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- N — Prompt 10 A · lost the acknowledge race                    -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 10 · <span>Variant A — <code>ALREADY_ACTIONED</code>, lost the acknowledge race</span></h2>
+<p class="cap">
+  Two coordinators clicked Acknowledge; one commit won server-side (<code>edge-cases.md</code> #2, the
+  ops-side instance of §9.2's nastiest race, reusing <code>confirm_request</code>'s
+  <code>ALREADY_ACTIONED</code> outcome rather than inventing a parallel one). The queue row
+  <b>updates in place</b> — never removed and re-inserted, which would read as a new escalation rather than
+  the same one someone else claimed. Acknowledge becomes <b>Inactive, not Disabled</b> (U83): normal
+  contrast, still focusable, still operable, and it <i>explains itself</i> on activation — a dead grey
+  rectangle gives no feedback at all. The notice is <b>inline, not a modal</b>. Because this coordinator is
+  focused on that exact row, the change announces <code>assertive</code>; the same change is
+  <b>silent</b> for anyone not focused on it (<code>accessibility-behaviour.md</code>'s politeness matrix
+  calls this case out by name). Focus stays on the row's now-changed content. No undo affordance is offered
+  — nothing of this coordinator's was committed, so there is nothing to undo.
+</p>
+<div class="frame">
+  <div class="topbar">
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+      <div class="qrow is-sel is-focus">
+        <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+        <div class="qmeta">SHP1015 · Jaipur</div>
+        <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+      </div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+        <div class="qmeta">SHP1009 · Gurugram</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-104</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span aria-current="step" class="s-lab g3">ACK</span><span class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">Neha B.</div>
+          <div class="qsla warn" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="notice notice-warn" role="alert">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-circle-alert"/></svg>
+          <div>Neha B. acknowledged this first.</div>
+        </div>
+        <div class="b-row">
+          <button class="b b-inact">Acknowledge</button>
+          <button class="b b-ghost b-far" aria-label="More actions — Escalate, Reassign, Cancel" title="Escalate · Reassign · Cancel"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-ellipsis"/></svg></button>
+        </div>
+        <div class="slabel">Reason</div>
+        <div class="body14">
+          Reefer <span class="mono-in">SHP1015</span> pinned to D5 (<span class="mono-in">RULE003</span>);
+          D5 down <span class="mono-in">18:00–22:00</span> (<span class="mono-in">DEVT002</span>).
+          No feasible slot in the search horizon.
+        </div>
+        <div class="b-row"><button class="b b-neu">Take over thread</button></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+    <span>All facilities</span>
+    <span><span class="tab">7</span>&nbsp;pending</span>
+    <span>Policy v3</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- O — Prompt 10 B · the underlying shipment changed              -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 10 · <span>Variant B — the underlying shipment changed under the coordinator</span></h2>
+<p class="cap">
+  A planner confirmed <code>SHP1015</code> while this escalation was being worked. The escalation
+  <b>does not auto-resolve or auto-cancel</b> and the stepper stays exactly where it was — the new fact is
+  surfaced inline in the Shipment section as soon as it is known, and the coordinator is left to Resolve or
+  Cancel <i>deliberately</i>, with that fact as visible context. <code>feedback-info</code> toned, mono for
+  the ID and the 24-hour time. No modal interruption, no full-pane reload, and <b>no toast as the only
+  carrier of this fact</b> — a toast is a confirmation, not a record. Shell around this card is unchanged.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">Detail pane · under takeover, shipment changed elsewhere</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="dtitle">
+          <span class="mono16">ESC-104</span><span class="mid">·</span>
+          <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+          <span class="b-far"><button class="b b-neu">Hand back</button></span>
+        </div>
+        <div class="dtop">
+          <div class="stepper4">
+            <span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot on" aria-hidden="true"></span><span class="s-line" aria-hidden="true"></span><span class="s-dot" aria-hidden="true"></span>
+            <span class="s-lab g1">OPEN</span><span class="s-lab g3">ACK</span><span aria-current="step" class="s-lab g5">IN PROG</span><span class="s-lab g7">RESOLVED</span>
+          </div>
+          <div class="owner">You (Anshul G.)</div>
+          <div class="qsla warn" style="margin-top:0;"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="slabel">Shipment</div>
+        <div class="prim14"><span class="mono-in">SHP1015</span> · Jaipur · Reefer · Priority CRITICAL</div>
+        <div class="notice notice-info" role="alert">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-circle-alert"/></svg>
+          <div><span class="mono-in">SHP1015</span> was confirmed by another planner at <span class="mono-in">09:58</span></div>
+        </div>
+        <div class="slabel">Thread</div>
+        <div class="msg">
+          <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+          <div class="txt">Still waiting on a dock, what's happening?</div>
+        </div>
+        <div class="divider-takeover">You joined the thread</div>
+        <div class="b-row">
+          <button class="b b-neu">Resolve</button>
+          <button class="b b-neu">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- P — Prompt 11 · Co-pilot inactive, two variants                -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 11 · <span>Co-pilot pane — Inactive, the state it sits in most of the time</span></h2>
+<p class="cap">
+  <b>Inactive, deliberately not Disabled and not Hidden</b> (U83, <code>components.md</code> §3). It meets
+  normal contrast rather than being faded like a disabled control, stays keyboard-reachable, and
+  <i>explains itself in words</i> instead of presenting a dead control. It is <b>never removed from the
+  layout</b>: a coordinator should never have to wonder whether the co-pilot exists, and hiding it would
+  also make the shell jump between two-pane and three-pane, which is worse than a quiet pane. Note what is
+  <i>not</i> here — no greyed-out ghost buttons for Summarise / Fetch context / Draft a reply, no lock icon,
+  no feature-gating language, no collapse-to-a-strip, no chat input. The pane header is styled identically
+  to the queue pane's, so the three panes read as one system.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">No takeover active</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">A capacity incident is selected</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-note">Not applicable to a capacity incident — there is no single driver thread to take over.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Q — Prompt 12 · Co-pilot active, draft awaiting approval       -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 12 · <span>Co-pilot active — three fixed capabilities, and the two-gate draft</span></h2>
+<p class="cap">
+  Three actions only; this is not a general chat feature, and there is no free-text input, no message
+  history, no regenerate, no thumbs up/down, no model name or token readout, no streaming animation.
+  <b>The two-gate rule the design must not shortcut</b> (U90, <code>flows-and-states.md</code> Flow 3):
+  <code>Approve</code> moves the exact text into the <i>thread composer</i>, editable and unsent — it does
+  <b>not</b> send. Sending is the ordinary composer Send in the detail pane, so the coordinator reads the
+  same string twice. <b>There is no "Approve and send" combined action, and it must not be invented</b> —
+  the last card shows the approved text sitting in the composer with <code>[ Send ]</code> still unpressed.
+  Per-action loading puts a spinner <b>in place of the leading icon, label unchanged, width frozen</b>:
+  loading never removes an action's own label and never reflows the pane. Summarise and Fetch context render
+  <b>inline and non-editable</b> — they are context, not messages; they never enter the transcript and never
+  get a Send action. <b>Only a drafted reply can cross into the composer.</b> Discard leaves nothing behind
+  — no trace in the thread, no text in the composer, no confirmation prompt, because nothing was ever shown
+  to the driver.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">1 · Active, nothing requested yet</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">2 · Summarise pressed — spinner in the leading slot, width frozen</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn" aria-busy="true"><span class="cp-lead"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-loader"/></svg></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">3 · Result inline, non-editable, no Send</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <div class="cp-result">
+          Driver reported a 70-minute delay at <span class="mono-in">08:31</span>.
+          Assistant offered two windows; both lapsed unheld.
+          Driver has asked twice since <span class="mono-in">09:20</span> with no dock assigned.
+        </div>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">4 · Draft awaiting approval — gate one</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+        <div class="draft">
+          “Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.”
+          <div class="draft-row">
+            <button class="b b-neu">Discard</button>
+            <button class="b b-con">Approve <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-arrow-right"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">5 · After Approve — text in the composer, Send unpressed (gate two)</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="slabel" style="margin-top:0;">Thread</div>
+        <div class="msg">
+          <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+          <div class="txt">Still waiting on a dock, what's happening?</div>
+        </div>
+        <div class="divider-takeover">You joined the thread</div>
+        <div class="crow" style="margin-top:12px;">
+          <div class="field">Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.</div>
+          <button class="b b-con">Send</button>
+        </div>
+        <div class="b-row">
+          <button class="b b-neu">Resolve</button>
+          <button class="b b-neu">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- R — Prompt 13 · Stale, suppressed, and per-action errors       -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 13 · <span>Co-pilot degradations — stale draft, safety suppression, per-action errors</span></h2>
+<p class="cap">
+  All three keep the console fully operable: <b>the co-pilot is secondary and never blocks the primary
+  path</b> (<code>edge-cases.md</code> #4, #5, #11). <b>A</b> — the thread advanced while the draft sat
+  unapproved, so a stale marker appears above the draft text, but <i>both</i> Discard and Approve stay
+  enabled: the coordinator, not the system, decides whether the draft is still good advice, and on Approve
+  the marker carries into the composer as a reminder before Send. <b>B</b> —
+  <code>SAFETY_OR_REGULATED</code> suppresses Draft a reply <b>immediately on selecting the escalation</b>,
+  not after an attempt fails, so no generation cycle is spent on a reply that was never going to be offered.
+  It is <b>Inactive</b>, not Hidden — Hidden is reserved for scope denial, and this is not a scope decision
+  — and Summarise and Fetch context stay fully available and normally styled, because gathering context
+  carries none of the liability a drafted message does. This suppression is reason-specific: the whole pane
+  is not greyed. <b>C</b> — each action degrades independently and visibly, the other two stay enabled, and
+  the detail pane's composer stays fully interactive behind the failure. <b>Co-pilot failure never disables
+  manual reply.</b> Copy is verbatim in all three; no whole-pane error state, no retry-all, no modal, no red
+  pane background, no apology.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">A · Stale draft — both actions stay enabled</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+        <div class="draft">
+          <div class="stale"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-triangle-alert"/></svg> Thread updated since this was drafted</div>
+          “Your reefer's slot at D5 reopens after 22:00. I can offer you 22:15.”
+          <div class="draft-row">
+            <button class="b b-neu">Discard</button>
+            <button class="b b-con">Approve <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-arrow-right"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">B · SAFETY_OR_REGULATED — Draft is Inactive, the other two are not</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <div class="enum" style="margin-bottom:4px;"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-shield-alert"/></svg> SAFETY_OR_REGULATED</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn inact"><span class="cp-lead"></span>Draft a reply</button>
+        <div class="cp-result">Not offered on safety-related escalations — write this reply yourself.</div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">C · Per-action errors — each degrades alone</div>
+    <div class="card w-copilot">
+      <div class="qhead"><span>Co-pilot</span></div>
+      <div class="cp-body">
+        <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+        <div class="inline-err"><svg aria-hidden="true" focusable="false" class="ic ic-xs" style="margin-top:2px;"><use href="#i-circle-alert"/></svg> Couldn't summarise — the thread is still readable above.</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+        <div class="inline-err"><svg aria-hidden="true" focusable="false" class="ic ic-xs" style="margin-top:2px;"><use href="#i-circle-alert"/></svg> Context unavailable.</div>
+        <div class="slabel" style="margin:8px 0;">Draft reply</div>
+        <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+        <div class="inline-err"><svg aria-hidden="true" focusable="false" class="ic ic-xs" style="margin-top:2px;"><use href="#i-circle-alert"/></svg> Couldn't draft a reply — write one directly in the composer.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S — Prompt 14 · Capacity incident: collapsed, expanded, handed -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 14 · <span>Capacity incident — collapsed, expanded, handed off, and scope-denied</span></h2>
+<p class="cap">
+  <b>One row per incident, always, regardless of how many shipments it affects</b> — that rule is the
+  component's whole reason for existing (<code>components.md</code> §17, Flow 4), and the affected count is
+  part of the row's <i>primary text</i>, not a badge easy to miss. Each affected shipment carries its
+  <b>3px neutral priority marker</b> alongside the written priority word — the bar alone is never sufficient
+  signal, and priority is a value ramp, never a hue, because red in this product means danger only. Every
+  shipment row is <b>strictly Read-only</b>: no hover, no focus ring, no accent, no cursor change, and
+  <b>no per-shipment action of any kind</b> — no confirm, reject, counter-offer or reschedule, even though
+  the rows are queue-row-shaped. Acting happens only through the single button below.
+  <code>[ Request sequencer proposal ]</code> is the <b>only</b> action ops has on an incident: it applies no
+  capacity change, it asks the sequencer to compute one — a capacity incident is <b>triaged in ops and
+  applied in planner</b> (U93). Once handed off the incident <b>persists in the ops queue</b> (the
+  coordinator who triaged it may still need to track it to resolution), never collapses back into individual
+  rows, offers no second Request click, and its count is <b>not frozen</b> at request time — it reflects the
+  current true set, so it may read 5 later even though 4 was requested (<code>edge-cases.md</code> #7).
+  The fourth card is the one that matters most: for a viewer not scoped to the planner console the
+  <code>View in planner queue</code> button is <b>absent from the layout entirely</b>. Scope denial is
+  always <b>Hidden, never Disabled</b> — a greyed-out control reveals that a destination exists (U83).
+  No per-shipment checkboxes, no bulk bar, no drag-to-reorder, no Gantt here (the board is the planner's),
+  no "Dismiss incident".
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">1 · Collapsed row in the queue pane</div>
+    <div class="card">
+      <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+      <div class="qrow settled">
+        <div class="qrow-top"><span class="qid">ESC-099</span><span class="qowner">Neha B.</span></div>
+        <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-help"/></svg> AMBIGUOUS_SHIPMENT</div>
+        <div class="qmeta">DRV004 · Kota</div>
+        <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
+      </div>
+      <div class="inc-row">
+        <div class="inc-head"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-right"/></svg><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg> Capacity incident</div>
+        <div class="inc-sub"><span class="mono-in">DOCK-JAI-D3</span> · 4&nbsp;shipments · <span class="mono-in">09:15–13:00</span></div>
+        <div class="inc-act"><button class="b b-pill">Review incident</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">2 · Expanded in the detail pane</div>
+    <div class="card w-detail">
+      <div class="dbody" style="padding-bottom:0;">
+        <div class="dtitle">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg>
+          <span class="prim14" style="font-weight:600;">Capacity incident</span>
+          <span class="mid">·</span><span class="mono16">DOCK-JAI-D3</span>
+        </div>
+        <div class="slabel">Window</div>
+        <div class="mono14">09:15–13:00</div>
+        <div class="slabel">Affected shipments (4)</div>
+      </div>
+      <div class="shiprow pri-crit"><span class="sid">SHP1005</span><span class="spri">CRITICAL</span><span class="sfac">Jaipur</span></div>
+      <div class="shiprow pri-high"><span class="sid">SHP1009</span><span class="spri">HIGH</span><span class="sfac">Jaipur</span></div>
+      <div class="shiprow pri-norm"><span class="sid">SHP1013</span><span class="spri">NORMAL</span><span class="sfac">Jaipur</span></div>
+      <div class="shiprow pri-crit"><span class="sid">SHP1014</span><span class="spri">CRITICAL</span><span class="sfac">Jaipur</span></div>
+      <div class="dbody" style="padding-top:0;">
+        <div class="b-row"><button class="b b-con">Request sequencer proposal</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">3 · Handed off · viewer is scoped to the planner console</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="dtitle">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg>
+          <span class="prim14" style="font-weight:600;">Capacity incident</span>
+          <span class="mid">·</span><span class="mono16">DOCK-JAI-D3</span>
+          <span class="mid">·</span><span class="mono16">09:15–13:00</span>
+        </div>
+        <div class="notice notice-info" role="status">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-network"/></svg>
+          <div>
+            Proposal requested · routed to Planner queue
+            <div style="font-size:13px;line-height:1.4;margin-top:4px;">4&nbsp;shipments awaiting a planner's review</div>
+          </div>
+        </div>
+        <div class="b-row">
+          <button class="b b-neu">View in planner queue <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-external"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">4 · Handed off · viewer is NOT scoped to planner — button Hidden, not Disabled</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="dtitle">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg>
+          <span class="prim14" style="font-weight:600;">Capacity incident</span>
+          <span class="mid">·</span><span class="mono16">DOCK-JAI-D3</span>
+          <span class="mid">·</span><span class="mono16">09:15–13:00</span>
+        </div>
+        <div class="notice notice-info" role="status">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-network"/></svg>
+          <div>
+            Proposal requested · routed to Planner queue
+            <div style="font-size:13px;line-height:1.4;margin-top:4px;">4&nbsp;shipments awaiting a planner's review</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- T — Prompt 15 · Resolve / Cancel reason picker                 -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 15 · <span>Reason picker — Cancel variant, over a flat scrim, with a toast above it</span></h2>
+<p class="cap">
+  <b>Resolve and Cancel are two different terminal states with two different meanings, not interchangeable
+  "done" buttons</b> — conflating them is the likeliest real mistake a coordinator makes under time
+  pressure. Container is the smallest modal size, 480px, <code>shadow-lg</code>, over a <b>flat scrim —
+  dimming, never blurring</b> (no glassmorphism anywhere in this product: text contrast must be verifiable,
+  and it is not when the background depends on what is behind it). Escape dismisses, focus is trapped,
+  restored to the trigger on close, and lands on the <b>first interactive element, never on the committing
+  button</b>. A reason is required — a bare Cancel with no reason leaves no audit trail for why an
+  SLA-tracked item closed. The internal-note label is always visible and the "(never shown to the driver)"
+  qualifier is <b>part of the label, not a tooltip</b>. "What happens next" replaces the driver-message
+  preview used in the planner's reject flow, because neither Resolve nor Cancel sends the driver anything;
+  <b>no driver-facing copy is invented for a message that is never sent</b>. The dismiss button comes
+  <b>first in source order</b> and sits ≥16px from the commit, so a keyboard user tabbing quickly reaches
+  the dismissal first whatever the visual order. There is <b>no "are you sure?" on top of this</b> — the
+  reason picker <i>is</i> the friction (U41). The toast on top demonstrates the stacking rule: toasts sit
+  <b>above</b> modals, because a time-boxed undo that can be hidden is no undo.
+  <br><br>
+  Two things flagged rather than smuggled: the picker's <i>container</i> is never specified as modal,
+  popover or inline (<code>stitch-prompts.md</code> Known gap 1) — the modal here rests on the reading that
+  a reason picker is data collection, not a confirmation gate; and whether these two actions get the
+  5-second undo at all is unstated (Known gap 3), so the toast below shows the shared anatomy without
+  asserting it fires for them.
+</p>
+<div class="wrap">
+  <div class="frame">
+    <div class="topbar">
+      <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+      <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+      <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+        <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+      </div>
+      <div class="pane">
+        <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
+        <div class="qrow is-sel">
+          <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">You</span></div>
+          <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</div>
+          <div class="qmeta">SHP1015 · Jaipur</div>
+          <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
+        </div>
+        <div class="qrow settled">
+          <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+          <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+          <div class="qmeta">SHP1009 · Gurugram</div>
+          <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="dbody">
+          <div class="dtitle">
+            <span class="mono16">ESC-104</span><span class="mid">·</span>
+            <span class="enum"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-calendar-x"/></svg> NO_FEASIBLE_SLOT</span>
+          </div>
+          <div class="slabel">Thread</div>
+          <div class="msg">
+            <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
+            <div class="txt">Still waiting on a dock, what's happening?</div>
+          </div>
+          <div class="divider-takeover">You joined the thread</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="qhead"><span>Co-pilot</span></div>
+        <div class="cp-body">
+          <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
+          <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
+          <button class="cp-btn"><span class="cp-lead"></span>Draft a reply</button>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+      <span>All facilities</span>
+      <span><span class="tab">7</span>&nbsp;pending</span>
+      <span>Policy v3</span>
+    </div>
+  </div>
+  <div class="scrim">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt-cancel">
+      <h3 class="mtitle" id="mt-cancel">Cancel escalation <span class="mid">·</span> <span class="mono-in">ESC-104</span></h3>
+      <div class="flabel" style="margin-top:0;">Reason</div>
+      <div class="radio-row"><span class="radio"></span> Shipment cancelled</div>
+      <div class="radio-row"><span class="radio on"><i></i></span> Duplicate of another open escalation</div>
+      <div class="radio-row"><span class="radio"></span> Created in error</div>
+      <div class="flabel">Internal note (never shown to the driver)</div>
+      <div class="field ta">Duplicate of <span class="mono-in">ESC-091</span> — same shipment, same reason.</div>
+      <div class="slabel">What happens next</div>
+      <div class="consequence">No message is sent to the driver. The escalation closes with this reason on its audit trail.</div>
+      <div class="modal-foot">
+        <button class="b b-neu">Cancel</button>
+        <button class="b b-con">Cancel escalation</button>
+      </div>
+    </div>
+  </div>
+  <div class="toasts">
+    <div class="toast" role="status">
+      <div>Resolved <span class="mono-in">ESC-098</span> · issue fixed</div>
+      <div class="trow">
+        <div class="undo-track" aria-hidden="true"><div class="undo-fill" style="width:62%;"></div></div>
+        <button class="b b-text" style="font-size:14px;">Undo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="screen-label">Prompt 15 · <span>Resolve variant, and the commit gated until a reason is chosen</span></h2>
+<p class="cap">
+  Identical structure, <b>one</b> reason — "Issue fixed" — pre-selected, and a different consequence
+  statement. The commit button carries <b>no destructive red fill</b>: resolving is not destructive, and the
+  surface spec assigns a red fill to neither variant, so neither gets one here. The third card is the
+  gate: with no reason chosen the commit stays <b>Disabled with a tooltip stating why</b> — this is the one
+  place on the surface where Disabled is correct rather than Inactive, because the control genuinely cannot
+  act yet and the missing input is visible in the same view (U83). Validation fires <b>on blur, never on
+  keystroke</b>, and error text sits <i>below</i> the field with a <code>circle-alert</code> at 14px, never
+  colour alone. The tooltip and validation strings are the only copy on this artboard with no source in the
+  surface spec — flagged, not smuggled.
+  No dropdown for three options (a radio group shows all three at once), no free-text-only reason replacing
+  the controlled vocabulary. On commit, focus moves to the next escalation <b>at the same queue position</b>
+  — never the top — so a coordinator working down a list does not lose their place.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">Resolve variant · one reason, pre-selected</div>
+    <div class="modal" role="dialog" aria-labelledby="mt-resolve">
+      <h3 class="mtitle" id="mt-resolve">Resolve escalation <span class="mid">·</span> <span class="mono-in">ESC-104</span></h3>
+      <div class="flabel" style="margin-top:0;">Reason</div>
+      <div class="radio-row"><span class="radio on"><i></i></span> Issue fixed</div>
+      <div class="flabel">Internal note (never shown to the driver)</div>
+      <div class="field ta">Offered 22:15 at D5 after the maintenance window; driver accepted in thread.</div>
+      <div class="slabel">What happens next</div>
+      <div class="consequence">Resolve does not send a separate message. If a takeover occurred, the driver has already been told the outcome in the thread.</div>
+      <div class="modal-foot">
+        <button class="b b-neu">Cancel</button>
+        <button class="b b-con">Resolve escalation</button>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">Cancel variant · no reason chosen — commit Disabled, note failed validation on blur</div>
+    <div class="modal" role="dialog" aria-labelledby="mt-cancel2">
+      <h3 class="mtitle" id="mt-cancel2">Cancel escalation <span class="mid">·</span> <span class="mono-in">ESC-104</span></h3>
+      <div class="flabel" style="margin-top:0;">Reason</div>
+      <div class="radio-row"><span class="radio"></span> Shipment cancelled</div>
+      <div class="radio-row"><span class="radio"></span> Duplicate of another open escalation</div>
+      <div class="radio-row"><span class="radio"></span> Created in error</div>
+      <div class="flabel">Internal note (never shown to the driver)</div>
+      <div class="field ta" style="border-color:var(--feedback-danger-border);">&nbsp;</div>
+      <div class="inline-err" style="margin-top:4px;"><svg aria-hidden="true" focusable="false" class="ic ic-xs" style="margin-top:2px;"><use href="#i-circle-alert"/></svg> Add an internal note before closing this escalation.</div>
+      <div class="slabel">What happens next</div>
+      <div class="consequence">No message is sent to the driver. The escalation closes with this reason on its audit trail.</div>
+      <div class="modal-foot">
+        <button class="b b-neu">Cancel</button>
+        <button class="b b-dis" aria-disabled="true" title="Choose a reason first.">Cancel escalation</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- U — Prompt 16 · Toasts and the inline failed write             -->
+<!-- ============================================================ -->
+<h2 class="screen-label">Prompt 16 · <span>Toast stack — bottom-left, max three, older collapsed</span></h2>
+<p class="cap">
+  Bottom-left, 16px from both edges, <b>maximum three stacked</b> with 8px gaps; older ones collapse to a
+  "+2 more" summary. The undo bar depletes <b>linearly over exactly 5000 ms</b> — linear because it
+  represents literal elapsed time, not an eased transition (rendered here at ~62% remaining). The same
+  5-second window is <b>also reachable by <code>Cmd/Ctrl+Z</code> regardless of where focus is</b>: a toast
+  a sighted user can click in five seconds is functionally unreachable for a screen-reader user who must
+  first hear it announced and then navigate to it. Success is 4 s, dismissible,
+  <code>role="status"</code>, polite — a success does not need to interrupt. <b>The error toast persists
+  until dismissed</b>, <code>role="alert"</code>, assertive, with an explicit dismiss <code>x</code>; no
+  error toast auto-dismisses. <b>Toasts never carry the only copy of important information</b> — a toast is
+  a confirmation, not a record, so whatever it says is also true and visible somewhere in the console. No
+  top-centre or top-right placement, no stack taller than three, no sound, no spinner inside a toast, and no
+  toast for routine row arrivals (Prompt 3's count pill is that whole signal). Motion: 200 ms ease-out in,
+  120 ms ease-in out; under <code>prefers-reduced-motion</code> both become instant with the same time on
+  screen.
+  <br><br>
+  Toast bodies for the success and error types are illustrative — Prompt 16 fixes their anatomy, timing,
+  role and dismissal, not their wording. "Nothing has changed" in the error line is not illustrative:
+  it is verbatim and mandatory.
+</p>
+<div class="wrap">
+  <div class="frame">
+    <div class="topbar">
+      <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></div>
+      <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+      <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
+        <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
+      </div>
+      <div class="pane">
+        <div class="qhead"><span>Escalations <span class="cnt">(6)</span></span></div>
+        <div class="qrow settled">
+          <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
+          <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-mail-warning"/></svg> NOTIFICATION_FAILED</div>
+          <div class="qmeta">SHP1009 · Gurugram</div>
+          <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
+        </div>
+        <div class="qrow settled">
+          <div class="qrow-top"><span class="qid">ESC-099</span><span class="qowner">Neha B.</span></div>
+          <div class="qreason"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-help"/></svg> AMBIGUOUS_SHIPMENT</div>
+          <div class="qmeta">DRV004 · Kota</div>
+          <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
+        </div>
+      </div>
+      <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+        <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
+          Select an escalation to see its detail and thread.
+        </div>
+      </div>
+      <div class="pane">
+        <div class="qhead"><span>Co-pilot</span></div>
+        <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span class="sb"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-wifi"/></svg> Online · synced just now</span>
+      <span>All facilities</span>
+      <span><span class="tab">6</span>&nbsp;pending</span>
+      <span>Policy v3</span>
+    </div>
+  </div>
+  <div class="toasts">
+    <div class="toast-more">+2&nbsp;more</div>
+    <div class="toast" role="alert">
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:4px;color:var(--feedback-danger-border);"><use href="#i-circle-alert"/></svg>
+        <div style="flex:1;min-width:0;">Retry send failed. Nothing has changed.</div>
+        <button class="b b-ghost" style="height:20px;width:20px;" aria-label="Dismiss"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button>
+      </div>
+    </div>
+    <div class="toast" role="status">
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:4px;"><use href="#i-circle-check-big"/></svg>
+        <div style="flex:1;min-width:0;">Acknowledged <span class="mono-in">ESC-102</span>.</div>
+      </div>
+    </div>
+    <div class="toast" role="status">
+      <div>Resolved <span class="mono-in">ESC-104</span> · issue fixed</div>
+      <div class="trow">
+        <div class="undo-track" aria-hidden="true"><div class="undo-fill" style="width:62%;"></div></div>
+        <button class="b b-text" style="font-size:14px;">Undo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="screen-label">Prompt 16 · <span>Inline failed write, and the non-blocking warning</span></h2>
+<p class="cap">
+  Neither of these is a toast — <b>they belong next to the thing that failed</b>. <b>"Nothing has changed"
+  is mandatory and verbatim</b>: in a system where a click commits capacity, a coordinator must know a
+  failure left no partial state. Every capacity-affecting action also carries an idempotency key (U70), so
+  <code>[ Try again ]</code> retries the same operation rather than issuing a second one — which is what
+  makes the promise in that sentence true rather than reassuring. The warning variant fires on hand-back
+  when the thread's shipment changed during takeover: the coordinator <b>can proceed anyway, but not
+  silently</b>. Inline notice, not a modal — it does not block.
+</p>
+<div class="strip">
+  <div class="cardwrap"><div class="card-cap">Failed write · danger toned, inline</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="notice notice-danger" role="alert" style="margin-top:0;">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-circle-alert"/></svg>
+          <div>
+            That didn't save. Nothing has changed.
+            <div class="b-row" style="margin-top:8px;"><button class="b b-neu">Try again</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cardwrap"><div class="card-cap">Non-blocking warning · hand-back on a changed shipment</div>
+    <div class="card w-detail">
+      <div class="dbody">
+        <div class="notice notice-warn" role="status" style="margin-top:0;">
+          <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:2px;"><use href="#i-triangle-alert"/></svg>
+          <div>This thread's shipment has changed since takeover — the assistant may not have current context.</div>
+        </div>
+        <div class="b-row"><button class="b b-neu">Hand back anyway</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================
+     End of gallery — Prompts 1–16 of stitch-prompts.md are all rendered above.
+     ============================================================================ -->
+</body>
+</html>

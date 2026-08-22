@@ -10,7 +10,13 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.llm import build_chat_model
-from app.assistant.observability import observe_input, observe_output, tool_outcome_metadata
+from app.assistant.observability import (
+    chat_turn_trace,
+    child_invoke_config,
+    observe_input,
+    observe_output,
+    tool_outcome_metadata,
+)
 from app.assistant.prompts import SYSTEM_PROMPT
 from app.assistant.tools import build_driver_tools
 from app.core.errors import AppError
@@ -139,111 +145,118 @@ async def run_assistant(
     ux_state = "answered"
     confirmation_payload: dict[str, Any] | None = None
 
-    invoke_config = observe_input(len(history))
-    try:
-        ai: AIMessage = await llm.ainvoke(messages, config=invoke_config)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("LLM invoke failed")
-        raise AppError(
-            "LLM is unavailable. Use deterministic REST actions or retry later.",
-            code="LLM_UNAVAILABLE",
-            status_code=503,
-            detail=str(exc)[:200],
-        ) from exc
+    turn_config = observe_input(len(history), thread_id=tid, session_id=sid)
+    invoke_config = child_invoke_config(turn_config)
 
-    for round_idx in range(MAX_TOOL_ROUNDS):
-        tool_calls = getattr(ai, "tool_calls", None) or []
-        if not tool_calls:
-            break
-        messages.append(ai)
-        should_break_after_round = False
-        for call in tool_calls:
-            name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
-            call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", "")
-            args = call.get("args") if isinstance(call, dict) else getattr(call, "args", {}) or {}
-            tool = tool_map.get(name or "")
-            if tool is None:
-                result = json.dumps({"code": "UNKNOWN_TOOL", "message": f"Tool {name} not allowed."})
-            else:
-                invoke_args = args
-                schema = getattr(tool, "args_schema", None)
-                if isinstance(args, dict) and schema is not None:
-                    allowed = set(getattr(schema, "model_fields", {}) or {})
-                    if allowed:
-                        invoke_args = {key: value for key, value in args.items() if key in allowed}
-                try:
-                    result = await tool.ainvoke(invoke_args)
-                except AppError as exc:
-                    result = json.dumps(
-                        {
-                            "code": exc.code,
-                            "message": exc.message,
-                            "detail": exc.detail,
-                            "status_code": exc.status_code,
-                        }
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    result = json.dumps(
-                        {
-                            "code": "TOOL_ERROR",
-                            "message": str(exc)[:300],
-                            "args_received": args if isinstance(args, dict) else {"raw": str(args)[:200]},
-                            "args_invoked": invoke_args
-                            if isinstance(invoke_args, dict)
-                            else {"raw": str(invoke_args)[:200]},
-                        }
-                    )
-
-            result_text = result if isinstance(result, str) else _json_safe(result)
-            try:
-                parsed = json.loads(result_text) if isinstance(result_text, str) else result_text
-            except (TypeError, json.JSONDecodeError):
-                parsed = {"raw": str(result_text)[:2000]}
-
-            observed_tools.append(
-                {
-                    "name": name,
-                    "args": args,
-                    "result": parsed if isinstance(parsed, (dict, list)) else {"raw": str(parsed)[:2000]},
-                    "result_preview": str(result_text)[:800],
-                }
-            )
-            try:
-                if isinstance(parsed, dict):
-                    code = parsed.get("code") or parsed.get("status")
-                    if code == "CONFIRMATION_REQUIRED":
-                        ux_state = "confirmation_required"
-                        confirmation_payload = parsed
-                        should_break_after_round = True
-                    elif code == "REPAIR_IS_NOT_ETA":
-                        ux_state = "clarification_required"
-                        should_break_after_round = True
-                    elif code == "CAPABILITY_NOT_ENABLED":
-                        ux_state = "capability_not_enabled"
-                    elif parsed.get("status") == "PERSISTED":
-                        ux_state = "persisted_success"
-                        confirmation_payload = parsed
-                        should_break_after_round = True
-            except (TypeError, json.JSONDecodeError, AttributeError):
-                pass
-
-            messages.append(ToolMessage(content=str(result_text), tool_call_id=call_id or name or "tool"))
-
-        if should_break_after_round:
-            break
-
+    with chat_turn_trace(
+        turn_config,
+        inputs={"message": message, "thread_id": tid, "session_id": sid},
+    ):
         try:
-            invoke_config = observe_input(
-                len(history), extra_metadata=tool_outcome_metadata(observed_tools, ux_state)
-            )
-            ai = await llm.ainvoke(messages, config=invoke_config)
+            ai: AIMessage = await llm.ainvoke(messages, config=invoke_config)
         except Exception as exc:  # noqa: BLE001
+            logger.exception("LLM invoke failed")
             raise AppError(
-                "LLM failed during tool loop.",
+                "LLM is unavailable. Use deterministic REST actions or retry later.",
                 code="LLM_UNAVAILABLE",
                 status_code=503,
                 detail=str(exc)[:200],
             ) from exc
+
+        for round_idx in range(MAX_TOOL_ROUNDS):
+            tool_calls = getattr(ai, "tool_calls", None) or []
+            if not tool_calls:
+                break
+            messages.append(ai)
+            should_break_after_round = False
+            for call in tool_calls:
+                name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+                call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", "")
+                args = call.get("args") if isinstance(call, dict) else getattr(call, "args", {}) or {}
+                tool = tool_map.get(name or "")
+                if tool is None:
+                    result = json.dumps({"code": "UNKNOWN_TOOL", "message": f"Tool {name} not allowed."})
+                else:
+                    invoke_args = args
+                    schema = getattr(tool, "args_schema", None)
+                    if isinstance(args, dict) and schema is not None:
+                        allowed = set(getattr(schema, "model_fields", {}) or {})
+                        if allowed:
+                            invoke_args = {key: value for key, value in args.items() if key in allowed}
+                    try:
+                        result = await tool.ainvoke(invoke_args, config=invoke_config)
+                    except AppError as exc:
+                        result = json.dumps(
+                            {
+                                "code": exc.code,
+                                "message": exc.message,
+                                "detail": exc.detail,
+                                "status_code": exc.status_code,
+                            }
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        result = json.dumps(
+                            {
+                                "code": "TOOL_ERROR",
+                                "message": str(exc)[:300],
+                                "args_received": args if isinstance(args, dict) else {"raw": str(args)[:200]},
+                                "args_invoked": invoke_args
+                                if isinstance(invoke_args, dict)
+                                else {"raw": str(invoke_args)[:200]},
+                            }
+                        )
+
+                result_text = result if isinstance(result, str) else _json_safe(result)
+                try:
+                    parsed = json.loads(result_text) if isinstance(result_text, str) else result_text
+                except (TypeError, json.JSONDecodeError):
+                    parsed = {"raw": str(result_text)[:2000]}
+
+                observed_tools.append(
+                    {
+                        "name": name,
+                        "args": args,
+                        "result": parsed if isinstance(parsed, (dict, list)) else {"raw": str(parsed)[:2000]},
+                        "result_preview": str(result_text)[:800],
+                    }
+                )
+                try:
+                    if isinstance(parsed, dict):
+                        code = parsed.get("code") or parsed.get("status")
+                        if code == "CONFIRMATION_REQUIRED":
+                            ux_state = "confirmation_required"
+                            confirmation_payload = parsed
+                            should_break_after_round = True
+                        elif code == "REPAIR_IS_NOT_ETA":
+                            ux_state = "clarification_required"
+                            should_break_after_round = True
+                        elif code == "CAPABILITY_NOT_ENABLED":
+                            ux_state = "capability_not_enabled"
+                        elif parsed.get("status") == "PERSISTED":
+                            ux_state = "persisted_success"
+                            confirmation_payload = parsed
+                            should_break_after_round = True
+                except (TypeError, json.JSONDecodeError, AttributeError):
+                    pass
+
+                messages.append(ToolMessage(content=str(result_text), tool_call_id=call_id or name or "tool"))
+
+            if should_break_after_round:
+                break
+
+            try:
+                invoke_config = child_invoke_config(
+                    turn_config,
+                    extra_metadata=tool_outcome_metadata(observed_tools, ux_state),
+                )
+                ai = await llm.ainvoke(messages, config=invoke_config)
+            except Exception as exc:  # noqa: BLE001
+                raise AppError(
+                    "LLM failed during tool loop.",
+                    code="LLM_UNAVAILABLE",
+                    status_code=503,
+                    detail=str(exc)[:200],
+                ) from exc
 
     raw_content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
     content = raw_content.strip()

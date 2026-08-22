@@ -1,0 +1,1326 @@
+<title>Carrier Portal Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from ../00-foundations/color.md and
+   ../00-foundations/typography.md. Same construction as the
+   other three mockups (U96).
+   ============================================================ */
+:root {
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+
+  --blue-50:#EFF6FF;  --blue-500:#3B82F6; --blue-600:#2563EB;
+  --amber-50:#FFFBEB; --amber-500:#F59E0B; --amber-700:#B45309;
+  --green-50:#ECFDF5; --green-500:#10B981; --green-600:#059669; --green-700:#047857;
+  --red-50:#FEF2F2;   --red-600:#DC2626;
+
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
+  --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
+
+  --board-bg:var(--neutral-200);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono',Consolas,monospace;
+
+  --r-sm:4px; --r-md:6px; --r-lg:8px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface-base:var(--neutral-950);
+    --surface-raised:var(--neutral-900);
+    --surface-hover:var(--neutral-800);
+    --text-primary:var(--neutral-50);
+    --text-secondary:var(--neutral-300);
+    --text-tertiary:var(--neutral-400);
+    --border-subtle:var(--neutral-800);
+    --border-default:var(--neutral-700);
+    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:#FBBF24;
+    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:#60A5FA;
+    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:#34D399;
+    --board-bg:var(--neutral-950);
+    --board-ink:var(--neutral-50);
+    --board-muted:var(--neutral-400);
+  }
+}
+:root[data-theme="dark"]{
+  --surface-base:var(--neutral-950);
+  --surface-raised:var(--neutral-900);
+  --surface-hover:var(--neutral-800);
+  --text-primary:var(--neutral-50);
+  --text-secondary:var(--neutral-300);
+  --text-tertiary:var(--neutral-400);
+  --border-subtle:var(--neutral-800);
+  --border-default:var(--neutral-700);
+  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+  --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:#FBBF24;
+  --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:#60A5FA;
+  --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:#34D399;
+  --board-bg:var(--neutral-950);
+  --board-ink:var(--neutral-50);
+  --board-muted:var(--neutral-400);
+}
+
+*{box-sizing:border-box;}
+body{ margin:0; background:var(--board-bg); color:var(--board-ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased; }
+
+.board-head{ max-width:1120px; margin:0 auto; padding:40px 24px 8px; }
+.board-head h1{ font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700; margin:0 0 4px; }
+.board-head p{ margin:0; color:var(--board-muted); font-size:14px; max-width:70ch; line-height:1.55; }
+.eyebrow{ font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--board-muted); margin:0 0 4px; }
+.screen-label{ max-width:1120px; margin:32px auto 8px; padding:0 24px; font-size:13px; font-weight:600; color:var(--board-muted); }
+.screen-label span{ color:var(--board-ink); font-weight:700; }
+
+/* comfortable density: 44px rows, 12/16 cell padding, 16px card padding, 12px stack gap — spacing-and-layout.md */
+.frame{
+  max-width:1120px; margin:0 auto 48px; border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.10);
+  border:1px solid var(--border-subtle);
+  background:var(--surface-base); font-size:14px;
+}
+.topbar{
+  height:56px; display:flex; align-items:center; gap:16px; padding:0 20px;
+  background:var(--surface-raised); border-bottom:1px solid var(--border-subtle);
+}
+.topbar .brand{ font-weight:700; font-size:16px; }
+.topbar-icons{ margin-left:auto; display:flex; gap:16px; color:var(--text-tertiary); font-size:20px; align-items:center; line-height:1; }
+.avatar{ width:32px; height:32px; border-radius:50%; background:var(--blue-600); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+
+.body{ display:grid; grid-template-columns:56px 1fr; }
+.rail{ background:var(--surface-raised); border-right:1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; gap:20px; padding-top:16px; color:var(--text-tertiary); font-size:20px; }
+.rail .active{ color:var(--blue-600); }
+.main{ padding:20px; }
+
+.stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:12px; }
+.stat{ background:var(--surface-raised); border:1px solid var(--border-subtle); border-radius:var(--r-md); padding:16px; }
+.stat .label{ font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); margin-bottom:4px; }
+.stat .value{ font-size:24px; font-weight:700; font-family:var(--font-data); }
+.stat .delta{ font-size:12px; font-weight:600; color:var(--green-600); margin-left:8px; }
+.spark{ margin-top:8px; height:24px; }
+
+.lastupdated{ font-size:12px; color:var(--text-tertiary); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+.lastupdated .refresh{ font-weight:600; color:var(--blue-600); cursor:pointer; }
+
+.sectionhead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.sectionhead h3{ font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); margin:0; }
+.filter{ font-size:12px; color:var(--text-tertiary); border:1px solid var(--border-default); border-radius:var(--r-sm); padding:4px 12px; }
+
+table.f{ width:100%; border-collapse:collapse; font-size:14px; margin-bottom:20px; }
+table.f th{ text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); padding:12px 16px; border-bottom:1px solid var(--border-subtle); }
+table.f td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); height:44px; vertical-align:middle; }
+table.f tr:hover td{ background:var(--surface-hover); }
+.mono{ font-family:var(--font-data); }
+.chip{ display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600; padding:2px 8px; border-radius:var(--r-sm); }
+.chip.pending{ background:var(--state-pending-bg); border:2px solid var(--state-pending-border); color:var(--state-pending-text); }
+.chip.confirmed{ background:var(--state-confirmed-bg); border:2px solid var(--state-confirmed-border); color:var(--state-confirmed-text); }
+.chevron{ color:var(--text-tertiary); }
+
+.excrow{ display:flex; align-items:center; gap:12px; padding:12px 16px; border:1px solid var(--border-subtle); border-radius:var(--r-md); font-size:14px; }
+.excrow .chevron{ margin-left:auto; }
+
+.detailcard{ background:var(--surface-raised); border:1px solid var(--border-subtle); border-radius:var(--r-md); padding:20px; }
+.detailcard .id{ font-size:20px; font-weight:700; margin-bottom:12px; }
+.detailcard .interval{ font-family:var(--font-data); color:var(--text-secondary); font-size:14px; margin:12px 0; }
+.histrow{ display:flex; gap:12px; font-size:13px; padding:8px 0; border-top:1px solid var(--border-subtle); }
+.histrow .t{ font-family:var(--font-data); color:var(--text-tertiary); width:56px; flex-shrink:0; }
+</style>
+
+<style>
+/* ============================================================
+   ADDITIONS — appended so the token block above stays verbatim.
+   Every value cites its foundations source. Nothing here
+   redefines a token declared above except the two [FIX] rules,
+   both of which are the same defect: --green-600 used where no
+   foundations file authorises it.
+   ============================================================ */
+
+/* --- Primitives copied from color.md that the block above never declared --- */
+:root{
+  --blue-400:#60A5FA;    /* color.md · Blue ramp */
+  --green-400:#34D399;   /* color.md · Green ramp */
+  --amber-400:#FBBF24;   /* color.md · Amber ramp */
+
+  /* Functional tier (tokens.md U85 — a component never reaches for a primitive) */
+  --border-focus:var(--blue-600);                 /* color.md · Surface and text tokens */
+  --feedback-success-text:var(--green-700);        /* color.md · Feedback colors */
+  --exception-flag-ink:var(--amber-700);           /* stitch-prompts §3 status cell */
+  --spark-ink:var(--text-tertiary);                /* components.md §14 defers to dataviz; color.md hue budget */
+  --skeleton-fill:var(--neutral-200);              /* stitch-prompts §5 */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);        /* elevation-and-depth.md */
+  --shadow-md:0 4px 12px rgba(15,23,42,.10);
+  --shadow-focus:0 0 0 2px var(--surface-base), 0 0 0 4px var(--border-focus);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --border-focus:var(--blue-400);
+  --feedback-success-text:var(--green-400);
+  --exception-flag-ink:var(--amber-400);
+  --skeleton-fill:var(--neutral-800);
+  --shadow-sm:none;                                /* elevation-and-depth.md: dark level 1 has no shadow */
+  --shadow-md:0 4px 12px rgba(0,0,0,.40);
+}}
+:root[data-theme="dark"]{
+  --border-focus:var(--blue-400);
+  --feedback-success-text:var(--green-400);
+  --exception-flag-ink:var(--amber-400);
+  --skeleton-fill:var(--neutral-800);
+  --shadow-sm:none;
+  --shadow-md:0 4px 12px rgba(0,0,0,.40);
+}
+
+/* [FIX 1] Sparkline stroke. The rule above set stroke="--green-600"; no foundations
+   file authorises it (color.md rations hue to promise state + danger; components.md §14
+   defers the sparkline to dataviz, which reserves status hues). A green trend line ~40px
+   above green CONFIRMED chips is the exact state-confusion the four-state system prevents.
+   Now --spark-ink = text-tertiary: 4.8:1 light / 6.7:1 dark, spends no hue.
+   [FIX 2] Delta ink. green-600 measures 3.8:1 on neutral-0 — color.md's own contrast table
+   marks it "Fails normal text — UI/large only", and this delta is 12px text. components.md
+   §14 also requires the delta use feedback-* tokens only. */
+.stat .delta{ color:var(--feedback-success-text); font-variant-numeric:tabular-nums; }
+
+/* --- Utilities --- */
+.tnum{ font-variant-numeric:tabular-nums; }         /* typography.md: all metric displays */
+.sr-only{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.ic{ fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+  flex-shrink:0; }                                   /* iconography.md: Lucide, 2px at every size */
+.gallery-note{ max-width:1120px; margin:40px auto 0; padding:16px 24px; font-size:13px; line-height:1.55;
+  color:var(--board-muted); border-left:3px solid var(--board-muted); }
+.gallery-note strong{ color:var(--board-ink); }
+.sublabel{ max-width:1120px; margin:0 auto 6px; padding:0 24px; font-size:12px; font-weight:600;
+  letter-spacing:.04em; text-transform:uppercase; color:var(--board-muted); }
+.screen-note{ max-width:1120px; margin:0 auto 8px; padding:0 24px; font-size:12px; line-height:1.5;
+  color:var(--board-muted); max-width:1120px; }
+
+/* --- Shell pieces the new frames use (spacing-and-layout.md App shell) --- */
+.iconbtn{ background:none; border:0; padding:2px; margin:0; color:inherit; display:inline-flex;
+  border-radius:var(--r-sm); cursor:pointer; }
+.avatarbtn{ width:32px; height:32px; border:0; border-radius:50%; background:var(--blue-600); color:#fff;
+  display:inline-flex; align-items:center; justify-content:center; font-family:var(--font-ui);
+  font-size:12px; font-weight:700; cursor:pointer; }
+.railitem{ width:56px; height:40px; display:flex; align-items:center; justify-content:center;
+  position:relative; color:var(--text-tertiary); }
+.railitem.on{ color:var(--blue-600); }
+/* Active item is a 2px inner accent bar, never a background fill (spacing-and-layout.md) */
+.railitem.on::after{ content:""; position:absolute; right:0; top:8px; bottom:8px; width:2px;
+  background:var(--blue-600); }
+
+/* Focus: 2px ring + 2px surface-coloured offset, never a glow (color.md, elevation-and-depth.md) */
+.iconbtn:focus-visible,.avatarbtn:focus-visible,.railitem:focus-visible,.btn:focus-visible,
+.filterbtn:focus-visible,.linkbtn:focus-visible,.tbl tbody tr:focus-visible,
+.excrow:focus-visible,.popitem:focus-visible{ outline:none; box-shadow:var(--shadow-focus); }
+.focus-demo{ box-shadow:var(--shadow-focus); }
+
+/* --- Buttons (components.md §1 `neutral`; 40px = comfortable) --- */
+.btn{ height:40px; min-width:80px; padding:0 16px; display:inline-flex; align-items:center;
+  justify-content:center; gap:8px; font-family:var(--font-ui); font-size:14px; font-weight:500;
+  color:var(--text-primary); background:transparent; border:1px solid var(--border-default);
+  border-radius:var(--r-md); cursor:pointer;
+  transition:background var(--t-fast,120ms) cubic-bezier(.16,1,.3,1); }
+.btn:hover{ background:var(--surface-hover); }
+.linkbtn{ background:none; border:0; padding:0; font-family:var(--font-ui); font-size:inherit;
+  font-weight:600; color:var(--blue-600); cursor:pointer; border-radius:var(--r-sm); }
+.linkbtn:hover{ text-decoration:underline; }        /* every interactive thing gives feedback */
+
+/* An exception row is one navigation target (stitch-prompts §4): hover 120ms, colour only —
+   no lift, no scale. Its text child needs min-width:0 or a long clause overflows the flex row. */
+a.excrow{ text-decoration:none; color:inherit;
+  transition:background 120ms cubic-bezier(.16,1,.3,1); }
+a.excrow:hover{ background:var(--surface-hover); }
+.excrow.raised{ background:var(--surface-raised); box-shadow:var(--shadow-sm); }
+.excrow > span{ min-width:0; }
+.excrow > span:not(.chevron):not(.sk){ flex:1; }    /* not .sk — a skeleton keeps its exact width */
+.filterbtn{ font-family:var(--font-ui); font-size:12px; color:var(--text-secondary);
+  background:transparent; border:1px solid var(--border-default); border-radius:var(--r-sm);
+  padding:4px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+
+/* --- Promise-state chips missing from the block above (components.md §2) --- */
+.chip.shown{ background:var(--state-shown-bg); border:1px solid var(--state-shown-border);
+  color:var(--state-shown-text); }
+.chip.held{ background:var(--state-held-bg); border:2px dashed var(--state-held-border);
+  color:var(--state-held-text); }                    /* dashed = temporary, survives greyscale */
+.chip .cd{ font-family:var(--font-data); font-variant-numeric:tabular-nums; margin-left:6px; }
+
+/* Exception marker: unbordered, unfilled — an amber bordered pill IS a HELD chip */
+.exflag{ display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600;
+  color:var(--exception-flag-ink); }
+.statuscell{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* --- Stat tile strip (components.md §14) --- */
+.spark2{ display:block; margin-top:8px; }
+.statlabelrow{ display:flex; align-items:baseline; gap:8px; }
+
+/* --- Table: tier-1 container, fixed columns, sticky header (spacing-and-layout.md) --- */
+.tbl{ background:var(--surface-raised); border:1px solid var(--border-subtle);
+  border-radius:var(--r-md); box-shadow:var(--shadow-sm); overflow:hidden; margin-bottom:20px; }
+.tbl table.f{ margin-bottom:0; table-layout:fixed; }
+.tbl thead th{ position:sticky; top:0; background:var(--surface-raised); z-index:100; }
+.tbl tbody tr:last-child td{ border-bottom:0; }
+.tbl td{ overflow:hidden; }
+.idc{ font-weight:600; }                             /* typography.md: row's primary identifier */
+.trunc{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* --- Filter popover (elevation tier 3) --- */
+.popwrap{ position:relative; }
+.pop{ position:absolute; right:0; top:calc(100% + 6px); min-width:220px; z-index:400;
+  background:var(--surface-raised); border:1px solid var(--border-subtle);
+  border-radius:var(--r-md); box-shadow:var(--shadow-md); padding:4px 0; }
+.popitem{ height:40px; display:flex; align-items:center; gap:8px; padding:0 12px; font-size:14px;
+  color:var(--text-primary); background:none; border:0; width:100%; text-align:left;
+  font-family:var(--font-ui); cursor:pointer; }
+.popitem:hover{ background:var(--surface-hover); }
+.popitem[aria-checked="true"]{ font-weight:600; }
+.popitem .tick{ margin-left:auto; color:var(--blue-600); }
+
+/* --- Empty / error blocks (components.md §13) --- */
+.block{ display:flex; flex-direction:column; align-items:center; text-align:center;
+  padding:48px 24px; }
+.block .bicon{ color:var(--text-tertiary); margin-bottom:16px; }
+.block .btitle{ font-size:14px; line-height:1.5; color:var(--text-primary); }
+.block .btitle.lead{ font-size:16px; font-weight:600; }
+.block .bsub{ font-size:13px; line-height:1.4; color:var(--text-secondary); margin-top:8px;
+  max-width:48ch; }
+.block .btn{ margin-top:16px; }
+
+/* --- Degradation notice: warning tokens, never danger (auth-and-scoping.md U84) --- */
+.notice{ display:flex; align-items:center; gap:8px; padding:12px 16px; border-radius:var(--r-md);
+  background:var(--state-held-bg); border:1px solid var(--state-held-border);
+  color:var(--state-held-text); font-size:14px; margin-bottom:12px; }
+.notice .linkbtn{ color:inherit; margin-left:4px; text-decoration:underline; }
+
+/* --- Skeletons: exact dimensions of the content they replace (stitch-prompts §5) --- */
+.sk{ background:var(--skeleton-fill); border-radius:var(--r-sm); display:block;
+  animation:skpulse 1600ms cubic-bezier(.65,0,.35,1) infinite; }
+@keyframes skpulse{ 0%,100%{opacity:1} 50%{opacity:.5} }
+@media (prefers-reduced-motion:reduce){ .sk{ animation:none; } }  /* motion.md: static block */
+.skrow{ display:flex; align-items:center; gap:0; height:44px; padding:12px 16px;
+  border-bottom:1px solid var(--border-subtle); }
+.skrow > .sk{ height:12px; margin-right:16px; }
+.stalled{ display:flex; align-items:center; justify-content:center; gap:12px; padding:16px;
+  font-size:13px; color:var(--text-secondary); border-top:1px solid var(--border-subtle); }
+
+/* --- Read-only shipment detail additions (stitch-prompts §8) --- */
+.detailcard .support{ font-size:13px; line-height:1.4; color:var(--text-secondary); margin-top:8px; }
+.detailcard .ref{ font-family:var(--font-data); font-size:14px; color:var(--text-secondary);
+  margin-top:8px; }
+.backbar{ display:flex; align-items:center; gap:6px; font-size:14px; color:var(--text-tertiary); }
+.detailcard.spec{ border-radius:var(--r-lg); }      /* 8px on the card (stitch-prompts §8) */
+.detailcard .idline{ font-size:20px; line-height:1.4; font-weight:600; margin-bottom:12px; }
+.detailcard .deadline{ font-size:13px; line-height:1.4; color:var(--text-secondary); margin-top:8px; }
+.detailcard .dhead{ font-size:12px; line-height:1.33; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--text-tertiary); margin-top:16px; }
+
+/* --- Out-of-scope refusal: no card, no shadow, sits on the page ground --- */
+.refuse{ min-height:360px; display:flex; align-items:center; justify-content:center; }
+.refuse .inner{ width:400px; text-align:center; }
+.refuse .rtitle{ font-size:16px; line-height:1.5; font-weight:600; color:var(--text-primary);
+  margin:24px 0 0; }
+.refuse .rsub{ font-size:13px; line-height:1.4; color:var(--text-secondary); margin:8px 0 0; }
+.refuse .btn{ margin-top:24px; }
+
+/* --- Forced-colors fallback (elevation-and-depth.md U87): box-shadow is stripped, so
+       every level-1+ surface needs a real edge or the layer model flattens to nothing --- */
+@media (forced-colors:active){
+  .frame,.stat,.detailcard,.excrow,.tbl,.pop,.notice{ border:1px solid CanvasText; }
+}
+</style>
+
+<div class="board-head">
+  <p class="eyebrow">05 · Carrier portal — mockup</p>
+  <h1>Every screen and state, tokens verbatim from 00-foundations</h1>
+  <p>
+    Single sectioned dashboard, cross-facility, entirely read-only (SOLUTION_DESIGN.md §7.5.6 has no
+    mutating tool for this role). Density <code>comfortable</code>, light theme (U69). No facility switcher
+    — a carrier's fleet spans every facility it delivers to, shown together.
+  </p>
+  <p style="margin-top:8px;">
+    13 labelled states, 20 frames, covering all nine screens in <code>stitch-prompts.md</code>.
+    <strong>States 1–2 are the original two-state sketch, preserved verbatim;</strong> states 3–13 are the
+    full spec-accurate set — see the note above state 3 for where the two disagree.
+  </p>
+</div>
+
+<p class="screen-label">State 1 — <span>Dashboard — overview strip, fleet shipments, open exceptions</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+    </div>
+    <div class="body">
+      <div class="rail"><div class="active">▤</div><div>👤</div></div>
+      <div class="main">
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Active shipments</div>
+            <div class="value">18</div>
+          </div>
+          <div class="stat">
+            <div class="label">Open exceptions</div>
+            <div class="value">3</div>
+          </div>
+          <div class="stat">
+            <div class="label">On-time (30d) <span class="delta">▲2%</span></div>
+            <div class="value">91%</div>
+            <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none">
+              <polyline points="0,16 15,14 30,18 45,10 60,12 75,6 90,8 100,4" fill="none" stroke="var(--spark-ink)" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="lastupdated">Last updated 2 min ago <span class="refresh">↻ Refresh</span></div>
+
+        <div class="sectionhead"><h3>Your shipments</h3><span class="filter">Filter: all statuses ▾</span></div>
+        <table class="f">
+          <tr><th>Shipment</th><th>Driver</th><th>Facility · Dock</th><th>Status</th><th></th></tr>
+          <tr>
+            <td class="mono">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur · D5</td>
+            <td><span class="chip pending">◷ PENDING</span></td><td class="chevron">›</td>
+          </tr>
+          <tr>
+            <td class="mono">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram · D2</td>
+            <td><span class="chip confirmed">✓ CONFIRMED</span></td><td class="chevron">›</td>
+          </tr>
+          <tr>
+            <td class="mono">SHP1013</td><td>Neha P.</td><td class="mono">Kota · —</td>
+            <td style="color:var(--amber-700);font-weight:600;">⚠ Exception open</td><td class="chevron">›</td>
+          </tr>
+        </table>
+
+        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="excrow">
+          <span class="mono">SHP1013</span> · Neha P. · No feasible slot — escalated 09:12
+          <span class="chevron">›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 2 — <span>Shipment detail — read-only, shared chip component, plain history</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="max-width:480px;">
+    <div class="topbar">
+      <div class="brand" style="font-size:14px;color:var(--text-tertiary);">← Dashboard</div>
+    </div>
+    <div class="body" style="grid-template-columns:1fr;">
+      <div class="main">
+        <div class="detailcard">
+          <div class="id">SHP1015 · Ravi K.</div>
+          <span class="chip pending">◷ PENDING CONFIRMATION</span>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">Decision by 11:57</div>
+          <div class="interval">Jaipur · D5 · Tue 20 Aug · 13:00</div>
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-tertiary);margin-top:16px;">History</div>
+          <div class="histrow"><span class="t">09:41</span> Reported delay</div>
+          <div class="histrow"><span class="t">09:52</span> Option offered</div>
+          <div class="histrow"><span class="t">09:53</span> Held, then requested</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gallery-note">
+  <strong>States 1–2 above are the original two-state sketch, preserved verbatim per brief.</strong>
+  States 3–13 below implement <code>stitch-prompts.md</code> in full and differ from it in four places,
+  all recorded rather than silently reconciled: the sketch's top bar carries a settings gear
+  (<code>stitch-prompts.md</code> flag #6 calls this mockup drift) and emoji glyphs rather than Lucide;
+  its status chip reads <code>PENDING</code> rather than the mandatory unabbreviated
+  <code>PENDING CONFIRMATION</code> (<code>components.md</code> §2); it merges Facility and Dock into one
+  column where the spec has two; and its stat-tile value is 24px/700 where
+  <code>components.md</code> §14 specifies <code>text-h3</code> (16px/600). One correction <em>was</em>
+  applied to state 1 — the sparkline now strokes <code>text-tertiary</code>, not
+  <code>green-600</code>. Its <code>preserveAspectRatio="none"</code> viewBox stretch is left as-is and
+  is a fifth legacy defect: prompt 2 forbids it, because a non-uniform stretch renders a "2px" stroke
+  thicker in one axis than the other. State 3 is the corrected rendering.
+</div>
+
+<p class="screen-label">State 3 — <span>Fleet overview strip — three stat tiles and the on-time sparkline</span></p>
+<p class="screen-note">
+  Component sheet, not a page. Tiles 1 and 2 carry no trend line on purpose — point-in-time facts with no
+  meaningful shape. Every figure is this carrier's own: no benchmark line, no band, no rank, no count of
+  anything outside this account (<code>auth-and-scoping.md</code> inference-risk rule).
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="background:var(--surface-base);padding:24px;">
+    <div class="stats" style="margin-bottom:0;">
+      <div class="stat">
+        <div class="label">Active shipments</div>
+        <div class="value tnum">18</div>
+      </div>
+      <div class="stat">
+        <div class="label">Open exceptions</div>
+        <div class="value tnum">3</div>
+      </div>
+      <div class="stat">
+        <div class="statlabelrow">
+          <div class="label" style="margin-bottom:0;">On-time (30d)</div>
+          <span class="delta">▲ 2%</span>
+        </div>
+        <div class="value tnum" style="margin-top:4px;">91%</div>
+        <!-- 30 daily points, most recent at the right. Drawn at rendered pixel size — no
+             non-uniform viewBox stretch, so the 2px stroke stays 2px in both axes. -->
+        <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
+             aria-label="On-time performance over the last 30 days, ending at 91%.">
+          <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+            stroke-linecap="round"
+            points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
+          <!-- End marker: emphasis by lightness value, not hue. 2px ring in the tile's own surface. -->
+          <circle cx="294" cy="8" r="4" fill="var(--text-primary)"
+                  stroke="var(--surface-raised)" stroke-width="2"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 4a — <span>Your shipments — default</span></p>
+<p class="screen-note">
+  Fixed column widths, sticky header, 44px rows. Row 4 shows a chip and an exception marker co-occurring
+  (normal, not a bug); row 5 shows both truncation rules — mid-truncated ID, end-truncated facility name,
+  each with a focus-reachable <code>title</code>. Sort is fixed at most-recently-updated first, so no
+  column header is clickable.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="sectionhead">
+          <h3>Your shipments</h3>
+          <button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button>
+        </div>
+        <div class="tbl">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono">D5</td>
+                <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono">D2</td>
+                <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1013</td><td>Neha P.</td><td class="mono">Kota</td>
+                <td class="mono">—</td>
+                <td><span class="statuscell"><span class="exflag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Exception open</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1021</td><td>Priya M.</td><td class="mono">Jaipur</td>
+                <td class="mono">D2</td>
+                <td>
+                  <span class="statuscell">
+                    <span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span>
+                    <span class="exflag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Exception open</span>
+                  </span>
+                </td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc"><span title="SH-2026-0819-0041217">SH-2026-0819-00…17</span></td>
+                <td><span class="trunc" title="Sunil Thackeray">Sunil T.</span></td>
+                <td class="mono"><span class="trunc" title="Gurugram Cross-Dock Terminal 2">Gurugram Cross-Dock Terminal 2</span></td>
+                <td class="mono">—</td>
+                <td><span class="statuscell"><span class="chip shown"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg>SHOWN</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 4b — <span>Your shipments — status filter open</span></p>
+<p class="screen-note">
+  Six single-select options at 40px. Selecting one filters the table only — the three stat tiles describe
+  the whole fleet regardless of the filter, so they do not change. Focus stays on the filter control after
+  selection (shown), it does not jump into the results
+  (<code>accessibility-behaviour.md</code> focus-management contract).
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="sectionhead">
+          <h3>Your shipments</h3>
+          <span class="popwrap">
+            <button class="filterbtn focus-demo" type="button" aria-expanded="true">Filter: all statuses ▾</button>
+            <span class="pop" role="menu" aria-label="Filter by status">
+              <button class="popitem" role="menuitemradio" aria-checked="true" type="button">All statuses
+                <svg class="ic tick" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button>
+              <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Shown</button>
+              <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Held</button>
+              <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Pending confirmation</button>
+              <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Confirmed</button>
+              <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Has open exception</button>
+            </span>
+          </span>
+        </div>
+        <div class="tbl">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono">D5</td>
+                <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono">D2</td>
+                <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1013</td><td>Neha P.</td><td class="mono">Kota</td>
+                <td class="mono">—</td>
+                <td><span class="statuscell"><span class="exflag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Exception open</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 4c — <span>Your shipments — filtered, no matches</span></p>
+<p class="screen-note">
+  The table <em>body</em> is replaced; the section heading, the filter control and the column headers all
+  stay, so nothing about the layout moves when a match returns. <code>search-x</code> at 32px, distinct
+  from both empty-state icons (<code>iconography.md</code>). Clearing a filter is a Low-tier action
+  (<code>components.md</code> §19) — it acts immediately, no confirmation.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="sectionhead">
+          <h3>Your shipments</h3>
+          <button class="filterbtn" type="button" aria-expanded="false">Filter: Confirmed ▾</button>
+        </div>
+        <div class="tbl">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+          </table>
+          <div class="block" role="status">
+            <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <p class="btitle" style="margin:0;">No shipments match this filter.</p>
+            <button class="btn" type="button">Clear filter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 5a — <span>Open exceptions — summary rows</span></p>
+<p class="screen-note">
+  Component sheet. The row is <strong>neutral</strong>, not an alarm — red stays reserved for genuine
+  danger. All three exact copy strings are shown so each reason icon is visible. What is deliberately
+  absent is the entire internal apparatus: no owner, no "assigned to", no SLA countdown, no
+  <code>OPEN → ACKNOWLEDGED → RESOLVED</code> stepper, no internal notes. The carrier learns <em>that</em>
+  it is being handled, never how.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="background:var(--surface-base);padding:24px;">
+    <div class="sectionhead"><h3>Open exceptions</h3></div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <a class="excrow raised" href="#">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
+        <span><span class="mono" style="font-weight:600;">SHP1013</span> · Neha P. · No feasible slot — escalated <span class="mono tnum">09:12</span></span>
+        <span class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>
+      <a class="excrow raised" href="#">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="M4.6 11a8 8 0 0 0 1.7 8.7 8 8 0 0 0 8.7 1.7"/><path d="M7.4 7.4a8 8 0 0 1 10.3 1 8 8 0 0 1 .9 10.2"/><path d="m2 2 20 20"/><path d="M12 12v-2"/></svg>
+        <span><span class="mono" style="font-weight:600;">SHP1015</span> · Ravi K. · No planner decision in time — released and escalated <span class="mono tnum">11:57</span></span>
+        <span class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>
+      <a class="excrow raised" href="#">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <span><span class="mono" style="font-weight:600;">SHP1021</span> · Priya M. · Awaiting operations review — raised <span class="mono tnum">08:20</span></span>
+        <span class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 5b — <span>Open exceptions — caught up (empty)</span></p>
+<p class="screen-note">
+  The good state. <code>circle-check-big</code> reads "you're done" — deliberately a different glyph from
+  the <code>inbox</code> used for "nothing yet" in state 8. No button: there is no action a carrier could
+  take here even if there were something to act on.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="background:var(--surface-base);padding:24px;">
+    <div class="sectionhead"><h3>Open exceptions</h3></div>
+    <div class="block" role="status" style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);">
+      <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+      <p class="btitle" style="margin:0;">No open exceptions.</p>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 6a — <span>Dashboard loading — per-section skeletons</span></p>
+<p class="screen-note">
+  Four independent calls, four sections resolving independently — never one page-level spinner. <strong>The
+  shell never shows a loading state</strong>: top bar, rail, section headings and column headers render
+  immediately and stay put, because what is loading is data, not the application. Blocks sit at the exact
+  dimensions of the content they replace, so nothing jumps when they resolve. Opacity pulse only, 1600ms —
+  the single looping animation permitted in this product, and static under
+  <code>prefers-reduced-motion</code>. Nothing at all renders under 1s in flight. The sparkline slot gets
+  no skeleton: it is secondary content.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main" aria-busy="true">
+        <div class="stats">
+          <div class="stat"><span class="sk" style="width:90px;height:12px;"></span><span class="sk" style="width:48px;height:16px;margin-top:8px;"></span></div>
+          <div class="stat"><span class="sk" style="width:90px;height:12px;"></span><span class="sk" style="width:48px;height:16px;margin-top:8px;"></span></div>
+          <div class="stat"><span class="sk" style="width:90px;height:12px;"></span><span class="sk" style="width:48px;height:16px;margin-top:8px;"></span></div>
+        </div>
+        <div class="lastupdated"><span class="sk" style="width:160px;height:11px;"></span></div>
+
+        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="tbl">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+          </table>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow" style="border-bottom:0;"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+        </div>
+
+        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="excrow" style="height:44px;"><span class="sk" style="width:340px;height:12px;"></span></div>
+          <div class="excrow" style="height:44px;"><span class="sk" style="width:280px;height:12px;"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 6b — <span>Dashboard loading — tiles resolved, table still in flight (past ~3s)</span></p>
+<p class="screen-note">
+  <strong>This partial state is the point of the design, not an edge case.</strong> A carrier with a fast
+  overview query and a slow fleet query sees the tiles resolve immediately rather than waiting on the
+  slowest section. Past roughly 3 seconds the skeleton is joined by a <code>Retry</code> affordance rather
+  than pulsing indefinitely. The exceptions section has resolved too and is unaffected.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="stats">
+          <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
+          <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
+          <div class="stat">
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="value tnum" style="margin-top:4px;">91%</div>
+          </div>
+        </div>
+        <div class="lastupdated">Last updated 2 minutes ago
+          <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
+        </div>
+
+        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="tbl" aria-busy="true">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+          </table>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="skrow" style="border-bottom:0;"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
+          <div class="stalled" role="status">
+            <span>This is taking longer than usual.</span>
+            <button class="btn" type="button" style="height:32px;min-width:0;padding:0 12px;">Retry</button>
+          </div>
+        </div>
+
+        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <a class="excrow" href="#">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
+          <span><span class="mono" style="font-weight:600;">SHP1013</span> · Neha P. · No feasible slot — escalated <span class="mono tnum">09:12</span></span>
+          <span class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 7 — <span>Dashboard empty — "caught up" (established carrier, currently at zero)</span></p>
+<p class="screen-note">
+  Frame A of two. An established carrier with real history that happens to have nothing running right now —
+  a <strong>good</strong> state, reassuring in tone. The tiles still render, with <strong>real zeroes</strong>:
+  a genuine <code>0</code> renders as <code>0</code>, never as a blank or a dash. The on-time figure and its
+  sparkline are intact, because 30 days of history exist. Compare against state 8, which is visually similar
+  and means the opposite thing.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="stats">
+          <div class="stat"><div class="label">Active shipments</div><div class="value tnum">0</div></div>
+          <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">0</div></div>
+          <div class="stat">
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div></div>
+            <div class="value tnum" style="margin-top:4px;">94%</div>
+            <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
+                 aria-label="On-time performance over the last 30 days, ending at 94%.">
+              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+                stroke-linecap="round"
+                points="4,15 14,14 24,16 34,13 44,14 54,12 64,13 74,15 84,12 94,11 104,13 114,10 124,12 134,11 144,9 154,11 164,10 174,12 184,9 194,10 204,8 214,9 224,11 234,8 244,9 254,7 264,8 274,10 284,8 294,7"/>
+              <circle cx="294" cy="7" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="lastupdated">Last updated 2 minutes ago
+          <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
+        </div>
+
+        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="tbl">
+          <div class="block" role="status">
+            <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+            <p class="btitle" style="margin:0;">No active shipments right now.</p>
+          </div>
+        </div>
+
+        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="block" role="status" style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);">
+          <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+          <p class="btitle" style="margin:0;">No open exceptions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 8 — <span>Dashboard empty — "nothing yet" (new carrier, no history at all)</span></p>
+<p class="screen-note">
+  Frame B of two, kept as a <strong>separate frame</strong> per U74 — same visual emptiness, opposite
+  meaning, and showing the wrong one makes a working system look broken. Tone is neutral and
+  informational, never reassuring: there is nothing yet to be reassured about. The on-time tile shows
+  <code>—</code> with no sparkline and no delta — an unknown must render as an explicit dash, never as
+  <code>0%</code> and never as a blank. That is three distinct renderings (<code>0</code>, <code>—</code>,
+  absent) that must never look alike. The <code>inbox</code> glyph reads "not started" where state 7's
+  <code>circle-check-big</code> reads "you're done". The exceptions section is hidden entirely for this
+  state — the prompt permits either that or an <code>inbox</code> block, and this mockup picks hiding and
+  applies it consistently. No call to action anywhere: this surface is read-only and a carrier cannot
+  create a shipment.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Vindhya Carriers</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Dev R.">DR</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="stats">
+          <div class="stat"><div class="label">Active shipments</div><div class="value tnum">0</div></div>
+          <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">0</div></div>
+          <div class="stat">
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div></div>
+            <div class="value tnum" style="margin-top:4px;">—</div>
+          </div>
+        </div>
+        <div class="lastupdated">Last updated 2 minutes ago
+          <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
+        </div>
+
+        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="tbl">
+          <div class="block" role="status">
+            <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            <p class="btitle lead" style="margin:0;">No shipments on record yet</p>
+            <p class="bsub">New deliveries will appear here automatically once they're scheduled.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 9 — <span>Load failure — shipments table failed (primary content, fails loud)</span></p>
+<p class="screen-note">
+  <strong>Primary</strong> content: the screen cannot do its job without it, so the failure is stated
+  plainly, names a likely cause, and offers a route out. Each section has its own error boundary — the
+  stat tiles above and the exceptions list below are unaffected and fully rendered. The heading and the
+  filter control stay in place. No raw error code, no HTTP status, no request ID, and no full-page error
+  screen for one failed region.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="stats">
+          <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
+          <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
+          <div class="stat">
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="value tnum" style="margin-top:4px;">91%</div>
+            <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
+                 aria-label="On-time performance over the last 30 days, ending at 91%.">
+              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+                stroke-linecap="round"
+                points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
+              <circle cx="294" cy="8" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="lastupdated">Last updated 2 minutes ago
+          <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
+        </div>
+
+        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="tbl">
+          <div class="block" role="alert">
+            <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
+            <p class="btitle" style="margin:0;">Couldn't load your shipments — usually a connection problem.</p>
+            <button class="btn" type="button">Try again</button>
+          </div>
+        </div>
+
+        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <a class="excrow" href="#">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
+          <span><span class="mono" style="font-weight:600;">SHP1013</span> · Neha P. · No feasible slot — escalated <span class="mono tnum">09:12</span></span>
+          <span class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 10 — <span>Degradation — trend data failed (secondary content, vanishes silently)</span></p>
+<p class="screen-note">
+  <strong>Secondary</strong> content: the sparkline enriches the page but nothing depends on it, so on
+  failure it <strong>simply is not there</strong>. No empty box, no dashed placeholder, no "chart
+  unavailable", no retry icon, no reduced-opacity ghost — giving it an error state would put it in
+  competition with the fleet list, which is the content that actually matters. The tile shrinks to the
+  height of the other two and nothing on the page mentions the failure. Note the <code>91%</code> value and
+  its delta still render: only the trend series failed.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="background:var(--surface-base);padding:24px;">
+    <div class="stats" style="margin-bottom:0;">
+      <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
+      <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
+      <div class="stat">
+        <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+        <div class="value tnum" style="margin-top:4px;">91%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 11 — <span>Degradation — refresh failed, data is stale</span></p>
+<p class="screen-note">
+  <strong>One notice, not five.</strong> A page reporting a separate warning per region has stopped being
+  informative. It uses <strong>warning</strong> tokens, never danger red — a page that looks like it is on
+  fire when the real problem is "these numbers are 40 seconds old" trains people to stop trusting red when
+  it matters. The stale sections stay fully rendered and legible: not greyed, not overlaid, not blurred.
+  <code>role="status"</code> and not a toast, because staleness is a persistent condition, not an event.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main">
+        <div class="notice" role="status">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <span>This page couldn't refresh. You're seeing data from <span class="mono tnum">09:41</span>.</span>
+          <button class="linkbtn" type="button">Try again</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
+          <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
+          <div class="stat">
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="value tnum" style="margin-top:4px;">91%</div>
+            <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
+                 aria-label="On-time performance over the last 30 days, ending at 91%.">
+              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+                stroke-linecap="round"
+                points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
+              <circle cx="294" cy="8" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="tbl">
+          <table class="f">
+            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
+                <th scope="col">Dock</th><th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Open detail</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono">D5</td>
+                <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+              <tr>
+                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono">D2</td>
+                <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
+                <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="sublabel" style="margin-top:32px;">State 12 — shipment detail, read-only · four promise-state variants</p>
+<p class="screen-note">
+  One screen, four variants — the same chip component a planner sees, in its read-only consumption, with
+  <strong>no affordance rendered beside it</strong>: no Confirm, Reject, Counter-offer, Reschedule or
+  Escalate, not even greyed out. Nothing here has a hover state, a pointer cursor or an accent colour
+  except the single <code>← Dashboard</code> link. The dock-and-time line is mandatory in this exact shape —
+  <span class="mono">Jaipur · D5 · Tue 20 Aug · 13:00–14:15</span> — because <strong>an operational time
+  never appears without its dock and its date</strong>: option sets span two days, and a bare time is a
+  wrong-day arrival waiting to happen. 24-hour clock, weekday-bearing date, en dash for the range, facility
+  local time never converted. History shows outcomes and driver-visible messages only — a planner's
+  rejection note and an operations coordinator's internal remark are never-shown fields. Nothing on this
+  screen explains <em>why</em> a contested interval went elsewhere; that would reveal another carrier's
+  operations.
+</p>
+
+<p class="screen-label">State 12a — <span>Shipment detail — <code>SHOWN</code> (nothing is reserved)</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="max-width:688px;">
+    <div class="topbar">
+      <a class="backbar" href="#" style="text-decoration:none;">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
+    </div>
+    <div class="body" style="grid-template-columns:1fr;">
+      <div class="main" style="padding:24px;">
+        <div class="detailcard spec">
+          <div class="idline"><span class="mono">SHP1044</span> · Kiran D.</div>
+          <span class="chip shown"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg>SHOWN</span>
+          <p class="support" style="margin-bottom:0;">Nothing is held yet.</p>
+          <div class="interval">Jaipur · D3 · Tue 20 Aug · 15:30–16:45</div>
+          <div class="dhead">History</div>
+          <div class="histrow"><span class="t tnum">09:41</span> Reported delay</div>
+          <div class="histrow"><span class="t tnum">09:52</span> Option offered</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 12b — <span>Shipment detail — <code>HELD</code> (90-second hold, not a booking)</span></p>
+<p class="screen-note">
+  Dashed 2px border reads "temporary" and survives greyscale, so the state is not carried by hue alone. The
+  countdown is a mono numeral with <code>tabular-nums</code> so digits do not shift width — no ring, no
+  radial timer, no progress bar, and the digit change is a discrete tick, never a smooth sweep. The copy
+  refuses finality language: no "booked", "reserved", "secured", "your slot" or "successfully" appears
+  below <code>CONFIRMED</code>.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="max-width:688px;">
+    <div class="topbar">
+      <a class="backbar" href="#" style="text-decoration:none;">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
+    </div>
+    <div class="body" style="grid-template-columns:1fr;">
+      <div class="main" style="padding:24px;">
+        <div class="detailcard spec">
+          <div class="idline"><span class="mono">SHP1015</span> · Ravi K.</div>
+          <span class="chip held"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>HELD<span class="cd">1:24</span></span>
+          <p class="support" style="margin-bottom:0;">Held for the driver until <span class="mono tnum">11:42:30</span>. This is not a booking yet.</p>
+          <div class="interval">Jaipur · D5 · Tue 20 Aug · 13:00–14:15</div>
+          <div class="dhead">History</div>
+          <div class="histrow"><span class="t tnum">09:41</span> Reported delay</div>
+          <div class="histrow"><span class="t tnum">09:52</span> Option offered</div>
+          <div class="histrow"><span class="t tnum">09:53</span> Held for the driver</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 12c — <span>Shipment detail — <code>PENDING CONFIRMATION</code> (awaiting a human)</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="max-width:688px;">
+    <div class="topbar">
+      <a class="backbar" href="#" style="text-decoration:none;">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
+    </div>
+    <div class="body" style="grid-template-columns:1fr;">
+      <div class="main" style="padding:24px;">
+        <div class="detailcard spec">
+          <div class="idline"><span class="mono">SHP1015</span> · Ravi K.</div>
+          <span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span>
+          <p class="deadline" style="margin-bottom:0;">Decision by <span class="mono tnum">11:57</span>.</p>
+          <p class="support" style="margin-bottom:0;">The warehouse hasn't confirmed this yet.</p>
+          <div class="interval">Jaipur · D5 · Tue 20 Aug · 13:00–14:15</div>
+          <div class="dhead">History</div>
+          <div class="histrow"><span class="t tnum">09:41</span> Reported delay</div>
+          <div class="histrow"><span class="t tnum">09:52</span> Option offered</div>
+          <div class="histrow"><span class="t tnum">09:53</span> Held, then requested</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 12d — <span>Shipment detail — <code>CONFIRMED</code> (the only state that may use finality language)</span></p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame" style="max-width:688px;">
+    <div class="topbar">
+      <a class="backbar" href="#" style="text-decoration:none;">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
+    </div>
+    <div class="body" style="grid-template-columns:1fr;">
+      <div class="main" style="padding:24px;">
+        <div class="detailcard spec">
+          <div class="idline"><span class="mono">SHP1009</span> · Amit S.</div>
+          <span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span>
+          <div class="interval">Gurugram · D2 · Tue 20 Aug · 13:00–14:15</div>
+          <p class="ref" style="margin-bottom:0;">Reference APT-1042</p>
+          <div class="dhead">History</div>
+          <div class="histrow"><span class="t tnum">09:41</span> Reported delay</div>
+          <div class="histrow"><span class="t tnum">09:52</span> Option offered</div>
+          <div class="histrow"><span class="t tnum">09:53</span> Held, then requested</div>
+          <div class="histrow"><span class="t tnum">11:12</span> Confirmed by warehouse</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="screen-label">State 13 — <span>Shipment detail — out-of-scope refusal</span></p>
+<p class="screen-note">
+  A stale bookmark, a forwarded link, or a load reassigned to a different carrier upstream. The server
+  refused the request; the client never received the shipment's data at all. <strong>The copy is exact and
+  must not be rewritten</strong>: it says the shipment <em>isn't in your fleet</em> — not that it does not
+  exist, was not found, was deleted, or belongs to someone else. That one sentence covers both the
+  "genuinely does not exist" and the "exists but is out of scope" cases deliberately, so the screen cannot
+  be used to probe for which shipments are real. <strong>No mono type on this screen and no shipment ID
+  echoed back</strong> — repeating it invites the reading that the system looked it up and found something.
+  No search box offering another route to the same disclosure, no "request access", no 404 numeral. The
+  headline is the focus target on arrival and is announced assertively. The block sits directly on the page
+  ground: no card, no shadow — this is a full-region state, not a component in a container.
+</p>
+<div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">Rajasthan Roadlines</div>
+      <div class="topbar-icons">
+        <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
+        <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+        <button class="avatarbtn" type="button" aria-label="Account — Anita B.">AB</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
+        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
+      </div>
+      <div class="main" style="padding:0;">
+        <div class="refuse">
+          <div class="inner" role="alert">
+            <svg class="ic" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--text-tertiary);"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/></svg>
+            <h2 class="rtitle" tabindex="-1">This shipment isn't in your fleet</h2>
+            <p class="rsub">Check the link, or go back to your dashboard.</p>
+            <button class="btn" type="button">Back to dashboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gallery-note">
+  <strong>What is absent from every frame above, on purpose.</strong> No benchmark line, no shaded
+  "industry range", no percentile, no rank badge, no "you're 2nd in the queue", no facility utilisation
+  figure, no "3 carriers affected" — <strong>and not even a count</strong> of anything outside this
+  account, because aggregates leak individual facts. No facility switcher, filter or tabs: a carrier's
+  fleet spans whatever warehouses it delivers to and is always shown whole, so facility is a value in a
+  row and never a scope control. No coloured facility accent anywhere, and the rail's outer edge is a plain
+  1px border rather than the 4px facility stripe every other console carries. No action of any kind — this
+  surface has no mutating tool in <code>SOLUTION_DESIGN.md</code> §7.5.6, so a control that appears
+  <em>Disabled</em> would misrepresent it; scope-denied is always Hidden. No live updates, no auto-refresh,
+  no "3 new" badges, no websocket indicator: refresh is manual, everywhere.
+</div>

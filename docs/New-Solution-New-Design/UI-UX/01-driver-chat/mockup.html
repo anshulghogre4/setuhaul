@@ -1,0 +1,2122 @@
+<title>Driver Chat Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   TOKENS — verbatim from 00-foundations/color.md
+   Light palette on bare :root. Dark redefines tokens only.
+   ============================================================ */
+:root {
+  /* neutral — slate-tinted */
+  --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
+  --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
+  --neutral-500:#64748B; --neutral-600:#475569; --neutral-700:#334155;
+  --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
+  /* semantic ramps */
+  --blue-50:#EFF6FF;  --blue-400:#60A5FA; --blue-500:#3B82F6; --blue-600:#2563EB; --blue-900:#1E3A8A;
+  --amber-50:#FFFBEB; --amber-400:#FBBF24;--amber-500:#F59E0B;--amber-600:#D97706;--amber-700:#B45309;--amber-900:#78350F;
+  --green-50:#ECFDF5; --green-400:#34D399;--green-500:#10B981;--green-600:#059669;--green-700:#047857;--green-900:#064E3B;
+  --red-50:#FEF2F2;   --red-400:#F87171;  --red-500:#EF4444;  --red-600:#DC2626;  --red-900:#7F1D1D;
+  --violet-500:#8B5CF6;
+
+  /* surfaces + text */
+  --surface-base:var(--neutral-50);
+  --surface-raised:var(--neutral-0);
+  --surface-hover:var(--neutral-100);
+  --surface-selected:var(--blue-50);
+  --text-primary:var(--neutral-900);
+  --text-secondary:var(--neutral-600);
+  --text-tertiary:var(--neutral-500);
+  --border-subtle:var(--neutral-200);
+  --border-default:var(--neutral-300);
+  --border-focus:var(--blue-600);
+
+  /* promise state */
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
+  --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
+  --urgent:var(--red-600);
+
+  /* board chrome — deliberately not app surface, so phones read as objects */
+  --board-bg:var(--neutral-200);
+  --board-panel:var(--neutral-0);
+  --board-ink:var(--neutral-900);
+  --board-muted:var(--neutral-600);
+  --board-line:var(--neutral-300);
+  --board-accent:var(--violet-500);
+
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-data:'JetBrains Mono','SF Mono',Consolas,monospace;
+
+  --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface-base:var(--neutral-950);
+    --surface-raised:var(--neutral-900);
+    --surface-hover:var(--neutral-800);
+    --surface-selected:#12203c;
+    --text-primary:var(--neutral-50);
+    --text-secondary:var(--neutral-300);
+    --text-tertiary:var(--neutral-400);
+    --border-subtle:var(--neutral-800);
+    --border-default:var(--neutral-700);
+    --border-focus:var(--blue-400);
+    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
+    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
+    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
+    --urgent:var(--red-400);
+    --board-bg:var(--neutral-950);
+    --board-panel:var(--neutral-900);
+    --board-ink:var(--neutral-50);
+    --board-muted:var(--neutral-400);
+    --board-line:var(--neutral-800);
+  }
+}
+:root[data-theme="dark"]{
+  --surface-base:var(--neutral-950);
+  --surface-raised:var(--neutral-900);
+  --surface-hover:var(--neutral-800);
+  --surface-selected:#12203c;
+  --text-primary:var(--neutral-50);
+  --text-secondary:var(--neutral-300);
+  --text-tertiary:var(--neutral-400);
+  --border-subtle:var(--neutral-800);
+  --border-default:var(--neutral-700);
+  --border-focus:var(--blue-400);
+  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+  --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
+  --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
+  --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
+  --urgent:var(--red-400);
+  --board-bg:var(--neutral-950);
+  --board-panel:var(--neutral-900);
+  --board-ink:var(--neutral-50);
+  --board-muted:var(--neutral-400);
+  --board-line:var(--neutral-800);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--board-bg); color:var(--board-ink);
+  font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- board chrome ---------- */
+.board-head{
+  max-width:1200px; margin:0 auto; padding:40px 24px 8px;
+  display:flex; flex-wrap:wrap; gap:24px; align-items:flex-end; justify-content:space-between;
+}
+.board-head h1{
+  font-size:28px; line-height:1.2; letter-spacing:-.02em; font-weight:700; margin:0 0 6px;
+  text-wrap:balance;
+}
+.board-head p{margin:0; color:var(--board-muted); font-size:14px; max-width:62ch; line-height:1.55;}
+.eyebrow{
+  font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--board-accent); margin:0 0 10px;
+}
+.toggle{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  background:var(--board-panel); color:var(--board-ink);
+  border:1px solid var(--board-line); border-radius:999px;
+  padding:9px 16px; font:inherit; font-size:13px; font-weight:500;
+}
+.toggle:hover{background:var(--surface-hover);}
+.toggle:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px;}
+
+.legend{
+  max-width:1200px; margin:20px auto 0; padding:0 24px;
+  display:flex; flex-wrap:wrap; gap:10px;
+}
+.legend-item{
+  display:inline-flex; align-items:center; gap:7px;
+  font-size:12px; color:var(--board-muted);
+  background:var(--board-panel); border:1px solid var(--board-line);
+  border-radius:999px; padding:6px 12px;
+}
+.sw{width:11px;height:11px;border-radius:3px;flex:none;}
+
+.grid{
+  max-width:1200px; margin:0 auto; padding:32px 24px 72px;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:40px 32px;
+}
+.cell{display:flex; flex-direction:column; gap:12px;}
+.cap{display:flex; flex-direction:column; gap:4px;}
+.cap b{font-size:14px; font-weight:600; letter-spacing:-.01em;}
+.cap span{font-size:12.5px; color:var(--board-muted); line-height:1.5;}
+.ref{
+  font-family:var(--font-data); font-size:10.5px; color:var(--board-accent);
+  letter-spacing:.02em;
+}
+
+/* ---------- phone frame ---------- */
+.phone{
+  width:100%; max-width:340px; aspect-ratio:390/780;
+  background:var(--surface-base); color:var(--text-primary);
+  border:1px solid var(--board-line); border-radius:22px;
+  overflow:hidden; display:flex; flex-direction:column;
+  box-shadow:0 4px 20px rgba(15,23,42,.10);
+  font-size:15px;
+}
+:root[data-theme="dark"] .phone, :root:not([data-theme="light"]) .phone{box-shadow:0 4px 20px rgba(0,0,0,.45);}
+
+.hdr{
+  flex:none; padding:12px 14px; border-bottom:1px solid var(--border-subtle);
+  background:var(--surface-raised); display:flex; flex-direction:column; gap:5px;
+}
+.hdr-row{display:flex; align-items:center; gap:9px; min-height:24px;}
+.hdr-ttl{font-size:15px; font-weight:600; letter-spacing:-.01em;}
+.back{color:var(--text-tertiary); font-size:18px; line-height:1;}
+.gear{margin-left:auto; color:var(--text-tertiary); font-size:15px;}
+
+.body{flex:1; overflow:hidden; padding:12px; display:flex; flex-direction:column; gap:10px;}
+.body.scrolly{overflow-y:auto;}
+
+/* ---------- promise-state chip (filled variant — driver surface) ---------- */
+.chip{
+  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  padding:4px 9px; border-radius:var(--r-sm); white-space:nowrap;
+}
+.chip .t{font-family:var(--font-data); font-variant-numeric:tabular-nums; letter-spacing:0;}
+.chip.shown{background:var(--state-shown-bg); border:1px solid var(--state-shown-border); color:var(--state-shown-text);}
+.chip.held{background:var(--state-held-bg); border:2px dashed var(--state-held-border); color:var(--state-held-text);}
+.chip.pending{background:var(--state-pending-bg); border:2px solid var(--state-pending-border); color:var(--state-pending-text);}
+.chip.confirmed{background:var(--state-confirmed-bg); border:2px solid var(--state-confirmed-border); color:var(--state-confirmed-text);}
+.chip .t.urgent{color:var(--urgent); font-weight:600;}
+
+/* ---------- thread card ---------- */
+.tcard{
+  position:relative; background:var(--surface-raised);
+  border:1px solid var(--border-subtle); border-radius:var(--r-lg);
+  padding:12px 12px 12px 15px; display:flex; flex-direction:column; gap:7px;
+}
+.tcard::before{
+  content:""; position:absolute; left:0; top:9px; bottom:9px; width:3px;
+  border-radius:0 2px 2px 0; background:var(--pri,var(--neutral-400));
+}
+.tcard.resolved{opacity:.6;}
+.tcard.resolved::before{display:none;}
+.tcard .desc{font-size:15px; font-weight:600; letter-spacing:-.01em; line-height:1.3;}
+.tcard .ord{font-family:var(--font-data); font-size:10.5px; color:var(--text-tertiary);}
+.tcard .op{font-size:13px; color:var(--text-secondary); font-variant-numeric:tabular-nums;}
+.tcard .foot{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+.tcard .prev{font-size:12.5px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.tcard .ts{font-family:var(--font-data); font-size:10.5px; color:var(--text-tertiary); flex:none;}
+.divider{
+  display:flex; align-items:center; gap:9px; margin:4px 0 0;
+  font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-tertiary);
+}
+.divider::after{content:""; flex:1; height:1px; background:var(--border-subtle);}
+
+/* ---------- messages ---------- */
+.msg{display:flex; flex-direction:column; gap:3px; max-width:84%;}
+.msg.me{align-self:flex-end; align-items:flex-end;}
+.msg.them{align-self:flex-start;}
+.who{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-tertiary); font-weight:500;}
+.who .av{
+  width:17px;height:17px;border-radius:50%; flex:none;
+  display:grid;place-items:center; font-size:9px; font-weight:700; color:#fff; background:var(--board-accent);
+}
+.bub{padding:9px 12px; border-radius:var(--r-lg); line-height:1.45; font-size:15px;}
+.me .bub{background:var(--surface-selected); border:1px solid var(--border-subtle);}
+.them .bub{background:var(--surface-raised); border:1px solid var(--border-subtle);}
+.them.human .bub{border:1px solid var(--border-default);}
+.meta{font-family:var(--font-data); font-size:10px; color:var(--text-tertiary);}
+
+.sys{
+  align-self:center; text-align:center; font-size:12.5px; color:var(--text-secondary);
+  line-height:1.45; max-width:92%; padding:2px 0;
+}
+.rule{
+  align-self:stretch; display:flex; align-items:center; gap:9px;
+  font-size:12px; color:var(--text-secondary); text-align:center;
+}
+.rule::before,.rule::after{content:""; flex:1; height:1px; background:var(--border-default);}
+
+/* ---------- option card ---------- */
+.opt{
+  background:var(--surface-raised); border:1px solid var(--border-default);
+  border-radius:var(--r-lg); padding:11px 13px; display:flex; flex-direction:column; gap:2px;
+  min-height:64px; justify-content:center;
+}
+.opt .dock{font-size:14.5px; font-weight:600; letter-spacing:-.01em;}
+.opt .time{font-family:var(--font-data); font-size:15px; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
+.opt .diff{font-size:12.5px; color:var(--text-secondary);}
+.opt.dead{opacity:.4;}
+.opt.dead .dock,.opt.dead .time{text-decoration:line-through;}
+.opt.held{border:2px dashed var(--state-held-border); background:var(--state-held-bg);}
+.opt.off{opacity:.4;}
+.opt .why{font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:5px;}
+
+/* ---------- composer ---------- */
+.qr{
+  flex:none; display:flex; gap:7px; padding:9px 12px;
+  border-top:1px solid var(--border-subtle); background:var(--surface-raised); flex-wrap:wrap;
+}
+.qr button{
+  font:inherit; font-size:13.5px; cursor:pointer;
+  background:var(--surface-base); color:var(--text-primary);
+  border:1px solid var(--border-default); border-radius:999px; padding:8px 13px;
+}
+.qr button:hover{background:var(--surface-hover);}
+.qr button:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px;}
+.comp{
+  flex:none; display:flex; align-items:center; gap:9px; padding:10px 12px;
+  border-top:1px solid var(--border-subtle); background:var(--surface-raised);
+}
+.comp .fld{
+  flex:1; border:1px solid var(--border-default); border-radius:999px;
+  padding:10px 14px; font-size:16px; color:var(--text-tertiary); background:var(--surface-base);
+}
+.comp .send{
+  width:38px;height:38px;flex:none;border-radius:50%; display:grid;place-items:center;
+  background:var(--blue-600); color:#fff; font-size:15px;
+}
+.comp .send.dim{background:var(--neutral-400);}
+.nav{
+  flex:none; display:flex; border-top:1px solid var(--border-subtle); background:var(--surface-raised);
+}
+.nav div{
+  flex:1; text-align:center; padding:11px 0 13px; font-size:12px; color:var(--text-tertiary); font-weight:500;
+}
+.nav div.on{color:var(--blue-600); font-weight:600;}
+:root[data-theme="dark"] .nav div.on{color:var(--blue-400);}
+
+.note{
+  font-size:11.5px; color:var(--board-muted); line-height:1.5;
+  border-left:2px solid var(--board-accent); padding-left:9px;
+}
+.foot-note{
+  max-width:1200px; margin:0 auto; padding:0 24px 64px;
+  font-size:12.5px; color:var(--board-muted); line-height:1.6; max-width:76ch;
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important;}}
+</style>
+
+<style>
+/* ============================================================
+   ADDENDUM — added for the screens below (stitch-prompts.md
+   §2, §3, §6, §8–§14, §16–§18, §20, §22, §23, §25–§28).
+   The eight original screens above are preserved verbatim and
+   are NOT restyled by anything in this block: every rule here
+   is scoped to .std / .sheet / new class names only.
+   Every value cites a 00-foundations file. New tokens follow
+   tokens.md's 3-tier grammar (U85) — no component reaches a
+   primitive directly.
+   ============================================================ */
+:root{
+  /* both themes are real on this board, so native controls, scrollbars and form
+     chrome must follow the active one rather than assuming light */
+  color-scheme:light dark;
+  /* elevation-and-depth.md — shadow tokens */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,.10);
+  /* components.md §13 / U78 — skeleton block fill */
+  --skeleton:var(--neutral-200);
+  /* color.md — feedback colours (NOT promise state; banner position disambiguates) */
+  --fb-warn-bg:var(--amber-50); --fb-warn-border:var(--amber-500); --fb-warn-text:var(--amber-700);
+  /* 01-driver-chat/components.md §8 + color.md contrast table (F9): green-700 passes AA, green-600 does not */
+  --verdict-pass:var(--green-700);
+  --verdict-fail:var(--red-600);
+  /* color.md — text-link */
+  --text-link:var(--blue-600);
+  /* components.md §1 — constructive button */
+  --btn-pri-bg:var(--blue-600); --btn-pri-text:var(--neutral-0);
+  /* U47 message tiers — neutral avatars: see the deviation note at the foot of this file */
+  --avatar-bg:var(--neutral-600);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --shadow-sm:none; --shadow-md:0 4px 12px rgba(0,0,0,.40);
+    --skeleton:var(--neutral-800);
+    --fb-warn-bg:#3a2c10; --fb-warn-border:var(--amber-500); --fb-warn-text:var(--amber-400);
+    --verdict-pass:var(--green-400); --verdict-fail:var(--red-400);
+    --text-link:var(--blue-400);
+    --btn-pri-bg:var(--blue-500); --btn-pri-text:var(--neutral-950);
+    --avatar-bg:var(--neutral-600);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --shadow-sm:none; --shadow-md:0 4px 12px rgba(0,0,0,.40);
+  --skeleton:var(--neutral-800);
+  --fb-warn-bg:#3a2c10; --fb-warn-border:var(--amber-500); --fb-warn-text:var(--amber-400);
+  --verdict-pass:var(--green-400); --verdict-fail:var(--red-400);
+  --text-link:var(--blue-400);
+  --btn-pri-bg:var(--blue-500); --btn-pri-text:var(--neutral-950);
+  --avatar-bg:var(--neutral-600);
+}
+
+/* an explicitly-chosen light theme must not let native chrome follow a dark OS */
+:root[data-theme="light"]{color-scheme:light;}
+
+/* ---------- board: section headings ---------- */
+.sec{
+  grid-column:1/-1; display:flex; flex-direction:column; gap:6px;
+  border-top:1px solid var(--board-line); padding-top:24px; margin:8px 0 -12px;
+}
+.sec h2{font-size:20px; line-height:1.4; font-weight:600; letter-spacing:-.01em; margin:0;}
+.sec p{margin:0; font-size:13px; color:var(--board-muted); line-height:1.55; max-width:76ch;}
+.sec .ref{margin-top:2px;}
+
+/* ---------- icons: Lucide, 2px stroke, inline SVG ---------- */
+.ic{fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none;}
+.ic14{width:14px;height:14px} .ic16{width:16px;height:16px}
+.ic20{width:20px;height:20px} .ic32{width:32px;height:32px}
+.mono{font-family:var(--font-data); font-variant-numeric:tabular-nums;}
+
+/* ============================================================
+   .std — the value-swept driver scale.
+   typography.md §Accessibility: nothing below 14px on this
+   surface (chip labels are text-label 12px by explicit rule).
+   spacing-and-layout.md: comfortable = 24px content padding,
+   12px stack gap, 16px card padding, 44px min tap target,
+   40px button height.
+   ============================================================ */
+.phone.std{font-size:16px;}                                  /* text-body-lg */
+.std .hdr{padding:12px 24px; gap:8px;}
+.std .hdr-ttl{font-size:16px;}                               /* text-h3 */
+.std .body{padding:24px; gap:12px;}
+.std .chip{font-size:12px; padding:5px 9px; gap:6px;}        /* text-label */
+.std .chip.wrap{white-space:normal;}
+/* ⚑F3 — escalation reference: plain secondary text on header row two, never the chip slot.
+   Unscoped on purpose: the core-arc takeover screen needs it too. */
+.escref{font-size:13px; color:var(--text-secondary);}
+.std .escref{font-size:14px;}
+.std .hbtn{
+  width:44px; height:44px; flex:none; display:grid; place-items:center; padding:0;
+  background:none; border:0; color:var(--text-tertiary); cursor:pointer;
+}
+.std .hbtn.wide{width:48px; height:48px;}   /* screens.md §4: back control is 48×48 */
+.std .hbtn.right{margin-left:auto;}
+.std .u{color:var(--urgent); font-weight:600;}
+.std .t.urgent{color:var(--urgent); font-weight:600;}
+
+.std .tcard{padding:16px 16px 16px 20px; gap:8px; min-height:88px; box-shadow:var(--shadow-sm);}
+.std .tcard .desc{font-size:16px;}
+.std .tcard .ord,.std .tcard .ts{font-size:14px;}
+.std .tcard .op,.std .tcard .prev{font-size:14px;}
+.std .tcard.skc{padding-left:16px;}
+.std .tcard.skc::before{display:none;}
+.std .divider{font-size:12px;}
+
+.std .who{font-size:14px; gap:8px;}
+.std .bub{font-size:16px; padding:12px;}
+.std .meta{font-size:14px;}
+.std .meta.fail{color:var(--urgent);}
+.std .sys{font-size:14px; display:flex; gap:8px; align-items:flex-start; text-align:left; justify-content:center;}
+.std .sys.plain{display:block; text-align:center;}
+.std .rule{font-size:14px;}
+.std .avc{
+  width:20px;height:20px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:12px;font-weight:700;color:var(--neutral-0);background:var(--avatar-bg);
+}
+
+.std .opt{padding:12px 16px; box-shadow:var(--shadow-sm); width:100%; text-align:left; color:inherit; font:inherit;}
+.std button.opt{cursor:pointer;}
+.std .opt .dock{font-size:16px;}
+.std .opt .time{font-size:16px;}
+.std .opt .diff,.std .opt .why{font-size:14px;}
+.std .opt.press{background:var(--surface-hover);}
+.std .opt.pend{border:2px solid var(--state-pending-border); background:var(--state-pending-bg);}
+.std .opt.pend .diff{color:var(--state-pending-text); font-weight:600;}
+.std .opt.held .diff{color:var(--state-held-text); font-weight:600;}
+/* F8: the four dimmed states dim their *lines*, never the status line that tells them apart */
+.std .opt.term .dock,.std .opt.term .time{text-decoration:line-through; opacity:.4;}
+.std .opt.term .why{color:var(--urgent);}
+.std .opt.offl .dock,.std .opt.offl .time{opacity:.4;}
+.std .opt.sup .dock,.std .opt.sup .time,.std .opt.sup .diff{opacity:.4;}
+.std .opt[disabled]{cursor:not-allowed;}
+
+.std .qr{padding:12px 24px; gap:8px;}
+.std .qr button{font-size:16px; min-height:44px; padding:10px 16px;}
+.std .comp{padding:12px 24px; gap:8px; min-height:56px;}
+.std .comp .fld{padding:12px 16px;}
+.std .comp .fld.typed{color:var(--text-primary);}
+.std .comp .fld.foc{outline:2px solid var(--border-focus); outline-offset:2px;}
+.std .comp .send{width:44px;height:44px; border:0; cursor:pointer;}
+.std .nav div{
+  font-size:14px; padding:8px 0; min-height:56px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+}
+.std button:focus-visible,.sheet button:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px;}
+
+/* §0: any number that updates live or sits in a column is tabular. Right-aligned
+   timestamps sit in a column across cards, and delivery-status times likewise. */
+.tcard .ts,.meta,.lockclock{font-variant-numeric:tabular-nums;}
+
+/* ---------- skeleton (components.md §13, U78) ---------- */
+.sk{background:var(--skeleton); border-radius:var(--r-sm); height:14px;}
+.sk.tall{height:20px;}
+.sk.chipblock{height:24px; width:100px;}
+.sk.bub{border-radius:var(--r-lg); height:56px;}
+
+/* ---------- empty / error state (components.md §13) ---------- */
+.est{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+.est .ei{color:var(--text-tertiary);}
+.est h3{font-size:16px; font-weight:600; line-height:1.5; margin:16px 0 0;}
+.est p{font-size:14px; line-height:1.5; color:var(--text-secondary); margin:8px 0 0; max-width:40ch;}
+.est .btn{margin-top:24px;}
+
+/* ---------- eligibility answer (01-driver-chat/components.md §8) ---------- */
+.elig{
+  background:var(--surface-raised); border:1px solid var(--border-default);
+  border-radius:var(--r-lg); padding:16px; box-shadow:var(--shadow-sm);
+}
+.elig .etitle{font-size:16px; font-weight:600; letter-spacing:-.01em;}
+.elig .erows{display:flex; flex-direction:column; gap:12px; margin-top:12px;}
+.elig .erow{display:flex; gap:12px; align-items:flex-start; font-size:16px; line-height:1.5;}
+.elig .erow .ic{margin-top:4px;}
+.elig .edet{font-size:14px; color:var(--text-secondary); line-height:1.45; margin-top:4px;}
+.elig .esep{border:0; border-top:1px solid var(--border-subtle); margin:12px 0;}
+.elig .everdict{font-size:16px; font-weight:600; line-height:1.5;}
+.pass{color:var(--verdict-pass);} .fail{color:var(--verdict-fail);}
+
+/* ---------- profile rows ---------- */
+.pblk{display:flex; flex-direction:column; gap:4px;}
+.pname{font-size:16px; font-weight:600;}
+.pval{font-size:16px; color:var(--text-secondary); line-height:1.5;}
+.plabel{font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-tertiary);}
+.psep{border:0; border-top:1px solid var(--border-subtle); align-self:stretch; margin:12px 0;}
+.prow{
+  display:flex; align-items:center; gap:8px; min-height:56px; width:100%;
+  font:inherit; font-size:16px; color:inherit; background:none; border:0; padding:0;
+  text-align:left; cursor:pointer;
+}
+.prow .pv{margin-left:auto; display:flex; align-items:center; gap:8px; color:var(--text-secondary);}
+.prow.danger{color:var(--urgent);}
+
+/* ---------- buttons (components.md §1) ---------- */
+.btn{
+  font:inherit; font-size:16px; font-weight:500; min-height:40px; min-width:80px;
+  border-radius:var(--r-md); padding:8px 16px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+}
+.btn.pri{background:var(--btn-pri-bg); color:var(--btn-pri-text); border:1px solid var(--btn-pri-bg);}
+.btn.sec{background:transparent; color:var(--text-primary); border:1px solid var(--border-default);}
+.btn.full{width:100%;}
+.linkbtn{
+  font:inherit; font-size:14px; background:none; border:0; cursor:pointer;
+  color:var(--text-link); text-decoration:underline; padding:12px 0; min-height:44px;
+}
+
+/* ---------- feedback banner (color.md §Feedback colors) ---------- */
+.bar{
+  flex:none; display:flex; gap:8px; align-items:flex-start; font-size:14px; line-height:1.45;
+  padding:12px 24px; background:var(--fb-warn-bg); color:var(--fb-warn-text);
+  border-top:1px solid var(--fb-warn-border); border-bottom:1px solid var(--fb-warn-border);
+}
+
+/* ---------- thinking dots · scroll-to-latest pill ---------- */
+.dots{display:inline-flex; gap:6px; align-items:center;}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--neutral-400);}
+.pill{
+  align-self:center; margin-top:auto; display:inline-flex; align-items:center; gap:8px;
+  font-size:14px; font-weight:500; background:var(--surface-raised); color:var(--text-primary);
+  border:1px solid var(--border-default); border-radius:999px; padding:12px 16px;
+  box-shadow:var(--shadow-md); min-height:44px; cursor:pointer; font-family:inherit;
+}
+
+/* ---------- OS chrome stand-ins (representational, not our design) ---------- */
+.kbd{
+  flex:none; height:200px; background:var(--surface-hover); border-top:1px solid var(--border-default);
+  display:grid; place-items:center; text-align:center; padding:12px;
+  font-size:14px; color:var(--text-tertiary);
+}
+.lockwrap{
+  flex:1; background:var(--neutral-800); display:flex; flex-direction:column; gap:24px;
+  padding:24px; justify-content:flex-start;
+}
+.lockclock{font-family:var(--font-data); font-size:32px; color:var(--neutral-100); text-align:center; font-variant-numeric:tabular-nums;}
+.notif{
+  background:var(--surface-raised); color:var(--text-primary); border-radius:var(--r-xl);
+  padding:16px; box-shadow:var(--shadow-md); display:flex; flex-direction:column; gap:4px;
+}
+.notif .napp{font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px;}
+.notif .nbody{font-size:16px; line-height:1.45;}
+
+/* ---------- component sheet (not a device screen) ---------- */
+.sheet{
+  background:var(--surface-base); color:var(--text-primary); font-size:16px;
+  border:1px solid var(--board-line); border-radius:var(--r-xl);
+  padding:24px; display:flex; flex-direction:column; gap:24px; box-shadow:var(--shadow-md);
+}
+.sheet .slabel{
+  font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--text-tertiary); margin-bottom:8px;
+}
+.compbox{border:1px solid var(--border-subtle); border-radius:var(--r-lg); overflow:hidden;}
+.compbox > :first-child{border-top:0;}
+.dlist{display:flex; flex-direction:column; gap:12px; font-size:14px;}
+.dlist div{display:flex; gap:12px; align-items:baseline;}
+.dlist b{font-weight:500; color:var(--text-secondary); min-width:11ch;}
+.contact{display:flex; align-items:center; gap:8px; min-height:44px; font-size:16px; color:var(--text-primary);}
+</style>
+
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+  <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></symbol>
+  <symbol id="i-clock-fade" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-circle-check-big" viewBox="0 0 24 24"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.008-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742"/><path d="M18 8c0 4.499 1.411 5.956 2.738 7.326A1 1 0 0 1 20 17h-.5"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384z"/></symbol>
+  <symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-loader-circle" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-messages-square" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-hexagon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></symbol>
+</svg>
+
+<div class="board-head">
+  <div>
+    <p class="eyebrow">SetuHaul Dock Command · Surface 01</p>
+    <h1>Driver chat — visual reference</h1>
+    <p>Rendered from <code>00-foundations/</code> tokens exactly: Inter + JetBrains Mono, the rationed hue
+    budget, four redundant state encodings. Every screen below traces to a spec section. The countdowns are
+    live and share one 1&nbsp;Hz tick — the same rule <code>components.md §3</code> requires of the build.</p>
+  </div>
+  <button class="toggle" id="tt" aria-label="Toggle colour theme">◐ <span id="ttl">Dark</span></button>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="sw" style="background:var(--neutral-400)"></span>SHOWN · nothing reserved</span>
+  <span class="legend-item"><span class="sw" style="background:var(--amber-500)"></span>HELD · dashed = temporary</span>
+  <span class="legend-item"><span class="sw" style="background:var(--blue-500)"></span>PENDING · awaiting a human</span>
+  <span class="legend-item"><span class="sw" style="background:var(--green-600)"></span>CONFIRMED · solid = committed</span>
+  <span class="legend-item"><span class="sw" style="background:var(--red-600)"></span>Danger only</span>
+</div>
+
+<div class="grid">
+
+  <div class="sec" style="border-top:0;padding-top:0;margin-top:0">
+    <h2>The core arc</h2>
+    <p>The eight screens this board opened with, preserved verbatim. In <code>stitch-prompts.md</code>'s
+    numbering they are §1, §4, §5, §15, §19, §21, §24 and §7 — in that order. Everything from
+    <em>Thread list — the remaining states</em> onward was added later and runs in strict
+    <code>stitch-prompts.md</code> order; those screens carry the value-swept scale described in the
+    deviation note at the foot of this page.</p>
+  </div>
+
+  <!-- 1 · THREAD LIST -->
+  <div class="cell">
+    <div class="cap"><b>Thread list — home</b>
+      <span>One card per load. A driver with two loads picks the right one before typing, which is how the disambiguation problem gets solved structurally rather than by asking.</span>
+      <span class="ref">screens.md §1 · solves §7.2b ladder</span></div>
+    <div class="phone">
+      <div class="hdr"><div class="hdr-row"><span class="hdr-ttl">SetuHaul</span><span class="gear">⚙</span></div></div>
+      <div class="body">
+        <div class="tcard" style="--pri:var(--neutral-900)">
+          <div><div class="desc">Kota load → IndustrialHub</div><div class="ord">ORD-260804-004</div></div>
+          <span class="chip held">⏱ Held <span class="t" data-cd="84"></span></span>
+          <div class="op">Dock D1 · Tue 4 Aug · 13:00–14:15</div>
+          <div class="foot"><span class="prev">Held for you — send it to the warehouse?</span><span class="ts">09:41</span></div>
+        </div>
+        <div class="tcard" style="--pri:var(--neutral-600)">
+          <div><div class="desc">Neemrana load → RajRetail</div><div class="ord">ORD-260804-017</div></div>
+          <span class="chip pending">◷ Pending confirmation</span>
+          <div class="op">Decision by 11:57</div>
+          <div class="foot"><span class="prev">The warehouse hasn't confirmed yet…</span><span class="ts">09:32</span></div>
+        </div>
+        <div class="divider">Resolved</div>
+        <div class="tcard resolved">
+          <div><div class="desc">Jodhpur load → HomeCraft</div><div class="ord">ORD-260803-011</div></div>
+          <span class="chip confirmed">✓ Confirmed</span>
+          <div class="op">Dock D2 · Mon 3 Aug · 14:00–15:00</div>
+        </div>
+      </div>
+      <div class="nav"><div class="on">Threads</div><div>Profile</div></div>
+    </div>
+    <p class="note">Priority is a neutral value ramp on the left edge — never a hue. Red stays exclusively danger, so a CRITICAL row never looks like a failing row.</p>
+  </div>
+
+  <!-- 2 · CONVERSATION -->
+  <div class="cell">
+    <div class="cap"><b>Conversation — options shown</b>
+      <span>Chat as the spine, structured cards inside the transcript. Cards carry the recommendation id; no ordinal is displayed or accepted, so the “take the second one” bug is unreachable.</span>
+      <span class="ref">screens.md §2, §4 · U16, U18, U48</span></div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Kota load → IndustrialHub</span></div>
+        <span class="chip shown">Options open · nothing held</span>
+      </div>
+      <div class="body scrolly">
+        <div class="msg me"><div class="bub">Traffic after Shahpura. Reaching around 11:20.</div><div class="meta">09:34 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">Your current slot is 10:00–11:00 at Jaipur DC — that won't work now. Three options are open. <b>Nothing is held yet</b> — another driver can take any of these.</div>
+        </div>
+        <div class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span><span class="diff">soonest</span></div>
+        <div class="opt"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span><span class="diff">no waiting</span></div>
+        <div class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span><span class="diff">most buffer</span></div>
+        <div class="msg them"><div class="bub">Tap one to hold it for 90 seconds.</div><div class="meta">09:34</div></div>
+      </div>
+      <div class="comp"><div class="fld">Message</div><div class="send">➤</div></div>
+    </div>
+    <p class="note">Every card carries its date even when all three are today — option sets can span days, and a bare time is a wrong-day booking waiting to happen.</p>
+  </div>
+
+  <!-- 3 · HELD -->
+  <div class="cell">
+    <div class="cap"><b>Held — 90 seconds, live</b>
+      <span>Tapping yields exclusivity, not a request. A second explicit action sends it to the warehouse — the UI must never collapse these to save a tap.</span>
+      <span class="ref">flows-and-states.md · D2 two-step commit</span></div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Kota load → IndustrialHub</span></div>
+        <span class="chip held">⏱ Held <span class="t" data-cd="46"></span> <span style="opacity:.6">ⓘ</span></span>
+      </div>
+      <div class="body scrolly">
+        <div class="opt dead"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span></div>
+        <div class="opt held">
+          <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff" style="color:var(--state-held-text);font-weight:600">Held for you · <span class="t" data-cd="46" style="font-family:var(--font-data);font-variant-numeric:tabular-nums"></span></span>
+        </div>
+        <div class="opt dead"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span></div>
+        <div class="msg them">
+          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">Dock D1 · Tue 4 Aug · 13:00–14:15 is held for you. <b>This is not a booking yet.</b> Send it to the warehouse to request it.</div>
+        </div>
+      </div>
+      <div class="qr"><button>Request this slot</button><button>Choose a different one</button></div>
+    </div>
+    <p class="note">Countdown turns red under 20% and the chip's dashed border pulses — dashed meaning temporary survives greyscale, glare and colour blindness.</p>
+  </div>
+
+  <!-- 4 · HOLD LAPSED -->
+  <div class="cell">
+    <div class="cap"><b>Hold lapsed</b>
+      <span>The card is replaced in place, never removed. A driver who looks up to find their option simply gone learns nothing and trusts less.</span>
+      <span class="ref">edge-cases.md §1 · HOLD_LAPSED</span></div>
+    <div class="phone">
+      <div class="hdr"><div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Kota load → IndustrialHub</span></div></div>
+      <div class="body scrolly">
+        <div class="opt dead">
+          <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why" style="color:var(--urgent)">Hold lapsed</span>
+        </div>
+        <div class="sys">That hold has lapsed — Dock D1 · 13:00–14:15 is available to other drivers again. Nothing has been lost; I can look again right now.</div>
+        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">Want me to find what's open now?</div></div>
+      </div>
+      <div class="qr"><button>Find options again</button></div>
+    </div>
+    <p class="note">Every failure names a cause and a next action. A refusal without a route is a dead end — and dead ends drive drivers back to phone calls.</p>
+  </div>
+
+  <!-- 5 · NO SAME-DAY -->
+  <div class="cell">
+    <div class="cap"><b>No same-day slot — not an escalation</b>
+      <span>The one negative-path message carrying good news underneath. Names the specific blocker, gives dated alternatives, offers the human route without making them ask.</span>
+      <span class="ref">edge-cases.md §5 · Stage 0 horizon</span></div>
+    <div class="phone">
+      <div class="hdr"><div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Delhi dairy → FreshBasket</span></div></div>
+      <div class="body scrolly">
+        <div class="msg me"><div class="bub">Evening traffic. ETA 6:30. Can the reefer unload tonight?</div><div class="meta">16:24 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">Nothing works at Jaipur DC today — the reefer dock is down for maintenance until 22:00 and the site closes then. <b>The earliest I can offer is tomorrow.</b></div>
+        </div>
+        <div class="opt"><span class="dock">Dock D5 · Wed 5 Aug</span><span class="time">06:00 – 07:15</span><span class="diff">first of the day</span></div>
+        <div class="opt"><span class="dock">Dock D5 · Wed 5 Aug</span><span class="time">07:30 – 08:45</span><span class="diff">most buffer</span></div>
+        <div class="msg them"><div class="bub">Nothing is held yet. If waiting overnight doesn't work, I'll bring in operations.</div></div>
+      </div>
+      <div class="qr"><button>That doesn't work — get help</button></div>
+    </div>
+    <p class="note">Here the date is load-bearing: a driver reading “06:00” as this morning has been mis-promised by a formatting choice.</p>
+  </div>
+
+  <!-- 6 · TAKEOVER -->
+  <div class="cell">
+    <div class="cap"><b>Human takeover</b>
+      <span>Silent takeover reads as the bot ignoring them. The divider is permanent and the human's messages are visibly heavier — avatar, real name, role.</span>
+      <span class="ref">edge-cases.md §7 · U47, §7.4</span></div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Delhi dairy → FreshBasket</span></div>
+        <div class="escref">Escalated · <span class="mono">ESC-4471</span></div>
+      </div>
+      <div class="body scrolly">
+        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">I've passed this to operations. Reference ESC-4471.</div></div>
+        <div class="rule">Neha from Operations joined</div>
+        <div class="msg them human">
+          <div class="who"><span class="av" style="background:var(--green-600)">N</span>Neha · Operations</div>
+          <div class="bub">Hi Manoj — I'm looking at your reefer load now. I can get the D5 maintenance pushed by an hour if you can hold until 19:00.</div>
+        </div>
+        <div class="msg me"><div class="bub">That works. I'll wait.</div><div class="meta">16:31 ✓✓</div></div>
+      </div>
+      <div class="comp"><div class="fld">Message</div><div class="send">➤</div></div>
+    </div>
+    <p class="note">The assistant stops auto-replying here. If it contributes again it's because a human used the co-pilot to draft it — and it posts as the human. ⚑F3, corrected: the escalation reference is plain secondary text on header row two. It previously rendered inside a promise-state chip, which <code>components.md §2</code> forbids — the chip is the only component permitted state hues, and ESCALATED is not one of the four states.</p>
+  </div>
+
+  <!-- 7 · OFFLINE -->
+  <div class="cell">
+    <div class="cap"><b>Offline</b>
+      <span>Transcript and confirmed details stay readable — that's what a driver needs at a gate. Option cards are visibly disabled, never hidden, and the composer stays enabled.</span>
+      <span class="ref">edge-cases.md §10 · U68</span></div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Kota load → IndustrialHub</span></div>
+        <span class="chip held">⏱ Held 1:24 · updated 2m ago</span>
+      </div>
+      <div class="body scrolly">
+        <div class="opt off">
+          <span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span>
+          <span class="why">⚡ Offline — can't select now</span>
+        </div>
+        <div class="opt off">
+          <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why">⚡ Offline — can't select now</span>
+        </div>
+        <div class="sys">⚡ You're offline. I'll send this as soon as you're back.</div>
+        <div class="msg me"><div class="bub">Will I still make the 13:00?</div><div class="meta">⏱ queued</div></div>
+      </div>
+      <div class="comp"><div class="fld">Message · will send when you're back</div><div class="send dim">➤</div></div>
+    </div>
+    <p class="note">Selecting an option never queues for later. Committing to capacity that can't be validated at the moment of commit is exactly the promise this system must not break.</p>
+  </div>
+
+  <!-- 8 · CONFIRMED -->
+  <div class="cell">
+    <div class="cap"><b>Confirmed — the only screen that may say it</b>
+      <span>Arrival guidance comes from real facility rules, never invented. A confirmation without arrival instructions is where detention starts.</span>
+      <span class="ref">voice-and-tone.md · RULE001, RULE002</span></div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="hdr-row"><span class="back">‹</span><span class="hdr-ttl">Kota load → IndustrialHub</span></div>
+        <span class="chip confirmed">✓ Confirmed · Dock D1 · Tue 4 Aug 13:00</span>
+      </div>
+      <div class="body scrolly">
+        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub">Requested: Dock D1 · Tue 4 Aug · 13:00–14:15. The warehouse hasn't confirmed this yet — a planner will decide by 11:57.</div></div>
+        <div class="sys">A planner confirmed your request.</div>
+        <div class="msg them">
+          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="bub"><b>✓ Confirmed</b> — Dock D1 · Tue 4 Aug · 13:00–14:15, Jaipur DC.<br>Reference <span style="font-family:var(--font-data);font-size:13.5px">APT-1042</span>.<br><br>You may check in from 12:00 (60 minutes early limit). If you haven't checked in by 13:30 the appointment may be marked no-show.</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div><div class="send">➤</div></div>
+    </div>
+    <p class="note">Only this state may use finality language or a success treatment. Everything above it says what is <em>not</em> yet true.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Thread list — the remaining states</h2>
+    <p>Loading and the two empty states. The same visual emptiness means two opposite things here, and
+    showing the wrong one makes a working system look broken (U74).</p>
+    <span class="ref">stitch-prompts.md §2–§3</span>
+  </div>
+
+  <!-- 2 · THREAD LIST — LOADING -->
+  <div class="cell">
+    <div class="cap"><b>2 · Thread list — loading</b>
+      <span>Skeleton cards at the real card's dimensions — 88px minimum height, 16px padding, 12px gaps,
+      24px side padding — with the header and bottom nav fully rendered and operable. The priority marker
+      does not render: priority is unknown until data arrives, and a grey marker would imply LOW.</span>
+      <span class="ref">stitch §2 · components.md §13 (U78) · motion.md latency bands (U84)</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <span class="hdr-ttl">SetuHaul</span>
+        <button class="hbtn right" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-settings"/></svg></button>
+      </div></div>
+      <div class="body" aria-busy="true">
+        <div class="tcard skc"><div class="sk tall" style="width:60%"></div><div class="sk" style="width:35%"></div>
+          <div class="sk chipblock"></div><div class="sk" style="width:70%"></div><div class="sk" style="width:50%"></div></div>
+        <div class="tcard skc"><div class="sk tall" style="width:60%"></div><div class="sk" style="width:35%"></div>
+          <div class="sk chipblock"></div><div class="sk" style="width:70%"></div><div class="sk" style="width:50%"></div></div>
+        <div class="tcard skc"><div class="sk tall" style="width:60%"></div><div class="sk" style="width:35%"></div>
+          <div class="sk chipblock"></div><div class="sk" style="width:70%"></div><div class="sk" style="width:50%"></div></div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-messages-square"/></svg>Threads</div>
+        <div><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-user"/></svg>Profile</div>
+      </div>
+    </div>
+    <p class="note">Nothing shows for the first second (U84) — an indicator that flashes for under a second
+    is pure distraction. In the build these blocks pulse on a 1600ms opacity-only loop and go static under
+    <code>prefers-reduced-motion</code>; this board is deliberately still, so they render as flat
+    <code>neutral-200</code>.</p>
+  </div>
+
+  <!-- 3A · EMPTY — CAUGHT UP -->
+  <div class="cell">
+    <div class="cap"><b>3A · Thread list — empty · caught up</b>
+      <span>This driver has history and nothing active. Reassuring: it is a good state. No call to action —
+      a driver cannot create a load, the dispatcher assigns it.</span>
+      <span class="ref">stitch §3A · components.md §13 first-run vs. caught-up (U74) · iconography.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <span class="hdr-ttl">SetuHaul</span>
+        <button class="hbtn right" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-settings"/></svg></button>
+      </div></div>
+      <div class="body">
+        <div class="est">
+          <span class="ei"><svg aria-hidden="true" focusable="false" class="ic ic32"><use href="#i-circle-check-big"/></svg></span>
+          <h3>No active loads.</h3>
+          <p>You'll see delays and slot changes here.</p>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-messages-square"/></svg>Threads</div>
+        <div><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-user"/></svg>Profile</div>
+      </div>
+    </div>
+    <p class="note"><code>circle-check-big</code> reads as “you're done”. The distinguishing signal is a
+    server-side history check, not a client-side “count is zero” guess (U74).</p>
+  </div>
+
+  <!-- 3B · EMPTY — NOTHING YET -->
+  <div class="cell">
+    <div class="cap"><b>3B · Thread list — empty · nothing yet</b>
+      <span>A brand-new driver account with no history at all. Neutral and informational — an expected
+      state, not a problem. Different icon on purpose: one icon for both would undercut the whole point of
+      separating them.</span>
+      <span class="ref">stitch §3B · components.md §13 (U74) · iconography.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <span class="hdr-ttl">SetuHaul</span>
+        <button class="hbtn right" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-settings"/></svg></button>
+      </div></div>
+      <div class="body">
+        <div class="est">
+          <span class="ei"><svg aria-hidden="true" focusable="false" class="ic ic32"><use href="#i-inbox"/></svg></span>
+          <h3>No loads assigned yet.</h3>
+          <p>Your dispatcher assigns these — they'll appear here automatically.</p>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-messages-square"/></svg>Threads</div>
+        <div><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-user"/></svg>Profile</div>
+      </div>
+    </div>
+    <p class="note"><code>inbox</code> reads as “not set up”. Neither variant gets a CTA, an illustration,
+    or the word “empty”.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Conversation — the rest of the promise lifecycle</h2>
+    <p>The core arc above covers <code>SHOWN</code>, <code>HELD</code> and <code>CONFIRMED</code>.
+    <code>PENDING CONFIRMATION</code> is the fourth, and the only one that burns fifteen minutes rather
+    than ninety seconds.</p>
+    <span class="ref">stitch-prompts.md §6</span>
+  </div>
+
+  <!-- 6 · PENDING CONFIRMATION -->
+  <div class="cell">
+    <div class="cap"><b>6 · PENDING CONFIRMATION — 15 minutes, awaiting a human</b>
+      <span>The request has gone to the warehouse. Nothing is committed. The label wraps to two lines rather
+      than abbreviating — <code>components.md §2</code> is explicit that if it does not fit, the container is
+      too small.</span>
+      <span class="ref">stitch §6 · components.md §2, §3 · color.md TTL urgency</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <div class="hdr-row" style="gap:4px">
+          <span class="chip pending wrap" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-clock-fade"/></svg>
+            Pending confirmation <span class="t" data-cd="767"></span> · decision by 11:57</span>
+          <button class="hbtn" aria-label="What does pending confirmation mean?"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-circle-help"/></svg></button>
+        </div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="opt pend">
+          <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">Requested · decision by 11:57</span>
+        </div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Requested: Dock D1 · Tue 4 Aug · 13:00–14:15<br><br>
+            The warehouse has not confirmed this yet. A planner will decide by 11:57.<br>
+            If there's no decision by then, the slot is released and I'll find you fresh options.</div>
+          <div class="meta">11:42</div>
+        </div>
+      </div>
+      <div class="comp">
+        <div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button>
+      </div>
+    </div>
+    <p class="note">No quick replies — there is nothing for the driver to decide. <b>PENDING never pulses</b>
+    (<code>motion.md</code>): a fifteen-minute element pulsing for its final three minutes is intolerable, so
+    the pulse stays reserved for the 90-second case. Naming the deadline <em>and</em> what happens after it
+    is what makes the wait tolerable.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Component sheets</h2>
+    <p>Not device screens. Three reference artboards: the four message tiers with the takeover divider, the
+    option card's full eight-state matrix, and the composer's five states. Rendered on the page background
+    at 24px padding with 24px between instances, each labelled with its state name.</p>
+    <span class="ref">stitch-prompts.md §8–§10</span>
+  </div>
+
+  <!-- 8 · MESSAGE TIERS + TAKEOVER DIVIDER -->
+  <div class="cell">
+    <div class="cap"><b>8 · Message tiers and the human-takeover divider</b>
+      <span>All four treatments in one transcript. The AI-versus-human distinction must survive a glance — a
+      driver who thinks they are still talking to a bot phrases things differently from one who knows a
+      person is reading. Avatar, real name, role and the heavier border carry it together; no one of them
+      alone is enough.</span>
+      <span class="ref">stitch §8 · U47 · 01-driver-chat/components.md §4, §5</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Delhi dairy → FreshBasket</span>
+        </div>
+        <div class="escref">Escalated · <span class="mono">ESC-4471</span></div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Evening traffic. ETA 6:30.</div><div class="meta">16:24 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">I've passed this to operations. Reference <span class="mono">ESC-4471</span>.</div>
+        </div>
+        <div class="rule" role="status">Neha from Operations joined</div>
+        <div class="msg them human">
+          <div class="who"><span class="avc">N</span>Neha · Operations</div>
+          <div class="bub">Hi Manoj — I'm looking at your reefer load now.</div>
+          <div class="meta">16:29</div>
+        </div>
+        <div class="sys plain">Dock D5 has gone out of service.</div>
+      </div>
+      <div class="comp">
+        <div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button>
+      </div>
+    </div>
+    <div class="sheet std">
+      <div>
+        <div class="slabel">Delivery status vocabulary · driver messages only</div>
+        <div class="dlist">
+          <div><b>Sending</b><span class="mono">○</span></div>
+          <div><b>Sent</b><span class="mono">✓</span></div>
+          <div><b>Delivered</b><span class="mono">✓✓</span></div>
+          <div><b>Queued offline</b><span class="mono">⏱ queued</span></div>
+          <div><b>Failed</b><span class="mono" style="color:var(--urgent)">⚠ not sent</span>
+            <button class="linkbtn">Retry</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">“Queued offline” is <b>explicit words, not a symbol</b>, so it can never be mistaken for
+    sent. There is no read receipt: during normal operation there is no human on the other end, and implying
+    one misrepresents the assistant. The divider is permanent and not dismissible — a silent takeover reads
+    as the bot ignoring the driver.</p>
+  </div>
+
+  <!-- 9 · OPTION CARD — FULL STATE MATRIX -->
+  <div class="cell">
+    <div class="cap"><b>9 · Option card — full state matrix</b>
+      <span>Eight states of the most consequential component on this surface. Cards mutate in place rather
+      than being replaced by a new message, so the driver sees <em>which</em> thing changed, not just that
+      something did.</span>
+      <span class="ref">stitch §9 · 01-driver-chat/components.md §2 · U16, U48, U50, U83</span></div>
+    <div class="sheet std">
+      <div>
+        <div class="slabel">1 · Default — selectable</div>
+        <button class="opt"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">no waiting</span></button>
+      </div>
+      <div>
+        <div class="slabel">2 · Pressed</div>
+        <button class="opt press"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">no waiting</span></button>
+      </div>
+      <div>
+        <div class="slabel">3 · Committing</div>
+        <button class="opt" aria-busy="true"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-loader-circle"/></svg> Requesting…</span></button>
+      </div>
+      <div>
+        <div class="slabel">4 · Held — won</div>
+        <button class="opt held"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">Held for you · <span class="t mono" data-cd="84"></span></span></button>
+      </div>
+      <div>
+        <div class="slabel">5 · Lost the race</div>
+        <button class="opt term"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why">Taken by another driver</span></button>
+      </div>
+      <div>
+        <div class="slabel">6 · Withdrawn</div>
+        <button class="opt term"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why">No longer available</span></button>
+      </div>
+      <div>
+        <div class="slabel">7 · Disabled — offline</div>
+        <button class="opt offl" disabled title="You're offline — options can't be selected until you're back">
+          <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-wifi-off"/></svg> Offline — can't select now</span></button>
+      </div>
+      <div>
+        <div class="slabel">8 · Superseded</div>
+        <div class="opt sup"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">no waiting</span></div>
+      </div>
+    </div>
+    <p class="note">⚑F8, handled: states 5–8 all read as dimmed, so the <b>status line stays at full
+    opacity</b> and only the dock and time lines dim. Colour is never the only difference — 5 and 6 carry a
+    strike-through, 7 carries an icon, 8 carries neither and is simply inert. States 5 and 6 stay
+    <em>Inactive</em>, not Disabled (U83): still focusable, so activating them can explain what happened.
+    Offline is genuinely temporary, so it is the one Disabled state, and it carries its reason.</p>
+  </div>
+
+  <!-- 10A · COMPOSER — FIVE STATES -->
+  <div class="cell">
+    <div class="cap"><b>10A · Composer and quick replies — five states</b>
+      <span>The composer is never disabled. Whatever else is unavailable, a driver must always be able to
+      say something. Two or three quick replies only — more than three is a form, not a conversation.</span>
+      <span class="ref">stitch §10 · 01-driver-chat/components.md §3 · U49</span></div>
+    <div class="sheet std">
+      <div>
+        <div class="slabel">With quick replies · sends the literal chip text as a normal message</div>
+        <div class="compbox">
+          <div class="qr" role="group" aria-label="Suggested replies">
+            <button>Arriving 11:00</button><button>Might be longer</button>
+          </div>
+          <div class="comp"><div class="fld">Message</div>
+            <button class="send dim" aria-label="Send" disabled><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+        </div>
+      </div>
+      <div>
+        <div class="slabel">1 · Empty — send disabled</div>
+        <div class="compbox"><div class="comp"><div class="fld">Message</div>
+          <button class="send dim" aria-label="Send" disabled><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div></div>
+      </div>
+      <div>
+        <div class="slabel">2 · Typing — send enabled</div>
+        <div class="compbox"><div class="comp"><div class="fld typed">Stuck at the Shahpura toll</div>
+          <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div></div>
+      </div>
+      <div>
+        <div class="slabel">3 · Sending — width frozen, no reflow</div>
+        <div class="compbox"><div class="comp"><div class="fld typed">Stuck at the Shahpura toll</div>
+          <button class="send" aria-label="Sending" aria-busy="true"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-loader-circle"/></svg></button></div></div>
+      </div>
+      <div>
+        <div class="slabel">4 · Offline — still fully enabled, messages queue</div>
+        <div class="compbox"><div class="comp"><div class="fld">Message · will send when you're back online</div>
+          <button class="send dim" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div></div>
+      </div>
+      <div>
+        <div class="slabel">5 · Focused — 2px ring, 2px offset, never a soft glow</div>
+        <div class="compbox"><div class="comp"><div class="fld foc">Message</div>
+          <button class="send dim" aria-label="Send" disabled><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div></div>
+      </div>
+    </div>
+    <p class="note">16px input text is functional, not stylistic: below it iOS Safari auto-zooms on focus.
+    Enter sends and Shift+Enter inserts a newline on a hardware keyboard. After sending, focus stays in the
+    composer rather than jumping to the new bubble
+    (<code>accessibility-behaviour.md</code>, content-added row).</p>
+  </div>
+
+  <!-- 10B · COMPOSER — KEYBOARD OPEN -->
+  <div class="cell">
+    <div class="cap"><b>10B · Keyboard open</b>
+      <span>Composer and quick replies rise with the keyboard; the transcript shrinks and holds its scroll
+      position relative to the <em>latest</em> message, not the top. The keyboard obscuring the input bar is
+      the common bug here, so it is stated on both iOS and Android.</span>
+      <span class="ref">stitch §10 keyboard-open variant · spacing-and-layout.md safe areas</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Does that mean your new arrival is 11:00, or that the delay may continue for
+            another hour?</div>
+        </div>
+      </div>
+      <div class="qr" role="group" aria-label="Suggested replies">
+        <button>Arriving 11:00</button><button>Might be longer</button>
+      </div>
+      <div class="comp"><div class="fld foc typed">Arriving around 11</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+      <div class="kbd">Device keyboard<br>(OS chrome — not part of this design system)</div>
+    </div>
+    <p class="note">The composer is the bottom-most interactive element, full width, thumb-reachable in every
+    grip, and it clears the home indicator via <code>env(safe-area-inset-bottom)</code>.</p>
+  </div>
+
+  <div class="sec">
+    <h2>System states</h2>
+    <p>Thinking, the transcript skeleton, and scroll-to-latest. All three exist to stop a driver at a
+    roadside concluding the app is broken.</p>
+    <span class="ref">stitch-prompts.md §11 · motion.md latency bands (U84)</span>
+  </div>
+
+  <!-- 11A · THINKING -->
+  <div class="cell">
+    <div class="cap"><b>11A · Assistant thinking</b>
+      <span>The same bubble at two elapsed times, shown together for comparison. It appears only after 400ms
+      of no response — a fast reply that flashes the indicator is distracting — and gains the second line
+      once the turn passes 8 seconds.</span>
+      <span class="ref">stitch §11A · motion.md latency bands (U84) · ai-chat-primitives.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Traffic after Shahpura. Reaching around 11:20.</div>
+          <div class="meta">09:34 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub" aria-label="Working"><span class="dots"><i></i><i></i><i></i></span></div>
+        </div>
+        <div class="msg them">
+          <div class="bub"><span class="dots"><i></i><i></i><i></i></span>
+            <div style="font-size:14px;color:var(--text-secondary);margin-top:8px">Still working on this…</div></div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">The dots run a 1.4s ease-in-out loop in the build; this board is static. Under
+    <code>prefers-reduced-motion</code> they are <b>replaced</b> by a static “Working…” label, not removed —
+    losing the signal entirely would be an accessibility failure dressed as compliance.</p>
+  </div>
+
+  <!-- 11B · TRANSCRIPT SKELETON -->
+  <div class="cell">
+    <div class="cap"><b>11B · Transcript skeleton</b>
+      <span>Opening a thread. The header renders fully with the real load descriptor — only the transcript
+      region is skeletal, because the descriptor is already known from the list the driver just tapped.</span>
+      <span class="ref">stitch §11B · components.md §13 route loading (U71, U78)</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body" aria-busy="true">
+        <div class="sk bub" style="width:60%;align-self:flex-end"></div>
+        <div class="sk bub" style="width:80%;align-self:flex-start;height:76px"></div>
+        <div class="sk bub" style="width:50%;align-self:flex-start"></div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send dim" aria-label="Send" disabled><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">Blocks match the real bubbles' alignment, widths and 12px gaps. If the load passes roughly
+    3 seconds the skeleton is joined by a retry affordance rather than spinning indefinitely — see 27C for
+    where that ends up.</p>
+  </div>
+
+  <!-- 11C · SCROLL TO LATEST -->
+  <div class="cell">
+    <div class="cap"><b>11C · Scroll to latest</b>
+      <span>Appears only when the driver is scrolled more than one screen from the bottom. The transcript
+      never auto-scrolls while they are reading history — new content arriving must not yank the view.</span>
+      <span class="ref">stitch §11C · elevation-and-depth.md level 3 · U19's principle on this surface</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Traffic after Shahpura. Reaching around 11:20.</div>
+          <div class="meta">09:34 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Your current slot is 10:00–11:00 at Jaipur DC — that won't work now.</div>
+        </div>
+        <button class="pill"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-arrow-down"/></svg>2 new</button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">It counts <b>messages, not events</b> — a card mutating in place does not increment it,
+    because the driver has not missed a message, they have missed a change to something already on screen.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Facility questions, the account surface, and push priming</h2>
+    <p>The read-only paths. None of these creates a request, a hold, or a state change.</p>
+    <span class="ref">stitch-prompts.md §12–§14</span>
+  </div>
+
+  <!-- 12A · ELIGIBILITY — PASS -->
+  <div class="cell">
+    <div class="cap"><b>12A · Eligibility answer — passes</b>
+      <span>“Does the 7:30 slot take a 32-foot vehicle?” answered as structured per-invariant output, not as
+      a sentence the assistant composed. Read-only: no request, no hold, no state change.</span>
+      <span class="ref">stitch §12A · 01-driver-chat/components.md §8 · ai-chat-primitives.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Does the 7:30 slot take a 32-foot vehicle?</div>
+          <div class="meta">07:02 ✓✓</div></div>
+        <div class="msg them" style="max-width:100%">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+        </div>
+        <div class="elig">
+          <div class="etitle">Dock D4 · 32-foot vehicle</div>
+          <div class="erows">
+            <div class="erow"><svg aria-hidden="true" focusable="false" class="ic ic16 pass"><use href="#i-check"/></svg><span>Vehicle length</span></div>
+            <div class="erow"><svg aria-hidden="true" focusable="false" class="ic ic16 pass"><use href="#i-check"/></svg>
+              <span>Weight <span class="mono">(14,500 / 25,000 kg)</span></span></div>
+            <div class="erow"><svg aria-hidden="true" focusable="false" class="ic ic16 pass"><use href="#i-check"/></svg><span>Dock active</span></div>
+          </div>
+          <hr class="esep">
+          <div class="everdict pass">Yes — this slot accepts your truck</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">Verdict green is <code>green-700</code>, not <code>green-600</code> — ⚑F9:
+    <code>color.md</code>'s own contrast table puts <code>green-600</code> at 3.8:1 on white, which fails AA
+    for normal text. Icon plus text carries the verdict; colour never carries it alone. No “Book this”
+    button: this path is read-only.</p>
+  </div>
+
+  <!-- 12B · ELIGIBILITY — FAIL -->
+  <div class="cell">
+    <div class="cap"><b>12B · Eligibility answer — fails</b>
+      <span>Every invariant renders, not just the failing one. A driver who sees only “no” learns nothing
+      they can act on; seeing which specific thing failed is what turns a refusal into a route.</span>
+      <span class="ref">stitch §12B · 01-driver-chat/components.md §8 · RULE003</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Delhi dairy → FreshBasket</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Can the reefer go on D5 at 18:00?</div>
+          <div class="meta">17:41 ✓✓</div></div>
+        <div class="msg them" style="max-width:100%">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+        </div>
+        <div class="elig">
+          <div class="etitle">Dock D5 · Reefer load</div>
+          <div class="erows">
+            <div class="erow"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-check"/></svg><span>Vehicle length</span></div>
+            <div class="erow"><svg aria-hidden="true" focusable="false" class="ic ic16 fail"><use href="#i-x"/></svg>
+              <span>Refrigeration required
+                <div class="edet">D5 is under maintenance 18:00–22:00<br>
+                  (<span class="mono">RULE003</span> pins reefer loads to D5 only)</div></span></div>
+          </div>
+          <hr class="esep">
+          <div class="everdict fail">No — try after 22:00 or ask for tomorrow's options</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">The passing row on a failing card stays its <b>normal neutral colour, never green</b> — a
+    mixed-verdict card is not the place to introduce a second meaning for a colour already spent on promise
+    state. Both verdict lines are templated sentences, not generated.</p>
+  </div>
+
+  <!-- 13 · PROFILE -->
+  <div class="cell">
+    <div class="cap"><b>13 · Profile</b>
+      <span>Minimal and mostly read-only. Identity and vehicle are owned by the dispatcher's system upstream
+      and displayed here for confirmation only — zero interactive affordance, because they were never
+      controls.</span>
+      <span class="ref">stitch §13 · components.md §18 Read-only (U83) · data-formatting.md units</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row"><span class="hdr-ttl">Profile</span></div></div>
+      <div class="body scrolly">
+        <div class="pblk">
+          <div class="pname">Manoj Sharma</div>
+          <div class="pval mono">+91-9000010006</div>
+          <div class="pval">Carrier: Rajasthan Roadlines</div>
+        </div>
+        <div class="pblk" style="margin-top:12px">
+          <div class="plabel">Vehicle</div>
+          <div class="pval"><span class="mono">UP14GT4106</span> · 32 ft multi-axle</div>
+        </div>
+        <hr class="psep">
+        <button class="prow">Notifications<span class="pv">On
+          <svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-chevron-right"/></svg></span></button>
+        <button class="prow">Language<span class="pv">English</span></button>
+        <button class="prow">Theme<span class="pv">Light
+          <svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-chevron-right"/></svg></span></button>
+        <hr class="psep">
+        <button class="prow danger">Sign out</button>
+      </div>
+      <div class="nav">
+        <div><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-messages-square"/></svg>Threads</div>
+        <div class="on"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-user"/></svg>Profile</div>
+      </div>
+    </div>
+    <p class="note"><code>32 ft</code>, with the space and never pluralised
+    (<code>data-formatting.md</code>). No avatar, no edit pencil, no statistics or on-time percentage — this
+    is not a gamified surface. ⚑F10 and ⚑F11 stay open: the theme row's dark-mode warning and sign-out's
+    friction tier are both unspecified, so the rows render and stop there.</p>
+  </div>
+
+  <!-- 14A · PUSH PRIMING -->
+  <div class="cell">
+    <div class="cap"><b>14A · Push-permission priming</b>
+      <span>Shown <em>before</em> the browser's own dialog. That prompt is one-shot — a denial is effectively
+      permanent, and a driver who denies it will not learn that their hold lapsed. Step 3 of onboarding:
+      after sign-in and after they have confirmed which load the conversation is about.</span>
+      <span class="ref">stitch §14 · auth-and-scoping.md priming · components.md §1</span></div>
+    <div class="phone std">
+      <div class="body est" style="padding:24px">
+        <span class="ei"><svg aria-hidden="true" focusable="false" class="ic ic32"><use href="#i-bell"/></svg></span>
+        <h3 style="font-size:20px;margin-top:24px">Stay informed about your slot</h3>
+        <p style="font-size:16px">Dock slots can change while you're driving. Notifications let me tell you
+          straight away instead of you finding out at the gate.</p>
+        <div style="width:100%;margin-top:32px;display:flex;flex-direction:column;gap:12px">
+          <button class="btn pri full">Turn on notifications</button>
+          <button class="btn sec full">Not now</button>
+        </div>
+      </div>
+    </div>
+    <p class="note">“Not now” is a real option, not a dismissal that nags — the app is fully usable without
+    push, and the re-ask happens only after an event the driver actually missed, framed by that event. ⚑F4:
+    the reference checklist for this pattern expects a realistic preview of what a notification from this app
+    looks like. The spec defines none for this screen, so <b>none is drawn</b>. 16B shows the one
+    notification the spec does specify.</p>
+  </div>
+
+  <!-- 14B · PUSH DENIED -->
+  <div class="cell">
+    <div class="cap"><b>14B · Push denied — the consequence, stated once</b>
+      <span>Cause and consequence, once, with no dismiss-and-repeat loop. Amber, not red: the app still
+      works.</span>
+      <span class="ref">stitch §14 denied variant · color.md feedback colours</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="bar"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-bell-off"/></svg>
+        <span>Notifications are off — you'll need to keep this page open to see changes.</span></div>
+      <div class="body scrolly" role="log">
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Three options are open. <b>Nothing is held yet</b> — another driver can take any
+            of these.</div>
+        </div>
+        <button class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span>
+          <span class="diff">soonest</span></button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">This is a <em>feedback</em> banner, not a promise state, and the distinction is carried by
+    position rather than colour (<code>color.md</code>): promise state is always a bordered chip with its
+    icon in the header's state slot; feedback is a full-width bar. A banner in the state slot would break the
+    rule that green means CONFIRMED and amber means HELD.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Negative paths</h2>
+    <p>The hard screens. Every one names a cause and a route: a refusal with no next step is a dead end, and
+    dead ends drive drivers back to phone calls — the failure mode this product exists to remove. The core
+    arc above already covers hold-lapsed (§15) and no-same-day (§19).</p>
+    <span class="ref">stitch-prompts.md §16–§18, §20</span>
+  </div>
+
+  <!-- 16A · PENDING EXPIRED -->
+  <div class="cell">
+    <div class="cap"><b>16A · Pending expired</b>
+      <span>Fifteen minutes passed with no planner action. Capacity was lost while the driver may have been
+      driving toward it, so the escalation is stated plainly rather than hidden — a driver whose request
+      timed out should know a human now owns it.</span>
+      <span class="ref">stitch §16 · edge-cases.md PENDING_EXPIRED · §7.4</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <button class="opt term"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why">Released — no planner response</span></button>
+        <div class="sys plain" role="alert">No planner responded in time, so Dock D1 · 13:00–14:15 has been
+          released. This has been escalated to operations, and I can look for fresh options now.</div>
+      </div>
+      <div class="qr"><button>Find options again</button></div>
+    </div>
+    <p class="note">The persistent state line clears — the header drops to one row, because there is no
+    promise to carry. The countdown does not keep running past zero; the component is replaced in place, so
+    the transcript keeps the record that the thing existed and what happened to it.</p>
+  </div>
+
+  <!-- 16B · PENDING EXPIRED — PUSH -->
+  <div class="cell">
+    <div class="cap"><b>16B · The same event as a push notification</b>
+      <span>High priority — one the driver must dismiss rather than one that auto-expires. The body uses the
+      <em>same template as the in-app copy</em>: a notification that says something different from the app is
+      a second source of truth.</span>
+      <span class="ref">stitch §16 push variant · voice-and-tone.md templates</span></div>
+    <div class="phone std">
+      <div class="lockwrap">
+        <div class="lockclock">11:57</div>
+        <div class="notif">
+          <div class="napp"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-hexagon"/></svg>SetuHaul Dock Command</div>
+          <div class="nbody">No planner responded in time, so Dock D1 · 13:00–14:15 has been released. I can
+            look for fresh options now.</div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Tapping deep-links straight into <em>this thread</em> with fresh options already loading —
+    never into the thread list. The lock-screen clock and wallpaper are OS chrome, drawn only so the
+    notification reads in context; they are not part of this design system. One of exactly four events that
+    earns elevated notification treatment.</p>
+  </div>
+
+  <!-- 17 · SLOT CONFLICT -->
+  <div class="cell">
+    <div class="cap"><b>17 · Lost the race</b>
+      <span>Another driver committed to the same interval a moment first. State the fact, move immediately to
+      alternatives — and never blame the driver for being slow. No penalty haptic: losing a race is not the
+      driver's error.</span>
+      <span class="ref">stitch §17 · edge-cases.md SLOT_CONFLICT · U50</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <button class="opt term"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="why">Taken by another driver</span></button>
+        <div class="sys plain" role="alert">Another driver requested Dock D1 · 13:00–14:15 a moment before
+          you. That one's gone — here's what's open now.</div>
+        <button class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">13:45 – 15:00</span>
+          <span class="diff">soonest</span></button>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span>
+          <span class="diff">most buffer</span></button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">The lost card stays in place <em>above</em> the new set so the driver can see which option
+    went. A driver never sees their ranking position or how many others were competing for the interval.</p>
+  </div>
+
+  <!-- 18 · OPTION WITHDRAWN -->
+  <div class="cell">
+    <div class="cap"><b>18 · Option withdrawn mid-conversation</b>
+      <span>A dock went out of service while the driver was deciding. The clearest expression of why cards
+      mutate in place: the driver sees <em>which</em> option died without matching prose to cards from
+      memory. Only the affected card changes — siblings stay at full opacity and selectable.</span>
+      <span class="ref">stitch §18 · edge-cases.md OPTION_WITHDRAWN · §12.2</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Delhi dairy → FreshBasket</span>
+        </div>
+        <span class="chip shown" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-list"/></svg>Options open · nothing held</span>
+      </div>
+      <div class="body scrolly" role="log">
+        <button class="opt term"><span class="dock">Dock D5 · Tue 4 Aug</span><span class="time">18:00 – 19:15</span>
+          <span class="why">No longer available</span></button>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">19:00 – 20:15</span>
+          <span class="diff">no waiting</span></button>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">20:30 – 21:45</span>
+          <span class="diff">most buffer</span></button>
+        <div class="sys plain" role="alert">Dock D5 has just gone out of service, so the 18:00 option is no
+          longer available. The other two options are still open.</div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">The second sentence is load-bearing — it is what stops the driver assuming everything
+    collapsed. Withdrawing an entire option set because one member died would be both wrong and alarming, so
+    nothing greys except the one card.</p>
+  </div>
+
+  <!-- 20 · NO FEASIBLE SLOT -->
+  <div class="cell">
+    <div class="cap"><b>20 · No feasible slot → escalation</b>
+      <span>The whole search horizon is exhausted. The thread hands over to a human and the assistant stops
+      auto-replying. Always a reference and a promise of contact — an escalation without a reference feels
+      like being dropped.</span>
+      <span class="ref">stitch §20 · edge-cases.md NO_FEASIBLE_SLOT · ⚑F3</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Delhi dairy → FreshBasket</span>
+        </div>
+        <div class="escref">Escalated · <span class="mono">ESC-4471</span></div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Nothing tonight then?</div><div class="meta">18:12 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">I can't find a workable slot for this load at Jaipur DC — the only reefer dock is
+            out of service past your arrival time, and there's nothing tomorrow either.<br><br>
+            I've passed this to operations. Reference <span class="mono">ESC-4471</span>. Someone will
+            contact you directly.</div>
+          <div class="meta">18:12</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">⚑F3, resolved by derivation: the escalation reference is <b>plain secondary text on header
+    row two, never in the promise-state chip slot</b>. <code>components.md §2</code> makes the chip the only
+    component permitted to use state hues, and ESCALATED is not one of the four states — there is no active
+    promise here at all. No option cards and no “try again”: offering a retry that will fail identically is
+    worse than not offering one. The composer stays enabled, because a person will read it.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Clarification</h2>
+    <p>Two readings, offered as taps. At most one question per turn, and only for a field that actually
+    blocks the next step — and after two failed attempts the thread escalates rather than looping.</p>
+    <span class="ref">stitch-prompts.md §22–§23</span>
+  </div>
+
+  <!-- 22A · DISAMBIGUATION -->
+  <div class="cell">
+    <div class="cap"><b>22A · Ambiguous shipment — disambiguation</b>
+      <span>The driver referred to a different load than the thread they are in. Human descriptors, never
+      identifiers: “the Kota load due 08:45”, never <span class="mono">SHP1004</span>. A reference number may
+      ride along in brackets; it may never be the question.</span>
+      <span class="ref">stitch §22 · voice-and-tone.md clarification · §7.2b</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Neemrana load → RajRetail</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Actually I meant the Kota load</div><div class="meta">08:11 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">You have two Kota loads today. The one due 08:45, or the later one due 18:00?</div>
+          <div class="meta">08:11</div>
+        </div>
+      </div>
+      <div class="qr" role="group" aria-label="Suggested replies">
+        <button>The 08:45 one</button><button>The 18:00 one</button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No dropdown of shipment IDs, and no open question where two readings can be offered as
+    taps. One tap is the difference between a resolved exception and an abandoned one — §13.1 counts
+    clarification turns for exactly this reason.</p>
+  </div>
+
+  <!-- 22B · DISAMBIGUATION → ESCALATION -->
+  <div class="cell">
+    <div class="cap"><b>22B · After two failed attempts</b>
+      <span>There is no third ask. The thread escalates instead of looping — no cards, no further quick
+      replies.</span>
+      <span class="ref">stitch §22 escalation variant · ⚑F3</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Neemrana load → RajRetail</span>
+        </div>
+        <div class="escref">Escalated · <span class="mono">ESC-4482</span></div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">the kota one</div><div class="meta">08:13 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">I'm not able to tell which load you mean. I've passed this to operations. Reference
+            <span class="mono">ESC-4482</span>. Someone will contact you directly.</div>
+          <div class="meta">08:13</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">Two attempts is the whole budget. A third clarification attempt on a phone at a roadside
+    is how an exception gets abandoned and turns into a phone call.</p>
+  </div>
+
+  <!-- 23A · LOW-CONFIDENCE ETA -->
+  <div class="cell">
+    <div class="cap"><b>23A · Low-confidence ETA — the clarification</b>
+      <span>“I am late by one hour” does not determine an arrival time. <b>Never derive an ETA from a delay
+      duration</b> — a 45-minute repair is not a 45-minute ETA shift.</span>
+      <span class="ref">stitch §23A · voice-and-tone.md · LOW_CONFIDENCE_ETA</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">I am late by one hour</div><div class="meta">09:48 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Does that mean your new arrival is 11:00, or that the delay may continue for
+            another hour?</div>
+          <div class="meta">09:48</div>
+        </div>
+      </div>
+      <div class="qr" role="group" aria-label="Suggested replies">
+        <button>Arriving 11:00</button><button>Might be longer</button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No “How late are you?” open question. Where ETA confidence needs showing at all it is a
+    16px <svg aria-hidden="true" focusable="false" class="ic ic16" style="vertical-align:-3px"><use href="#i-triangle-alert"/></svg>
+    <code>alert-triangle</code> and nothing else — confidence never gets its own hue, because hue here is
+    rationed to promise state and danger. <em>Its placement in the transcript is not specified anywhere in
+    the surface files, so none is drawn on this artboard.</em></p>
+  </div>
+
+  <!-- 23B · RISK AS A CHOICE -->
+  <div class="cell">
+    <div class="cap"><b>23B · Risk framed as a choice, not hidden as a warning</b>
+      <span>The driver prices their own risk — they are better placed to judge it than the system. The
+      assistant's sentence carries the trade-off; the cards stay neutral, with <b>neither visually preferred
+      over the other</b>.</span>
+      <span class="ref">stitch §23B · U16 (no ranking visuals) · color.md hue budget</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <span class="chip shown" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-list"/></svg>Options open · nothing held</span>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Might be longer, hard to say</div><div class="meta">09:49 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">I can hold 11:00, but if that time is uncertain, the 12:15 window gives you an hour
+            of cushion and avoids a second reschedule.</div>
+        </div>
+        <button class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">11:00 – 12:15</span>
+          <span class="diff">soonest</span></button>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span>
+          <span class="diff">most buffer</span></button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No “Recommended” badge, no confidence percentage, no risk meter, and nothing
+    auto-selected. Both cards are identical in weight, border and fill — the only difference is the one
+    differentiator line each carries.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Refusals</h2>
+    <p>Five artboards. Every refusal names the specific rule and offers a route. None of them uses red, a
+    warning icon, or error styling — a refusal is a fact being stated, not a system error.</p>
+    <span class="ref">stitch-prompts.md §25–§26</span>
+  </div>
+
+  <!-- 25A · REFUSAL — CONFIRM IT YOURSELF -->
+  <div class="cell">
+    <div class="cap"><b>25A · “Just confirm it, don't wait for the warehouse”</b>
+      <span>States the boundary once, then offers the only lever that actually exists.</span>
+      <span class="ref">stitch §25A · D2 (a human confirms) · voice-and-tone.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Just confirm it, don't wait for the warehouse</div>
+          <div class="meta">11:46 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Only a warehouse planner can confirm a slot — I can't skip that step.<br>
+            I can flag your request as urgent so it's reviewed first.</div>
+          <div class="meta">11:46</div>
+        </div>
+      </div>
+      <div class="qr"><button>Flag as urgent</button></div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No apology for a system rule. The route is offered, not withheld until the driver thinks
+    to ask for it.</p>
+  </div>
+
+  <!-- 25B · REFUSAL — INFEASIBLE SLOT -->
+  <div class="cell">
+    <div class="cap"><b>25B · “Book me the 7:30 even though I get there at 8”</b>
+      <span>Names the specific failing invariant in plain language — never “that's not allowed” — then moves
+      straight to what does fit.</span>
+      <span class="ref">stitch §25B · §7.1 feasibility invariants</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <span class="chip shown" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-list"/></svg>Options open · nothing held</span>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Book me the 7:30 even though I get there at 8</div>
+          <div class="meta">07:14 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">7:30 won't work — your ETA is 8:00 and the unload needs to finish before the slot
+            closes. Here's what does fit your arrival time:</div>
+        </div>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">08:15 – 09:30</span>
+          <span class="diff">soonest</span></button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">The alternative arrives in the same turn. The driver never has to ask “so what
+    <em>can</em> I have?”</p>
+  </div>
+
+  <!-- 25C · REFUSAL — UNMANIFESTED CARGO -->
+  <div class="cell">
+    <div class="cap"><b>25C · “I'm carrying something not on the manifest”</b>
+      <span>No scheduling continues past this point. Escalation <em>is</em> the route here — this is the one
+      refusal of the four that ends without an option or a chip.</span>
+      <span class="ref">stitch §25C · §7.4 SAFETY_OR_REGULATED · ⚑F3</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <div class="escref">Escalated · <span class="mono">ESC-4478</span></div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">I'm carrying something not on the manifest</div>
+          <div class="meta">10:02 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">That's not something I can schedule around — it needs a person to look at before
+            anything else happens. I've flagged this to operations now.</div>
+          <div class="meta">10:02</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No cards, no quick replies, and no promise-state chip — there is no promise. The reference
+    sits in plain secondary text on header row two, same as §20 and §26.</p>
+  </div>
+
+  <!-- 25D · REFUSAL — ANOTHER DRIVER'S SLOT -->
+  <div class="cell">
+    <div class="cap"><b>25D · “Give me the slot that truck ahead of me has”</b>
+      <span>States the policy once, briefly, then moves straight to what is actually open — dwelling on the
+      refusal reads as scolding. No mention of the other driver's identity, carrier or booking.</span>
+      <span class="ref">stitch §25D · auth-and-scoping.md inference risk</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <span class="chip shown" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-list"/></svg>Options open · nothing held</span>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">Give me the slot that truck ahead of me has</div>
+          <div class="meta">12:38 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">I can't move another driver's booking. Here's what's actually open right now:</div>
+        </div>
+        <button class="opt"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">no waiting</span></button>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">“Capacity can never be promised twice” cuts both ways: the same rule that protects this
+    driver's confirmed slot is the one being stated here.</p>
+  </div>
+
+  <!-- 26 · SAFETY REFUSAL -->
+  <div class="cell">
+    <div class="cap"><b>26 · Refusal — safety</b>
+      <span>The one screen in this product where nothing else may compete for attention. No option cards, no
+      quick replies, no suggestions, no promise-state chip. Reviewed wording, not a template to rephrase.</span>
+      <span class="ref">stitch §26 · voice-and-tone.md safety · §7.4 SAFETY_OR_REGULATED</span></div>
+    <div class="phone std">
+      <div class="hdr">
+        <div class="hdr-row">
+          <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+          <span class="hdr-ttl">Kota load → IndustrialHub</span>
+        </div>
+        <div class="escref">Escalated · <span class="mono">ESC-4471</span></div>
+      </div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">My brakes are failing, should I keep driving?</div>
+          <div class="meta">14:07 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">That's not a decision I can make for you. Please contact your carrier
+            and pull over safely if you're not already stopped.<br>
+            Reference <span class="mono">ESC-4471</span> has been raised with operations.</div>
+          <div class="meta">14:07</div>
+        </div>
+        <div class="contact"><svg aria-hidden="true" focusable="false" class="ic ic16"><use href="#i-phone"/></svg>
+          Rajasthan Roadlines · <span class="mono">—</span></div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">No red, no alert banner, no warning triangle, no elevated card. The words carry it, and
+    decoration would read as the system dramatising rather than helping. The carrier contact is a plain
+    <code>tel:</code> row, not a styled primary button competing with the message. <b>The spec supplies no
+    carrier phone number</b>, and §20 explicitly forbids inventing one for a mockup — so the number renders
+    as <code>data-formatting.md</code>'s explicit “not yet known” em dash rather than a fabricated value.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Failures, and the one thread that closes</h2>
+    <p>In a system where a tap commits capacity, a failure must state plainly that it left <em>no partial
+    state</em> — otherwise the rational response is to tap again. All three failure artboards are
+    <code>role="alert"</code>: silence on failure is the single worst accessibility failure mode available.
+    The cancelled-shipment thread is the only path here that ends rather than recovering.</p>
+    <span class="ref">stitch-prompts.md §27–§28 · accessibility-behaviour.md politeness matrix</span>
+  </div>
+
+  <!-- 27A · SEND FAILED -->
+  <div class="cell">
+    <div class="cap"><b>27A · Message failed to send</b>
+      <span>The typed text is <em>preserved, never cleared</em>. The bubble stays in place at full opacity —
+      what failed is delivery, not the driver's sentence, and re-typing at a roadside one-handed is a real
+      cost.</span>
+      <span class="ref">stitch §27A · 01-driver-chat/components.md §5 delivery vocabulary · U81</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Tap one to hold it for 90 seconds.</div>
+          <div class="meta">09:34</div>
+        </div>
+        <div class="msg me">
+          <div class="bub">Stuck at the Shahpura toll, make it 12:15</div>
+          <div class="meta fail" role="alert">⚠ not sent</div>
+          <button class="linkbtn" aria-label="Retry sending this message">Retry</button>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note"><code>⚠ not sent</code> is words in <code>--urgent</code>, not a bare symbol — the same
+    reason <code>⏱ queued</code> is spelled out. A 300ms haptic fires on failure, because the driver may have
+    pocketed the phone. Retry is an inline text button with a 44px hit area, not a toast: a toast that
+    disappears before it can be read is the failure mode this replaces.</p>
+  </div>
+
+  <!-- 27B · COMMIT FAILED -->
+  <div class="cell">
+    <div class="cap"><b>27B · Commit failed — nothing has changed</b>
+      <span>The driver requested a slot and the write failed. The card <em>unlocks and returns to its previous
+      state</em> — unchanged, still selectable. Nothing half-happened, and the copy has to say so.</span>
+      <span class="ref">stitch §27B · U70 idempotency key · components.md §19 · voice-and-tone.md</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <button class="opt"><span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
+          <span class="diff">no waiting</span></button>
+        <button class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span>
+          <span class="diff">most buffer</span></button>
+        <div class="sys plain" role="alert">That didn't save. <b>Nothing has changed.</b></div>
+      </div>
+      <div class="qr"><button>Try again — this won't double-book you.</button></div>
+    </div>
+    <p class="note">“Nothing has changed” is bolded because it is the load-bearing half of the sentence. The
+    chip's second clause is not padding either: every capacity-affecting action carries an <b>idempotency
+    key</b> (U70), so retrying after an uncertain failure is genuinely safe — and a driver who does not know
+    that will avoid retrying a request that needs retrying. No error code, no “Something went wrong”, no
+    modal.</p>
+  </div>
+
+  <!-- 27C · THREAD FAILED TO LOAD -->
+  <div class="cell">
+    <div class="cap"><b>27C · Thread failed to load</b>
+      <span>Where 11B's skeleton ends up when the load never resolves. The error is scoped to the content
+      region — header and composer stay rendered, so the driver is never left on a blank screen with nothing
+      to type into.</span>
+      <span class="ref">stitch §27C · components.md §13 error state · iconography.md octagon-alert</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Kota load → IndustrialHub</span>
+      </div></div>
+      <div class="body">
+        <div class="est" role="alert">
+          <span class="ei"><svg aria-hidden="true" focusable="false" class="ic ic32"><use href="#i-octagon-alert"/></svg></span>
+          <h3>Couldn't load this conversation.</h3>
+          <p>This is usually a connection problem.</p>
+          <button class="btn sec full">Retry</button>
+        </div>
+        <div class="divider">Cached</div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">Dock D1 · Tue 4 Aug · 13:00–14:15, Jaipur DC. Reference <span class="mono">APT-1042</span>.</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">Where a cached transcript exists it renders beneath, read-only, rather than showing
+    nothing — at a gate the confirmed appointment line is the single most valuable thing on the phone. The
+    label reuses the thread list's “Resolved” section rule rather than introducing a second divider form.
+    <b>A driver is never signed out mid-exception</b>: session refresh is silent and in-flight typed text
+    survives it. A login screen appearing while a hold burns down is a product failure, not an edge case.</p>
+  </div>
+
+  <!-- 28A · CANCELLED SHIPMENT -->
+  <div class="cell">
+    <div class="cap"><b>28A · Cancelled shipment — the refusal is the whole answer</b>
+      <span>The shipment was cancelled upstream. No option cards, no scheduling path, no quick replies — and
+      the routing points at <b>dispatch</b>, not operations. It is an upstream matter, and sending the driver
+      to the wrong place wastes a phone call.</span>
+      <span class="ref">stitch §28 · edge-cases.md cancelled shipment · ⚑F3</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
+        <span class="hdr-ttl">Barmer load → SaltWorks</span>
+      </div></div>
+      <div class="body scrolly" role="log">
+        <div class="msg me"><div class="bub">What time am I unloading at Jaipur DC?</div>
+          <div class="meta">07:52 ✓✓</div></div>
+        <div class="msg them">
+          <div class="who"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-hexagon"/></svg>SetuHaul assistant</div>
+          <div class="bub">That shipment and its appointment were cancelled.<br>
+            Please contact dispatch before travelling.</div>
+          <div class="meta">07:52</div>
+        </div>
+      </div>
+      <div class="comp"><div class="fld">Message</div>
+        <button class="send" aria-label="Send"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-send"/></svg></button></div>
+    </div>
+    <p class="note">One header row, 56px, <b>no promise-state chip</b> — there is no promise here, and no
+    escalation reference either, because nothing was escalated. The thread closes after this reply, but the
+    composer stays enabled: the driver can still say something and it will reach a person. No apology for an
+    upstream decision, and no red — a cancellation is a fact, not a system error.</p>
+  </div>
+
+  <!-- 28B · THREAD-LIST CONSEQUENCE -->
+  <div class="cell">
+    <div class="cap"><b>28B · The thread-list consequence</b>
+      <span>The cancelled thread moves under “Resolved” at 60% opacity with no priority marker. Its state-chip
+      slot shows <em>nothing</em> — an absent chip, not a fifth chip variant invented to mean “cancelled”.</span>
+      <span class="ref">stitch §28 second artboard · screens.md §1 Resolved · U81 blank-vs-zero</span></div>
+    <div class="phone std">
+      <div class="hdr"><div class="hdr-row">
+        <span class="hdr-ttl">SetuHaul</span>
+        <button class="hbtn right" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-settings"/></svg></button>
+      </div></div>
+      <div class="body">
+        <div class="tcard" style="--pri:var(--neutral-600)">
+          <div><div class="desc">Neemrana load → RajRetail</div><div class="ord">ORD-260804-017</div></div>
+          <span class="chip pending" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-clock-fade"/></svg>
+            Pending confirmation</span>
+          <div class="op">Decision by 11:57</div>
+          <div class="foot"><span class="prev">The warehouse hasn't confirmed yet…</span><span class="ts">09:32</span></div>
+        </div>
+        <div class="divider">Resolved</div>
+        <div class="tcard resolved">
+          <div><div class="desc">Barmer load → SaltWorks</div><div class="ord">ORD-260805-002</div></div>
+          <div class="op">Cancelled by dispatch</div>
+          <div class="foot"><span class="prev">Please contact dispatch before travelling.</span><span class="ts">07:52</span></div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-messages-square"/></svg>Threads</div>
+        <div><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-user"/></svg>Profile</div>
+      </div>
+    </div>
+    <p class="note">The card is never auto-deleted. The transcript is an append-only operational record, and a
+    thread that vanishes is exactly the “learns nothing and trusts less” failure that makes every terminal
+    state on this surface mutate in place instead of disappearing.</p>
+  </div>
+
+</div>
+
+<p class="foot-note">
+  Forty-three artboards covering all 28 screens in <code>stitch-prompts.md</code>, one design system. What
+  this board is really testing: can a driver tell these four states apart at a glance, in sunlight, on a
+  cheap phone, while stressed? Colour is one of four channels here — the dashed-versus-solid border, the
+  icon, and the spelled-out label each survive independently when colour doesn't. Screens trace to
+  <code>01-driver-chat/</code>; tokens to <code>00-foundations/</code>.
+</p>
+
+<p class="foot-note">
+  <b>Deviation note — the core arc's eight screens.</b> The eight screens under <em>The core arc</em> predate
+  the value sweep and are preserved as drawn, so the board keeps a record of what changed rather than
+  quietly restyling it. Everything from <em>Thread list — the remaining states</em> onward carries the
+  <code>.std</code> class, which is the swept scale: <b>nothing below 14px</b>
+  (<code>typography.md</code> §Accessibility — the 11px product-wide floor does not apply on this surface,
+  and chip labels are <code>text-label</code> 12px by explicit rule), <code>comfortable</code> density from
+  <code>spacing-and-layout.md</code> (24px content padding, 12px stack gap, 16px card padding, 44px minimum
+  tap target, 40px button height), and Lucide icons as inline SVG at a uniform 2px stroke. The core arc
+  still renders body copy at 12.5–13px and timestamps at 10.5px, uses typographic glyphs
+  (<code>‹ ➤ ⬡ ⚙ ⚡</code>) where the swept screens use Lucide symbols, and pads content at 12px rather than
+  24px — <code>stitch-prompts.md</code> ⚑F1 and ⚑F12 record both as real contradictions between the
+  foundations and the surface files, still awaiting a decision. <b>Take the <code>.std</code> screens as the
+  buildable reference wherever the two disagree.</b> One core-arc defect was corrected rather than
+  preserved: the human-takeover header rendered its escalation reference inside a promise-state chip, which
+  <code>components.md §2</code> forbids outright (⚑F3), so it now matches every other escalated screen.
+  <b>Avatars</b> use <code>--avatar-bg</code> (<code>neutral-600</code>) on the swept screens rather than the
+  core arc's violet: <code>color.md</code>'s hue budget is rationed to promise state and danger, and the
+  assistant's attribution glyph is not either.
+</p>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('tt'), lbl=document.getElementById('ttl');
+  function current(){
+    var s=root.getAttribute('data-theme');
+    if(s) return s;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  }
+  function sync(){ lbl.textContent = current()==='dark' ? 'Light' : 'Dark'; }
+  btn.addEventListener('click',function(){
+    root.setAttribute('data-theme', current()==='dark'?'light':'dark'); sync();
+  });
+  sync();
+
+  // one shared 1 Hz tick for every countdown — components.md §3
+  var cds=[].slice.call(document.querySelectorAll('[data-cd]')).map(function(el){
+    return {el:el, t:parseInt(el.getAttribute('data-cd'),10), max:parseInt(el.getAttribute('data-cd'),10)};
+  });
+  function fmt(s){ return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+  function paint(){
+    cds.forEach(function(c){
+      c.el.textContent=fmt(c.t);
+      c.el.classList.toggle('urgent', c.t <= c.max*0.2);
+    });
+  }
+  paint();
+  setInterval(function(){
+    cds.forEach(function(c){ c.t = c.t>0 ? c.t-1 : c.max; });
+    paint();
+  },1000);
+})();
+</script>
