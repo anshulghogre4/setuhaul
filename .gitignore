@@ -42,3 +42,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Claude Code local settings (per-developer tool permissions, not shared)
+.claude/settings.local.json
