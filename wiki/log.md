@@ -851,3 +851,31 @@ last_updated: 2026-08-22
 - Applied `20260823080000_m8_sweeper_finishing.sql` live (fresh backup first): `PENDING_EXPIRED_UNACTIONED` added to `escalation_queue`, sweeper service account seeded. `expiry.py` now writes the escalate-leg row in the same transaction as expiry+audit. `JOB_ACTOR_USER_ID`/`JOB_AUTH_TOKEN` set in `.env.local`, token never printed.
 - 183 passed, 0 failed. Closed #20 with evidence. **M1 fully closed.**
 - Updated [[handoff]] and root CHANGELOG. Nothing committed.
+
+## 2026-08-23 08:40 IST | implementation | M2 started: E2.1 dispatch console removed
+
+- Deleted dispatch_service.py, dispatch.py router, its test file, and the whole frontend/src/features/dispatch/ directory. Found and fixed 4 dependency points beyond the obvious files via grep-first discipline (eta_service.py docstring, App.tsx, OpsHomes.tsx, ProtectedLayout.tsx).
+- Verified: 175 passed 0 failed (drop matches deleted test count exactly), compileall clean, frontend build clean, lint shows only a pre-existing unrelated warning.
+- Sequencing set for the rest of M2: E2.3 (identity model) before E2.2 (repository tier) before E2.4 (router dedup).
+- Updated [[handoff]] and root CHANGELOG. Nothing committed.
+
+## 2026-08-23 08:46 IST | implementation | E2.3 (#23): identity model — user_scopes, CARRIER role, carrier_id
+
+- Migration applied live (backed up first): CARRIER role, user_scopes table, backfilled from existing facility_id/driver_id (counts verified exact). RoleName.CARRIER, ExecutionContext.carrier_id/is_carrier/can_read_carrier() added — the last never falls back to has_global_read_scope, avoiding silent scope widening.
+- Rewiring the four scope-check call sites deliberately left to E2.2, per that epic's own stated job.
+- Verified every pre-existing role's resolution is byte-identical (queried live), per the rollback note's requirement. 177 passed, 0 failed.
+- Updated [[handoff]] and root CHANGELOG. Nothing committed.
+
+## 2026-08-23 09:46 IST | implementation | E2.2 (#22): repository tier + scope consolidation; real gap filed as #48
+
+- Skipped import-lint CI per owner decision (F4's own evidence calls it premature). Built app/repositories/scope.py (single NFR-020 implementation), migrated 6 duplicated scope-check sites (2 more than briefed), thinned 3 routers (17->0 raw SQL calls). 37 new characterization tests prove byte-identical behavior across every role.
+- Found and filed #48: resolve_escalation never checks facility_id, a real pre-existing NFR-019 gap — not silently fixed, tracked separately.
+- Independently re-verified: 214 passed 0 failed, route registration confirmed via app.openapi() (31 routes, 11 ops), message-convergence confirmed inert via grep.
+- Updated [[handoff]] and root CHANGELOG. Nothing committed.
+
+## 2026-08-23 09:54 IST | implementation | E2.4 closed — M2 fully closed
+
+- driver.py/driver_reads.py dedup already resolved by E2.2. Escalation vocabulary migration applied live (backup first): NO_SLOT->NO_FEASIBLE_SLOT (2 rows renamed), 4 dead values dropped, 6 canonical reasons added, ACKNOWLEDGED added to status lifecycle. Caught and fixed a real ordering bug in the migration itself (transaction rolled back cleanly, no damage). Code + tests + one frontend branch updated to match.
+- 214 passed 0 failed, frontend build clean, zero remaining old-value references.
+- **M2 fully closed** (E2.1-E2.4). New gap from E2.2's audit tracked separately as #48.
+- Updated [[handoff]] and root CHANGELOG. Nothing committed.

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.core.settings import get_settings
+from app.repositories.scope import assert_shipment_visible
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import evaluate_candidate_slot, find_feasible_slots
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
@@ -187,18 +188,16 @@ def _assert_shipment_scope(
     The global tier then demands `is_admin` — write authority — rather than mere global visibility,
     so TRANSPORT_MANAGER / REGIONAL_OPERATIONS_HEAD (global *read-only* personas) can still see a
     cross-facility appointment but cannot cancel or reschedule it. Read callers pass the default.
+
+    E2.2 (issue #22): the rule itself now lives once in `repositories.scope`; this stays only as
+    the adapter that unpacks a shipment row for the many call sites in this module.
     """
-    if ctx.is_driver:
-        if shipment["driver_id"] != ctx.driver_id:
-            raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-        return
-    if ctx.is_operator:
-        if shipment["destination_facility_id"] != ctx.facility_id:
-            raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-        return
-    if ctx.is_admin if require_write else ctx.has_global_read_scope:
-        return
-    raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
+    assert_shipment_visible(
+        ctx,
+        shipment_driver_id=shipment["driver_id"],
+        shipment_facility_id=shipment["destination_facility_id"],
+        require_write=require_write,
+    )
 
 
 def _assert_ops_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:

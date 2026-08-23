@@ -98,3 +98,55 @@ def test_admin_retains_write_authority_and_global_read():
     assert ctx.is_admin
     assert ctx.has_global_read_scope
     assert not ctx.is_operator
+
+
+def test_carrier_reads_only_its_own_fleet():
+    """E2.3 (issue #23): a carrier's read reach never falls back to has_global_read_scope."""
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR301",
+        email="carrier@fleetco.example",
+        full_name="Fleet Carrier",
+        role_id="ROL009",
+        role_name=RoleName.CARRIER,
+        carrier_id="CAR001",
+    )
+    assert ctx.is_carrier
+    assert ctx.can_read_carrier("CAR001")
+    assert not ctx.can_read_carrier("CAR002")
+    assert not ctx.can_read_carrier(None)
+    # A carrier persona must never be treated as facility-scoped or globally read-capable --
+    # it is a third, independent scoping dimension (facility / carrier / driver), not a variant
+    # of either existing one.
+    assert not ctx.is_operator
+    assert not ctx.has_global_read_scope
+    assert not ctx.can_read_facility("FAC-JAI-01")
+
+
+def test_non_carrier_roles_never_pass_can_read_carrier():
+    """A cross-carrier-id refusal must be unconditional for every non-CARRIER role, including
+    global-read roles -- can_read_carrier must not accidentally inherit has_global_read_scope."""
+    admin_ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR999",
+        email="admin@setuhaul.com",
+        full_name="Admin",
+        role_id="ROL008",
+        role_name=RoleName.ADMIN,
+    )
+    assert not admin_ctx.can_read_carrier("CAR001")
+
+    carrier_ctx_no_scope = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR302",
+        email="carrier2@fleetco.example",
+        full_name="Unscoped Carrier User",
+        role_id="ROL009",
+        role_name=RoleName.CARRIER,
+        # carrier_id intentionally omitted -- e.g. a CARRIER user whose user_scopes row is
+        # missing or not yet provisioned.
+    )
+    assert not carrier_ctx_no_scope.can_read_carrier("CAR001")

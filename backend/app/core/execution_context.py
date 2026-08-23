@@ -12,6 +12,10 @@ class RoleName(StrEnum):
     TRANSPORT_MANAGER = "TRANSPORT_MANAGER"
     REGIONAL_OPERATIONS_HEAD = "REGIONAL_OPERATIONS_HEAD"
     ADMIN = "ADMIN"
+    # E2.3 (issue #23, M15): read-only fleet visibility, scoped to the caller's own carrier_id.
+    # Added alongside the existing facility-scoped roles, not replacing anything -- the S7.5.6
+    # carrier portal tool catalog (M3) has nowhere to attach without this.
+    CARRIER = "CARRIER"
 
 
 class ExecutionContext(BaseModel):
@@ -28,12 +32,21 @@ class ExecutionContext(BaseModel):
     role_name: RoleName
     driver_id: str | None = None
     facility_id: str | None = None
+    # E2.3 (issue #23, M15): the carrier scope, read from user_scopes (scope_type='CARRIER'),
+    # not from a column on users -- user_scopes is the identity model's source of truth for this,
+    # the same way driver_id/facility_id are columns on users only because they predate it.
+    carrier_id: str | None = None
     is_active: bool = True
     permissions: list[str] = Field(default_factory=list)
 
     @property
     def is_driver(self) -> bool:
         return self.role_name == RoleName.DRIVER
+
+    @property
+    def is_carrier(self) -> bool:
+        """Read-only fleet persona (E2.3, M15) -- own carrier_id only, never global."""
+        return self.role_name == RoleName.CARRIER
 
     @property
     def is_operator(self) -> bool:
@@ -81,3 +94,20 @@ class ExecutionContext(BaseModel):
         if facility_id is None:
             return False
         return self.facility_id == facility_id
+
+    def can_read_carrier(self, carrier_id: str | None) -> bool:
+        """A carrier persona reads only its own fleet -- never global, unlike facility scope.
+
+        Deliberately does not fall back to `has_global_read_scope`: SOLUTION_DESIGN.md line 1290
+        requires a cross-carrier id to be refused server-side, not merely hidden, and a carrier
+        user is never one of the roles `has_global_read_scope` names. `has_global_read_scope`
+        stays facility-only on purpose -- widening it to also mean "any carrier" would let an
+        ADMIN/ops persona's read reach silently expand to carrier data the moment this method
+        existed, which is exactly the "silent scope widening" issue #23's rollback note warns
+        against.
+        """
+        if not self.is_carrier:
+            return False
+        if carrier_id is None:
+            return False
+        return self.carrier_id == carrier_id

@@ -135,22 +135,6 @@ export function ProtectedLayout({ portal, title, children }: Props) {
           >
             Dock Command
           </Link>
-          <Link
-            to="/dispatch"
-            style={{
-              padding: '8px 18px',
-              borderRadius: '8px 8px 0 0',
-              background: location.pathname === '/dispatch' ? 'var(--panel-high)' : 'transparent',
-              color: location.pathname === '/dispatch' ? 'var(--accent)' : 'var(--muted)',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              textDecoration: 'none',
-              borderBottom: location.pathname === '/dispatch' ? '2px solid var(--accent)' : '2px solid transparent',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Dispatch Console
-          </Link>
         </nav>
       ) : null}
       <main>

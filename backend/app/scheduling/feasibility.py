@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.repositories.scope import assert_shipment_visible
 from app.scheduling.constraints import load_scheduling_constraints
 
 ACTIVE_APPOINTMENT_STATUSES = frozenset({"PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS"})
@@ -570,18 +571,14 @@ def evaluate_candidate_slot(
 
 
 def _assert_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
-    # find_feasible_slots only reads and ranks; the global tier is read scope, not write authority.
-    if ctx.is_driver:
-        if shipment["driver_id"] != ctx.driver_id:
-            raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-        return
-    if ctx.is_operator:
-        if shipment["destination_facility_id"] != ctx.facility_id:
-            raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-        return
-    if ctx.has_global_read_scope:
-        return
-    raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
+    # find_feasible_slots only reads and ranks, so this uses the read tier (require_write=False,
+    # the default): the global personas' visibility applies, their write authority does not.
+    # E2.2 (issue #22): rule owned by repositories.scope; this is the row-unpacking adapter.
+    assert_shipment_visible(
+        ctx,
+        shipment_driver_id=shipment["driver_id"],
+        shipment_facility_id=shipment["destination_facility_id"],
+    )
 
 
 async def find_feasible_slots(

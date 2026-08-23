@@ -55,7 +55,7 @@ function extractEscalationReason(item: EscalationItem): string {
       ? `${first.failure_code || 'SLOT_REJECTED'}: ${first.message || 'No dock available'}`
       : String(first)
   }
-  if (item.escalation_type === 'NO_SLOT') {
+  if (item.escalation_type === 'NO_FEASIBLE_SLOT') {
     return 'No same-day dock slot available matching shipment requirements and driver ETA.'
   }
   if (item.escalation_type === 'DRIVER_BREAKDOWN') {
@@ -569,13 +569,6 @@ function OpsBody({
               >
                 Cancel
               </button>
-              <a
-                href="/dispatch"
-                className="secondary-btn"
-                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-              >
-                📦 Assign New Load
-              </a>
               <button
                 type="button"
                 style={{

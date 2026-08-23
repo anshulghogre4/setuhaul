@@ -45,6 +45,10 @@ ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
     RoleName.ADMIN: list(_GLOBAL_OPS_PERMS),
     RoleName.TRANSPORT_MANAGER: list(_GLOBAL_OPS_PERMS),
     RoleName.REGIONAL_OPERATIONS_HEAD: list(_GLOBAL_OPS_PERMS),
+    # RoleName.CARRIER deliberately absent (defaults to [] via ROLE_PERMISSIONS.get below):
+    # E2.3 only creates the identity model (role, carrier_id, user_scopes). The SS7.5.6 carrier
+    # tool catalog and its permission strings are M3/E3.3's job -- filling this in now would
+    # invent a permission list the tool layer does not exist to check against yet.
 }
 
 OPS_PORTAL_ROLES = (
@@ -143,6 +147,26 @@ async def get_execution_context(
     except ValueError as exc:
         raise AppError("Unknown role.", code="ROLE_UNKNOWN", status_code=403) from exc
 
+    # E2.3 (issue #23, M15): carrier_id has no column on users -- user_scopes is its source of
+    # truth. Only looked up for the CARRIER role; every other role's identity resolution is
+    # unchanged from before this migration, which is what issue #23's rollback note requires
+    # ("every existing role's scope resolves identically before and after").
+    carrier_id: str | None = None
+    if role_name == RoleName.CARRIER:
+        scope_row = (
+            await session.execute(
+                text(
+                    """
+                    SELECT scope_value FROM public.user_scopes
+                    WHERE user_id = :user_id AND scope_type = 'CARRIER'
+                    LIMIT 1
+                    """
+                ),
+                {"user_id": str(row["user_id"])},
+            )
+        ).mappings().first()
+        carrier_id = str(scope_row["scope_value"]) if scope_row else None
+
     return ExecutionContext(
         request_id=get_request_id(request),
         auth_subject=subject,
@@ -153,6 +177,7 @@ async def get_execution_context(
         role_name=role_name,
         driver_id=row["driver_id"],
         facility_id=row["facility_id"],
+        carrier_id=carrier_id,
         is_active=True,
         permissions=ROLE_PERMISSIONS.get(role_name, []),
     )

@@ -426,7 +426,7 @@ async def test_live_d16_cast_smoke_options_request_cancel_noslot_reject_stale():
                 vikas,
                 EscalateExceptionCommand(
                     shipment_id="SHP-D16-NOSLOT",
-                    escalation_type="NO_SLOT",
+                    escalation_type="NO_FEASIBLE_SLOT",
                     payload=noslot.escalation,
                     policy_version=noslot.policy_version,
                     recommendation_id=noslot.recommendation_id,

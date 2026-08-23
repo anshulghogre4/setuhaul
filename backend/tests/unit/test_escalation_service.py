@@ -8,7 +8,7 @@ def test_escalation_command_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         EscalateExceptionCommand(  # type: ignore[call-arg]
             shipment_id="SHP1017",
-            escalation_type="NO_SLOT",
+            escalation_type="NO_FEASIBLE_SLOT",
             untrusted_override=True,  # type: ignore[call-arg]
         )
 
@@ -16,13 +16,13 @@ def test_escalation_command_rejects_unknown_fields():
 def test_escalation_command_accepts_versioned_recommendation_payload():
     command = EscalateExceptionCommand(
         shipment_id="SHP1017",
-        escalation_type="NO_SLOT",
+        escalation_type="NO_FEASIBLE_SLOT",
         policy_version="sprint3_constraints_v1",
         recommendation_id="REC-123",
         payload={"blocking_reasons": [{"failure_code": "NO_CANDIDATE_SLOTS"}]},
     )
 
-    assert command.escalation_type == "NO_SLOT"
+    assert command.escalation_type == "NO_FEASIBLE_SLOT"
     assert command.recommendation_id == "REC-123"
 
 
@@ -47,7 +47,7 @@ async def test_resolve_escalation_updates_db_status():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
-        "escalation_type": "NO_SLOT",
+        "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
     }
 
@@ -82,7 +82,7 @@ async def test_resolve_escalation_persists_resolution_note():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
-        "escalation_type": "NO_SLOT",
+        "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
         "resolution_note": "Slot manually confirmed at dock",
     }
@@ -123,7 +123,7 @@ async def test_escalate_exception_requires_confirmation_before_write():
         ctx,
         EscalateExceptionCommand(
             shipment_id="SHP-D16-RAVI",
-            escalation_type="NO_SLOT",
+            escalation_type="NO_FEASIBLE_SLOT",
             payload={"reason": "driver asked for help"},
             confirmed=False,
         ),
@@ -249,7 +249,7 @@ async def test_resolve_escalation_still_allows_admin():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
-        "escalation_type": "NO_SLOT",
+        "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
     }
     mock_session = AsyncMock()

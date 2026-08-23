@@ -10,10 +10,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
 from app.services.ids import new_id
 
+# E2.4 (issue #24): SOLUTION_DESIGN.md section 7.4's nine canonical reasons. The live enum
+# previously diverged almost completely (only WAREHOUSE_REPLY_CONFLICT overlapped) -- NO_SLOT was
+# renamed to NO_FEASIBLE_SLOT (a real rename: two live rows migrated, see
+# supabase/migrations/20260823100000_e24_escalation_vocabulary.sql), and CONTRADICTORY /
+# APPROVAL_REQUIRED / REGULATED / EMERGENCY were dropped -- confirmed zero live usage and no
+# other code reference before removing them.
+#
+# REQUIRES_TIME_RESOLUTION / REQUIRES_DOCK_REASSIGNMENT (D12's backfill worklist) are
+# deliberately absent here: they are system-generated during the E1.1 backfill, never a value a
+# caller of escalate_exception should be manually specifying.
 ESCALATION_TYPES = frozenset(
-    {"NO_SLOT", "CONTRADICTORY", "APPROVAL_REQUIRED", "REGULATED", "EMERGENCY", "WAREHOUSE_REPLY_CONFLICT"}
+    {
+        "NO_FEASIBLE_SLOT",
+        "PENDING_EXPIRED_UNACTIONED",
+        "AMBIGUOUS_SHIPMENT",
+        "LOW_CONFIDENCE_ETA",
+        "WAREHOUSE_REPLY_CONFLICT",
+        "NOTIFICATION_FAILED",
+        "NOTIFICATION_UNROUTABLE",
+        "SAFETY_OR_REGULATED",
+        "CAPACITY_EVENT_CASCADE",
+    }
 )
 
 
@@ -35,12 +56,6 @@ class EscalateExceptionCommand(BaseModel):
 
 def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _assert_ops_scope(ctx: ExecutionContext, facility_id: str) -> None:
-    if ctx.is_admin or (ctx.is_operator and ctx.facility_id == facility_id):
-        return
-    raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
 
 
 async def _shipment_scope(session: AsyncSession, shipment_id: str) -> dict[str, Any]:
@@ -87,7 +102,7 @@ async def escalate_exception(
         if shipment["driver_id"] != ctx.driver_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
     else:
-        _assert_ops_scope(ctx, str(shipment["facility_id"]))
+        assert_facility_write_scope(ctx, str(shipment["facility_id"]))
 
     now = _as_of()
     day = now[:10]
@@ -155,7 +170,7 @@ async def persist_noslot_escalation(
         ctx,
         EscalateExceptionCommand(
             shipment_id=shipment_id,
-            escalation_type="NO_SLOT",
+            escalation_type="NO_FEASIBLE_SLOT",
             payload=payload,
             policy_version=payload.get("policy_version"),
             recommendation_id=payload.get("recommendation_id"),
@@ -167,10 +182,10 @@ async def get_exception_queue(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None = None
 ) -> dict[str, Any]:
     # Read path: the global tier is read scope, not write authority (see ExecutionContext.is_admin).
-    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
-    if not ctx.has_global_read_scope:
-        if not scope or (facility_id and facility_id != scope):
-            raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+    # A global-read persona that names no facility gets scope=None here, which deliberately means
+    # "no facility filter" -- this query's WHERE clause is built conditionally, unlike the three
+    # below, which bind :facility_id unconditionally and therefore pass require_facility=True.
+    scope = resolve_facility_scope(ctx, facility_id)
     params: dict[str, Any] = {}
     facility_filter = ""
     if scope:
@@ -278,9 +293,7 @@ async def resolve_escalation(
 async def get_pending_confirmations(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
-    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
-        raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
     rows = (
         await session.execute(
             text(
@@ -304,9 +317,7 @@ async def get_pending_confirmations(
 
 
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
-    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
-        raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
     rows = (
         await session.execute(
             text(
@@ -327,9 +338,7 @@ async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility
 
 
 async def get_queue_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
-    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
-        raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
     pending = (
         await session.execute(
             text(

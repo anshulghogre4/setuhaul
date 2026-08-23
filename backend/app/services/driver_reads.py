@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.repositories.drivers import load_driver_operational_snapshot
+from app.repositories.facilities import driver_serves_facility, get_facility, list_facility_contacts
+from app.repositories.scope import assert_facility_visible, assert_shipment_visible
 
 
 def _as_of() -> str:
@@ -25,103 +28,54 @@ async def get_driver_operational_context(
     if not ctx.is_driver or not ctx.driver_id:
         raise AppError("Driver mapping missing.", code="DRIVER_UNMAPPED", status_code=403)
 
-    driver = (
-        await session.execute(
-            text(
-                """
-                SELECT driver_id, driver_name, phone, licence_number, home_base_city, driver_status
-                FROM public.drivers WHERE driver_id = :driver_id
-                """
-            ),
-            {"driver_id": ctx.driver_id},
-        )
-    ).mappings().first()
-    if driver is None:
-        raise AppError("Driver not found.", code="NOT_FOUND", status_code=404)
-
-    shipments = (
-        await session.execute(
-            text(
-                """
-                SELECT shipment_id, order_reference, destination_facility_id, current_status,
-                       latest_eta_ts, original_eta_ts, priority_code, updated_at
-                FROM public.shipments
-                WHERE driver_id = :driver_id
-                ORDER BY updated_at DESC NULLS LAST
-                LIMIT 20
-                """
-            ),
-            {"driver_id": ctx.driver_id},
-        )
-    ).mappings().all()
-
-    active = [s for s in shipments if s["current_status"] not in ("COMPLETED", "CANCELLED")]
-    primary = active[0] if active else (shipments[0] if shipments else None)
-
-    appointment = None
-    facility = None
-    latest_eta = None
-    if primary is not None:
-        appointment = (
-            await session.execute(
-                text(
-                    """
-                    SELECT a.appointment_id, a.shipment_id, a.slot_id, a.appointment_status,
-                           a.is_current, a.booked_at, a.confirmed_at, a.updated_at,
-                           s.dock_id, s.facility_id, s.slot_start_ts, s.slot_end_ts, s.slot_status
-                    FROM public.appointments a
-                    LEFT JOIN public.appointment_slots s ON s.slot_id = a.slot_id
-                    WHERE a.shipment_id = :shipment_id
-                    ORDER BY a.is_current DESC, a.updated_at DESC NULLS LAST
-                    LIMIT 1
-                    """
-                ),
-                {"shipment_id": primary["shipment_id"]},
-            )
-        ).mappings().first()
-        facility = (
-            await session.execute(
-                text(
-                    """
-                    SELECT facility_id, facility_name, city, state, timezone, open_time, close_time
-                    FROM public.facilities WHERE facility_id = :facility_id
-                    """
-                ),
-                {"facility_id": primary["destination_facility_id"]},
-            )
-        ).mappings().first()
-        latest_eta = (
-            await session.execute(
-                text(
-                    """
-                    SELECT eta_update_id, shipment_id, source_type, declared_eta_ts,
-                           delay_reason_code, confidence_code, created_at
-                    FROM public.eta_updates
-                    WHERE shipment_id = :shipment_id
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                    """
-                ),
-                {"shipment_id": primary["shipment_id"]},
-            )
-        ).mappings().first()
-
+    snapshot = await load_driver_operational_snapshot(session, ctx.driver_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
-        "driver": dict(driver),
-        "profile": {
-            "user_id": ctx.user_id,
-            "full_name": ctx.full_name,
-            "email": ctx.email,
-            "facility_id": ctx.facility_id,
-        },
-        "shipments": [dict(s) for s in shipments],
-        "active_shipments": [dict(s) for s in active],
-        "primary_shipment": dict(primary) if primary else None,
-        "current_appointment": _serialize_row(appointment),
-        "latest_eta": _serialize_row(latest_eta),
-        "facility": _serialize_row(facility),
+        "driver": snapshot["driver"],
+        "profile": _driver_profile(ctx),
+        "shipments": snapshot["shipments"],
+        "active_shipments": snapshot["active_shipments"],
+        "primary_shipment": snapshot["primary_shipment"],
+        "current_appointment": snapshot["current_appointment"],
+        "latest_eta": snapshot["latest_eta"],
+        "facility": snapshot["facility"],
+        "freshness": "live",
+    }
+
+
+def _driver_profile(ctx: ExecutionContext) -> dict[str, Any]:
+    """Identity fields echoed back to the driver surface, all from the trusted context."""
+    return {
+        "user_id": ctx.user_id,
+        "full_name": ctx.full_name,
+        "email": ctx.email,
+        "facility_id": ctx.facility_id,
+    }
+
+
+async def get_driver_context_payload(session: AsyncSession, ctx: ExecutionContext) -> dict[str, Any]:
+    """The `/api/v1/driver/context` REST payload.
+
+    Deliberately *not* `get_driver_operational_context`: that one additionally exposes
+    `active_shipments`, which the assistant tools consume but the REST response has never
+    returned. Keeping them as two compositions over one shared query set (E2.2) removes the
+    duplicated SQL without changing either caller's response shape.
+    """
+    if not ctx.driver_id:
+        raise AppError("Driver mapping missing.", code="DRIVER_UNMAPPED", status_code=403)
+
+    snapshot = await load_driver_operational_snapshot(session, ctx.driver_id)
+    return {
+        "as_of": _as_of(),
+        "source": "postgresql",
+        "driver": snapshot["driver"],
+        "profile": _driver_profile(ctx),
+        "shipments": snapshot["shipments"],
+        "primary_shipment": snapshot["primary_shipment"],
+        "current_appointment": snapshot["current_appointment"],
+        "latest_eta": snapshot["latest_eta"],
+        "facility": snapshot["facility"],
         "freshness": "live",
     }
 
@@ -148,12 +102,11 @@ async def get_shipment_details(
     ).mappings().first()
     if row is None:
         raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
-    if ctx.is_driver and row["driver_id"] != ctx.driver_id:
-        raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-    if ctx.is_operator and row["destination_facility_id"] != ctx.facility_id:
-        raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-    if not (ctx.is_driver or ctx.is_operator or ctx.has_global_read_scope):
-        raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
+    assert_shipment_visible(
+        ctx,
+        shipment_driver_id=row["driver_id"],
+        shipment_facility_id=row["destination_facility_id"],
+    )
     return {"as_of": _as_of(), "source": "postgresql", "shipment": dict(row), "freshness": "live"}
 
 
@@ -244,56 +197,21 @@ async def get_current_appointment(
 async def get_facility_details(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str
 ) -> dict[str, Any]:
-    if ctx.is_driver:
-        owned = (
-            await session.execute(
-                text(
-                    """
-                    SELECT 1 FROM public.shipments
-                    WHERE driver_id = :driver_id AND destination_facility_id = :facility_id
-                    LIMIT 1
-                    """
-                ),
-                {"driver_id": ctx.driver_id, "facility_id": facility_id},
-            )
-        ).first()
-        if owned is None:
-            raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
-    elif ctx.is_operator and ctx.facility_id != facility_id:
-        raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
-    elif not (ctx.is_driver or ctx.is_operator or ctx.has_global_read_scope):
-        raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
+    # The driver branch is the only one that needs a database answer, so the probe runs first and
+    # only for drivers -- keeping the extra round-trip off the operator/global paths, exactly as
+    # the previous inline version did.
+    serves = await driver_serves_facility(session, ctx.driver_id, facility_id) if ctx.is_driver else False
+    assert_facility_visible(ctx, facility_id, driver_serves_facility=serves)
 
-    facility = (
-        await session.execute(
-            text(
-                """
-                SELECT facility_id, facility_name, city, state, timezone, open_time, close_time,
-                       checkin_grace_min, default_unload_min, active_flag
-                FROM public.facilities WHERE facility_id = :facility_id
-                """
-            ),
-            {"facility_id": facility_id},
-        )
-    ).mappings().first()
+    facility = await get_facility(session, facility_id)
     if facility is None:
         raise AppError("Facility not found.", code="NOT_FOUND", status_code=404)
-    contacts = (
-        await session.execute(
-            text(
-                """
-                SELECT contact_id, facility_id, contact_name, contact_role, phone, email
-                FROM public.facility_contacts WHERE facility_id = :facility_id
-                """
-            ),
-            {"facility_id": facility_id},
-        )
-    ).mappings().all()
+    contacts = await list_facility_contacts(session, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
-        "facility": dict(facility),
-        "contacts": [dict(c) for c in contacts],
+        "facility": facility,
+        "contacts": contacts,
         "freshness": "live",
     }
 

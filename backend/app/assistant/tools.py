@@ -138,7 +138,7 @@ class RescheduleAppointmentArgs(BaseModel):
 class EscalateExceptionArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
     shipment_id: str
-    escalation_type: str = Field(default="NO_SLOT")
+    escalation_type: str = Field(default="NO_FEASIBLE_SLOT")
     reason: str | None = None
     confirmed: bool = Field(
         default=False,
@@ -473,7 +473,7 @@ def build_driver_tools(
                     payload["persisted_escalation"] = {
                         "escalation_id": persisted.get("escalation_id"),
                         "escalation_status": persisted.get("escalation_status"),
-                        "dedupe_key": f"{shipment_id}:{persisted.get('created_at', '')[:10]}:NO_SLOT",
+                        "dedupe_key": f"{shipment_id}:{persisted.get('created_at', '')[:10]}:NO_FEASIBLE_SLOT",
                     }
                 except Exception as escalate_exc:  # noqa: BLE001 — feasibility still returns
                     payload["persisted_escalation_error"] = {

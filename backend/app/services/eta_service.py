@@ -43,10 +43,11 @@ class EtaUpdateCommand(BaseModel):
 def parse_eta_ts(value: str, *, field_name: str = "declared_eta_ts") -> datetime:
     """Parse a caller-supplied ISO-8601 ETA into an offset-aware datetime, or raise 422.
 
-    Public and field-name-parameterised because `dispatch_service.create_dispatch_shipment` needs
-    the identical parse for its own `original_eta_ts` now that E1.1 made
-    `shipments.original_eta_ts`/`latest_eta_ts` `timestamptz` -- a second copy of ISO parsing in
-    another module would be one more place for the tz-required rule to drift out of sync.
+    Public and field-name-parameterised so any caller needing this parse (any module writing
+    into `shipments.original_eta_ts`/`latest_eta_ts`, `timestamptz` since E1.1) reuses it rather
+    than keeping a second copy of the tz-required rule that could drift out of sync. (Was also
+    used by `dispatch_service.create_dispatch_shipment` before that module was deleted, E2.1 --
+    SOLUTION_DESIGN.md section 0.9 WON'T list.)
     """
     raw = value.strip()
     if raw.endswith("Z"):
