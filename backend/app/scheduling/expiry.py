@@ -245,11 +245,13 @@ async def _expire_one_pending(
         await session.execute(
             text(
                 """
-                SELECT appointment_id, shipment_id, slot_id, appointment_status, is_current
-                FROM public.appointments
-                WHERE appointment_id = :appointment_id
-                  AND appointment_status = 'PENDING_CONFIRMATION'
-                  AND is_current = 1
+                SELECT a.appointment_id, a.shipment_id, a.slot_id, a.appointment_status,
+                       a.is_current, sl.facility_id
+                FROM public.appointments a
+                JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                WHERE a.appointment_id = :appointment_id
+                  AND a.appointment_status = 'PENDING_CONFIRMATION'
+                  AND a.is_current = 1
                 FOR UPDATE SKIP LOCKED
                 """
             ),
@@ -322,6 +324,44 @@ async def _expire_one_pending(
                 }
             ),
             "created_at": now_iso,
+        },
+    )
+    # M8's "escalates" leg (SOLUTION_DESIGN.md section 7.4, PENDING_EXPIRED_UNACTIONED): a
+    # pending appointment nobody actioned before its TTL is an escalation-worthy event in its
+    # own right, not just a status change nobody sees. Same table, same reasoning as E1.2's
+    # REQUIRES_TIME_RESOLUTION/REQUIRES_DOCK_REASSIGNMENT reuse -- one durable, planner-facing
+    # queue, not a second mechanism to keep in sync. `ON CONFLICT (dedupe_key) DO NOTHING`
+    # makes this safe under the same EventBridge-retry story as the rest of this function: a
+    # replayed sweep finds the appointment no longer PENDING_CONFIRMATION and never reaches
+    # this insert at all, so the dedupe key is a second, belt-and-braces guard, not the only one.
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.escalation_queue (
+              escalation_id, shipment_id, facility_id, escalation_type, escalation_status,
+              severity_code, payload_json, dedupe_key, created_at, updated_at
+            ) VALUES (
+              :escalation_id, :shipment_id, :facility_id, 'PENDING_EXPIRED_UNACTIONED', 'OPEN',
+              'HIGH', :payload_json, :dedupe_key, :created_at, :updated_at
+            )
+            ON CONFLICT (dedupe_key) DO NOTHING
+            """
+        ),
+        {
+            "escalation_id": allocation.new_id("ESC"),
+            "shipment_id": locked["shipment_id"],
+            "facility_id": locked["facility_id"],
+            "payload_json": json.dumps(
+                {
+                    "appointment_id": appointment_id,
+                    "slot_id": locked["slot_id"],
+                    "reason": EXPIRY_REASON,
+                    "occupancy_released": released,
+                }
+            ),
+            "dedupe_key": f"PENDING-EXPIRED-{appointment_id}",
+            "created_at": now_iso,
+            "updated_at": now_iso,
         },
     )
     return released

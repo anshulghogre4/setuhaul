@@ -844,3 +844,10 @@ last_updated: 2026-08-22
 - E1.5: injectable clock, sweeper with `FOR UPDATE SKIP LOCKED`, internal endpoint. PENDING_CONFIRMATION expiry proven live against 3 real stale appointments. Left open: EventBridge transport fork, escalate/notify legs, D2 HELD expiry (structurally blocked), sweeper actor seeding.
 - E1.5's own live verification caught a severe live break: E1.1's timestamptz conversion broke every `.isoformat()`-string write to the six converted tables, silently, since 06:26 IST today. Confirmed independently twice. Opened #47 (`risk:high`), fixed same session (`allocation.py`/`eta_service.py`/`dispatch_service.py`), found two extra bugs (unparsed ETA strings, now validated), added a mutation-tested regression guard, closed with evidence.
 - Independently re-verified: 182 passed 0 failed, a separate live read-only bind probe against production, full diff read. Updated [[handoff]] and root CHANGELOG. Nothing committed.
+
+## 2026-08-23 08:07 IST | implementation | M1 fully closed: #20 finished, HELD handed off to #25
+
+- Investigated D2 HELD before touching it: `dock_occupancy` has no state/expires_at, no HELD step exists in the driver flow at all. Confirmed not a correctness gap (E1.3's exclusion constraint already prevents double-booking). Owner-approved hand-off to #25 (M3), which already flagged `confirm_held_slot` missing.
+- Applied `20260823080000_m8_sweeper_finishing.sql` live (fresh backup first): `PENDING_EXPIRED_UNACTIONED` added to `escalation_queue`, sweeper service account seeded. `expiry.py` now writes the escalate-leg row in the same transaction as expiry+audit. `JOB_ACTOR_USER_ID`/`JOB_AUTH_TOKEN` set in `.env.local`, token never printed.
+- 183 passed, 0 failed. Closed #20 with evidence. **M1 fully closed.**
+- Updated [[handoff]] and root CHANGELOG. Nothing committed.

@@ -167,7 +167,13 @@ async def test_sweep_locks_with_the_status_predicate_and_skip_locked(monkeypatch
         "booked_at": SNAPSHOT - timedelta(minutes=40),
         "facility_id": "FAC-JAI-01",
     }
-    session = _sweeper_session([candidate], lock_returns=[{"appointment_id": "APT-STALE"}])
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-STALE", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
     await expiry.sweep_expired_appointments(
@@ -194,7 +200,13 @@ async def test_sweep_releases_the_dock_claim_in_the_same_transaction(monkeypatch
         "booked_at": SNAPSHOT - timedelta(minutes=40),
         "facility_id": "FAC-JAI-01",
     }
-    session = _sweeper_session([candidate], lock_returns=[{"appointment_id": "APT-STALE"}])
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-STALE", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
     order: list[str] = []
     session.commit.side_effect = lambda: order.append("commit")
 
@@ -225,7 +237,13 @@ async def test_sweep_records_a_claimless_expiry_honestly(monkeypatch):
         "booked_at": SNAPSHOT - timedelta(minutes=40),
         "facility_id": "FAC-JAI-01",
     }
-    session = _sweeper_session([candidate], lock_returns=[{"appointment_id": "APT-NOCLAIM"}])
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-NOCLAIM", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=False))
 
     result = await expiry.sweep_expired_appointments(
@@ -246,7 +264,13 @@ async def test_sweep_writes_an_audit_row_naming_the_sweeper_as_the_actor(monkeyp
         "booked_at": SNAPSHOT - timedelta(minutes=40),
         "facility_id": "FAC-JAI-01",
     }
-    session = _sweeper_session([candidate], lock_returns=[{"appointment_id": "APT-STALE"}])
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-STALE", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
     await expiry.sweep_expired_appointments(
@@ -285,7 +309,13 @@ async def test_sweep_binds_a_datetime_to_timestamptz_and_a_string_to_text(monkey
         "booked_at": SNAPSHOT - timedelta(minutes=40),
         "facility_id": "FAC-JAI-01",
     }
-    session = _sweeper_session([candidate], lock_returns=[{"appointment_id": "APT-STALE"}])
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-STALE", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
     await expiry.sweep_expired_appointments(
@@ -314,6 +344,51 @@ async def test_sweep_binds_a_datetime_to_timestamptz_and_a_string_to_text(monkey
         if "ORDER BY a.booked_at ASC" in str(call.args[0])
     )
     assert isinstance(scan["deadline"], datetime)
+
+
+@pytest.mark.asyncio
+async def test_sweep_escalates_via_the_shared_worklist_not_a_second_mechanism(monkeypatch):
+    """M8's escalate leg (SOLUTION_DESIGN.md section 7.4, PENDING_EXPIRED_UNACTIONED) reuses
+    escalation_queue -- same table E1.2's REQUIRES_TIME_RESOLUTION/REQUIRES_DOCK_REASSIGNMENT
+    already reuses -- not a new mechanism."""
+    candidate = {
+        "appointment_id": "APT-STALE",
+        "shipment_id": "SHP1002",
+        "slot_id": "SLT001",
+        "booked_at": SNAPSHOT - timedelta(minutes=40),
+        "facility_id": "FAC-JAI-01",
+    }
+    session = _sweeper_session(
+        [candidate],
+        lock_returns=[
+            {"appointment_id": "APT-STALE", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"}
+        ],
+    )
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
+
+    await expiry.sweep_expired_appointments(
+        session, actor_user_id="USR-SYS", clock=FrozenClock(SNAPSHOT)
+    )
+
+    esc = next(
+        call.args[1]
+        for call in session.execute.await_args_list
+        if "INSERT INTO public.escalation_queue" in str(call.args[0])
+    )
+    assert esc["shipment_id"] == "SHP1002"
+    assert esc["facility_id"] == "FAC-JAI-01"
+    assert esc["dedupe_key"] == "PENDING-EXPIRED-APT-STALE"
+    payload = json.loads(esc["payload_json"])
+    assert payload["appointment_id"] == "APT-STALE"
+    assert payload["occupancy_released"] is True
+    esc_sql = next(
+        str(call.args[0])
+        for call in session.execute.await_args_list
+        if "INSERT INTO public.escalation_queue" in str(call.args[0])
+    )
+    assert "PENDING_EXPIRED_UNACTIONED" in esc_sql
+    assert "ON CONFLICT (dedupe_key) DO NOTHING" in esc_sql
 
 
 @pytest.mark.asyncio
@@ -361,7 +436,13 @@ async def test_sweep_commits_per_appointment_so_one_bad_row_cannot_undo_the_othe
     ]
     session = _sweeper_session(
         candidates,
-        lock_returns=[{"appointment_id": "APT-0"}, None, {"appointment_id": "APT-2"}],
+        lock_returns=[
+            {"appointment_id": "APT-0", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"},
+            None,
+            {"appointment_id": "APT-2", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"},
+        ],
     )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
@@ -387,7 +468,13 @@ async def test_sweep_flags_a_full_batch_so_a_backlog_is_visible(monkeypatch):
         for i in range(2)
     ]
     session = _sweeper_session(
-        candidates, lock_returns=[{"appointment_id": "APT-0"}, {"appointment_id": "APT-1"}]
+        candidates,
+        lock_returns=[
+            {"appointment_id": "APT-0", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"},
+            {"appointment_id": "APT-1", "shipment_id": "SHP1002", "slot_id": "SLT001",
+             "facility_id": "FAC-JAI-01"},
+        ],
     )
     monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
