@@ -65,6 +65,22 @@ class Settings(BaseSettings):
     # fails startup loudly instead of emitting a log line that scrolls past.
     allow_region_mismatch: bool = False
 
+    # M8 expiry sweeper (SOLUTION_DESIGN.md D2/D9, TECH_STACK.md section 5). The scheduled caller is
+    # a machine with no Supabase identity, so the internal jobs endpoint authenticates on a shared
+    # secret instead of a JWT -- an EventBridge connection's API-key authorization is exactly this
+    # shape (AWS "Connections for API targets": basic, OAuth, API Key). Blank by default and the
+    # endpoint refuses to run while it is blank, so an unconfigured deploy cannot expose an
+    # unauthenticated capacity-releasing route.
+    job_auth_token: str = ""
+    # public.users.user_id the sweeper attributes its audit_logs rows to. audit_logs.user_id is
+    # NOT NULL REFERENCES users(user_id), so an automated transition still needs a real row; the
+    # honest answer is a dedicated service account, not a human planner's id borrowed for the
+    # occasion. Blank means refuse, for the same reason as job_auth_token.
+    job_actor_user_id: str = ""
+    pending_confirmation_ttl_minutes: int = 15  # D9
+    held_slot_ttl_seconds: int = 90  # D2
+    expiry_sweep_batch_limit: int = 50
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Starlette regex; allows Vercel preview/prod *.vercel.app without knowing the URL yet.
     cors_origin_regex: str = r"https://.*\.vercel\.app"

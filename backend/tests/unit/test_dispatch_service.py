@@ -218,3 +218,91 @@ async def test_create_dispatch_shipment_duplicate_id_is_409_not_500():
     assert exc_info.value.code == "SHIPMENT_ALREADY_EXISTS"
     assert exc_info.value.status_code == 409
     assert session.rollback.called
+
+
+# --- Issue #47: E1.1 timestamptz bind types ----------------------------------------------
+# `shipments.planned_departure_ts / original_eta_ts / latest_eta_ts / created_at / updated_at`
+# all became `timestamptz` in E1.1, and asyncpg encodes a timestamptz parameter with its datetime
+# codec only -- a `str` raises DataError, which 500'd every dispatch create in production. The
+# mock session here never encodes a parameter, so the bind type has to be asserted explicitly.
+
+
+def _dispatch_lookup_row() -> MagicMock:
+    row = MagicMock()
+    row.mappings.return_value.first.return_value = {
+        "driver_id": "DRV001",
+        "carrier_id": "CAR001",
+        "driver_name": "Ravi Kumar",
+        "home_base_city": "Gurugram",
+        "vehicle_id": "VEH001",
+        "facility_id": "FAC-GGN-01",
+        "facility_name": "Gurugram DC",
+    }
+    return row
+
+
+@pytest.mark.asyncio
+async def test_create_dispatch_shipment_binds_datetimes_into_shipments_insert():
+    from datetime import datetime
+
+    session = AsyncMock()
+    session.execute.return_value = _dispatch_lookup_row()
+
+    with patch(
+        "app.services.dispatch_service.lookup_idempotency", new_callable=AsyncMock, return_value=None
+    ), patch(
+        "app.services.dispatch_service.store_idempotency", new_callable=AsyncMock
+    ), patch(
+        "app.services.dispatch_service.find_feasible_slots", new_callable=AsyncMock
+    ) as slots:
+        slots.return_value = MagicMock(options=[])
+        await create_dispatch_shipment(
+            session, _ctx(RoleName.OPERATIONS_EXECUTIVE), _cmd(), idempotency_key="IDEM-DISP-BIND"
+        )
+
+    insert_params = next(
+        call.args[1]
+        for call in session.execute.await_args_list
+        if len(call.args) > 1
+        and isinstance(call.args[1], dict)
+        and "INSERT INTO public.shipments" in str(call.args[0])
+    )
+    # `now` covers planned_departure_ts, created_at and updated_at; `original_eta_ts` covers both
+    # original_eta_ts and latest_eta_ts. Both must be datetimes, not ISO strings.
+    assert isinstance(insert_params["now"], datetime)
+    assert isinstance(insert_params["original_eta_ts"], datetime)
+    assert insert_params["original_eta_ts"].tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_create_dispatch_shipment_rejects_eta_without_timezone():
+    """`original_eta_ts` used to be written straight into a text column, so a tz-less or
+    unparseable value was accepted silently. It now has to become an offset-aware datetime before
+    it can be bound at all, so the refusal is explicit and happens before any write."""
+    session = AsyncMock()
+    session.execute.return_value = _dispatch_lookup_row()
+
+    with patch(
+        "app.services.dispatch_service.lookup_idempotency", new_callable=AsyncMock, return_value=None
+    ):
+        with pytest.raises(AppError) as exc_info:
+            await create_dispatch_shipment(
+                session,
+                _ctx(RoleName.OPERATIONS_EXECUTIVE),
+                CreateDispatchShipmentCommand(
+                    driver_id="DRV001",
+                    destination_facility_id="FAC-GGN-01",
+                    original_eta_ts="2026-08-16T09:00:00",  # no offset
+                ),
+                idempotency_key="IDEM-DISP-NAIVE",
+            )
+
+    assert exc_info.value.code == "INVALID_ETA"
+    assert exc_info.value.status_code == 422
+    assert "original_eta_ts" in str(exc_info.value)
+    # Refused before the INSERT: no shipment row was attempted.
+    assert not any(
+        "INSERT INTO public.shipments" in str(call.args[0])
+        for call in session.execute.await_args_list
+        if call.args
+    )

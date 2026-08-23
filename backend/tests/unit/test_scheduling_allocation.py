@@ -1,5 +1,7 @@
+import re
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -23,6 +25,10 @@ from app.scheduling.allocation import (
 class _DbOrig:
     def __init__(self, constraint_name: str | None) -> None:
         self.constraint_name = constraint_name
+
+
+class _MessageOnlyOrig(Exception):
+    """A DBAPI error that exposes only a message -- what the asyncpg dialect really raises."""
 
 
 def _driver_ctx() -> ExecutionContext:
@@ -96,12 +102,34 @@ def test_appointment_request_status_code_does_not_confirm_closed_states():
 
 @pytest.mark.parametrize(
     "constraint_name",
-    ["ux_active_appointment_per_slot", "ux_current_active_appointment_per_shipment"],
+    [
+        "ux_active_appointment_per_slot",
+        "ux_current_active_appointment_per_shipment",
+        "dock_occupancy_dock_id_window_excl",
+    ],
 )
 def test_allocation_unique_constraint_name_detects_postgres_allocation_guards(constraint_name):
     exc = IntegrityError("insert appointments", {}, _DbOrig(constraint_name))
 
     assert allocation_unique_constraint_name(exc) == constraint_name
+
+
+def test_allocation_unique_constraint_name_reads_exclusion_violation_from_message_only():
+    """The production shape, not a convenience fake.
+
+    SQLAlchemy's asyncpg dialect rebuilds its DBAPI error as `IntegrityError("%s: %s" %
+    (type(error), error))` and copies sqlstate but not constraint_name, so `exc.orig` carries
+    no constraint_name attribute at all and the D1 exclusion violation has to be recognised
+    from Postgres' own message wording.
+    """
+    orig = _MessageOnlyOrig(
+        "<class 'asyncpg.exceptions.ExclusionViolationError'>: conflicting key value "
+        'violates exclusion constraint "dock_occupancy_dock_id_window_excl"'
+    )
+    assert not hasattr(orig, "constraint_name")
+    exc = IntegrityError("INSERT INTO public.dock_occupancy", {}, orig)
+
+    assert allocation_unique_constraint_name(exc) == "dock_occupancy_dock_id_window_excl"
 
 
 def test_allocation_unique_constraint_name_ignores_unrelated_integrity_errors():
@@ -155,6 +183,9 @@ async def test_cancel_appointment_transitions_active_row_and_commits(monkeypatch
     )
     store = AsyncMock()
     monkeypatch.setattr(allocation, "store_idempotency", store)
+    # Covered on its own in test_cancel_appointment_releases_the_dock_claim; stubbed here so
+    # this test keeps asserting the appointment transition itself.
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
 
     result = await cancel_appointment(
         session,
@@ -370,6 +401,7 @@ async def test_reschedule_restores_old_appointment_when_claim_conflicts(monkeypa
             return_value={
                 "appointment_id": "APT-OLD",
                 "appointment_status": "CONFIRMED",
+                "slot_id": "SLT-OLD",
             }
         ),
     )
@@ -387,6 +419,10 @@ async def test_reschedule_restores_old_appointment_when_claim_conflicts(monkeypa
     monkeypatch.setattr(allocation, "request_slot", request_slot_mock)
     store = AsyncMock()
     monkeypatch.setattr(allocation, "store_idempotency", store)
+    # The dock_occupancy release/re-claim pair has its own tests below; stubbed here so this
+    # one stays about restoring the old appointment row.
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
+    monkeypatch.setattr(allocation, "_claim_dock_occupancy", AsyncMock(return_value={}))
 
     from app.scheduling.allocation import reschedule_appointment
 
@@ -401,9 +437,537 @@ async def test_reschedule_restores_old_appointment_when_claim_conflicts(monkeypa
     assert result.code == "SLOT_CONFLICT_REFRESH_REQUIRED"
     request_slot_mock.assert_awaited_once()
     assert request_slot_mock.await_args.kwargs["persist"] is False
-    restore_params = session.execute.await_args_list[1].args[1]
+    # Matched by content, not position: the statement sequence around this restore now also
+    # carries the dock_occupancy release and re-claim, and an index-based assertion silently
+    # starts checking a different statement every time one is added.
+    statements = [
+        (str(call.args[0]), call.args[1] if len(call.args) > 1 else {})
+        for call in session.execute.await_args_list
+    ]
+    restore_params = next(
+        params
+        for sql, params in statements
+        if "UPDATE public.appointments" in sql and params.get("status") == "CONFIRMED"
+    )
     assert restore_params["appointment_id"] == "APT-OLD"
-    assert restore_params["status"] == "CONFIRMED"
     store.assert_awaited_once()
     session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reschedule_releases_then_restores_the_dock_claim(monkeypatch):
+    """A failed reschedule must put the D1 claim back, not leave the old appointment active on
+    an unclaimed dock interval."""
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(
+            return_value={
+                "shipment_id": "SHP1",
+                "driver_id": "DRV001",
+                "destination_facility_id": "FAC-JAI-01",
+            }
+        ),
+    )
+    monkeypatch.setattr(allocation, "_assert_shipment_scope", lambda *_a, **_k: None)
+    monkeypatch.setattr(allocation, "_validate_displayed_recommendation", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "find_feasible_slots",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                options=[SimpleNamespace(slot_id="SLT-NEW")], policy_version="v1"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(
+            return_value={
+                "appointment_id": "APT-OLD",
+                "appointment_status": "CONFIRMED",
+                "slot_id": "SLT-OLD",
+            }
+        ),
+    )
+    release = AsyncMock(return_value=True)
+    claim = AsyncMock(return_value={"dock_id": "DOCK-JAI-D1", "window": "[)"})
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", release)
+    monkeypatch.setattr(allocation, "_claim_dock_occupancy", claim)
+    monkeypatch.setattr(
+        allocation,
+        "request_slot",
+        AsyncMock(
+            return_value=allocation.RequestSlotResult(
+                as_of="t",
+                status="CONFLICTED",
+                code="SLOT_OPTIONS_STALE",
+                shipment_id="SHP1",
+                slot_id="SLT-NEW",
+                policy_version="v1",
+                appointment_writes=0,
+                idempotency_key="k:claim",
+            )
+        ),
+    )
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+
+    from app.scheduling.allocation import reschedule_appointment
+
+    result = await reschedule_appointment(
+        session,
+        _driver_ctx(),
+        shipment_id="SHP1",
+        command=RescheduleAppointmentCommand(appointment_id="APT-OLD", new_slot_id="SLT-NEW"),
+        idempotency_key="k",
+    )
+
+    assert result.code == "SLOT_OPTIONS_STALE"
+    release.assert_awaited_once_with(session, "APT-OLD")
+    claim.assert_awaited_once_with(
+        session, appointment_id="APT-OLD", shipment_id="SHP1", slot_id="SLT-OLD"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reschedule_does_not_invent_a_claim_it_never_released(monkeypatch):
+    """One of E1.1's escalated appointments holds no claim; restoring it must not create one,
+    which would fail the exclusion constraint on an interval nobody owned."""
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(
+            return_value={
+                "shipment_id": "SHP1",
+                "driver_id": "DRV001",
+                "destination_facility_id": "FAC-JAI-01",
+            }
+        ),
+    )
+    monkeypatch.setattr(allocation, "_assert_shipment_scope", lambda *_a, **_k: None)
+    monkeypatch.setattr(allocation, "_validate_displayed_recommendation", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "find_feasible_slots",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                options=[SimpleNamespace(slot_id="SLT-NEW")], policy_version="v1"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(
+            return_value={
+                "appointment_id": "APT-OLD",
+                "appointment_status": "CONFIRMED",
+                "slot_id": "SLT-OLD",
+            }
+        ),
+    )
+    claim = AsyncMock()
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=False))
+    monkeypatch.setattr(allocation, "_claim_dock_occupancy", claim)
+    monkeypatch.setattr(
+        allocation,
+        "request_slot",
+        AsyncMock(
+            return_value=allocation.RequestSlotResult(
+                as_of="t",
+                status="CONFLICTED",
+                code="SLOT_OPTIONS_STALE",
+                shipment_id="SHP1",
+                slot_id="SLT-NEW",
+                policy_version="v1",
+                appointment_writes=0,
+                idempotency_key="k:claim",
+            )
+        ),
+    )
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+
+    from app.scheduling.allocation import reschedule_appointment
+
+    await reschedule_appointment(
+        session,
+        _driver_ctx(),
+        shipment_id="SHP1",
+        command=RescheduleAppointmentCommand(appointment_id="APT-OLD", new_slot_id="SLT-NEW"),
+        idempotency_key="k",
+    )
+
+    claim.assert_not_awaited()
+
+
+D1_MIGRATION = (
+    Path(__file__).resolve().parents[3]
+    / "supabase"
+    / "migrations"
+    / "20260823060000_d1_correctness_bedrock.sql"
+)
+
+
+def _sql_fingerprint(sql: str) -> str:
+    """Whitespace- and alias-insensitive form, so the same expression written across several
+    lines with a different table alias still compares equal."""
+    return re.sub(r"\b(?:r|s|sl)\.", "", re.sub(r"\s+", "", sql))
+
+
+async def _captured_claim_sql() -> tuple[str, dict]:
+    session = AsyncMock()
+    # execute() is awaited, but the Result it resolves to is synchronous -- an AsyncMock child
+    # would hand back a coroutine from .mappings().
+    session.execute.return_value = MagicMock()
+    session.execute.return_value.mappings.return_value.first.return_value = {
+        "dock_id": "DOCK-JAI-D1",
+        "window": "[2026-08-16 13:30+00,2026-08-16 14:10+00)",
+    }
+    claim = await allocation._claim_dock_occupancy(
+        session, appointment_id="APT-NEW", shipment_id="SHP1", slot_id="SLT1"
+    )
+    assert claim == {
+        "dock_id": "DOCK-JAI-D1",
+        "window": "[2026-08-16 13:30+00,2026-08-16 14:10+00)",
+    }
+    call = session.execute.await_args
+    return str(call.args[0]), call.args[1]
+
+
+@pytest.mark.asyncio
+async def test_claim_dock_occupancy_writes_the_exclusion_constrained_row():
+    sql, params = await _captured_claim_sql()
+
+    assert "INSERT INTO public.dock_occupancy" in sql
+    assert 'RETURNING dock_id, "window"' in sql
+    # Idempotent per appointment so the reschedule restore can re-claim blindly, without
+    # weakening the race between two different appointment ids.
+    assert "NOT EXISTS" in sql
+    assert params == {
+        "appointment_id": "APT-NEW",
+        "shipment_id": "SHP1",
+        "slot_id": "SLT1",
+    }
+
+
+@pytest.mark.asyncio
+async def test_claim_window_matches_the_e11_backfill_expression_exactly():
+    """Drift guard. If the booking path and the E1.1 backfill ever compute the window
+    differently, backfilled rows and newly claimed rows stop meaning the same thing by
+    'occupied' -- and nothing else in the system would notice.
+    """
+    sql, _ = await _captured_claim_sql()
+    migration_line = next(
+        line
+        for line in D1_MIGRATION.read_text(encoding="utf-8").splitlines()
+        if "computed_window :=" in line
+    )
+    backfill_expression = migration_line.split(":=", 1)[1].strip().rstrip(";")
+
+    assert "tstzrange(" in backfill_expression
+    assert _sql_fingerprint(backfill_expression) in _sql_fingerprint(sql)
+
+
+@pytest.mark.asyncio
+async def test_release_dock_occupancy_reports_whether_a_claim_existed():
+    session = AsyncMock()
+    session.execute.return_value = MagicMock()
+    session.execute.return_value.first.return_value = (76,)
+
+    assert await allocation._release_dock_occupancy(session, "APT-OLD") is True
+    sql, params = str(session.execute.await_args.args[0]), session.execute.await_args.args[1]
+    assert "DELETE FROM public.dock_occupancy" in sql
+    assert "RETURNING occupancy_id" in sql
+    assert params == {"appointment_id": "APT-OLD"}
+
+    session.execute.return_value.first.return_value = None
+    assert await allocation._release_dock_occupancy(session, "APT-NO-CLAIM") is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_appointment_releases_the_dock_claim(monkeypatch):
+    """Without this the cancelled appointment's interval stays claimed forever and every
+    later booking on it loses the race to a row nobody owns."""
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(
+            return_value={
+                "shipment_id": "SHP1017",
+                "driver_id": "DRV001",
+                "destination_facility_id": "FAC-JAI-01",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(
+            return_value={
+                "appointment_id": "APT020",
+                "shipment_id": "SHP1017",
+                "slot_id": "SLT020",
+                "appointment_status": "CONFIRMED",
+                "is_current": 1,
+            }
+        ),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+    release = AsyncMock(return_value=True)
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", release)
+
+    await cancel_appointment(
+        session,
+        _driver_ctx(),
+        shipment_id="SHP1017",
+        command=CancelAppointmentCommand(
+            appointment_id="APT020", cancellation_reason="Vehicle breakdown"
+        ),
+        idempotency_key="cancel-key",
+    )
+
+    release.assert_awaited_once_with(session, "APT020")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_status", ["REJECTED", "EXPIRED"])
+async def test_ops_pending_transition_releases_the_dock_claim(monkeypatch, target_status):
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(
+            return_value={
+                "shipment_id": "SHP1002",
+                "driver_id": "DRV002",
+                "destination_facility_id": "FAC-JAI-01",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(
+            return_value={
+                "appointment_id": "APT021",
+                "shipment_id": "SHP1002",
+                "slot_id": "SLT021",
+                "appointment_status": "PENDING_CONFIRMATION",
+                "is_current": 1,
+            }
+        ),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+    release = AsyncMock(return_value=True)
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", release)
+
+    await allocation._ops_pending_transition(
+        session,
+        _ops_ctx(),
+        shipment_id="SHP1002",
+        appointment_id="APT021",
+        target_status=target_status,
+        reason="Dock unavailable",
+        action_type=allocation.AUDIT_ACTION_REJECT_APPOINTMENT,
+        idempotency_key="ops-key",
+    )
+
+    release.assert_awaited_once_with(session, "APT021")
+
+
+# --- E1.1 bind-type regression guard ---------------------------------------------------------
+# Why this exists: E1.1 converted six tables' timestamp columns from `text` to `timestamptz`, and
+# asyncpg 0.31.0 encodes a timestamptz parameter with its datetime codec only -- a `str` raises
+# `DataError: invalid input for query argument $1 ... (expected a datetime.date or
+# datetime.datetime instance, got 'str')`. Every write path in this module bound `.isoformat()`
+# strings, so every real appointment transition 500'd in production from the moment the migration
+# landed, and the whole mock-based suite still passed because a MagicMock session never encodes a
+# parameter. These tests close exactly that blind spot.
+#
+# The converted-column set is parsed out of the migration rather than hardcoded, so a later
+# migration that converts another column makes this guard cover it automatically instead of going
+# quietly out of date.
+
+
+def _converted_columns_from_migration() -> dict[str, set[str]]:
+    """{table: {column, ...}} for every `text` -> `timestamptz` conversion E1.1 performed."""
+    sql = D1_MIGRATION.read_text(encoding="utf-8")
+    converted: dict[str, set[str]] = {}
+    for table, body in re.findall(
+        r"ALTER TABLE public\.(\w+)\s+((?:\s*ALTER COLUMN[^;]*?));", sql, re.IGNORECASE
+    ):
+        cols = set(re.findall(r"ALTER COLUMN (\w+) TYPE timestamptz", body, re.IGNORECASE))
+        if cols:
+            converted.setdefault(table, set()).update(cols)
+    return converted
+
+
+def test_migration_parse_finds_the_six_converted_tables():
+    """Guards the guard: if the parse silently matched nothing, the assertions below would pass
+    vacuously and the regression they exist to catch would sail straight through."""
+    converted = _converted_columns_from_migration()
+
+    assert set(converted) == {
+        "appointment_slots",
+        "appointments",
+        "shipments",
+        "dock_status_events",
+        "eta_updates",
+        "facility_checkins",
+    }
+    assert converted["appointments"] == {
+        "booked_at",
+        "confirmed_at",
+        "cancelled_at",
+        "updated_at",
+    }
+
+
+def _assert_timestamp_binds_are_correctly_typed(session) -> int:
+    """Every bind into a converted column must be a datetime; audit_logs.created_at must stay str.
+
+    Returns how many binds were actually checked so a caller can refuse to pass on zero.
+    """
+    from datetime import datetime
+
+    converted = _converted_columns_from_migration()
+    checked = 0
+    for call in session.execute.await_args_list:
+        if len(call.args) < 2 or not isinstance(call.args[1], dict):
+            continue
+        sql, params = str(call.args[0]), call.args[1]
+        for table, columns in converted.items():
+            if f"public.{table}" not in sql:
+                continue
+            for column in columns:
+                # Only when the statement really assigns/inserts that column via a bind of the
+                # same name -- these paths name their parameters after their columns.
+                if column in params and re.search(rf"\b{column}\b", sql):
+                    assert isinstance(params[column], datetime), (
+                        f"{table}.{column} is timestamptz after E1.1 but was bound as "
+                        f"{type(params[column]).__name__}; asyncpg would raise DataError."
+                    )
+                    checked += 1
+        if "public.audit_logs" in sql and "created_at" in params:
+            assert isinstance(params["created_at"], str), (
+                "audit_logs.created_at was deliberately NOT converted by E1.1 and must stay a "
+                "string bind; a datetime raises the mirror-image asyncpg DataError."
+            )
+            checked += 1
+    return checked
+
+
+@pytest.mark.asyncio
+async def test_cancel_appointment_binds_datetimes_not_iso_strings(monkeypatch):
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(return_value={"shipment_id": "SHP1017", "driver_id": "DRV001",
+                                "destination_facility_id": "FAC-JAI-01"}),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(return_value={"appointment_id": "APT020", "shipment_id": "SHP1017",
+                                "slot_id": "SLT020", "appointment_status": "CONFIRMED",
+                                "is_current": 1}),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
+
+    await cancel_appointment(
+        session,
+        _driver_ctx(),
+        shipment_id="SHP1017",
+        command=CancelAppointmentCommand(
+            appointment_id="APT020", cancellation_reason="Vehicle breakdown"
+        ),
+        idempotency_key="cancel-bind-key",
+    )
+
+    # cancelled_at + updated_at (timestamptz) and audit_logs.created_at (text).
+    assert _assert_timestamp_binds_are_correctly_typed(session) == 3
+
+
+@pytest.mark.asyncio
+async def test_confirm_appointment_binds_datetimes_not_iso_strings(monkeypatch):
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(return_value={"shipment_id": "SHP1002", "driver_id": "DRV002",
+                                "destination_facility_id": "FAC-JAI-01"}),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(return_value={"appointment_id": "APT021", "shipment_id": "SHP1002",
+                                "slot_id": "SLT021",
+                                "appointment_status": "PENDING_CONFIRMATION", "is_current": 1}),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+
+    await confirm_appointment(
+        session,
+        _ops_ctx(),
+        shipment_id="SHP1002",
+        command=ConfirmAppointmentCommand(
+            appointment_id="APT021", warehouse_confirmation_ref="WH-JAI-2026-021"
+        ),
+        idempotency_key="confirm-bind-key",
+    )
+
+    # confirmed_at + updated_at (timestamptz) and audit_logs.created_at (text).
+    assert _assert_timestamp_binds_are_correctly_typed(session) == 3
+
+
+@pytest.mark.asyncio
+async def test_ops_pending_transition_binds_datetimes_not_iso_strings(monkeypatch):
+    session = AsyncMock()
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(return_value={"shipment_id": "SHP1002", "driver_id": "DRV002",
+                                "destination_facility_id": "FAC-JAI-01"}),
+    )
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(return_value={"appointment_id": "APT021", "shipment_id": "SHP1002",
+                                "slot_id": "SLT021",
+                                "appointment_status": "PENDING_CONFIRMATION", "is_current": 1}),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
+
+    await allocation._ops_pending_transition(
+        session,
+        _ops_ctx(),
+        shipment_id="SHP1002",
+        appointment_id="APT021",
+        target_status="REJECTED",
+        reason="Dock unavailable",
+        action_type=allocation.AUDIT_ACTION_REJECT_APPOINTMENT,
+        idempotency_key="ops-bind-key",
+    )
+
+    # updated_at (timestamptz) and audit_logs.created_at (text).
+    assert _assert_timestamp_binds_are_correctly_typed(session) == 2
 

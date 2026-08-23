@@ -31,6 +31,19 @@ ALLOCATION_UNIQUE_CONSTRAINTS = frozenset(
         "ux_current_active_appointment_per_shipment",
     }
 )
+# D1's real capacity invariant: EXCLUDE USING gist (dock_id WITH =, "window" WITH &&) on
+# public.dock_occupancy. Verified live 2026-08-23 by reading pg_constraint -- contype 'x',
+# name exactly as below. A partial unique index can only stop two rows claiming the *same*
+# slot id; it cannot see a 75-minute unload booked at 11:00 colliding with a 12:00 booking,
+# because those are different slot rows (SOLUTION_DESIGN.md section 5 Stage 3 / D1).
+DOCK_OCCUPANCY_EXCLUSION_CONSTRAINT = "dock_occupancy_dock_id_window_excl"
+# Every constraint here means the same thing to the caller: somebody else already holds this
+# capacity, so refresh and retry. The two unique indexes stay as a belt-and-braces fast check
+# while appointment_slots is still authoritative; SOLUTION_DESIGN.md section 5 Stage 3 says to
+# keep them during migration and drop them only once dock_occupancy is the sole authority.
+ALLOCATION_CONFLICT_CONSTRAINTS = ALLOCATION_UNIQUE_CONSTRAINTS | {
+    DOCK_OCCUPANCY_EXCLUSION_CONSTRAINT
+}
 
 
 class RequestSlotCommand(BaseModel):
@@ -139,7 +152,22 @@ class AppointmentTransitionResult(BaseModel):
     appointment_writes: int = 1
 
 
+# Bind types are not interchangeable, and getting one wrong is a hard runtime failure rather than a
+# silent coercion. After E1.1's conversion
+# (supabase/migrations/20260823060000_d1_correctness_bedrock.sql:44) every `appointments` timestamp
+# column touched below -- booked_at, confirmed_at, cancelled_at, updated_at -- is `timestamptz`, and
+# asyncpg 0.31.0 encodes a timestamptz parameter with its datetime codec only: handing it a `str`
+# raises `asyncpg.exceptions.DataError: invalid input for query argument $1 ... (expected a
+# datetime.date or datetime.datetime instance, got 'str')`. `audit_logs.created_at` is the opposite
+# case -- still `text`, never converted -- so it takes the ISO string and would raise the mirror-image
+# DataError if given a datetime. Both directions verified live 2026-08-23 with a read-only bind probe.
+# So every transition below derives two names from one instant: `now` for the timestamptz binds,
+# `now_iso` for the text ones. Same pattern as expiry.py:270.
 def _as_of() -> str:
+    """Wall clock as an ISO string, for the `as_of` field of a *response model* only.
+
+    Never bind this into a SQL parameter for one of the converted columns -- see the note above.
+    """
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -211,13 +239,58 @@ def appointment_request_status_code(status: str | None) -> tuple[str, bool]:
     return "APPOINTMENT_STATUS_UNKNOWN", False
 
 
+def _already_actioned_error(
+    appointment: dict[str, Any], *, attempted: str
+) -> AppError:
+    """The loser-facing half of SOLUTION_DESIGN.md section 7.5.1's race resolution.
+
+    section 7.5.1 requires that when `confirm_request` and the D9 expiry sweeper hit the same row,
+    *"the loser gets `ALREADY_ACTIONED` with the winning transition named"* -- section 9.2 #3 calls
+    this the nastiest race in the design precisely because both actors believe they acted. A generic
+    INVALID_APPOINTMENT_TRANSITION told the planner only that the click failed, not that a sweeper
+    had released the interval a moment earlier, which is the difference between "refresh" and a
+    reason.
+
+    Costs no extra query: the winning status and its reason are already on the row the caller's
+    `SELECT ... FOR UPDATE` returned. Under READ COMMITTED that is the *updated* version left behind
+    by whoever committed first (PostgreSQL "Transaction Isolation" 13.2.1 -- SELECT FOR UPDATE locks
+    and returns the updated row), which is exactly why the winner is readable here at all.
+    """
+    winner = str(appointment.get("appointment_status") or "UNKNOWN")
+    reason = appointment.get("cancellation_reason")
+    detail = f" Reason recorded: {reason}" if reason else ""
+    return AppError(
+        f"Cannot {attempted} this appointment: it is already {winner}.{detail}",
+        code="ALREADY_ACTIONED",
+        status_code=409,
+    )
+
+
 def allocation_unique_constraint_name(exc: IntegrityError) -> str | None:
+    """Name the allocation constraint an IntegrityError came from, or None if unrelated.
+
+    Covers both allocation guards and D1's dock_occupancy exclusion constraint: asyncpg raises
+    ExclusionViolationError (SQLSTATE 23P01) for the latter, which subclasses
+    IntegrityConstraintViolationError and is therefore translated to the same
+    sqlalchemy.exc.IntegrityError as a unique violation (verified against the pinned
+    SQLAlchemy 2.0.51 asyncpg dialect, _asyncpg_error_translate). One caller, one mapping --
+    a second error-handling path would be a second thing to keep in sync.
+
+    The string fallback is not belt-and-braces, it is the path that actually fires in
+    production: that same dialect rebuilds its DBAPI error from only a message string
+    ("%s: %s" % (type(error), error)) and copies over sqlstate but *not* constraint_name, so
+    exc.orig has no constraint_name attribute under asyncpg. Postgres puts the constraint name
+    in the primary message for both shapes -- 'duplicate key value violates unique constraint
+    "..."' and 'conflicting key value violates exclusion constraint "..."'
+    (src/backend/executor/execIndexing.c) -- so matching the message is reliable. The attribute
+    check is kept first for drivers that do preserve it.
+    """
     orig = getattr(exc, "orig", None)
     constraint_name = getattr(orig, "constraint_name", None)
-    if constraint_name in ALLOCATION_UNIQUE_CONSTRAINTS:
+    if constraint_name in ALLOCATION_CONFLICT_CONSTRAINTS:
         return str(constraint_name)
     message = str(exc)
-    for name in ALLOCATION_UNIQUE_CONSTRAINTS:
+    for name in ALLOCATION_CONFLICT_CONSTRAINTS:
         if name in message:
             return name
     return None
@@ -424,6 +497,105 @@ async def _current_active_appointment_for_shipment(session: AsyncSession, shipme
     return dict(row) if row else None
 
 
+async def _claim_dock_occupancy(
+    session: AsyncSession,
+    *,
+    appointment_id: str,
+    shipment_id: str,
+    slot_id: str,
+) -> dict[str, Any] | None:
+    """Write the D1 capacity claim for an appointment, inside the caller's transaction.
+
+    This row -- not the SELECT ... FOR UPDATE above it -- is what actually decides a
+    concurrent race: public.dock_occupancy carries
+    EXCLUDE USING gist (dock_id WITH =, "window" WITH &&), so Postgres admits exactly one
+    overlapping claim per dock and the loser gets an IntegrityError to translate
+    (SOLUTION_DESIGN.md section 5 Stage 3). It must therefore be inserted in the same
+    transaction that creates the appointment; committing an appointment without its claim
+    would leave the interval unprotected.
+
+    The window is computed in SQL, not in Python, and deliberately mirrors the E1.1 backfill
+    expression character for character (supabase/migrations/20260823060000_d1_correctness_
+    bedrock.sql:218): dock_id and slot_start_ts from appointment_slots, expected_unload_min
+    from shipments, plus a 15-minute changeover buffer, half-open '[)'. Verified 2026-08-23:
+    this expression reproduces all 613 backfilled windows exactly. If the two ever disagreed,
+    the backfilled rows and newly booked rows would mean different things by "occupied". (The
+    buffer is a flat 15 minutes because that is what the backfill used; making it
+    per-facility is still an open D1 decision, so there is no knob to thread through yet.)
+
+    The NOT EXISTS guard makes the claim idempotent per appointment_id. It does not weaken
+    the race: competing callers always carry different freshly minted appointment ids, so
+    both still reach the exclusion constraint. It exists so the reschedule restore path can
+    re-claim without having to know whether its own release was already rolled back.
+
+    Returns the claimed row, or None when this appointment already holds a claim.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.dock_occupancy (dock_id, appointment_id, "window")
+                SELECT sl.dock_id,
+                       :appointment_id,
+                       tstzrange(
+                           sl.slot_start_ts,
+                           sl.slot_start_ts
+                             + ((s.expected_unload_min + 15) || ' minutes')::interval,
+                           '[)'
+                       )
+                FROM public.appointment_slots sl
+                JOIN public.shipments s ON s.shipment_id = :shipment_id
+                WHERE sl.slot_id = :slot_id
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.dock_occupancy o
+                      WHERE o.appointment_id = :appointment_id
+                  )
+                RETURNING dock_id, "window"
+                """
+            ),
+            {
+                "appointment_id": appointment_id,
+                "shipment_id": shipment_id,
+                "slot_id": slot_id,
+            },
+        )
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+async def _release_dock_occupancy(session: AsyncSession, appointment_id: str) -> bool:
+    """Drop an appointment's D1 capacity claim, inside the caller's transaction.
+
+    Mandatory on every transition out of PENDING_CONFIRMATION/CONFIRMED/IN_PROGRESS. The
+    shipped dock_occupancy table has no `state` column, so unlike the predicated
+    EXCLUDE in SOLUTION_DESIGN.md section 0.8 there is nothing that makes a cancelled
+    claim stop blocking -- deletion is the only release. Skip it and a cancelled or rejected
+    appointment silently blocks its dock interval forever, while find_feasible_slots (which
+    still reads appointments, not dock_occupancy) keeps offering the slot: every retry would
+    then lose the race to a ghost.
+
+    Returns True only if a claim was really deleted. Not every active appointment has one --
+    the E1.1 backfill escalated 42 genuinely overlapping appointments to the D12 worklist
+    instead of claiming for them -- and the reschedule restore path needs to tell the
+    difference, so that a failed reschedule puts back exactly what it took and never invents
+    a claim that would then fail the exclusion constraint on an interval nobody owned.
+    """
+    released = (
+        await session.execute(
+            text(
+                """
+                DELETE FROM public.dock_occupancy
+                WHERE appointment_id = :appointment_id
+                RETURNING occupancy_id
+                """
+            ),
+            {"appointment_id": appointment_id},
+        )
+    ).first()
+    return released is not None
+
+
 async def _conflict_result(
     session: AsyncSession,
     ctx: ExecutionContext,
@@ -594,7 +766,9 @@ async def cancel_appointment(
             status_code=409,
         )
 
-    now = datetime.now(timezone.utc).isoformat()
+    # One instant, two representations -- see the bind-type note above `_as_of`.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     await session.execute(
         text(
             """
@@ -614,6 +788,9 @@ async def cancel_appointment(
             "updated_at": now,
         },
     )
+    # Same transaction as the cancellation: the dock interval must become bookable again the
+    # instant the appointment stops occupying it, or the next request_slot loses to a ghost.
+    await _release_dock_occupancy(session, command.appointment_id)
     await session.execute(
         text(
             """
@@ -643,7 +820,7 @@ async def cancel_appointment(
                 },
                 default=str,
             ),
-            "created_at": now,
+            "created_at": now_iso,
         },
     )
     updated = await _reread_appointment(session, command.appointment_id)
@@ -708,13 +885,13 @@ async def confirm_appointment(
         raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
     old_status = str(appointment["appointment_status"])
     if old_status != "PENDING_CONFIRMATION":
-        raise AppError(
-            f"Cannot confirm appointment from {old_status}.",
-            code="INVALID_APPOINTMENT_TRANSITION",
-            status_code=409,
-        )
+        # The D9 sweeper (or another planner) got here first. section 7.5.1 requires this to be
+        # distinguishable by code and to name the winner, not to read as a generic bad transition.
+        raise _already_actioned_error(appointment, attempted="confirm")
 
-    now = datetime.now(timezone.utc).isoformat()
+    # One instant, two representations -- see the bind-type note above `_as_of`.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     await session.execute(
         text(
             """
@@ -759,7 +936,7 @@ async def confirm_appointment(
                 },
                 default=str,
             ),
-            "created_at": now,
+            "created_at": now_iso,
         },
     )
     updated = await _reread_appointment(session, command.appointment_id)
@@ -825,7 +1002,12 @@ async def request_slot(
         else:
             return result
 
-    now = datetime.now(timezone.utc).isoformat()
+    # One instant, two representations -- see the bind-type note above `_as_of`. `now` also becomes
+    # this appointment's `booked_at`, which is the anchor D9's 15-minute TTL is measured from
+    # (expiry.py compares `booked_at < deadline`), so it has to be a real timestamptz value and not a
+    # string the sweeper's comparison would have to cast.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     shipment = (
         await session.execute(
             text(
@@ -996,6 +1178,24 @@ async def request_slot(
                 "updated_at": now,
             },
         )
+        # The capacity claim goes in the same transaction as the appointment, immediately
+        # after it (the FK needs the appointment row to exist first). This insert is the
+        # concurrency decision; everything above it is a fast-path pre-check.
+        claim = await _claim_dock_occupancy(
+            session,
+            appointment_id=appointment_id,
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+        )
+        if claim is None:
+            # Unreachable for a freshly minted appointment_id, and deliberately loud rather
+            # than tolerated: silently committing an appointment whose dock interval was
+            # never claimed is the exact failure mode dock_occupancy exists to prevent.
+            raise AppError(
+                "Could not claim dock capacity for the appointment.",
+                code="DOCK_OCCUPANCY_CLAIM_FAILED",
+                status_code=500,
+            )
         await session.execute(
             text(
                 """
@@ -1021,10 +1221,15 @@ async def request_slot(
                         "policy_version": constraints.policy_version,
                         "displayed_policy_version": command.displayed_policy_version,
                         "note": command.note,
+                        # Which dock interval this booking actually took, straight from the
+                        # claim Postgres accepted -- so the audit trail records the capacity
+                        # decision, not just the slot id the driver tapped.
+                        "dock_id": claim["dock_id"],
+                        "occupancy_window": claim["window"],
                     },
                     default=str,
                 ),
-                "created_at": now,
+                "created_at": now_iso,
             },
         )
         await session.flush()
@@ -1039,10 +1244,15 @@ async def request_slot(
             shipment_id=shipment_id,
             slot_id=slot_id,
             policy_version=constraints.policy_version,
+            # One reason_code for all three constraints on purpose: to the caller they mean the
+            # same thing (someone else holds this capacity, refresh and retry), and the
+            # user-facing code stays SLOT_CONFLICT_REFRESH_REQUIRED either way. The constraint
+            # name in the message is what distinguishes an exact-slot double-book from a true
+            # interval overlap when reading the trail back.
             reason_code="POSTGRES_UNIQUE_ALLOCATION_CONFLICT",
             message=(
-                "PostgreSQL rejected the appointment claim because another active appointment "
-                f"already satisfies {constraint_name}."
+                "PostgreSQL rejected the appointment claim because another active claim "
+                f"already holds this capacity (constraint {constraint_name})."
             ),
             idempotency_key=idempotency_key,
         )
@@ -1122,12 +1332,12 @@ async def _ops_pending_transition(
     if appointment is None:
         raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
     if appointment["appointment_status"] != "PENDING_CONFIRMATION":
-        raise AppError(
-            f"Cannot transition appointment from {appointment['appointment_status']}.",
-            code="INVALID_APPOINTMENT_TRANSITION",
-            status_code=409,
-        )
-    now = _as_of()
+        # Same race as confirm, same answer: the manual ops expire/reject buttons contend with the
+        # D9 sweeper on exactly the same rows, so the loser is told who won here too.
+        raise _already_actioned_error(appointment, attempted=target_status.lower())
+    # One instant, two representations -- see the bind-type note above `_as_of`.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     await session.execute(
         text(
             """
@@ -1139,6 +1349,8 @@ async def _ops_pending_transition(
         ),
         {"status": target_status, "reason": reason, "updated_at": now, "appointment_id": appointment_id},
     )
+    # REJECTED and EXPIRED both stop occupying the dock, so the claim goes with them.
+    await _release_dock_occupancy(session, appointment_id)
     await session.execute(
         text(
             """
@@ -1156,7 +1368,7 @@ async def _ops_pending_transition(
             "entity_id": appointment_id,
             "old_value_json": json.dumps({"status": "PENDING_CONFIRMATION"}),
             "new_value_json": json.dumps({"status": target_status, "reason": reason}),
-            "created_at": now,
+            "created_at": now_iso,
         },
     )
     result = AppointmentTransitionResult(
@@ -1246,7 +1458,11 @@ async def reschedule_appointment(
         raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
     if old["appointment_status"] not in ACTIVE_APPOINTMENT_STATUSES:
         raise AppError("Appointment is not active.", code="INVALID_APPOINTMENT_TRANSITION", status_code=409)
-    now = _as_of()
+    # timestamptz bind -- see the note above `_as_of`. Only the datetime form is needed on this
+    # path: the one text column reschedule writes (`audit_logs.created_at`, further down) is written
+    # after the nested `request_slot` call returns, so it takes its own fresh instant rather than
+    # reusing this one.
+    now = datetime.now(timezone.utc)
     prior_status = str(old["appointment_status"])
     await session.execute(
         text(
@@ -1259,6 +1475,10 @@ async def reschedule_appointment(
         ),
         {"appointment_id": command.appointment_id, "updated_at": now, "reason": "Replaced by reschedule"},
     )
+    # Release before the new claim, not after: moving 11:00 -> 11:30 on the same dock overlaps
+    # itself, so holding the old claim would make the exclusion constraint reject the driver's
+    # own reschedule. Restored below if the new claim does not land.
+    released_old_claim = await _release_dock_occupancy(session, command.appointment_id)
     # Recommendation freshness was already validated above against the true
     # pre-cancel snapshot, and new_slot_id was already confirmed to be a live
     # feasible option. Do not re-pass displayed_recommendation_id/policy_version
@@ -1290,10 +1510,27 @@ async def reschedule_appointment(
             ),
             {
                 "status": prior_status,
-                "updated_at": _as_of(),
+                # timestamptz, not a string -- see the note above `_as_of`. A fresh instant rather
+                # than `now`: this restore happens after the failed nested request_slot, and the
+                # row's updated_at should say when it was put back, not when it was taken.
+                "updated_at": datetime.now(timezone.utc),
                 "appointment_id": command.appointment_id,
             },
         )
+        # The old appointment is active again, so it must hold its claim again -- but only if
+        # it held one before, otherwise this would invent a claim on an interval nobody owned.
+        # Two shapes of failure reach here: request_slot's IntegrityError branch already called
+        # session.rollback(), which undid the release too, and the claim's NOT EXISTS guard
+        # makes this a no-op then; a non-rollback conflict (stale options, slot no longer
+        # feasible) leaves the release standing, and this is what puts the claim back. Without
+        # it a restored appointment would sit on an unprotected dock interval.
+        if released_old_claim:
+            await _claim_dock_occupancy(
+                session,
+                appointment_id=command.appointment_id,
+                shipment_id=shipment_id,
+                slot_id=str(old["slot_id"]),
+            )
         await store_idempotency(
             session, key=idempotency_key, user_id=ctx.user_id, route=route,
             request_hash=req_hash, response=result.model_dump(), status_code=409,
@@ -1321,6 +1558,8 @@ async def reschedule_appointment(
             "action_type": AUDIT_ACTION_RESCHEDULE_APPOINTMENT, "entity_id": result.appointment_id,
             "old_value_json": json.dumps({"appointment_id": command.appointment_id, "status": old["appointment_status"]}),
             "new_value_json": json.dumps({"appointment_id": result.appointment_id, "slot_id": command.new_slot_id}),
+            # Deliberately still a string: audit_logs.created_at was never converted by E1.1 and
+            # would raise the mirror-image DataError if handed a datetime. Verified live 2026-08-23.
             "created_at": _as_of(),
         },
     )

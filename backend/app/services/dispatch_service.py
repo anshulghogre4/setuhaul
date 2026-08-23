@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.feasibility import find_feasible_slots
+from app.services.eta_service import parse_eta_ts
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 
@@ -134,7 +135,19 @@ async def create_dispatch_shipment(
 
     shipment_id = cmd.shipment_id or f"SHP-DISP-{uuid.uuid4().hex[:8].upper()}"
     order_ref = cmd.order_reference or f"ORD-{uuid.uuid4().hex[:6].upper()}"
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # Every timestamp column this INSERT touches -- planned_departure_ts, original_eta_ts,
+    # latest_eta_ts, created_at, updated_at -- became `timestamptz` in E1.1
+    # (supabase/migrations/20260823060000_d1_correctness_bedrock.sql:50), and asyncpg 0.31.0 encodes
+    # a timestamptz parameter with its datetime codec only: a `str` raises `DataError: invalid input
+    # for query argument $1 ... (expected a datetime.date or datetime.datetime instance, got 'str')`.
+    # Verified live 2026-08-23. `now_iso` survives only for the JSON response body below, where a
+    # string is what the caller wants.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    # `original_eta_ts` arrives as a bare request string, so it has to be parsed before it can be
+    # bound. Shared parser (eta_service) rather than a local one, so the "must carry a timezone
+    # offset" rule has a single definition.
+    original_eta = parse_eta_ts(cmd.original_eta_ts, field_name="original_eta_ts")
     temp_control = 1 if cmd.product_category == "PERISHABLE_FOOD" else 0
 
     # 3. Create shipment in public.shipments.
@@ -157,8 +170,8 @@ async def create_dispatch_shipment(
                 :origin_name, :origin_city, :destination_facility_id,
                 :customer_name, :product_category, :load_weight_kg, :pallet_count,
                 :required_dock_type, :temp_control, :priority_code,
-                :now_iso, :original_eta_ts, :original_eta_ts,
-                :expected_unload_min, 'IN_TRANSIT', :now_iso, :now_iso
+                :now, :original_eta_ts, :original_eta_ts,
+                :expected_unload_min, 'IN_TRANSIT', :now, :now
             )
             """
             ),
@@ -178,9 +191,9 @@ async def create_dispatch_shipment(
                 "required_dock_type": cmd.required_dock_type,
                 "temp_control": temp_control,
                 "priority_code": cmd.priority_code,
-                "original_eta_ts": cmd.original_eta_ts,
+                "original_eta_ts": original_eta,
                 "expected_unload_min": cmd.expected_unload_min,
-                "now_iso": now_iso,
+                "now": now,
             },
         )
         await session.commit()

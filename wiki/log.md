@@ -806,3 +806,41 @@ last_updated: 2026-08-22
 
 - Owner confirmed `ap-south-1` as the production region target; the path is the E7.1 migration (#45), not `ALLOW_REGION_MISMATCH=true` as a standing workaround. E7.1 remains blocked on #31/#32 (M4) per its existing dependency note — this decision doesn't change that ordering, just confirms the destination.
 - Updated [[handoff]]. No code/infra changed.
+
+## 2026-08-23 05:39 IST | implementation | M0 issues closed with evidence after plain-message commit
+
+- Owner pushed M0 (`ea35c01 "M0 done"`) directly; confirmed via `gh issue list` that the plain message auto-closed nothing. Commented and closed all 10 M0 issues individually with real evidence (test results, diff citations) rather than bulk-closing or leaving them open.
+- Milestone M0 now 0 open, 10 closed (auto-updates from issue state); milestone object left open pending a live-traffic re-measurement, which needs an actual deploy.
+- Updated [[handoff]] and root CHANGELOG.
+
+## 2026-08-23 06:26 IST | implementation | D1 correctness bedrock (E1.1/E1.2) applied to production
+
+- pg_dump backup verified, migration-drift reconciled, 46 duplicate `appointment_slots` pairs discovered and resolved (1 genuine double-booking expired per D9, 45 consolidated, FK history checked first) before the schema migration could even run.
+- Applied `20260823060000_d1_correctness_bedrock.sql`: btree_gist, six-table timestamptz conversion, 4 views dropped/recreated, `dock_occupancy` with the D1 GiST exclusion constraint, 613-row backfill, `escalation_queue` extended for the D12 worklist (reused, not a new table).
+- Verified directly: extension present, columns converted, exclusion constraint live-tested (a genuinely overlapping insert was rejected by Postgres), §10 zero-overlap invariant clean, view row counts match the known 671 live shipments.
+- Updated [[handoff]] and root CHANGELOG. Nothing committed to git.
+
+## 2026-08-23 06:51 IST | implementation | E1.4 (#19): Stage 0 horizon, facility-rule + driver-window constraints, casts dropped
+
+- `backend/app/scheduling/feasibility.py`, `constraints.json`, `tests/unit/test_scheduling_feasibility.py`. `allocation.py` untouched (parallel E1.3 agent's file).
+- **Issue premise corrected by re-verification**: live `EXPLAIN ANALYZE` shows `ix_slots_facility_time` was *already* being used before this change — E1.1's timestamptz conversion made the `CAST(... AS timestamptz)` a no-op the planner strips. The cast removal is hygiene; the `NFR-003` unblock came from E1.1, not from #19's own edit.
+- `NFR-003` measured and still open for a different reason: ~60 ms end to end vs a 50 ms budget, while the candidate SQL is 0.9–1.5 ms and a bare `SELECT 1` is 10.0 ms — the four sequential round trips are the whole budget. Matches [[testing]]-adjacent finding F16 in `COMPARISON-latency.md`; collapsing the round trips is the fix and is not this issue.
+- Stage 0 added: 48 h rolling horizon from the effective ETA, `LIMIT` 200→500, and a `FEASIBLE` / `NO_SAME_DAY_SLOT` / `NO_FEASIBLE_SLOT` outcome split where **only the last escalates**. Options now carry `slot_local_date` + `is_same_day` because the ISO `+00:00` date is not always the facility-local date.
+- Stage 1 gained two hard constraints (8→10): `facility_rules` evaluation with `effective_from`/`effective_to` effectivity (`LAST_NEW_START_TIME`, `HEAVY_DOCK_REQUIRED_KG`, `REEFER_DOCK_REQUIRED`; absence is permission, never inherited across facilities) and driver `earliest_acceptable_ts`/`latest_acceptable_ts` enforcement. Both fetched inside the two existing statements — `session.execute` count is 4 at `HEAD` and 4 now, verified.
+- Live before/after on the demo cast: only `SHP-D16-RACE-B` changed (5→4 options; the dropped interval would finish 20:55 IST against a stated 20:40 IST leave-by). `NO_SAME_DAY_SLOT` is not reachable on the frozen 16-Aug dataset — a data property the design itself predicts, needing D8/D14 regeneration for a live proof; the SQL half is proven live and the derivation half by unit test.
+- Not done, flagged: grace/no-show window (needs §9.1's injected clock — wall clock would reject the whole frozen dataset), `policy_version` bump (belongs with the `policy_versions` table), `allocation.py` revalidation wiring, `prompts.py` `NO_SAME_DAY_SLOT` template.
+- Verified: backend units **148 passed, 0 failed** (14 new). `ruff` clean of new findings. DB access read-only. Nothing committed. Updated [[handoff]] and root CHANGELOG.
+
+## 2026-08-23 06:55 IST | implementation | E1.3 (#18): dock_occupancy is now the real concurrency mechanism (writeback deferred, recorded now)
+
+- `allocation.py::request_slot` now claims a `dock_occupancy` row in the same transaction as the appointment; the exclusion constraint (not the old partial unique indexes) is the actual enforcement point. Row locks/idempotency/audit kept as-is per the issue's own instruction.
+- Root-caused that `exc.orig.constraint_name` doesn't survive asyncpg's SQLAlchemy 2.0.51 error translation in production — the message-substring fallback is the real path, verified live before writing the mapping.
+- Scope correctly expanded: added release-on-cancel/reject/expire/reschedule, since the shipped table has no `state` column and deletion is the only release — undocumented in the issue but a real gap without it.
+- Three forks flagged for the owner: missing `ON DELETE CASCADE`, keeping (not dropping) the legacy unique indexes until E1.4's revalidation wiring lands, one accepted-risk reschedule race.
+- Re-verified independently on the combined tree after E1.4 also landed: 148 passed, 0 failed. Updated [[handoff]] and root CHANGELOG.
+
+## 2026-08-23 07:38 IST | implementation | E1.5 expiry sweeper (partial, #20 open) + live incident #47 (fixed, closed)
+
+- E1.5: injectable clock, sweeper with `FOR UPDATE SKIP LOCKED`, internal endpoint. PENDING_CONFIRMATION expiry proven live against 3 real stale appointments. Left open: EventBridge transport fork, escalate/notify legs, D2 HELD expiry (structurally blocked), sweeper actor seeding.
+- E1.5's own live verification caught a severe live break: E1.1's timestamptz conversion broke every `.isoformat()`-string write to the six converted tables, silently, since 06:26 IST today. Confirmed independently twice. Opened #47 (`risk:high`), fixed same session (`allocation.py`/`eta_service.py`/`dispatch_service.py`), found two extra bugs (unparsed ETA strings, now validated), added a mutation-tested regression guard, closed with evidence.
+- Independently re-verified: 182 passed 0 failed, a separate live read-only bind probe against production, full diff read. Updated [[handoff]] and root CHANGELOG. Nothing committed.

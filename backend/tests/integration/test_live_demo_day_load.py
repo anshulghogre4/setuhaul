@@ -92,6 +92,20 @@ async def _cleanup_load(session_factory, run_id: str) -> None:
             ),
             {"prefix": prefix, "slot_prefix": slot_prefix},
         )
+        # dock_occupancy.appointment_id has no ON DELETE CASCADE, so the D1 capacity claims
+        # written by request_slot must go before the appointments they reference.
+        await session.execute(
+            text(
+                """
+                DELETE FROM public.dock_occupancy
+                WHERE appointment_id IN (
+                    SELECT appointment_id FROM public.appointments
+                    WHERE shipment_id LIKE :prefix OR slot_id LIKE :slot_prefix
+                )
+                """
+            ),
+            {"prefix": prefix, "slot_prefix": slot_prefix},
+        )
         await session.execute(
             text(
                 "DELETE FROM public.appointments WHERE shipment_id LIKE :prefix OR slot_id LIKE :slot_prefix"
@@ -188,6 +202,20 @@ async def _cleanup_cast_writes(session_factory, run_id: str) -> None:
         await session.execute(
             text("DELETE FROM public.idempotency_requests WHERE idempotency_key LIKE :prefix"),
             {"prefix": f"d16cast-{run_id}-%"},
+        )
+        # Claims first: dock_occupancy.appointment_id has no ON DELETE CASCADE.
+        await session.execute(
+            text(
+                """
+                DELETE FROM public.dock_occupancy
+                WHERE appointment_id IN (
+                    SELECT appointment_id FROM public.appointments
+                    WHERE shipment_id IN ('SHP-D16-RAVI', 'SHP-D16-NOSLOT')
+                      AND booking_source = 'DRIVER_CHAT'
+                      AND appointment_id NOT LIKE 'D16-APT-%'
+                )
+                """
+            )
         )
         await session.execute(
             text(
@@ -309,6 +337,17 @@ async def test_live_d16_cast_smoke_options_request_cancel_noslot_reject_stale():
                     """
                 ),
                 {"now": datetime.now(IST).isoformat()},
+            )
+            # This precondition cancels in raw SQL rather than through cancel_appointment, so
+            # it has to release the D1 claim itself -- otherwise the old appointment's dock
+            # interval stays claimed and the reschedule under test loses to a ghost.
+            await session.execute(
+                text(
+                    """
+                    DELETE FROM public.dock_occupancy
+                    WHERE appointment_id = 'D16-APT-RAVI-OLD'
+                    """
+                )
             )
             await session.commit()
 

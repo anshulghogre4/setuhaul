@@ -5,7 +5,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.v1.routers import chat, dispatch, driver, health_auth, operations, scheduling, shipments
+from app.api.v1.routers import (
+    chat,
+    dispatch,
+    driver,
+    health_auth,
+    internal,
+    operations,
+    scheduling,
+    shipments,
+)
 from app.assistant.observability import shutdown_telemetry
 from app.core.errors import (
     AppError,
@@ -71,6 +80,9 @@ def create_app() -> FastAPI:
     app.include_router(scheduling.router)
     app.include_router(chat.router)
     app.include_router(dispatch.router)
+    # Machine-callable only (shared-secret header, not a Supabase JWT) -- the M8 expiry sweeper's
+    # trigger target. Registered last so it is visibly separate from the six user-facing routers.
+    app.include_router(internal.router)
     return app
 
 

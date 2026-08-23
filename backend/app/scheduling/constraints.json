@@ -101,6 +101,16 @@
       "id": "no_conflicting_active_appointment",
       "failure_code": "ACTIVE_APPOINTMENT_EXISTS",
       "statement": "A shipment with an active appointment can only use reschedule flow, not a second independent booking flow."
+    },
+    {
+      "id": "facility_rule_compliance",
+      "failure_code": "FACILITY_RULE_VIOLATION",
+      "statement": "Active facility_rules rows for the destination facility, evaluated with effective_from/effective_to time-bounded effectivity, must permit the interval. An absent rule is permission, not inheritance from another facility. Mechanically enforced rule types: LAST_NEW_START_TIME, HEAVY_DOCK_REQUIRED_KG, REEFER_DOCK_REQUIRED."
+    },
+    {
+      "id": "driver_acceptable_window",
+      "failure_code": "DRIVER_WINDOW_VIOLATION",
+      "statement": "The interval must start no earlier than the driver's earliest_acceptable_ts and finish no later than latest_acceptable_ts, taken from live driver_exceptions rows and intersected across them."
     }
   ],
   "ranking_policy": {

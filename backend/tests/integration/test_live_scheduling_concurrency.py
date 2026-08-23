@@ -59,6 +59,25 @@ async def _cleanup(session_factory, run_id: str) -> None:
                 "shipment_prefix": shipment_prefix,
             },
         )
+        # dock_occupancy.appointment_id has no ON DELETE CASCADE, so the D1 capacity claims
+        # written by request_slot must go before the appointments they reference.
+        await session.execute(
+            text(
+                """
+                DELETE FROM public.dock_occupancy
+                WHERE appointment_id IN (
+                    SELECT appointment_id
+                    FROM public.appointments
+                    WHERE slot_id = :slot_id
+                       OR shipment_id LIKE :shipment_prefix
+                )
+                """
+            ),
+            {
+                "slot_id": slot_id,
+                "shipment_prefix": shipment_prefix,
+            },
+        )
         await session.execute(
             text(
                 """

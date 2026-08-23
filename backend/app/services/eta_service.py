@@ -40,7 +40,14 @@ class EtaUpdateCommand(BaseModel):
     client_message_id: str | None = None
 
 
-def _parse_eta(value: str) -> datetime:
+def parse_eta_ts(value: str, *, field_name: str = "declared_eta_ts") -> datetime:
+    """Parse a caller-supplied ISO-8601 ETA into an offset-aware datetime, or raise 422.
+
+    Public and field-name-parameterised because `dispatch_service.create_dispatch_shipment` needs
+    the identical parse for its own `original_eta_ts` now that E1.1 made
+    `shipments.original_eta_ts`/`latest_eta_ts` `timestamptz` -- a second copy of ISO parsing in
+    another module would be one more place for the tz-required rule to drift out of sync.
+    """
     raw = value.strip()
     if raw.endswith("Z"):
         raw = raw[:-1] + "+00:00"
@@ -48,17 +55,21 @@ def _parse_eta(value: str) -> datetime:
         dt = datetime.fromisoformat(raw)
     except ValueError as exc:
         raise AppError(
-            "declared_eta_ts must be an ISO-8601 timestamp with timezone.",
+            f"{field_name} must be an ISO-8601 timestamp with timezone.",
             code="INVALID_ETA",
             status_code=422,
         ) from exc
     if dt.tzinfo is None:
         raise AppError(
-            "declared_eta_ts must include a timezone offset.",
+            f"{field_name} must include a timezone offset.",
             code="INVALID_ETA",
             status_code=422,
         )
     return dt
+
+
+# Existing internal callers keep the original name and the original error wording.
+_parse_eta = parse_eta_ts
 
 
 def format_eta_display(eta_ts: str) -> str:
@@ -282,10 +293,23 @@ async def record_eta_update(
             status_code=422,
         )
 
-    _parse_eta(command.declared_eta_ts)
+    # The parsed value is now kept, not discarded: `eta_updates.declared_eta_ts` and
+    # `shipments.latest_eta_ts` became `timestamptz` in E1.1
+    # (supabase/migrations/20260823060000_d1_correctness_bedrock.sql:50,62) and asyncpg 0.31.0
+    # encodes a timestamptz parameter with its datetime codec only -- binding the raw request string
+    # raises `DataError: invalid input for query argument $1 ... (expected a datetime.date or
+    # datetime.datetime instance, got 'str')`. Validation already happened here; this just stops
+    # throwing away the datetime it produced.
+    declared_eta = _parse_eta(command.declared_eta_ts)
     shipment = await _assert_driver_owns_shipment(session, ctx, shipment_id)
 
-    now = datetime.now(timezone.utc).isoformat()
+    # One instant, two representations. `now` for the converted timestamptz columns
+    # (eta_updates.created_at, shipments.updated_at); `now_iso` for the ones E1.1 deliberately left
+    # as `text` -- chat_messages.message_ts, driver_exceptions.reported_at, audit_logs.created_at --
+    # which raise the mirror-image DataError if handed a datetime. Both directions verified live
+    # 2026-08-23 with a read-only bind probe. Same pattern as scheduling/expiry.py:270.
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     eta_id = new_id("ETA")
     exception_id = new_id("EXC")
     audit_id = new_id("AUD")
@@ -343,7 +367,7 @@ async def record_eta_update(
             "eta_update_id": eta_id,
             "shipment_id": shipment_id,
             "driver_id": ctx.driver_id,
-            "declared_eta_ts": command.declared_eta_ts,
+            "declared_eta_ts": declared_eta,
             "confidence_code": command.confidence_code,
             "delay_reason_code": command.delay_reason_code,
             "note": command.note,
@@ -360,7 +384,7 @@ async def record_eta_update(
             """
         ),
         {
-            "latest_eta_ts": command.declared_eta_ts,
+            "latest_eta_ts": declared_eta,
             "updated_at": now,
             "shipment_id": shipment_id,
         },
@@ -385,7 +409,9 @@ async def record_eta_update(
             "thread_id": thread_id,
             "driver_id": ctx.driver_id,
             "message_text": description,
-            "message_ts": now,
+            # chat_messages.message_ts / extracted_eta_ts are still `text` -- not in E1.1's
+            # six-table conversion -- so these two stay string binds on purpose.
+            "message_ts": now_iso,
             "external_message_id": command.client_message_id or idempotency_key,
             "parsed_intent": PARSED_INTENT_UPDATE_ETA,
             "extracted_eta_ts": command.declared_eta_ts,
@@ -451,7 +477,9 @@ async def record_eta_update(
                 "driver_id": ctx.driver_id,
                 "thread_id": thread_id,
                 "exception_type": command.exception_type,
-                "reported_at": now,
+                # driver_exceptions is explicitly outside E1.1's conversion -- reported_at and
+                # declared_eta_ts are both still `text` here, so both stay string binds.
+                "reported_at": now_iso,
                 "reported_delay_min": command.reported_delay_min,
                 "declared_eta_ts": command.declared_eta_ts,
                 "description": description,
@@ -486,7 +514,8 @@ async def record_eta_update(
                     "reported_delay_min": command.reported_delay_min,
                 }
             ),
-            "created_at": now,
+            # audit_logs.created_at is still `text` -- string bind, deliberately.
+            "created_at": now_iso,
         },
     )
 
