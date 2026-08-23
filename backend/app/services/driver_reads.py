@@ -152,7 +152,7 @@ async def get_shipment_details(
         raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
     if ctx.is_operator and row["destination_facility_id"] != ctx.facility_id:
         raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-    if not (ctx.is_driver or ctx.is_operator or ctx.is_admin):
+    if not (ctx.is_driver or ctx.is_operator or ctx.has_global_read_scope):
         raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
     return {"as_of": _as_of(), "source": "postgresql", "shipment": dict(row), "freshness": "live"}
 
@@ -261,7 +261,7 @@ async def get_facility_details(
             raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     elif ctx.is_operator and ctx.facility_id != facility_id:
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
-    elif not (ctx.is_driver or ctx.is_operator or ctx.is_admin):
+    elif not (ctx.is_driver or ctx.is_operator or ctx.has_global_read_scope):
         raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
     facility = (
@@ -538,6 +538,12 @@ async def report_vehicle_breakdown_or_incident(
             "dedupe_key": dedupe,
         },
     )
+
+    # get_db_session (core/deps.py) yields a bare session with no auto-commit, and neither the
+    # tools.py wrapper nor run_assistant.py commits on this function's behalf. Without this call
+    # SQLAlchemy rolls the transaction back when the session closes, so the driver's incident
+    # report is silently discarded while the assistant still replies "PERSISTED". Do not remove.
+    await session.commit()
 
     return {
         "status": "PERSISTED",

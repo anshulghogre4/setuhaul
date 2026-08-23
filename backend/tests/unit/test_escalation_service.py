@@ -199,3 +199,89 @@ async def test_get_pending_confirmations_scopes_to_own_facility():
     assert res["items"][0]["appointment_id"] == "APT-1"
     params = mock_session.execute.call_args.args[1]
     assert params["facility_id"] == "FAC-GGN-01"
+
+
+@pytest.mark.asyncio
+async def test_resolve_escalation_forbids_global_read_only_roles():
+    """Issue #10 acceptance: TRANSPORT_MANAGER / REGIONAL_OPERATIONS_HEAD hold only
+    *_read_global permissions, so they must be refused on this write even though they sit in
+    OPS_PORTAL_ROLES and therefore clear the router-level require_roles gate."""
+    from unittest.mock import AsyncMock
+    from app.services.escalation_service import resolve_escalation
+    from app.core.execution_context import ExecutionContext, RoleName
+    from app.core.errors import AppError
+
+    for role_id, role in (("ROL006", RoleName.TRANSPORT_MANAGER), ("ROL007", RoleName.REGIONAL_OPERATIONS_HEAD)):
+        ctx = ExecutionContext(
+            request_id="r",
+            auth_subject="sub",
+            user_id="USR-RO-TEST",
+            email="readonly@setuhaul.com",
+            full_name="Read Only",
+            role_id=role_id,
+            role_name=role,
+        )
+        mock_session = AsyncMock()
+        with pytest.raises(AppError) as exc_info:
+            await resolve_escalation(mock_session, ctx, "ESC-TEST-99", resolution_note="Should not persist")
+        assert exc_info.value.code == "FORBIDDEN", role
+        assert exc_info.value.status_code == 403, role
+        assert not mock_session.commit.called, f"{role} must not reach a commit"
+
+
+@pytest.mark.asyncio
+async def test_resolve_escalation_still_allows_admin():
+    """Guards against over-correcting issue #10 into locking real admins out."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import resolve_escalation
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR999",
+        email="admin@setuhaul.com",
+        full_name="Admin",
+        role_id="ROL008",
+        role_name=RoleName.ADMIN,
+    )
+    mock_row = MagicMock()
+    mock_row.mappings.return_value.first.return_value = {
+        "escalation_id": "ESC-TEST-99",
+        "shipment_id": "SHP1006",
+        "escalation_type": "NO_SLOT",
+        "escalation_status": "RESOLVED",
+    }
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_row
+
+    res = await resolve_escalation(mock_session, ctx, "ESC-TEST-99", resolution_note="Approved by Admin")
+
+    assert res["escalation_status"] == "RESOLVED"
+    assert mock_session.commit.called
+
+
+@pytest.mark.asyncio
+async def test_global_read_only_role_keeps_cross_facility_read():
+    """The fix must not over-correct: these personas are granted *_read_global, so a
+    cross-facility read must still succeed (only their write paths close)."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import get_pending_confirmations
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR-RO-TEST",
+        email="readonly@setuhaul.com",
+        full_name="Read Only",
+        role_id="ROL006",
+        role_name=RoleName.TRANSPORT_MANAGER,
+    )
+    mock_rows = MagicMock()
+    mock_rows.mappings.return_value.all.return_value = []
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_rows
+
+    res = await get_pending_confirmations(mock_session, ctx, "FAC-JAI-01")
+    assert res["facility_id"] == "FAC-JAI-01"

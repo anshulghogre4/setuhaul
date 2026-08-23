@@ -356,7 +356,7 @@ async def test_reschedule_restores_old_appointment_when_claim_conflicts(monkeypa
             }
         ),
     )
-    monkeypatch.setattr(allocation, "_assert_read_scope", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(allocation, "_assert_shipment_scope", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(allocation, "_validate_displayed_recommendation", AsyncMock(return_value=None))
     monkeypatch.setattr(
         allocation,

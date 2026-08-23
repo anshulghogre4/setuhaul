@@ -55,7 +55,7 @@ async def auth_me(
         "facility_id": ctx.facility_id,
         "permissions": ctx.permissions,
         "scope": {
-            "type": "global_read_only" if ctx.is_admin else ("facility" if ctx.facility_id else "self"),
+            "type": "global_read_only" if ctx.has_global_read_scope else ("facility" if ctx.facility_id else "self"),
             "facility_id": ctx.facility_id,
             "driver_id": ctx.driver_id,
         },

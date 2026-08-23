@@ -51,7 +51,7 @@ async def get_shipment(
     elif ctx.is_operator:
         if row["destination_facility_id"] != ctx.facility_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-    elif not ctx.is_admin:
+    elif not ctx.has_global_read_scope:
         raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
     return ok(
@@ -83,7 +83,7 @@ async def current_appointment(
         raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
     if ctx.is_operator and shipment["destination_facility_id"] != ctx.facility_id:
         raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
-    if not (ctx.is_driver or ctx.is_operator or ctx.is_admin):
+    if not (ctx.is_driver or ctx.is_operator or ctx.has_global_read_scope):
         raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
     row = (

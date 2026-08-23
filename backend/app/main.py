@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.routers import chat, dispatch, driver, health_auth, operations, scheduling, shipments
+from app.assistant.observability import shutdown_telemetry
 from app.core.errors import (
     AppError,
     app_error_handler,
@@ -14,16 +15,22 @@ from app.core.errors import (
     validation_error_handler,
 )
 from app.core.middleware import RequestIdMiddleware
-from app.core.settings import get_settings
+from app.core.settings import assert_region_alignment, get_settings
 from app.db.session import db
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    # Co-location guard before anything opens a connection: if compute is in the wrong
+    # region, every DB/Redis round trip this process makes crosses a continent, so the
+    # process must refuse to start rather than serve correct answers slowly.
+    assert_region_alignment(settings)
     db.configure(settings)
     yield
     await db.dispose()
+    # Telemetry is flushed here, at shutdown, and never per turn (§10 lever 8).
+    shutdown_telemetry()
 
 
 def create_app() -> FastAPI:

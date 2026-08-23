@@ -793,3 +793,16 @@ last_updated: 2026-08-22
 - Surfaced two real blockers, not yet fixed, both needing an owner decision: `docs/New-Solution-New-Design/` + `.claude/` + `.mcp.json` are entirely untracked by git (74+ files, no backup beyond the working directory); `backend/app/assistant/observability.py`/`run_assistant.py` carry real uncommitted work (the 2026-08-20 LangSmith upgrade #32 already cites as "landed") that overlaps M0/E0.2's target file.
 - No commit made — requires explicit owner request per standing instruction.
 - Updated [[handoff]] and root CHANGELOG.
+
+## 2026-08-22 17:49 IST | implementation | M0 implemented (E0.1, E0.2, E0.3) — uncommitted, pending review
+
+- Two parallel specialist-agent dispatches (fullstack-engineer, latency-engineer) implemented all of milestone M0 (#6-#15) on disjoint files; every change independently re-verified against the real diff and a real test run (124 passed, 0 failed) before being trusted.
+- Notable root-cause finding: #10's actual bug was in `ExecutionContext.is_admin` itself (conflated write-authority with global read-reach), not the three routers the issue named — fixed at the property plus every real consumer.
+- Real deploy consequence flagged, not yet acted on: the live ECS/AgentCore stacks will refuse to boot after this deploys unless `ALLOW_REGION_MISMATCH=true` is set first or the region migration (#45/E7.1) happens first.
+- E0.3 honestly records two current limitations (TTFT = whole turn, no LLM network/inference split) rather than fabricating numbers neither installed provider SDK actually exposes.
+- Updated [[handoff]] and root CHANGELOG. No master-plan Living sprint status change (different, already-complete scope). Nothing committed or pushed yet.
+
+## 2026-08-23 05:34 IST | planning | Decision: ap-south-1 confirmed, migration not escape hatch
+
+- Owner confirmed `ap-south-1` as the production region target; the path is the E7.1 migration (#45), not `ALLOW_REGION_MISMATCH=true` as a standing workaround. E7.1 remains blocked on #31/#32 (M4) per its existing dependency note — this decision doesn't change that ordering, just confirms the destination.
+- Updated [[handoff]]. No code/infra changed.

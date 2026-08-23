@@ -9,7 +9,7 @@ from typing import Any
 
 from app.assistant.run_assistant import run_assistant
 from app.core.execution_context import ExecutionContext
-from app.core.settings import get_settings
+from app.core.settings import DESIGNED_AWS_REGION, assert_region_alignment, get_settings
 from app.db.session import db
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,9 @@ def _hydrate_ssm_into_env() -> int:
     except ImportError:
         logger.warning("ssm hydrate skipped: boto3 missing")
         return 0
-    region = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1").strip()
+    region = (
+        os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or DESIGNED_AWS_REGION
+    ).strip()
     client = boto3.client("ssm", region_name=region)
     for name, env_key in _SSM_ENV:
         if (os.environ.get(env_key) or "").strip():
@@ -66,6 +68,10 @@ def _hydrate_ssm_into_env() -> int:
 def _ensure_db() -> None:
     _hydrate_ssm_into_env()
     settings = get_settings()
+    # Same co-location guard as the FastAPI lifespan. AgentCore Runtime never runs that
+    # lifespan, so without this call the runtime is the one entrypoint that could drift
+    # regions unnoticed — which is exactly what happened (live runtime ARN: us-east-1).
+    assert_region_alignment(settings)
     if db.engine is None:
         db.configure(settings)
 

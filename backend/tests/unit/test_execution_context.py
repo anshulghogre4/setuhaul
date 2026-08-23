@@ -61,16 +61,40 @@ def test_facility_ops_roles_are_operator_scoped():
     assert not ctx.can_read_facility("FAC-GGN-01")
 
 
-def test_global_ops_roles_are_admin_scoped():
+def test_global_read_only_roles_have_global_read_but_no_write_authority():
+    """Issue #10: TRANSPORT_MANAGER / REGIONAL_OPERATIONS_HEAD hold only *_read_global
+    permissions, so is_admin (the flag every mutating path checks) must be False for them
+    while global read reach is preserved via has_global_read_scope."""
+    for role_id, role in (
+        ("ROL007", RoleName.REGIONAL_OPERATIONS_HEAD),
+        ("ROL006", RoleName.TRANSPORT_MANAGER),
+    ):
+        ctx = ExecutionContext(
+            request_id="r",
+            auth_subject="sub",
+            user_id="USR106",
+            email="neha.bansal@setuhaul.com",
+            full_name="Neha",
+            role_id=role_id,
+            role_name=role,
+        )
+        assert not ctx.is_admin, f"{role} must not be write-authorised"
+        assert not ctx.is_operator
+        assert ctx.has_global_read_scope, f"{role} must keep global read reach"
+        assert ctx.can_read_facility("FAC-JAI-01")
+
+
+def test_admin_retains_write_authority_and_global_read():
+    """Guards against over-correcting issue #10 into locking real admins out of writes."""
     ctx = ExecutionContext(
         request_id="r",
         auth_subject="sub",
-        user_id="USR106",
-        email="neha.bansal@setuhaul.com",
-        full_name="Neha",
-        role_id="ROL007",
-        role_name=RoleName.REGIONAL_OPERATIONS_HEAD,
+        user_id="USR999",
+        email="admin@setuhaul.com",
+        full_name="Admin",
+        role_id="ROL008",
+        role_name=RoleName.ADMIN,
     )
     assert ctx.is_admin
+    assert ctx.has_global_read_scope
     assert not ctx.is_operator
-    assert ctx.can_read_facility("FAC-JAI-01")

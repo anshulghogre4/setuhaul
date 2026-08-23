@@ -166,8 +166,9 @@ async def persist_noslot_escalation(
 async def get_exception_queue(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None = None
 ) -> dict[str, Any]:
-    scope = facility_id if ctx.is_admin else ctx.facility_id
-    if not ctx.is_admin:
+    # Read path: the global tier is read scope, not write authority (see ExecutionContext.is_admin).
+    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
+    if not ctx.has_global_read_scope:
         if not scope or (facility_id and facility_id != scope):
             raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     params: dict[str, Any] = {}
@@ -277,8 +278,8 @@ async def resolve_escalation(
 async def get_pending_confirmations(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope = facility_id if ctx.is_admin else ctx.facility_id
-    if not scope or (not ctx.is_admin and facility_id and facility_id != scope):
+    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
+    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     rows = (
         await session.execute(
@@ -303,8 +304,8 @@ async def get_pending_confirmations(
 
 
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = facility_id if ctx.is_admin else ctx.facility_id
-    if not scope or (not ctx.is_admin and facility_id and facility_id != scope):
+    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
+    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     rows = (
         await session.execute(
@@ -326,8 +327,8 @@ async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility
 
 
 async def get_queue_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = facility_id if ctx.is_admin else ctx.facility_id
-    if not scope or (not ctx.is_admin and facility_id and facility_id != scope):
+    scope = facility_id if ctx.has_global_read_scope else ctx.facility_id
+    if not scope or (not ctx.has_global_read_scope and facility_id and facility_id != scope):
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     pending = (
         await session.execute(

@@ -305,6 +305,7 @@ def evaluate_candidate_slot(
 
 
 def _assert_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
+    # find_feasible_slots only reads and ranks; the global tier is read scope, not write authority.
     if ctx.is_driver:
         if shipment["driver_id"] != ctx.driver_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
@@ -313,7 +314,7 @@ def _assert_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
         if shipment["destination_facility_id"] != ctx.facility_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
         return
-    if ctx.is_admin:
+    if ctx.has_global_read_scope:
         return
     raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 

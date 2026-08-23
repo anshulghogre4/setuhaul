@@ -47,7 +47,25 @@ class ExecutionContext(BaseModel):
 
     @property
     def is_admin(self) -> bool:
-        """Global read-only ops personas (shared ops portal + admin password bucket)."""
+        """Write-authorised global persona.
+
+        This is the flag every *mutating* path checks (escalation resolve, dispatch create,
+        appointment confirm/reject/expire/cancel/reschedule), so only ADMIN belongs here.
+        TRANSPORT_MANAGER and REGIONAL_OPERATIONS_HEAD were previously included, which handed
+        two personas that hold only `*_read_global` permissions (see ROLE_PERMISSIONS in
+        core/deps.py) cross-facility write access — an M15/NFR-019 violation. Their global
+        *visibility* now comes from `has_global_read_scope` instead; do not re-add them here.
+        """
+        return self.role_name == RoleName.ADMIN
+
+    @property
+    def has_global_read_scope(self) -> bool:
+        """Personas that may read across every facility, whether or not they may write.
+
+        Deliberately distinct from `is_admin`: read reach and write authority were one flag
+        before, so widening visibility for a read-only persona silently widened its writes too.
+        Read paths check this; write paths check `is_admin`.
+        """
         return self.role_name in {
             RoleName.ADMIN,
             RoleName.TRANSPORT_MANAGER,
@@ -58,7 +76,7 @@ class ExecutionContext(BaseModel):
         return self.is_driver and self.driver_id is not None and self.driver_id == driver_id
 
     def can_read_facility(self, facility_id: str | None) -> bool:
-        if self.is_admin:
+        if self.has_global_read_scope:
             return True
         if facility_id is None:
             return False

@@ -120,6 +120,10 @@ async def test_report_vehicle_breakdown_or_incident(mock_session, driver_ctx):
     assert res["incident_type"] == "BREAKDOWN"
     assert res["severity_code"] == "CRITICAL"
     assert res["driver_id"] == "DRV001"
+    # Regression guard for issue #9: the function reported "PERSISTED" while never committing,
+    # so SQLAlchemy discarded the write when get_db_session closed the session. A refactor that
+    # drops the commit again must fail here rather than silently losing driver incident reports.
+    mock_session.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio

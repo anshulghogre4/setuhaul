@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-from typing import Any
+import time
+from typing import Any, Coroutine
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -11,8 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.llm import build_chat_model
 from app.assistant.observability import (
+    TurnLatency,
+    attach_run_metrics,
     chat_turn_trace,
     child_invoke_config,
+    elapsed_ms,
+    model_labels,
     observe_input,
     observe_output,
     tool_outcome_metadata,
@@ -32,9 +38,40 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 6
 
+# asyncio keeps only a weak reference to a running task, so a fire-and-forget task can be
+# garbage-collected mid-flight. Hold a strong reference until it finishes.
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
 
 def _json_safe(value: Any) -> str:
     return json.dumps(value, default=str)
+
+
+def _spawn_background(coro: Coroutine[Any, Any, Any], *, label: str) -> bool:
+    """Run post-answer housekeeping off the driver's critical path.
+
+    Used for work whose result the current response does not depend on. Returns False
+    when there is no running loop (a synchronous caller), in which case the coroutine is
+    closed rather than left un-awaited.
+    """
+
+    def _done(task: asyncio.Task[Any]) -> None:
+        _BACKGROUND_TASKS.discard(task)
+        if task.cancelled():
+            logger.warning("background task cancelled: %s", label)
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("background task failed: %s (%s)", label, type(exc).__name__)
+
+    try:
+        task = asyncio.create_task(coro)
+    except RuntimeError:
+        coro.close()
+        return False
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_done)
+    return True
 
 
 def _configure_langsmith(settings: Settings) -> None:
@@ -72,6 +109,10 @@ async def run_assistant(
     tid = thread_id or f"THR-LIVE-{ctx.driver_id}-{uuid4().hex[:8].upper()}"
     sid = normalize_memory_id(session_id) if session_id else f"SES-LIVE-{uuid4().hex[:12].upper()}"
     memory = ConversationMemory(settings)
+    # Per-turn latency accumulator (TECH_STACK.md section 10's six measurements).
+    # Started before the first Redis round trip so turn_ms and TTFT cover the whole turn
+    # the driver waits on, not just the model calls.
+    turn = TurnLatency()
 
     # One pipelined Upstash round trip for history + summaries + session state,
     # reused below for the duplicate-message check instead of a second fetch.
@@ -94,6 +135,11 @@ async def run_assistant(
             "summary_created": False,
             "duplicate": True,
             "ux_state": "duplicate_ignored",
+            "latency": turn.finish(
+                ux_state="duplicate_ignored",
+                redis_ms=memory.redis_ms,
+                redis_ops=memory.redis_ops,
+            ),
         }
 
     history = full_history[-RAW_CONTEXT_SIZE:]
@@ -110,6 +156,7 @@ async def run_assistant(
 
     base_llm = build_chat_model(settings)
     llm = base_llm.bind_tools(tools)
+    llm_provider, llm_model = model_labels(base_llm)
 
     messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
     if summaries:
@@ -151,10 +198,18 @@ async def run_assistant(
     with chat_turn_trace(
         turn_config,
         inputs={"message": message, "thread_id": tid, "session_id": sid},
-    ):
+    ) as run:
+        llm_started = time.perf_counter()
         try:
             ai: AIMessage = await llm.ainvoke(messages, config=invoke_config)
         except Exception as exc:  # noqa: BLE001
+            turn.record_llm(
+                duration_ms=elapsed_ms(llm_started),
+                provider=llm_provider,
+                model=llm_model,
+                hop=0,
+                ok=False,
+            )
             logger.exception("LLM invoke failed")
             raise AppError(
                 "LLM is unavailable. Use deterministic REST actions or retry later.",
@@ -162,12 +217,20 @@ async def run_assistant(
                 status_code=503,
                 detail=str(exc)[:200],
             ) from exc
+        turn.record_llm(
+            duration_ms=elapsed_ms(llm_started),
+            provider=llm_provider,
+            model=llm_model,
+            hop=0,
+            usage=getattr(ai, "usage_metadata", None),
+        )
 
         for round_idx in range(MAX_TOOL_ROUNDS):
             tool_calls = getattr(ai, "tool_calls", None) or []
             if not tool_calls:
                 break
             messages.append(ai)
+            turn.note_hop()
             should_break_after_round = False
             for call in tool_calls:
                 name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
@@ -183,9 +246,12 @@ async def run_assistant(
                         allowed = set(getattr(schema, "model_fields", {}) or {})
                         if allowed:
                             invoke_args = {key: value for key, value in args.items() if key in allowed}
+                    tool_started = time.perf_counter()
+                    tool_ok = True
                     try:
                         result = await tool.ainvoke(invoke_args, config=invoke_config)
                     except AppError as exc:
+                        tool_ok = False
                         result = json.dumps(
                             {
                                 "code": exc.code,
@@ -195,6 +261,7 @@ async def run_assistant(
                             }
                         )
                     except Exception as exc:  # noqa: BLE001
+                        tool_ok = False
                         result = json.dumps(
                             {
                                 "code": "TOOL_ERROR",
@@ -205,6 +272,15 @@ async def run_assistant(
                                 else {"raw": str(invoke_args)[:200]},
                             }
                         )
+
+                if tool is not None:
+                    # Per-tool DB latency, measured at the call site: every driver tool is
+                    # a typed PostgreSQL read, and the tool layer itself is out of scope.
+                    turn.record_tool(
+                        tool=str(name or "unknown"),
+                        duration_ms=elapsed_ms(tool_started),
+                        ok=tool_ok,
+                    )
 
                 result_text = result if isinstance(result, str) else _json_safe(result)
                 try:
@@ -244,6 +320,7 @@ async def run_assistant(
             if should_break_after_round:
                 break
 
+            llm_started = time.perf_counter()
             try:
                 invoke_config = child_invoke_config(
                     turn_config,
@@ -251,91 +328,129 @@ async def run_assistant(
                 )
                 ai = await llm.ainvoke(messages, config=invoke_config)
             except Exception as exc:  # noqa: BLE001
+                turn.record_llm(
+                    duration_ms=elapsed_ms(llm_started),
+                    provider=llm_provider,
+                    model=llm_model,
+                    hop=round_idx + 1,
+                    ok=False,
+                )
                 raise AppError(
                     "LLM failed during tool loop.",
                     code="LLM_UNAVAILABLE",
                     status_code=503,
                     detail=str(exc)[:200],
                 ) from exc
+            turn.record_llm(
+                duration_ms=elapsed_ms(llm_started),
+                provider=llm_provider,
+                model=llm_model,
+                hop=round_idx + 1,
+                usage=getattr(ai, "usage_metadata", None),
+            )
 
-    raw_content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
-    content = raw_content.strip()
-    if not content or ux_state in ("confirmation_required", "clarification_required"):
-        if observed_tools:
-            last_tool = observed_tools[-1]
-            try:
-                res_dict = json.loads(last_tool.get("result_preview") or "{}")
-                if isinstance(res_dict, dict) and res_dict.get("code") == "CONFIRMATION_REQUIRED":
-                    shipment_id = res_dict.get("shipment_id") or "your shipment"
-                    display_eta = res_dict.get("display_eta") or res_dict.get("declared_eta_ts")
-                    content = f"Please confirm that you want to update the ETA for shipment {shipment_id} to {display_eta}."
-                elif isinstance(res_dict, dict) and res_dict.get("code") == "REPAIR_IS_NOT_ETA":
-                    content = res_dict.get("message") or "Repair duration is not an arrival ETA. Please declare an explicit arrival date and time."
-                elif isinstance(res_dict, dict) and res_dict.get("message"):
-                    content = str(res_dict["message"])
-                elif isinstance(res_dict, dict) and res_dict.get("status") == "PERSISTED":
-                    shipment_id = res_dict.get("shipment_id") or "shipment"
-                    eta_ts = res_dict.get("declared_eta_ts") or ""
-                    content = f"ETA update for {shipment_id} ({eta_ts}) has been confirmed and saved successfully."
-                elif isinstance(res_dict, dict) and res_dict.get("feasible_slots"):
-                    slots = res_dict["feasible_slots"]
-                    content = f"Found {len(slots)} feasible dock slot options for your shipment."
-                else:
-                    content = f"Operation for {last_tool['name']} completed successfully."
-            except Exception:
-                content = "Operational request processed successfully."
-        else:
-            content = "Hello! I am your SetuHaul Logistics Assistant. How can I help you today?"
-    new_session = {
-        "driver_id": ctx.driver_id,
-        "last_intent": observed_tools[-1]["name"] if observed_tools else "chat",
-        "thread_id": tid,
-        "session_id": sid,
-        "ux_state": ux_state,
-    }
-    if confirmation_payload and confirmation_payload.get("shipment_id"):
-        new_session["pending_shipment_id"] = confirmation_payload.get("shipment_id")
-        new_session["pending_eta_ts"] = confirmation_payload.get("declared_eta_ts")
+        raw_content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
+        content = raw_content.strip()
+        if not content or ux_state in ("confirmation_required", "clarification_required"):
+            if observed_tools:
+                last_tool = observed_tools[-1]
+                try:
+                    res_dict = json.loads(last_tool.get("result_preview") or "{}")
+                    if isinstance(res_dict, dict) and res_dict.get("code") == "CONFIRMATION_REQUIRED":
+                        shipment_id = res_dict.get("shipment_id") or "your shipment"
+                        display_eta = res_dict.get("display_eta") or res_dict.get("declared_eta_ts")
+                        content = f"Please confirm that you want to update the ETA for shipment {shipment_id} to {display_eta}."
+                    elif isinstance(res_dict, dict) and res_dict.get("code") == "REPAIR_IS_NOT_ETA":
+                        content = res_dict.get("message") or "Repair duration is not an arrival ETA. Please declare an explicit arrival date and time."
+                    elif isinstance(res_dict, dict) and res_dict.get("message"):
+                        content = str(res_dict["message"])
+                    elif isinstance(res_dict, dict) and res_dict.get("status") == "PERSISTED":
+                        shipment_id = res_dict.get("shipment_id") or "shipment"
+                        eta_ts = res_dict.get("declared_eta_ts") or ""
+                        content = f"ETA update for {shipment_id} ({eta_ts}) has been confirmed and saved successfully."
+                    elif isinstance(res_dict, dict) and res_dict.get("feasible_slots"):
+                        slots = res_dict["feasible_slots"]
+                        content = f"Found {len(slots)} feasible dock slot options for your shipment."
+                    else:
+                        content = f"Operation for {last_tool['name']} completed successfully."
+                except Exception:
+                    content = "Operational request processed successfully."
+            else:
+                content = "Hello! I am your SetuHaul Logistics Assistant. How can I help you today?"
+        new_session = {
+            "driver_id": ctx.driver_id,
+            "last_intent": observed_tools[-1]["name"] if observed_tools else "chat",
+            "thread_id": tid,
+            "session_id": sid,
+            "ux_state": ux_state,
+        }
+        if confirmation_payload and confirmation_payload.get("shipment_id"):
+            new_session["pending_shipment_id"] = confirmation_payload.get("shipment_id")
+            new_session["pending_eta_ts"] = confirmation_payload.get("declared_eta_ts")
 
-    memory.append_turn(
-        user_id=ctx.user_id,
-        thread_id=tid,
-        session_id=sid,
-        user_message=message,
-        assistant_message=content,
-        session=new_session,
-        client_message_id=client_message_id,
-    )
-    # Rolling summary of oldest raw turns when the thread grows (ERICA-style).
-    # known_message_count avoids a separate LLEN round trip: full_history was the
-    # pre-append count, and append_turn just pushed exactly 2 more messages.
-    new_summary = await memory.maybe_summarize_history(
-        user_id=ctx.user_id,
-        thread_id=tid,
-        session_id=sid,
-        llm=base_llm,
-        known_message_count=len(full_history) + 2,
-    )
+        memory.append_turn(
+            user_id=ctx.user_id,
+            thread_id=tid,
+            session_id=sid,
+            user_message=message,
+            assistant_message=content,
+            session=new_session,
+            client_message_id=client_message_id,
+        )
+        # Rolling summary of oldest raw turns when the thread grows (ERICA-style).
+        # known_message_count avoids a separate LLEN round trip: full_history was the
+        # pre-append count, and append_turn just pushed exactly 2 more messages.
+        #
+        # Deliberately NOT awaited: a full extra LLM inference plus six Upstash round
+        # trips, on roughly one turn in three, entirely after the driver's answer
+        # already exists. The summary is only read by the *next* turn, so awaiting it
+        # spent ~1.9 s of a 2.5 s per-turn budget (NFR-002) on housekeeping. If the task
+        # is lost to a container recycle, the next turn crosses the threshold again and
+        # retries.
+        summary_scheduled = _spawn_background(
+            memory.maybe_summarize_history(
+                user_id=ctx.user_id,
+                thread_id=tid,
+                session_id=sid,
+                llm=base_llm,
+                known_message_count=len(full_history) + 2,
+            ),
+            label="maybe_summarize_history",
+        )
 
-    observe_output(content)
+        latency = turn.finish(
+            ux_state=ux_state,
+            redis_ms=memory.redis_ms,
+            redis_ops=memory.redis_ops,
+        )
+        # The same numbers on the LangSmith parent run: with no OTEL distro outside
+        # AgentCore, the trace is where these are actually readable today.
+        attach_run_metrics(
+            run, latency, outputs={"response": content, "ux_state": ux_state}
+        )
+        observe_output(content)
 
-    return {
-        "thread_id": tid,
-        "session_id": sid,
-        "response": content,
-        "tool_calls": [
-            {
-                "name": t["name"],
-                "args": t["args"],
-                "result": t.get("result"),
-                "result_preview": t.get("result_preview"),
-            }
-            for t in observed_tools
-        ],
-        "memory_degraded": memory.degraded,
-        "memory_degrade_reason": memory.degrade_reason,
-        "summary_created": new_summary is not None,
-        "ux_state": ux_state,
-        "confirmation": confirmation_payload,
-        "duplicate": False,
-    }
+        return {
+            "thread_id": tid,
+            "session_id": sid,
+            "response": content,
+            "tool_calls": [
+                {
+                    "name": t["name"],
+                    "args": t["args"],
+                    "result": t.get("result"),
+                    "result_preview": t.get("result_preview"),
+                }
+                for t in observed_tools
+            ],
+            "memory_degraded": memory.degraded,
+            "memory_degrade_reason": memory.degrade_reason,
+            # Summarisation now runs in the background, so the turn cannot report whether a
+            # summary was written — only that one was scheduled. Key kept for wire compat.
+            "summary_created": False,
+            "summary_scheduled": summary_scheduled,
+            "ux_state": ux_state,
+            "confirmation": confirmation_payload,
+            "duplicate": False,
+            "latency": latency,
+        }

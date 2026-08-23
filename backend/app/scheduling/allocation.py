@@ -150,7 +150,16 @@ def _assert_driver_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> Non
         raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
 
 
-def _assert_read_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
+def _assert_shipment_scope(
+    ctx: ExecutionContext, shipment: dict[str, Any], *, require_write: bool = False
+) -> None:
+    """Driver/operator/global scoping for a single shipment.
+
+    `require_write=True` is mandatory for callers that mutate an appointment (cancel, reschedule).
+    The global tier then demands `is_admin` — write authority — rather than mere global visibility,
+    so TRANSPORT_MANAGER / REGIONAL_OPERATIONS_HEAD (global *read-only* personas) can still see a
+    cross-facility appointment but cannot cancel or reschedule it. Read callers pass the default.
+    """
     if ctx.is_driver:
         if shipment["driver_id"] != ctx.driver_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
@@ -159,12 +168,17 @@ def _assert_read_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
         if shipment["destination_facility_id"] != ctx.facility_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
         return
-    if ctx.is_admin:
+    if ctx.is_admin if require_write else ctx.has_global_read_scope:
         return
     raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
 
 def _assert_ops_scope(ctx: ExecutionContext, shipment: dict[str, Any]) -> None:
+    """Write-side gate for confirm/reject/expire and the ops branch of request_slot.
+
+    `is_admin` here is deliberate and must stay: this helper only guards mutations, so the
+    global tier needs write authority. Do not relax it to `has_global_read_scope`.
+    """
     if ctx.is_operator:
         if shipment["destination_facility_id"] != ctx.facility_id:
             raise AppError("Shipment not in scope.", code="FORBIDDEN", status_code=403)
@@ -513,7 +527,7 @@ async def get_appointment_request_status(
     shipment = await _shipment_for_status(session, shipment_id)
     if shipment is None:
         raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
-    _assert_read_scope(ctx, shipment)
+    _assert_shipment_scope(ctx, shipment)
 
     appointment = await _appointment_request_status_row(
         session,
@@ -563,7 +577,7 @@ async def cancel_appointment(
     shipment = await _shipment_for_status(session, shipment_id)
     if shipment is None:
         raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
-    _assert_read_scope(ctx, shipment)
+    _assert_shipment_scope(ctx, shipment, require_write=True)
 
     appointment = await _locked_appointment(
         session,
@@ -1195,7 +1209,7 @@ async def reschedule_appointment(
     shipment = await _shipment_for_status(session, shipment_id)
     if shipment is None:
         raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
-    _assert_read_scope(ctx, shipment)
+    _assert_shipment_scope(ctx, shipment, require_write=True)
     stale = await _validate_displayed_recommendation(
         session, ctx, shipment_id=shipment_id, slot_id=command.new_slot_id,
         displayed_policy_version=command.displayed_policy_version,

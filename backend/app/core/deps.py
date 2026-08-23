@@ -66,8 +66,27 @@ def get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
 
 
+# Process-scoped verifiers. A per-request JwtVerifier meant PyJWKClient (whose JWK-set
+# cache is per-instance) was rebuilt every request, so every authenticated request paid a
+# blocking urllib JWKS fetch + TLS handshake before any application work — and
+# security.py's hourly-refresh guard could never be satisfied. Keyed by the auth-relevant
+# settings rather than @lru_cache'd on the Settings object, which pydantic makes
+# unhashable. Rotation still works: PyJWKClient re-fetches when a token's `kid` is not in
+# the cached set, and its JWKSetCache expires on its own 300 s lifespan.
+_JWT_VERIFIERS: dict[tuple[str, str, str], JwtVerifier] = {}
+
+
 def get_jwt_verifier(settings: Annotated[Settings, Depends(get_settings)]) -> JwtVerifier:
-    return JwtVerifier(settings)
+    key = (
+        settings.supabase_jwks_url,
+        settings.supabase_issuer,
+        settings.supabase_jwt_audience,
+    )
+    verifier = _JWT_VERIFIERS.get(key)
+    if verifier is None:
+        verifier = JwtVerifier(settings)
+        _JWT_VERIFIERS[key] = verifier
+    return verifier
 
 
 async def get_db_session() -> AsyncSession:

@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Protocol
+import time
+from contextlib import contextmanager
+from typing import Any, Iterator, Protocol
 
+from app.assistant.observability import record_redis_op
 from app.core.settings import Settings
 from app.core.tls import use_system_trust_store
 
@@ -64,6 +67,11 @@ class ConversationMemory:
         self._client = None
         self.degraded = False
         self.degrade_reason: str | None = None
+        # Redis RTT for this turn. Upstash is reached over its REST API, so every batch
+        # below is a full HTTPS request - this is the number the native-protocol decision
+        # (section 10 lever 9) will be measured against.
+        self.redis_ops = 0
+        self.redis_ms = 0.0
         url = (settings.upstash_redis_rest_url or "").strip()
         token = (settings.upstash_redis_rest_token or "").strip()
         if not url or not token:
@@ -79,6 +87,22 @@ class ConversationMemory:
             self.degraded = True
             self.degrade_reason = f"UPSTASH_INIT_FAILED:{type(exc).__name__}"
             logger.warning("Upstash init failed: %s", type(exc).__name__)
+
+    @contextmanager
+    def _timed(self, op: str, *, ops: int = 1) -> Iterator[None]:
+        """Time one Upstash command batch and record it as Redis RTT.
+
+        ``ops`` is the number of HTTP requests inside the block: the summariser's trailing
+        writes are un-pipelined, so counting them as one would hide five round trips.
+        """
+        started = time.perf_counter()
+        try:
+            yield
+        finally:
+            duration_ms = (time.perf_counter() - started) * 1000.0
+            self.redis_ops += ops
+            self.redis_ms += duration_ms
+            record_redis_op(op, duration_ms)
 
     def _scope(self, *, user_id: str, thread_id: str, session_id: str | None = None) -> tuple[str, str, str]:
         return (
@@ -193,9 +217,10 @@ class ConversationMemory:
             return []
         try:
             take = HISTORY_LIMIT if limit is None else max(1, min(limit, HISTORY_LIMIT))
-            raw = self._client.lrange(
-                self._history_key(user_id, thread_id, session_id), -take, -1
-            )
+            with self._timed("lrange_history"):
+                raw = self._client.lrange(
+                    self._history_key(user_id, thread_id, session_id), -take, -1
+                )
             out = _parse_list_items(raw)
             self.degraded = False
             self.degrade_reason = None
@@ -218,9 +243,10 @@ class ConversationMemory:
             return []
         try:
             take = max(1, min(limit, SUMMARY_CONTEXT_SIZE))
-            raw = self._client.lrange(
-                self._summaries_key(user_id, thread_id, session_id), -take, -1
-            )
+            with self._timed("lrange_summaries"):
+                raw = self._client.lrange(
+                    self._summaries_key(user_id, thread_id, session_id), -take, -1
+                )
             out: list[str] = []
             for item in raw or []:
                 if isinstance(item, str):
@@ -242,7 +268,8 @@ class ConversationMemory:
         if self._client is None:
             return {}
         try:
-            raw = self._client.get(self._session_key(user_id, thread_id, session_id))
+            with self._timed("get_session"):
+                raw = self._client.get(self._session_key(user_id, thread_id, session_id))
             if not raw:
                 return {}
             if isinstance(raw, dict):
@@ -273,7 +300,8 @@ class ConversationMemory:
             pipe.lrange(hkey, -HISTORY_LIMIT, -1)
             pipe.lrange(skey, -SUMMARY_CONTEXT_SIZE, -1)
             pipe.get(sekey)
-            history_raw, summaries_raw, session_raw = pipe.exec()
+            with self._timed("pipeline_turn_context"):
+                history_raw, summaries_raw, session_raw = pipe.exec()
 
             summaries: list[str] = []
             for item in summaries_raw or []:
@@ -341,7 +369,8 @@ class ConversationMemory:
                 skey = self._session_key(user_id, thread_id, session_id)
                 pipe.set(skey, json.dumps(session), ex=TTL_SECONDS)
             pipe.set(self._active_key(user_id), json.dumps(active_payload), ex=TTL_SECONDS)
-            pipe.exec()
+            with self._timed("pipeline_append_turn"):
+                pipe.exec()
 
             self.degraded = False
             self.degrade_reason = None
@@ -469,7 +498,8 @@ class ConversationMemory:
             if message_count < RAW_MESSAGE_LIMIT:
                 return None
 
-            oldest = _parse_list_items(self._client.lrange(hkey, 0, SUMMARY_CHUNK_SIZE - 1))
+            with self._timed("lrange_summary_chunk"):
+                oldest = _parse_list_items(self._client.lrange(hkey, 0, SUMMARY_CHUNK_SIZE - 1))
             if not oldest:
                 return None
 
@@ -489,12 +519,18 @@ class ConversationMemory:
             if not summary:
                 return None
 
-            self._client.rpush(skey, summary)
-            self._client.ltrim(skey, -SUMMARY_CONTEXT_SIZE, -1)
-            self._client.expire(skey, TTL_SECONDS)
-            # Drop the summarized oldest raw messages; keep newer turns.
-            self._client.ltrim(hkey, SUMMARY_CHUNK_SIZE, -1)
-            self._client.expire(hkey, TTL_SECONDS)
+            # Five separate HTTPS requests, unlike append_turn's single pipeline. Left
+            # un-pipelined deliberately for now: this whole block runs off the request
+            # path since the summariser became fire-and-forget, so pipelining it would
+            # optimise a path no driver waits on. Measured as a five-op group so the cost
+            # stays visible if it ever moves back onto the turn.
+            with self._timed("summary_write_unpipelined", ops=5):
+                self._client.rpush(skey, summary)
+                self._client.ltrim(skey, -SUMMARY_CONTEXT_SIZE, -1)
+                self._client.expire(skey, TTL_SECONDS)
+                # Drop the summarized oldest raw messages; keep newer turns.
+                self._client.ltrim(hkey, SUMMARY_CHUNK_SIZE, -1)
+                self._client.expire(hkey, TTL_SECONDS)
             self.degraded = False
             self.degrade_reason = None
             return summary

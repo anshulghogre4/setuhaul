@@ -37,7 +37,9 @@ def _as_of() -> str:
 
 
 def _resolve_facility(ctx: ExecutionContext, facility_id: str | None) -> str | None:
-    if ctx.is_admin:
+    # Read-scope only: every caller of this helper is a GET endpoint, so the global tier here is
+    # has_global_read_scope (ADMIN + the two read-only ops personas), not the write flag is_admin.
+    if ctx.has_global_read_scope:
         return facility_id
     if not ctx.facility_id:
         raise AppError("Operator facility scope missing.", code="SCOPE_MISSING", status_code=403)
@@ -173,7 +175,7 @@ async def dashboard_summary(
         "as_of": _as_of(),
         "source": "postgresql",
         "scope": {
-            "type": "global" if scope_facility is None and ctx.is_admin else "facility",
+            "type": "global" if scope_facility is None and ctx.has_global_read_scope else "facility",
             "facility_id": scope_facility,
             "read_only": True,
         },

@@ -6,13 +6,17 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.feasibility import find_feasible_slots
+from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
+
+DISPATCH_CREATE_ROUTE = "POST /api/v1/dispatch/shipments"
 
 
 class CreateDispatchShipmentCommand(BaseModel):
@@ -66,10 +70,28 @@ async def list_dispatch_facilities(session: AsyncSession) -> list[dict[str, Any]
 
 
 async def create_dispatch_shipment(
-    session: AsyncSession, ctx: ExecutionContext, cmd: CreateDispatchShipmentCommand
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    cmd: CreateDispatchShipmentCommand,
+    *,
+    idempotency_key: str,
 ) -> dict[str, Any]:
     if not (ctx.is_operator or ctx.is_admin):
         raise AppError("Insufficient permissions for dispatch operations.", code="FORBIDDEN", status_code=403)
+
+    # This route creates a shipment AND consumes dock capacity via request_slot, so a bare retry
+    # (double-click, network timeout-and-resend) previously produced a second shipment and a second
+    # booking. Same lookup/store ledger every other mutating route uses (M9 / services/idempotency.py).
+    req_hash = payload_hash(cmd.model_dump())
+    replay = await lookup_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=DISPATCH_CREATE_ROUTE,
+        request_hash=req_hash,
+    )
+    if replay is not None:
+        return {**replay["response"], "idempotent_replay": True}
 
     # 1. Verify driver exists and fetch carrier_id & home city
     driver_row = (
@@ -115,10 +137,14 @@ async def create_dispatch_shipment(
     now_iso = datetime.now(timezone.utc).isoformat()
     temp_control = 1 if cmd.product_category == "PERISHABLE_FOOD" else 0
 
-    # 3. Create shipment in public.shipments
-    await session.execute(
-        text(
-            """
+    # 3. Create shipment in public.shipments.
+    # The INSERT is inside the try, not just the commit: asyncpg reports a unique violation when
+    # the statement executes, so catching only around commit() would let the 500 through. Mirrors
+    # allocation.py's IntegrityError handling, which wraps execute()+flush() for the same reason.
+    try:
+        await session.execute(
+            text(
+                """
             INSERT INTO public.shipments (
                 shipment_id, order_reference, carrier_id, driver_id, vehicle_id,
                 origin_name, origin_city, destination_facility_id,
@@ -135,29 +161,39 @@ async def create_dispatch_shipment(
                 :expected_unload_min, 'IN_TRANSIT', :now_iso, :now_iso
             )
             """
-        ),
-        {
-            "shipment_id": shipment_id,
-            "order_reference": order_ref,
-            "carrier_id": carrier_id,
-            "driver_id": cmd.driver_id,
-            "vehicle_id": vehicle_id,
-            "origin_name": origin_name,
-            "origin_city": origin_city,
-            "destination_facility_id": cmd.destination_facility_id,
-            "customer_name": cmd.customer_name,
-            "product_category": cmd.product_category,
-            "load_weight_kg": cmd.load_weight_kg,
-            "pallet_count": cmd.pallet_count,
-            "required_dock_type": cmd.required_dock_type,
-            "temp_control": temp_control,
-            "priority_code": cmd.priority_code,
-            "original_eta_ts": cmd.original_eta_ts,
-            "expected_unload_min": cmd.expected_unload_min,
-            "now_iso": now_iso,
-        },
-    )
-    await session.commit()
+            ),
+            {
+                "shipment_id": shipment_id,
+                "order_reference": order_ref,
+                "carrier_id": carrier_id,
+                "driver_id": cmd.driver_id,
+                "vehicle_id": vehicle_id,
+                "origin_name": origin_name,
+                "origin_city": origin_city,
+                "destination_facility_id": cmd.destination_facility_id,
+                "customer_name": cmd.customer_name,
+                "product_category": cmd.product_category,
+                "load_weight_kg": cmd.load_weight_kg,
+                "pallet_count": cmd.pallet_count,
+                "required_dock_type": cmd.required_dock_type,
+                "temp_control": temp_control,
+                "priority_code": cmd.priority_code,
+                "original_eta_ts": cmd.original_eta_ts,
+                "expected_unload_min": cmd.expected_unload_min,
+                "now_iso": now_iso,
+            },
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        # A caller-supplied shipment_id that already exists used to surface as an unhandled 500.
+        # Retries with the same Idempotency-Key never reach here (the replay guard above returns
+        # first); this is the genuine "different key, same shipment_id" collision.
+        await session.rollback()
+        raise AppError(
+            f"Shipment '{shipment_id}' already exists.",
+            code="SHIPMENT_ALREADY_EXISTS",
+            status_code=409,
+        ) from exc
 
     # 4. Search feasible slots for this new shipment at planned ETA
     initial_appointment = None
@@ -171,7 +207,11 @@ async def create_dispatch_shipment(
                 displayed_policy_version=options_result.policy_version,
                 displayed_recommendation_id=options_result.recommendation_id,
             )
-            idem_key = f"IDEM-DISP-{uuid.uuid4().hex[:16]}"
+            # Derived from the caller's key, not uuid4(): a random key can never match a prior
+            # attempt, so request_slot's own idempotency guard could never see the duplicate.
+            # The suffix keeps it distinct from the outer key, whose ledger row has a different
+            # route (lookup_idempotency raises IDEMPOTENCY_SCOPE_MISMATCH on a route mismatch).
+            idem_key = f"{idempotency_key}:dispatch-initial-slot"
             booking_res = await request_slot(
                 session,
                 ctx,
@@ -186,7 +226,7 @@ async def create_dispatch_shipment(
         # Initial appointment booking failed gracefully; shipment remains created
         booking_result = {"status": "NO_INITIAL_SLOT", "note": str(e)}
 
-    return {
+    result = {
         "as_of": now_iso,
         "shipment_id": shipment_id,
         "order_reference": order_ref,
@@ -198,4 +238,16 @@ async def create_dispatch_shipment(
         "priority_code": cmd.priority_code,
         "appointment": initial_appointment,
         "booking_result": booking_result,
+        "idempotency_key": idempotency_key,
     }
+    await store_idempotency(
+        session,
+        key=idempotency_key,
+        user_id=ctx.user_id,
+        route=DISPATCH_CREATE_ROUTE,
+        request_hash=req_hash,
+        response=result,
+        status_code=200,
+    )
+    await session.commit()
+    return {**result, "idempotent_replay": False}
