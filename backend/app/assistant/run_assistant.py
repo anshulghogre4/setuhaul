@@ -9,6 +9,7 @@ from typing import Any, Coroutine
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.llm import build_chat_model
@@ -137,6 +138,42 @@ async def run_assistant(
             "ux_state": "duplicate_ignored",
             "latency": turn.finish(
                 ux_state="duplicate_ignored",
+                redis_ms=memory.redis_ms,
+                redis_ops=memory.redis_ops,
+            ),
+        }
+
+    # E3.2 (issue #26): a coordinator's take_over_thread sets chat_threads.thread_status =
+    # 'ESCALATED' to disable assistant auto-reply on this thread (SOLUTION_DESIGN.md section
+    # 7.5.5). Before this epic nothing in the turn path ever read thread_status at all -- the
+    # assistant kept auto-replying regardless of a live takeover. Checked once per turn, before
+    # any LLM/tool work starts, since an escalated thread should never reach either.
+    thread_status_row = (
+        await session.execute(
+            text("SELECT thread_status FROM public.chat_threads WHERE thread_id = :tid"), {"tid": tid}
+        )
+    ).mappings().first()
+    if thread_status_row is not None and str(thread_status_row["thread_status"]) == "ESCALATED":
+        notice = (
+            "Your message has been received. An operations coordinator is currently handling "
+            "this conversation directly and will respond shortly."
+        )
+        memory.append_turn(
+            user_id=ctx.user_id, thread_id=tid, session_id=sid,
+            user_message=message, assistant_message=notice, client_message_id=client_message_id,
+        )
+        return {
+            "thread_id": tid,
+            "session_id": sid,
+            "response": notice,
+            "tool_calls": [],
+            "memory_degraded": memory.degraded,
+            "memory_degrade_reason": memory.degrade_reason,
+            "summary_created": False,
+            "duplicate": False,
+            "ux_state": "escalated_takeover",
+            "latency": turn.finish(
+                ux_state="escalated_takeover",
                 redis_ms=memory.redis_ms,
                 redis_ops=memory.redis_ops,
             ),

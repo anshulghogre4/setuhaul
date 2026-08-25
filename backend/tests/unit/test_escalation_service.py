@@ -47,6 +47,7 @@ async def test_resolve_escalation_updates_db_status():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
+        "facility_id": "FAC-GGN-01",
         "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
     }
@@ -82,6 +83,7 @@ async def test_resolve_escalation_persists_resolution_note():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
+        "facility_id": "FAC-GGN-01",
         "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
         "resolution_note": "Slot manually confirmed at dock",
@@ -95,9 +97,10 @@ async def test_resolve_escalation_persists_resolution_note():
     )
 
     assert res["resolution_note"] == "Slot manually confirmed at dock"
-    # First call is the escalation_queue update; its bound params must carry the note.
-    first_call_params = mock_session.execute.call_args_list[0].args[1]
-    assert first_call_params["note"] == "Slot manually confirmed at dock"
+    # First call is the facility-scope lookup (issue #48's fix); the second is the
+    # escalation_queue update, whose bound params must carry the note.
+    second_call_params = mock_session.execute.call_args_list[1].args[1]
+    assert second_call_params["note"] == "Slot manually confirmed at dock"
 
 
 @pytest.mark.asyncio
@@ -249,6 +252,7 @@ async def test_resolve_escalation_still_allows_admin():
     mock_row.mappings.return_value.first.return_value = {
         "escalation_id": "ESC-TEST-99",
         "shipment_id": "SHP1006",
+        "facility_id": "FAC-ANY-01",  # ADMIN's assert_facility_write_scope bypasses the facility match entirely
         "escalation_type": "NO_FEASIBLE_SLOT",
         "escalation_status": "RESOLVED",
     }

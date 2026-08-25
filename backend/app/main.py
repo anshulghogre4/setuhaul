@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.routers import (
+    admin,
     carrier,
     chat,
     driver,
@@ -15,6 +16,7 @@ from app.api.v1.routers import (
     operations,
     planner,
     scheduling,
+    shared,
     shipments,
 )
 from app.assistant.observability import shutdown_telemetry
@@ -86,6 +88,10 @@ def create_app() -> FastAPI:
     # E3.6 (issue #30, M3): SS7.5.1 planner dock-blocking + SS7.5.2 gate/yard writes.
     app.include_router(planner.router)
     app.include_router(gate.router)
+    # E3.5 (issue #29, M3): SS7.5.8 shared/cross-cutting tools -- used by every role, owned by none.
+    app.include_router(shared.router)
+    # E3.4 (issue #28, M3): SS7.5.7 admin console -- users/roles, facility rules, policy, audit.
+    app.include_router(admin.router)
     # Machine-callable only (shared-secret header, not a Supabase JWT) -- the M8 expiry sweeper's
     # trigger target. Registered last so it is visibly separate from the user-facing routers.
     app.include_router(internal.router)

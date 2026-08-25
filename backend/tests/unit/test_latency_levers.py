@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -267,6 +267,18 @@ def _patch_turn(monkeypatch, memory, ai=None, tool_rounds=None, tools=None):
     return llm
 
 
+def _no_escalated_thread_session() -> AsyncMock:
+    """E3.2 (issue #26): run_assistant now does one `session.execute` read (chat_threads.thread_status)
+    before any LLM/tool work, to check for a live ops takeover. `.mappings().first()` -> None here
+    means "no thread row found", the same as every thread these tests use before this epic existed
+    -- the turn proceeds normally, exactly matching pre-E3.2 behaviour."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = None
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
 async def _run_turn(monkeypatch, memory, **kwargs):
     """Run one driver turn against the fakes. Returns (result, llm, elapsed_seconds).
 
@@ -278,7 +290,7 @@ async def _run_turn(monkeypatch, memory, **kwargs):
     llm = _patch_turn(monkeypatch, memory, **kwargs)
     started = time.perf_counter()
     result = await run_assistant(
-        session=MagicMock(),
+        session=_no_escalated_thread_session(),
         ctx=_driver_ctx(),
         settings=Settings(google_api_key="AIzaTestKeyNotReal", langsmith_tracing=False),
         message="Where is my shipment?",

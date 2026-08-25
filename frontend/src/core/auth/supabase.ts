@@ -51,7 +51,13 @@ export async function signIn(email: string, password: string) {
 
 export async function signOut() {
   if (!supabase) return
-  await supabase.auth.signOut()
+  // E3.5 (issue #29): Supabase's signOut() defaults to `scope: 'global'`, which revokes every
+  // refresh token for this user, not just this device. This is the plain single-device "Sign
+  // Out" button, so it must say so explicitly -- without `local` here it silently becomes
+  // sign_out_everywhere. Found live in production during E3.5's implementation: this call had
+  // no scope argument at all, meaning every ordinary sign-out was already doing the global
+  // revoke by accident.
+  await supabase.auth.signOut({ scope: 'local' })
   sessionStorage.clear()
   localStorage.removeItem('setuhaul.returnUrl')
 }

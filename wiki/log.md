@@ -3,10 +3,43 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-23
+last_updated: 2026-08-25
 ---
 
 # Wiki log
+
+## 2026-08-25 16:07 IST | implementation | E3.4 (#28, M3) — admin console: users/roles, rule registry, policy simulate/publish, audit. M3 fully implemented.
+
+- All 13 SS7.5.7 tools built. Live migration: a real rule_type CHECK constraint on facility_rules (had none before, despite the design claiming otherwise) + a new policy_versions table (Module didn't exist, same gap-class as the Sequencer/notification outbox).
+- admin_user_service.py: invite_user/remove_user are the only writes in this backend touching real Supabase Auth identities (service-role key, first use anywhere in the codebase). remove_user deactivates locally rather than hard-deleting (FK-referenced by audit_logs).
+- admin_governance_service.py: simulate_policy_weights is an honest current-state proxy (no decision log exists to literally replay), deliberately duplicates the scoring formula rather than touching feasibility.py's live ranking code — pinned with a parity test. Live-verified real sensitivity (0 flips moderate change, 100/100 extreme change on the same 100 candidates).
+- Verified: 361 passed (339 + 22 new), migration verified live, 68 total routes.
+- Evidence on #28. **M3 is now fully implemented** — all 6 epics done, #48 fixed, #49 filed for the sequencer gap. E3.1/E3.3/E3.6 already committed; E3.2/E3.5/E3.4 + #48 await one batch commit.
+
+## 2026-08-25 15:47 IST | implementation | E3.5 (#29, M3) — shared tools: account, notifications, search; live sign-out-scope bug fixed
+
+- All 6 SS7.5.8 tools built. Live migration: new `notifications`/`notification_preferences` tables (Module 10 was entirely unbuilt, same gap-class as E3.2's Sequencer) + `pg_trgm` extension + 2 trigram indexes.
+- account_service.py proxies password-reset/sign-out to Supabase Auth's HTTP API directly (no local session/password table); sign_out_everywhere correctly uses the caller's own bearer token, not service-role.
+- notification_service.py: honest gap flagged — no producer writes notifications anywhere yet, feed is correctly empty, not broken.
+- search_service.py: pg_trgm fuzzy search over shipments+drivers, facility-scoped, ops/admin roles only for v1.
+- Two real bugs caught before shipping: `drivers.phone_number` doesn't exist (real column is `phone`); shipment search initially missed matching on shipment_id itself.
+- Found and fixed a live production bug outside this epic's formal scope: frontend's plain "Sign Out" button called Supabase's signOut() with no scope, defaulting to 'global' — every single-device sign-out was silently revoking all other sessions too. One-line fix, tsc/lint clean.
+- Verified: 339 passed (322 + 17 new), migration verified live, 56 total routes.
+- Evidence on #29. Left open — part of the batch to push once all of M3 completes (owner's direction this turn).
+
+## 2026-08-25 15:32 IST | implementation | E3.2 (#26, M3) — ops console: escalation ownership, acknowledge/reassign/cancel/take-over/hand-back, #48 fixed, #49 filed
+
+- 7 of 8 SS7.5.5 tools built; `request_sequencer_proposal` deferred to new #49 since SS7.5.3 (the Sequencer) doesn't exist anywhere in the codebase and was never its own tracked issue.
+- Live migration: `escalation_queue.owner_user_id` (nullable FK), additive only, backup verified first.
+- Extended `get_exception_queue` (owner filter, stepper, SLA-remaining assumption, cascade-affected-shipments) and fixed a real bug: the old status filter silently dropped ACKNOWLEDGED rows from the queue.
+- Added acknowledge/reassign/cancel_escalation and take_over_thread/hand_back_thread. Rebuilt resolve_escalation, fixing #48's cross-facility gap directly.
+- Cross-cutting: wired thread_status='ESCALATED' into run_assistant.py to actually suppress LLM auto-reply — previously nothing read that column at all. Documented a real gap: the driver-visible notice writes to Postgres chat_messages, but the live chat UI renders from Redis only and doesn't read that table yet.
+- Verified: 322 passed (297 + 25 new), 8 pre-existing tests fixed for the new contract, migration verified live, 49 total routes confirmed via openapi().
+- Evidence on #26, cross-ref on #48, #49 filed. Both #26/#48 left open pending commit.
+
+## 2026-08-25 15:12 IST | verification | M3's E3.1/E3.3/E3.6 committed, pushed, auto-closed
+
+- Commit `5a6bcc2` pushed by owner; `gh issue list` confirms #25/#27/#30 CLOSED, #26/#28/#29 OPEN. M3 remaining: E3.2 (ops console, ~15% done), E3.4 (admin console, not started), E3.5 (shared/cross-cutting, not started) — the "big" epics, awaiting direction per the owner's pacing checkpoint.
 
 ## 2026-08-24 05:30 IST | implementation | E3.3 (#27) and E3.6 (#30, M3) — carrier portal, planner dock-blocking, gate/yard writes
 
