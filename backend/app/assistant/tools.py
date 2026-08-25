@@ -13,13 +13,11 @@ from app.core.execution_context import ExecutionContext
 from app.scheduling.allocation import (
     CancelAppointmentCommand,
     RequestSlotCommand,
-    RescheduleAppointmentCommand,
     cancel_appointment,
     get_appointment_request_status,
     request_slot,
-    reschedule_appointment,
 )
-from app.scheduling.feasibility import find_feasible_slots
+from app.scheduling.feasibility import explain_slot_eligibility, find_feasible_slots
 from app.services import driver_reads
 from app.services.eta_service import EtaUpdateCommand, confirmation_preview, record_eta_update
 from app.services.escalation_service import (
@@ -29,6 +27,28 @@ from app.services.escalation_service import (
 )
 from app.services.redis_memory import ConversationMemory
 
+# E3.1 (issue #25): SOLUTION_DESIGN.md section 7.5.4's 12-tool driver allowlist, enumerated
+# there because "Appendix A argues for shrinking the driver tool surface... that claim is only
+# actionable if the list is named." confirm_held_slot is deliberately not yet built -- it needs
+# the D2 HELD state on dock_occupancy (schema + a restructured request_slot), which this session
+# scoped as its own dedicated pass, not a tool-catalog line item (see issue #25's own comment
+# thread and #20's hand-off note). This module therefore binds 11 of the 12, not all 12.
+DRIVER_ALLOWLIST = frozenset(
+    {
+        "get_driver_operational_context",
+        "list_active_shipments",
+        "get_latest_eta",
+        "get_current_appointment",
+        "report_delay_or_update_eta",
+        "find_feasible_slots",
+        "request_slot",
+        "get_appointment_request_status",
+        "explain_slot_eligibility",
+        "cancel_appointment",
+        "escalate_exception",
+    }
+)
+
 
 class EmptyArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -37,16 +57,6 @@ class EmptyArgs(BaseModel):
 class ShipmentIdArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
     shipment_id: str = Field(description="Shipment identifier, e.g. SHP1017")
-
-
-class FacilityIdArgs(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    facility_id: str = Field(description="Facility identifier, e.g. FAC-JAI-01")
-
-
-class ExceptionArgs(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    shipment_id: str | None = Field(default=None, description="Optional shipment filter")
 
 
 class ReportDelayArgs(BaseModel):
@@ -78,12 +88,6 @@ class ReportDelayArgs(BaseModel):
     description: str | None = None
 
 
-class SchedulingArgs(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    intent: str = Field(description="Requested scheduling action")
-    shipment_id: str | None = None
-
-
 class FindFeasibleSlotsArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
     shipment_id: str | None = Field(
@@ -100,6 +104,14 @@ class RequestSlotArgs(BaseModel):
     displayed_policy_version: str | None = Field(default=None)
     displayed_recommendation_id: str | None = Field(default=None)
     note: str | None = Field(default=None, description="Optional driver note for the request")
+
+
+class SlotEligibilityArgs(BaseModel):
+    """E3.1 (issue #25), FR-DRV-006: browse-only, no exception created."""
+
+    model_config = ConfigDict(extra="ignore")
+    shipment_id: str = Field(description="Shipment the slot is being considered for")
+    slot_id: str = Field(description="Exact slot_id to explain eligibility for")
 
 
 class AppointmentRequestStatusArgs(BaseModel):
@@ -125,16 +137,6 @@ class CancelAppointmentArgs(BaseModel):
     )
 
 
-class RescheduleAppointmentArgs(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    shipment_id: str
-    appointment_id: str
-    new_slot_id: str
-    displayed_policy_version: str | None = None
-    displayed_recommendation_id: str | None = None
-    note: str | None = None
-
-
 class EscalateExceptionArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
     shipment_id: str
@@ -148,70 +150,6 @@ class EscalateExceptionArgs(BaseModel):
             "escalated to human operations."
         ),
     )
-
-
-class ConversationMemoryArgs(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    include_recent_messages: bool = Field(
-        default=True,
-        description="Whether to include bounded recent chat snippets from Redis.",
-    )
-
-
-class VehicleCarrierArgs(BaseModel):
-    shipment_id: str | None = Field(
-        default=None,
-        description="Shipment ID to query vehicle, payload capacity, and carrier details for.",
-    )
-
-
-class GateQueueArgs(BaseModel):
-    shipment_id: str | None = Field(
-        default=None,
-        description="Shipment ID to check yard queue position and gate check-in status.",
-    )
-
-
-class FacilityRulesArgs(BaseModel):
-    facility_id: str | None = Field(
-        default=None,
-        description="Facility ID to query safety rules, grace periods, and procedures for.",
-    )
-    shipment_id: str | None = Field(
-        default=None,
-        description="Optional shipment ID to derive destination facility ID.",
-    )
-
-
-class ReportIncidentArgs(BaseModel):
-    shipment_id: str | None = Field(
-        default=None,
-        description="Shipment ID associated with the breakdown or vehicle incident.",
-    )
-    incident_type: str = Field(
-        default="BREAKDOWN",
-        description="Incident type: BREAKDOWN, TRAFFIC, WEATHER, DELAY, ACCIDENT, OTHER.",
-    )
-    description: str = Field(
-        default="",
-        description="Detailed description of the breakdown or vehicle incident.",
-    )
-    reported_delay_min: int | None = Field(
-        default=None,
-        description="Optional estimated delay in minutes caused by the breakdown.",
-    )
-
-
-class DockMaintenanceArgs(BaseModel):
-    facility_id: str | None = Field(
-        default=None,
-        description="Facility ID to check active dock maintenance alerts for.",
-    )
-    dock_id: str | None = Field(
-        default=None,
-        description="Optional dock ID to filter specific dock maintenance alerts.",
-    )
-
 
 
 def _json(data: Any) -> str:
@@ -253,7 +191,18 @@ def build_driver_tools(
     memory: ConversationMemory | None = None,
     client_message_id: str | None = None,
 ) -> list[StructuredTool]:
-    """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist)."""
+    """Role-scoped POC tools for ChatOpenAI.bind_tools (driver allowlist).
+
+    E3.1 (issue #25): binds `DRIVER_ALLOWLIST` -- 11 of SOLUTION_DESIGN.md section 7.5.4's
+    12-tool allowlist (`confirm_held_slot` deferred, its own build). Previously bound 23 tools,
+    essentially the whole multi-role catalog; the other 12 either fold into the pre-fetched
+    `get_driver_operational_context` payload or are deferred to a second-tier catalog per
+    section 7.5.4's own reasoning (schema tokens on every call, degraded selection accuracy --
+    TECH_STACK.md section 10 latency lever 2). `reschedule_appointment` is removed entirely,
+    not folded: D1 collapses a reschedule into two interval operations (cancel_appointment then
+    request_slot on a fresh slot), both of which are already in this allowlist, so no stub tool
+    is needed for the LLM to accomplish the same outcome -- see prompts.py's matching update.
+    """
 
     def _displayed_recommendation_id(explicit: str | None, shipment_id: str) -> str | None:
         if explicit:
@@ -261,45 +210,6 @@ def build_driver_tools(
         if memory is None:
             return None
         return memory.get_active_recommendation(user_id=ctx.user_id, shipment_id=shipment_id)
-
-    async def get_current_user_context(_: EmptyArgs | None = None) -> str:
-        return _json(
-            {
-                "user_id": ctx.user_id,
-                "full_name": ctx.full_name,
-                "email": ctx.email,
-                "role_name": ctx.role_name,
-                "driver_id": ctx.driver_id,
-                "facility_id": ctx.facility_id,
-                "permissions": ctx.permissions,
-            }
-        )
-
-    async def get_conversation_memory(**kwargs: Any) -> str:
-        args = ConversationMemoryArgs.model_validate(kwargs)
-        if memory is None:
-            return _json(
-                {
-                    "code": "REDIS_MEMORY_UNAVAILABLE",
-                    "source": "upstash_redis",
-                    "thread_id": thread_id,
-                    "session_id": session_id,
-                    "recent_messages": [],
-                    "session": {},
-                    "ttl_seconds": 24 * 60 * 60,
-                    "non_authoritative": True,
-                    "degraded": True,
-                    "degrade_reason": "MEMORY_NOT_ATTACHED_TO_TOOL",
-                }
-            )
-        return _json(
-            memory.snapshot(
-                user_id=ctx.user_id,
-                thread_id=thread_id,
-                session_id=session_id,
-                include_recent_messages=args.include_recent_messages,
-            )
-        )
 
     async def get_driver_operational_context(_: EmptyArgs | None = None) -> str:
         return _json(await driver_reads.get_driver_operational_context(session, ctx))
@@ -314,24 +224,10 @@ def build_driver_tools(
             }
         )
 
-    async def get_shipment_details(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
-        try:
-            parsed = args if isinstance(args, ShipmentIdArgs) else ShipmentIdArgs.model_validate(kwargs)
-            return _json(await driver_reads.get_shipment_details(session, ctx, parsed.shipment_id))
-        except Exception as exc:  # noqa: BLE001
-            return _tool_error(exc)
-
     async def get_latest_eta(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
         try:
             parsed = args if isinstance(args, ShipmentIdArgs) else ShipmentIdArgs.model_validate(kwargs)
             return _json(await driver_reads.get_latest_eta(session, ctx, parsed.shipment_id))
-        except Exception as exc:  # noqa: BLE001
-            return _tool_error(exc)
-
-    async def get_eta_history(args: ShipmentIdArgs | None = None, **kwargs: Any) -> str:
-        try:
-            parsed = args if isinstance(args, ShipmentIdArgs) else ShipmentIdArgs.model_validate(kwargs)
-            return _json(await driver_reads.get_eta_history(session, ctx, parsed.shipment_id))
         except Exception as exc:  # noqa: BLE001
             return _tool_error(exc)
 
@@ -341,17 +237,6 @@ def build_driver_tools(
             return _json(await driver_reads.get_current_appointment(session, ctx, parsed.shipment_id))
         except Exception as exc:  # noqa: BLE001
             return _tool_error(exc)
-
-    async def get_facility_details(args: FacilityIdArgs | None = None, **kwargs: Any) -> str:
-        try:
-            parsed = args if isinstance(args, FacilityIdArgs) else FacilityIdArgs.model_validate(kwargs)
-            return _json(await driver_reads.get_facility_details(session, ctx, parsed.facility_id))
-        except Exception as exc:  # noqa: BLE001
-            return _tool_error(exc)
-
-    async def get_exception_status(args: ExceptionArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, ExceptionArgs) else ExceptionArgs.model_validate(kwargs)
-        return _json(await driver_reads.get_exception_status(session, ctx, parsed.shipment_id))
 
     async def report_delay_or_update_eta(args: ReportDelayArgs | None = None, **kwargs: Any) -> str:
         parsed_args = args if isinstance(args, ReportDelayArgs) else ReportDelayArgs.model_validate(kwargs)
@@ -526,35 +411,15 @@ def build_driver_tools(
             code = getattr(exc, "code", "REQUEST_SLOT_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
-    async def reschedule_appointment_tool(args: RescheduleAppointmentArgs | None = None, **kwargs: Any) -> str:
-        parsed_args = args if isinstance(args, RescheduleAppointmentArgs) else RescheduleAppointmentArgs.model_validate(kwargs)
-        rec_id = _displayed_recommendation_id(
-            parsed_args.displayed_recommendation_id, parsed_args.shipment_id
-        )
+    async def explain_slot_eligibility_tool(args: SlotEligibilityArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = args if isinstance(args, SlotEligibilityArgs) else SlotEligibilityArgs.model_validate(kwargs)
         try:
-            result = await reschedule_appointment(
-                session,
-                ctx,
-                shipment_id=parsed_args.shipment_id,
-                command=RescheduleAppointmentCommand(
-                    appointment_id=parsed_args.appointment_id,
-                    new_slot_id=parsed_args.new_slot_id,
-                    note=parsed_args.note,
-                    displayed_policy_version=parsed_args.displayed_policy_version,
-                    displayed_recommendation_id=rec_id,
-                    client_message_id=client_message_id,
-                ),
-                idempotency_key=chat_mutation_idempotency_key(
-                    thread_id=thread_id,
-                    action="reschedule",
-                    parts=[parsed_args.appointment_id, parsed_args.new_slot_id],
-                    client_message_id=client_message_id,
-                ),
+            result = await explain_slot_eligibility(
+                session, ctx, parsed_args.shipment_id, parsed_args.slot_id
             )
             return _json(result.model_dump())
-        except Exception as exc:  # noqa: BLE001
-            code = getattr(exc, "code", "RESCHEDULE_APPOINTMENT_FAILED")
-            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model, browse-only
+            return _tool_error(exc)
 
     async def escalate_exception_tool(args: EscalateExceptionArgs | None = None, **kwargs: Any) -> str:
         parsed_args = args if isinstance(args, EscalateExceptionArgs) else EscalateExceptionArgs.model_validate(kwargs)
@@ -629,63 +494,7 @@ def build_driver_tools(
             code = getattr(exc, "code", "CANCEL_APPOINTMENT_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
-    async def scheduling_capability_disabled(args: SchedulingArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, SchedulingArgs) else SchedulingArgs.model_validate(kwargs)
-        return _json(
-            {
-                "code": "CAPABILITY_NOT_ENABLED",
-                "message": (
-                    "Rescheduling and appointment confirmation are not enabled for the Driver "
-                    "assistant. Confirmation remains an operations/warehouse action."
-                ),
-                "intent": parsed.intent,
-                "shipment_id": parsed.shipment_id,
-                "appointment_writes": 0,
-            }
-        )
-
-    async def get_vehicle_and_carrier_details(args: VehicleCarrierArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, VehicleCarrierArgs) else VehicleCarrierArgs.model_validate(kwargs)
-        return _json(await driver_reads.get_vehicle_and_carrier_details(session, ctx, parsed.shipment_id))
-
-    async def get_gate_and_queue_status(args: GateQueueArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, GateQueueArgs) else GateQueueArgs.model_validate(kwargs)
-        return _json(await driver_reads.get_gate_and_queue_status(session, ctx, parsed.shipment_id))
-
-    async def get_facility_rules_and_restrictions(args: FacilityRulesArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, FacilityRulesArgs) else FacilityRulesArgs.model_validate(kwargs)
-        return _json(await driver_reads.get_facility_rules_and_restrictions(session, ctx, parsed.facility_id, parsed.shipment_id))
-
-    async def report_vehicle_breakdown_or_incident(args: ReportIncidentArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, ReportIncidentArgs) else ReportIncidentArgs.model_validate(kwargs)
-        return _json(
-            await driver_reads.report_vehicle_breakdown_or_incident(
-                session, ctx, parsed.shipment_id, parsed.incident_type, parsed.description, parsed.reported_delay_min, thread_id=thread_id
-            )
-        )
-
-    async def get_dock_maintenance_alerts(args: DockMaintenanceArgs | None = None, **kwargs: Any) -> str:
-        parsed = args if isinstance(args, DockMaintenanceArgs) else DockMaintenanceArgs.model_validate(kwargs)
-        return _json(await driver_reads.get_dock_maintenance_alerts(session, ctx, parsed.facility_id, parsed.dock_id))
-
-    return [
-        StructuredTool.from_function(
-            coroutine=get_current_user_context,
-            name="get_current_user_context",
-            description="Return verified authenticated user/role/driver mapping.",
-            args_schema=EmptyArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_conversation_memory,
-            name="get_conversation_memory",
-            description=(
-                "Return bounded Upstash Redis conversation/session memory for this authenticated "
-                "user, browser session, and thread — including rolling summaries of older turns when present. "
-                "This is ephemeral, 24-hour, non-authoritative context only; "
-                "never use it as shipment, ETA, appointment, dock, or facility truth."
-            ),
-            args_schema=ConversationMemoryArgs,
-        ),
+    tools = [
         StructuredTool.from_function(
             coroutine=get_driver_operational_context,
             name="get_driver_operational_context",
@@ -699,21 +508,9 @@ def build_driver_tools(
             args_schema=EmptyArgs,
         ),
         StructuredTool.from_function(
-            coroutine=get_shipment_details,
-            name="get_shipment_details",
-            description="Get details for one in-scope shipment.",
-            args_schema=ShipmentIdArgs,
-        ),
-        StructuredTool.from_function(
             coroutine=get_latest_eta,
             name="get_latest_eta",
             description="Get the latest ETA update for a shipment.",
-            args_schema=ShipmentIdArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_eta_history,
-            name="get_eta_history",
-            description="Get ETA history for a shipment.",
             args_schema=ShipmentIdArgs,
         ),
         StructuredTool.from_function(
@@ -721,18 +518,6 @@ def build_driver_tools(
             name="get_current_appointment",
             description="Get the current appointment observation for a shipment.",
             args_schema=ShipmentIdArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_facility_details,
-            name="get_facility_details",
-            description="Get facility details and contacts (driver-safe / scoped).",
-            args_schema=FacilityIdArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_exception_status,
-            name="get_exception_status",
-            description="Get exception status for the driver, optionally filtered by shipment.",
-            args_schema=ExceptionArgs,
         ),
         StructuredTool.from_function(
             coroutine=report_delay_or_update_eta,
@@ -773,6 +558,15 @@ def build_driver_tools(
             args_schema=AppointmentRequestStatusArgs,
         ),
         StructuredTool.from_function(
+            coroutine=explain_slot_eligibility_tool,
+            name="explain_slot_eligibility",
+            description=(
+                "Explain, per invariant, why one specific slot_id is or is not eligible for a "
+                "shipment. Browse-only: never books, holds, or creates an exception/escalation."
+            ),
+            args_schema=SlotEligibilityArgs,
+        ),
+        StructuredTool.from_function(
             coroutine=cancel_appointment_tool,
             name="cancel_appointment",
             description=(
@@ -783,57 +577,14 @@ def build_driver_tools(
             args_schema=CancelAppointmentArgs,
         ),
         StructuredTool.from_function(
-            coroutine=reschedule_appointment_tool,
-            name="reschedule_appointment",
-            description=(
-                "Replace the driver's current active appointment with an explicitly selected fresh "
-                "slot option. It revalidates capacity and creates PENDING_CONFIRMATION only."
-            ),
-            args_schema=RescheduleAppointmentArgs,
-        ),
-        StructuredTool.from_function(
             coroutine=escalate_exception_tool,
             name="escalate_exception",
             description="Create a durable human operations escalation for an in-scope shipment.",
             args_schema=EscalateExceptionArgs,
         ),
-        StructuredTool.from_function(
-            coroutine=get_vehicle_and_carrier_details,
-            name="get_vehicle_and_carrier_details",
-            description="Get assigned vehicle registration, payload capacity kg, refrigeration capability, and carrier contact details.",
-            args_schema=VehicleCarrierArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_gate_and_queue_status,
-            name="get_gate_and_queue_status",
-            description="Get gate check-in status, yard queue position, arrival state, and dock assignment.",
-            args_schema=GateQueueArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_facility_rules_and_restrictions,
-            name="get_facility_rules_and_restrictions",
-            description="Get facility safety rules, policies, gate procedures, and check-in grace periods.",
-            args_schema=FacilityRulesArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=report_vehicle_breakdown_or_incident,
-            name="report_vehicle_breakdown_or_incident",
-            description="Report a roadside vehicle breakdown, accident, or emergency incident to dispatch.",
-            args_schema=ReportIncidentArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=get_dock_maintenance_alerts,
-            name="get_dock_maintenance_alerts",
-            description="Get active dock maintenance alerts, outages, or capacity reduction events for a facility.",
-            args_schema=DockMaintenanceArgs,
-        ),
-        StructuredTool.from_function(
-            coroutine=scheduling_capability_disabled,
-            name="scheduling_capability_disabled",
-            description=(
-                "Return CAPABILITY_NOT_ENABLED for reschedule or driver confirmation mutations."
-            ),
-            args_schema=SchedulingArgs,
-        ),
     ]
-
+    assert {t.name for t in tools} == DRIVER_ALLOWLIST, (
+        "build_driver_tools drifted from DRIVER_ALLOWLIST -- keep the two in sync, "
+        "the allowlist constant is what E3.1's own tests assert against."
+    )
+    return tools

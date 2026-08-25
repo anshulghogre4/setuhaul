@@ -829,3 +829,175 @@ async def find_feasible_slots(
         escalation=escalation,
         current_active_appointment=dict(active_appt) if active_appt else None,
     )
+
+
+class SlotEligibilityResult(BaseModel):
+    """FR-DRV-006 (E3.1, issue #25): 'eligibility answered per-invariant; browse-only, no
+    exception created.' Deliberately returns the same failure_code/message shape
+    evaluate_candidate_slot already produces for request_slot's own rejection path, rather
+    than a third vocabulary for the same set of reasons -- a driver asking "why can't I book
+    this slot" and request_slot's own 409 should name the same thing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shipment_id: str
+    slot_id: str
+    eligible: bool
+    checked_constraints: list[str]
+    failure_code: str | None = None
+    message: str | None = None
+    explanation: list[str] = Field(default_factory=list)
+
+
+async def explain_slot_eligibility(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    shipment_id: str,
+    slot_id: str,
+) -> SlotEligibilityResult:
+    """FR-DRV-006: answer "is this specific slot eligible, and why" without creating an
+    appointment or an exception -- browse-only, per the requirement's own wording.
+
+    Deliberately re-fetches shipment/facility/candidate rather than sharing find_feasible_slots's
+    in-flight state: that function only ever holds one candidate slot's row in memory at a time
+    during its scan (never the full set), so there is nothing to look up post hoc, and threading
+    a "just check this one slot_id" mode through find_feasible_slots's control flow would risk
+    the exact kind of change this session has repeatedly found expensive to get right in an
+    already-verified function (see COMPARISON-latency F16 on that function's round-trip budget).
+    A second, narrower query is the lower-risk shape for a read that a driver may call often
+    while deciding, on a slot_id they already have in hand from find_feasible_slots's own output.
+    """
+    constraints = load_scheduling_constraints()
+    checked_constraints = sorted(constraints.hard_constraint_ids())
+
+    shipment = (
+        await session.execute(
+            text(
+                """
+                SELECT s.shipment_id, s.driver_id, s.destination_facility_id,
+                       s.required_dock_type, s.temperature_control_required,
+                       s.load_weight_kg, s.expected_unload_min,
+                       le.effective_eta_ts,
+                       (SELECT max(de.earliest_acceptable_ts::timestamptz)
+                          FROM public.driver_exceptions de
+                         WHERE de.shipment_id = s.shipment_id
+                           AND de.exception_status NOT IN :inactive_exception_statuses
+                           AND de.earliest_acceptable_ts IS NOT NULL) AS driver_earliest_acceptable_ts,
+                       (SELECT min(de.latest_acceptable_ts::timestamptz)
+                          FROM public.driver_exceptions de
+                         WHERE de.shipment_id = s.shipment_id
+                           AND de.exception_status NOT IN :inactive_exception_statuses
+                           AND de.latest_acceptable_ts IS NOT NULL) AS driver_latest_acceptable_ts
+                FROM public.shipments s
+                JOIN public.v_latest_eta le ON le.shipment_id = s.shipment_id
+                WHERE s.shipment_id = :shipment_id
+                """
+            ).bindparams(bindparam("inactive_exception_statuses", expanding=True)),
+            {
+                "shipment_id": shipment_id,
+                "inactive_exception_statuses": list(INACTIVE_EXCEPTION_STATUSES),
+            },
+        )
+    ).mappings().first()
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    shipment_data = dict(shipment)
+    assert_shipment_visible(
+        ctx,
+        shipment_driver_id=shipment_data.get("driver_id"),
+        shipment_facility_id=str(shipment_data["destination_facility_id"]),
+    )
+
+    candidate = (
+        await session.execute(
+            text(
+                """
+                SELECT sl.slot_id, sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
+                       sl.slot_status, sl.block_reason, d.dock_code, d.dock_type,
+                       d.supports_refrigerated, d.max_vehicle_weight_kg, d.dock_status,
+                       a.appointment_id AS active_appointment_id,
+                       de.dock_event_id AS active_dock_event_id
+                FROM public.appointment_slots sl
+                JOIN public.docks d ON d.dock_id = sl.dock_id
+                LEFT JOIN public.appointments a
+                  ON a.slot_id = sl.slot_id
+                 AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
+                LEFT JOIN public.dock_status_events de
+                  ON de.dock_id = sl.dock_id
+                 AND de.event_start_ts < sl.slot_end_ts
+                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts)
+                WHERE sl.slot_id = :slot_id AND sl.facility_id = :facility_id
+                """
+            ),
+            {"slot_id": slot_id, "facility_id": shipment_data["destination_facility_id"]},
+        )
+    ).mappings().first()
+    if candidate is None:
+        return SlotEligibilityResult(
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            eligible=False,
+            checked_constraints=checked_constraints,
+            failure_code="SLOT_NOT_FOUND",
+            message="No slot with this id exists at the shipment's destination facility.",
+        )
+    candidate_data = dict(candidate)
+
+    facility = (
+        await session.execute(
+            text(
+                """
+                SELECT f.facility_id, f.timezone, f.open_time, f.close_time, f.active_flag,
+                       (SELECT coalesce(json_agg(json_build_object(
+                                 'rule_id', fr.rule_id,
+                                 'rule_type', fr.rule_type,
+                                 'rule_value', fr.rule_value,
+                                 'effective_from', fr.effective_from,
+                                 'effective_to', fr.effective_to))::text, '[]')
+                          FROM public.facility_rules fr
+                         WHERE fr.facility_id = f.facility_id
+                           AND fr.active_flag = 1) AS facility_rules_json
+                FROM public.facilities f
+                WHERE f.facility_id = :facility_id
+                """
+            ),
+            {"facility_id": shipment_data["destination_facility_id"]},
+        )
+    ).mappings().first()
+    if facility is None or not int(facility["active_flag"]):
+        raise AppError("Destination facility is not active.", code="FACILITY_UNAVAILABLE", status_code=409)
+    facility_data = dict(facility)
+    facility_rules: list[dict[str, Any]] = json.loads(str(facility_data.pop("facility_rules_json") or "[]"))
+    driver_window = {
+        "earliest_acceptable_ts": shipment_data.get("driver_earliest_acceptable_ts"),
+        "latest_acceptable_ts": shipment_data.get("driver_latest_acceptable_ts"),
+    }
+
+    eta_dt = _parse_timestamp(str(shipment_data["effective_eta_ts"]))
+    option, reason = evaluate_candidate_slot(
+        shipment=shipment_data,
+        facility=facility_data,
+        eta_dt=eta_dt,
+        candidate=candidate_data,
+        checked_constraints=checked_constraints,
+        facility_rules=facility_rules,
+        driver_window=driver_window,
+    )
+
+    if option is not None:
+        return SlotEligibilityResult(
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            eligible=True,
+            checked_constraints=checked_constraints,
+            explanation=option.ranking_explanation,
+        )
+    assert reason is not None  # evaluate_candidate_slot always returns exactly one of the two
+    return SlotEligibilityResult(
+        shipment_id=shipment_id,
+        slot_id=slot_id,
+        eligible=False,
+        checked_constraints=checked_constraints,
+        failure_code=reason.failure_code,
+        message=reason.message,
+    )

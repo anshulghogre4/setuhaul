@@ -45,10 +45,19 @@ ROLE_PERMISSIONS: dict[RoleName, list[str]] = {
     RoleName.ADMIN: list(_GLOBAL_OPS_PERMS),
     RoleName.TRANSPORT_MANAGER: list(_GLOBAL_OPS_PERMS),
     RoleName.REGIONAL_OPERATIONS_HEAD: list(_GLOBAL_OPS_PERMS),
-    # RoleName.CARRIER deliberately absent (defaults to [] via ROLE_PERMISSIONS.get below):
-    # E2.3 only creates the identity model (role, carrier_id, user_scopes). The SS7.5.6 carrier
-    # tool catalog and its permission strings are M3/E3.3's job -- filling this in now would
-    # invent a permission list the tool layer does not exist to check against yet.
+    # E3.3 (issue #27, M3): filled in now that SS7.5.6's catalog exists, as E2.3's placeholder
+    # comment said it would be. Read-only by construction -- there is no `*:write_carrier` string
+    # here because SS7.5.6 defines no mutating tool, and the naming follows the existing
+    # `<domain>:<verb>_<tier>` convention with a new `_carrier` tier rather than reusing
+    # `_facility` (carriers are explicitly not facility-scoped). The four domains are SS2's
+    # persona table for this role -- shipments, drivers, vehicles -- plus the exceptions raised
+    # against those shipments, which SS7.5.6's `list_fleet_exceptions` reads.
+    RoleName.CARRIER: [
+        "shipment:read_carrier",
+        "driver:read_carrier",
+        "vehicle:read_carrier",
+        "exception:read_carrier",
+    ],
 }
 
 OPS_PORTAL_ROLES = (

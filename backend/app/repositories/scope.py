@@ -115,6 +115,52 @@ def assert_facility_visible(
     raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
 
 
+def resolve_carrier_scope(ctx: ExecutionContext) -> str:
+    """Return the carrier id a carrier-portal read must filter by (`E3.3`, §7.5.6, `M15`).
+
+    Deliberately takes **no** `requested_carrier_id` parameter, unlike `resolve_facility_scope`
+    above. That asymmetry is the point: §7.5.6 states every carrier tool is "scope-derived from
+    the caller's own `carrier_id` (M15), never accepted as an argument", so there is no client
+    input for this function to validate -- the only carrier id that can reach a query is the one
+    on the verified identity. Adding a parameter here later would reintroduce exactly the
+    client-supplied-scope shape M15 exists to forbid.
+
+    Raises rather than returning `None` on an unmapped identity: unlike a global-read facility
+    persona, "no carrier filter" is never a legal carrier-portal outcome, so an unmapped CARRIER
+    user must be refused, not silently served the whole fleet table.
+    """
+    if not ctx.is_carrier:
+        raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)
+    if not ctx.carrier_id:
+        raise AppError(
+            "Carrier scope missing.",
+            code="CARRIER_UNMAPPED",
+            status_code=403,
+            detail="This account is not linked to a carrier.",
+        )
+    return ctx.carrier_id
+
+
+def assert_shipment_in_carrier_fleet(
+    ctx: ExecutionContext, *, shipment_carrier_id: str | None
+) -> None:
+    """Refuse a shipment that is not in the caller's own fleet (§7.5.6 `get_shipment_detail`).
+
+    Callers must pass `shipment_carrier_id=None` for a shipment id that returned no row at all,
+    **not** raise `NOT_FOUND` first. `UI-UX/05-carrier-portal/edge-cases.md` #1 requires that this
+    surface "never confirms or denies whether the shipment exists at all outside their scope", so
+    a missing id and another carrier's id must be indistinguishable to the client -- same code,
+    same status, same message. A 404-then-403 pair would leak existence by response code alone.
+    """
+    if not ctx.can_read_carrier(shipment_carrier_id):
+        raise AppError(
+            "This shipment isn't in your fleet.",
+            code="FORBIDDEN",
+            status_code=403,
+            detail="This shipment isn't in your fleet.",
+        )
+
+
 def assert_facility_write_scope(ctx: ExecutionContext, facility_id: str) -> None:
     """Write gate for an action recorded against a facility (e.g. raising an escalation).
 

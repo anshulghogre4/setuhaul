@@ -139,17 +139,30 @@ def test_allocation_unique_constraint_name_ignores_unrelated_integrity_errors():
 
 
 def test_driver_tool_allowlist_includes_request_slot():
+    """E3.1 (issue #25): 11 of SOLUTION_DESIGN.md section 7.5.4's 12-tool driver allowlist
+    (confirm_held_slot deferred). reschedule_appointment/scheduling_capability_disabled are
+    gone -- D1 collapses a reschedule into cancel_appointment + request_slot, both already
+    on the allowlist, so there is nothing left to disable a stub tool for.
+    """
     tools = build_driver_tools(session=None, ctx=_driver_ctx(), thread_id="THR-TEST")  # type: ignore[arg-type]
     names = {tool.name for tool in tools}
 
-    assert "get_conversation_memory" in names
-    assert "find_feasible_slots" in names
-    assert "request_slot" in names
-    assert "get_appointment_request_status" in names
-    assert "cancel_appointment" in names
-    assert "reschedule_appointment" in names
-    assert "escalate_exception" in names
-    assert "scheduling_capability_disabled" in names
+    assert names == {
+        "get_driver_operational_context",
+        "list_active_shipments",
+        "get_latest_eta",
+        "get_current_appointment",
+        "report_delay_or_update_eta",
+        "find_feasible_slots",
+        "request_slot",
+        "get_appointment_request_status",
+        "explain_slot_eligibility",
+        "cancel_appointment",
+        "escalate_exception",
+    }
+    assert "get_conversation_memory" not in names
+    assert "reschedule_appointment" not in names
+    assert "scheduling_capability_disabled" not in names
 
 
 @pytest.mark.asyncio

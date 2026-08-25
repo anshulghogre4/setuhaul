@@ -1,6 +1,10 @@
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.assistant.tools import build_driver_tools
+from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
 from app.scheduling.feasibility import (
     OUTCOME_FEASIBLE,
@@ -9,6 +13,7 @@ from app.scheduling.feasibility import (
     active_facility_rules,
     derive_outcome,
     evaluate_candidate_slot,
+    explain_slot_eligibility,
     recommendation_id_for,
 )
 
@@ -468,3 +473,131 @@ def test_recommendation_id_is_stable_and_uses_noslot_marker():
         effective_eta_ts="2026-08-04T12:00:00+05:30",
         option_slot_ids=[],
     ) != first
+
+
+# --------------------------------------------------------------------------------------
+# E3.1 (issue #25) -- explain_slot_eligibility, FR-DRV-006
+# --------------------------------------------------------------------------------------
+
+
+def _driver_ctx(**overrides) -> ExecutionContext:
+    data = {
+        "request_id": "r",
+        "auth_subject": "sub",
+        "user_id": "USR201",
+        "email": "driver@setuhaul.com",
+        "full_name": "Test Driver",
+        "role_id": "ROL001",
+        "role_name": RoleName.DRIVER,
+        "driver_id": "DRV001",
+    }
+    data.update(overrides)
+    return ExecutionContext(**data)
+
+
+def _mock_result(row: dict | None):
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = row
+    return result
+
+
+def _eligibility_session(*, shipment_row: dict, candidate_row: dict | None, facility_row: dict | None):
+    """Mocks the three sequential session.execute calls explain_slot_eligibility makes:
+    shipment, candidate slot, facility -- in that order (matches the function's own body)."""
+    session = AsyncMock()
+    calls = [_mock_result(shipment_row)]
+    if candidate_row is not None:
+        calls.append(_mock_result(candidate_row))
+        calls.append(_mock_result(facility_row))
+    else:
+        calls.append(_mock_result(None))
+    session.execute = AsyncMock(side_effect=calls)
+    return session
+
+
+@pytest.mark.asyncio
+async def test_explain_slot_eligibility_reports_eligible_with_the_same_explanation_shape():
+    shipment_row = _shipment(
+        driver_id="DRV001",
+        destination_facility_id="FAC-JAI-01",
+        effective_eta_ts="2026-08-04T11:30:00+05:30",
+        driver_earliest_acceptable_ts=None,
+        driver_latest_acceptable_ts=None,
+    )
+    candidate_row = _candidate()
+    facility_row = {**_facility(), "active_flag": 1, "facility_rules_json": "[]"}
+    session = _eligibility_session(
+        shipment_row=shipment_row, candidate_row=candidate_row, facility_row=facility_row
+    )
+
+    result = await explain_slot_eligibility(session, _driver_ctx(), "SHP1017", "SLOT-JAI-019")
+
+    assert result.eligible is True
+    assert result.failure_code is None
+    assert result.explanation, "an eligible slot must still explain why, not just say yes"
+    assert result.checked_constraints  # non-empty: this is what "per-invariant" means
+
+
+@pytest.mark.asyncio
+async def test_explain_slot_eligibility_names_the_same_failure_code_request_slot_would_give():
+    """FR-DRV-006 answers with the same vocabulary evaluate_candidate_slot already uses for
+    request_slot's own rejection -- a driver asking "why not" and a driver who tried and got a
+    409 should hear the same reason, not two different vocabularies for one fact."""
+    shipment_row = _shipment(
+        driver_id="DRV001",
+        destination_facility_id="FAC-JAI-01",
+        effective_eta_ts="2026-08-04T11:30:00+05:30",
+        driver_earliest_acceptable_ts=None,
+        driver_latest_acceptable_ts=None,
+    )
+    candidate_row = _candidate(active_appointment_id="APT-EXISTING")
+    facility_row = {**_facility(), "active_flag": 1, "facility_rules_json": "[]"}
+    session = _eligibility_session(
+        shipment_row=shipment_row, candidate_row=candidate_row, facility_row=facility_row
+    )
+
+    result = await explain_slot_eligibility(session, _driver_ctx(), "SHP1017", "SLOT-JAI-019")
+
+    assert result.eligible is False
+    assert result.failure_code == "SLOT_CAPACITY_UNAVAILABLE"
+    assert result.message
+    assert result.explanation == []
+
+
+@pytest.mark.asyncio
+async def test_explain_slot_eligibility_reports_not_found_without_raising():
+    """Browse-only per FR-DRV-006's own wording: a slot_id that does not exist at this
+    facility is an answer ("not eligible, here is why"), not a 404 the driver assistant has
+    to translate into conversational language itself."""
+    shipment_row = _shipment(
+        driver_id="DRV001",
+        destination_facility_id="FAC-JAI-01",
+        effective_eta_ts="2026-08-04T11:30:00+05:30",
+        driver_earliest_acceptable_ts=None,
+        driver_latest_acceptable_ts=None,
+    )
+    session = _eligibility_session(shipment_row=shipment_row, candidate_row=None, facility_row=None)
+
+    result = await explain_slot_eligibility(session, _driver_ctx(), "SHP1017", "SLOT-DOES-NOT-EXIST")
+
+    assert result.eligible is False
+    assert result.failure_code == "SLOT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_explain_slot_eligibility_refuses_a_shipment_outside_the_callers_scope():
+    """assert_shipment_visible (E2.2's repository tier) is the actual scope gate here -- a
+    different driver's shipment must be refused before any slot data is even fetched."""
+    shipment_row = _shipment(
+        driver_id="DRV999",  # not the calling driver
+        destination_facility_id="FAC-JAI-01",
+        effective_eta_ts="2026-08-04T11:30:00+05:30",
+        driver_earliest_acceptable_ts=None,
+        driver_latest_acceptable_ts=None,
+    )
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=_mock_result(shipment_row))
+
+    with pytest.raises(AppError) as exc_info:
+        await explain_slot_eligibility(session, _driver_ctx(), "SHP-NOT-MINE", "SLOT-JAI-019")
+    assert exc_info.value.code == "FORBIDDEN"

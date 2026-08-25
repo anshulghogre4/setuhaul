@@ -6,11 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.routers import (
+    carrier,
     chat,
     driver,
+    gate,
     health_auth,
     internal,
     operations,
+    planner,
     scheduling,
     shipments,
 )
@@ -78,8 +81,13 @@ def create_app() -> FastAPI:
     app.include_router(shipments.router)
     app.include_router(scheduling.router)
     app.include_router(chat.router)
+    # E3.3 (issue #27, M3): the SS7.5.6 carrier portal -- five read-only GETs, CARRIER-role only.
+    app.include_router(carrier.router)
+    # E3.6 (issue #30, M3): SS7.5.1 planner dock-blocking + SS7.5.2 gate/yard writes.
+    app.include_router(planner.router)
+    app.include_router(gate.router)
     # Machine-callable only (shared-secret header, not a Supabase JWT) -- the M8 expiry sweeper's
-    # trigger target. Registered last so it is visibly separate from the five user-facing routers.
+    # trigger target. Registered last so it is visibly separate from the user-facing routers.
     app.include_router(internal.router)
     return app
 

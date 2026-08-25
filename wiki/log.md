@@ -3,10 +3,26 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-22
+last_updated: 2026-08-23
 ---
 
 # Wiki log
+
+## 2026-08-24 05:30 IST | implementation | E3.3 (#27) and E3.6 (#30, M3) — carrier portal, planner dock-blocking, gate/yard writes
+
+- Two background `fullstack-engineer` dispatches from the prior turn both hit the session API usage limit mid-task; resumed and finished directly rather than trusted, per standing discipline.
+- E3.3 (§7.5.6 carrier portal): agent's work was nearly complete (router+service+repo+23 tests) but mid-fix on a real bug — `count_open_exceptions` vs `list_open_exceptions` used two different "open" definitions, 73 vs 75 live on CAR001, independently reproduced before fixing. Fix unified both onto one SQL definition; had to also fix the test file's own static SQL-scope-audit helper, which couldn't see through the resulting f-string interpolation.
+- E3.6 (§7.5.1 planner dock-blocking + §7.5.2 gate/yard writes): agent had written 1407 lines of service code, well-grounded but completely unwired — no router, no tests, nothing imported it, and its last message said it was about to verify a bind pattern against live data and never did. Independently verified the `ANY(:param)` bind pattern, every schema claim (`information_schema`/`pg_constraint`), the EARLY/ON_TIME/LATE calibration against the same 5 live rows, and the 397-row dwell claim — all confirmed exact. Found a real gap: no DB role backs the design's "Gate/yard officer" persona; asked the owner rather than guessing, got WAREHOUSE_PLANNER+FACILITY_MANAGER for gate/yard, WAREHOUSE_PLANNER for planner (both +ADMIN). Added both routers (8 endpoints total) + 45 new tests.
+- Verified: 297 passed, 0 failed total (252 after E3.3, +45 for E3.6's new tests); `compileall` clean; `app.openapi()` confirms 44 total routes.
+- Evidence comments posted on #27 and #30; both left open pending commit.
+- Also recorded: owner removed the live ECS `setuhaul-api` cluster mid-session — confirmed no impact, since nothing this session touched deployed infrastructure.
+
+## 2026-08-23 10:34 IST | implementation | E3.1 (#25, M3) — driver tool allowlist correction: 23 → 12 (11 bound, 1 deferred)
+
+- `build_driver_tools` (`backend/app/assistant/tools.py`) now binds `SOLUTION_DESIGN.md` §7.5.4's allowlist minus `confirm_held_slot` (deferred to the D2 HELD build). Removed 13 tool wrappers whose underlying `driver_reads.py` service functions stay in place for REST callers; removed `reschedule_appointment` from the chat surface entirely since D1 collapses it into `cancel_appointment` + `request_slot`, both already bound. Added `explain_slot_eligibility` (FR-DRV-006, browse-only) backed by a new `feasibility.explain_slot_eligibility()`.
+- `build_driver_tools` now self-asserts its returned tool names equal `DRIVER_ALLOWLIST` — drift fails loudly instead of silently. `prompts.py` updated to match (dropped 3 dead-tool references, added the composed reschedule flow + the new tool's guidance).
+- Verified: `compileall` clean, full backend unit suite 218 passed (baseline 214 + 4 new), whole-backend grep for every removed name/Args class confirms zero remaining references, `test_scheduling_allocation.py`'s allowlist assertion updated to the new 11-tool set.
+- Comment with full evidence posted on #25; left open pending commit (`Fixes #25` on push closes it, per this session's standing evidence-only-close rule).
 
 ## 2026-08-22 07:46 IST | process | Adopted the AI Collaboration Field Guide into `AGENTS.md`; installed `gh` CLI
 
