@@ -8,6 +8,34 @@ last_updated: 2026-08-25
 
 # Wiki log
 
+## 2026-08-25 19:15 IST | tracking | Filed E7.3 (#51, M7): CloudWatch tool-level tracing
+
+- Owner asked if CloudWatch was tracked (no); asked to add it. Filed #51 under M7, citing COMPARISON-deployment.md §7's "keep as-is" verdict being deliberately reversed per current priority, not a missed gap. risk:low.
+
+## 2026-08-25 19:07 IST | implementation | E4.2 sub-issue 4 closed: real deploy shipped, deployHash check found broken and fixed
+
+- Ran agentcore_deploy.py for real (owner re-authed AWS). Deploy succeeded (agentRuntimeVersion 9->10, confirmed live). Wrapper's own confirm step caught a bug in itself: deployHash's JSON path was wrong (sibling of runtimes, not nested inside it), and once fixed, deployHash proved to not be a real content signal at all (identical before/after despite a confirmed new deploy) -- replaced with agentRuntimeVersion via aws CLI (boto3 needs botocore[crt] for this login flow). 408 passed/0 failed. M4 now fully complete end-to-end, not just implemented. Owner also removed ECS Express Mode from AWS -- flagged, not acted on.
+
+## 2026-08-25 18:51 IST | implementation | M4 E4.2 (#32) — atomic deploy wrapper, dependency single-source-of-truth, live CI drift also fixed
+
+- `stage_agentcore_codezip.py` now generates codezip's requirements.txt/pyproject.toml from backend/pyproject.toml directly (tomllib) instead of hand-maintained duplicates; deleted pyproject.agentcore.toml. Found+fixed live CI drift (ci.yml was pip-installing stale requirements.txt, testing old langchain-google-genai 2.1.12 since E4.1). New docs/scripts/agentcore_deploy.py: stage -> tests+`agentcore package` gate -> deploy -> deployHash freshness check, replacing direct `agentcore.cmd deploy` calls (AGENTS.md/DEPLOYMENT.md/sprint-4-hosting.md updated). Verified end-to-end with real (non-mocked) tools -- correctly halted at expired AWS session. 22 new tests, 405 passed/0 failed. Evidence on #32, left open -- sub-issue 4 (real redeploy) needs owner's `aws login`.
+
+## 2026-08-25 18:19 IST | verification | Real Vertex AI end-to-end test via owner's GCP credentials; gemini-3.7-flash rollout gap root-caused
+
+- ADC auth + region/project wiring + `gemini-2.5-flash` all proven live through the app's actual code. `gemini-3.7-flash` 404s only through the SDK's regional-subdomain (`v1beta1`) surface, not Vertex's classic surface where it's confirmed live -- a Google-side rollout gap for a very new model, not a code defect. No code changes. Evidence posted on #31. Also: a `grep`/`Read` pair leaked 4 real secret values into the transcript this pass -- flagged to owner, rotation recommended.
+
+## 2026-08-25 17:52 IST | verification | Vertex AI -> Gemini Enterprise Agent Platform rebrand confirmed; TECH_STACK.md/llm.py annotated
+
+- Owner-flagged claim ("Vertex AI is now an agent platform") verified via `WebSearch`: real, Google Cloud Next 2026 (2026-04-22) rebrand into Gemini Enterprise Agent Platform, includes a real Agent Engine. Confirmed unaffected: our REST endpoint (`aiplatform.googleapis.com`) and SDK choice (`langchain-google-genai`/`google-genai`, already chosen over the now-deprecating `ChatVertexAI`). Architecture unchanged -- AWS AgentCore stays the agent-hosting runtime per the owner's own AWS-credit constraint. Annotated `TECH_STACK.md` §7 and `llm.py`'s docstring only.
+
+## 2026-08-25 17:43 IST | implementation | M4 E4.1 (#31) — model/provider correction: langchain-google-genai 4.x, Vertex/ADC auth, gemini-3.7-flash, gemini-first order, region assertion
+
+- All 6 sub-issues done: dependency bump (verified 385/0 before touching auth), `llm.py` rewritten for Vertex/ADC (`vertexai=True`, `project`, `location`, no more `google_api_key=`), model default `gemini-3.7-flash`, `thinking_level: high`, `AUTO_ORDER` gemini-first, new `_assert_vertex_region`. `_extract_text()` added to `run_assistant.py` for LangChain v1.x content-blocks. `test_llm_factory.py` updated for the new contract. Full suite: 387 passed, 3 skipped, 0 failed. `.env.example` updated (`GCP_PROJECT`/`GCP_VERTEX_LOCATION`, `GOOGLE_API_KEY` marked deprecated). Real end-to-end Vertex verification still blocked on the owner's GCP credentials. Evidence posted on #31, left open pending commit. E4.2/#32 is now the only open M4 issue.
+
+## 2026-08-25 17:22 IST | verification | E4.3/E4.4/#50 committed, pushed, auto-closed
+
+- Commit `47d568d` pushed by owner. `gh issue view` confirms #33/#34/#50 CLOSED. M4 milestone: 2/4 closed (E4.1/#31, E4.2/#32 remain, both paused on external owner-supplied dependencies).
+
 ## 2026-08-25 17:05 IST | implementation | M4 E4.3 (#33) + E4.4 (#34) — latency levers, loop hardening, live incident #50 found and fixed
 
 - M4 started after M3 closed. Owner chose "E4.3 + E4.4 first," pausing before E4.1/E4.2 (both need external credentials/an owner-run deploy).

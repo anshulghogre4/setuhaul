@@ -1,3 +1,8 @@
+# Kept in sync with pyproject.toml's [project.dependencies] for manual `pip install -r
+# requirements.txt` setups (see README.md). Not the source of truth and not what CI/Docker
+# actually install from (both use uv sync against pyproject.toml + uv.lock) -- regenerate this
+# by hand whenever pyproject.toml's dependency list changes; a version bump that misses this file
+# only breaks a manual pip-install path, not CI or any deploy target.
 fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.32.0,<1.0.0
 pydantic>=2.9.0,<3.0.0
@@ -7,13 +12,13 @@ asyncpg>=0.30.0,<1.0.0
 httpx>=0.28.0,<1.0.0
 PyJWT[crypto]>=2.10.0,<3.0.0
 python-multipart>=0.0.17,<1.0.0
-langchain>=0.3.0,<1.0.0
-langchain-openai>=0.3.0,<1.0.0
-langchain-google-genai>=2.0.0,<3.0.0
-langchain-core>=0.3.0,<1.0.0
+langchain>=0.3.0,<2.0.0
+langchain-openai>=0.3.0,<2.0.0
+langchain-google-genai>=4.0.0,<5.0.0
+langchain-core>=1.0.0,<2.0.0
+truststore>=0.10.0,<1.0.0
 upstash-redis>=1.2.0,<2.0.0
+redis>=5.0.0,<6.0.0
 boto3>=1.35.0,<2.0.0
-truststore>=0.10.0,<2.0.0
-pytest>=8.0.0,<9.0.0
-pytest-asyncio>=0.24.0,<1.0.0
+pytest-asyncio>=1.3.0,<2.0.0
 tzdata>=2024.1

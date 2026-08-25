@@ -477,13 +477,22 @@ Vercel `VITE_API_BASE_URL` is whichever HTTPS URL won.
 
 Do not generate or deploy AgentCore until local assistant chat works.
 
-**Every `agentcore.cmd deploy` — first or day-2 — must be preceded by re-staging `agentcore/codezip/`.** `agentcore.cmd deploy` packages `agentcore/codezip/app/`, a **separate copied snapshot** of `backend/app/`, not the live source. Editing `backend/app/**` alone does nothing for AgentCore until that snapshot is refreshed — this silently shipped a stale prompt fix on 2026-08-17 (deploy reported success, bug kept reproducing, because the copy was never re-staged). Always run:
+**Never call `agentcore.cmd deploy` directly — use the atomic wrapper instead** (E4.2/issue #32,
+2026-08-26). `agentcore.cmd deploy` packages `agentcore/codezip/app/`, a **separate copied
+snapshot** of `backend/app/`, not the live source. Editing `backend/app/**` alone does nothing for
+AgentCore until that snapshot is refreshed — this silently shipped a stale prompt fix on
+2026-08-17, and recurred again (confirmed live, worse: 5+ files diverged) before this fix landed.
+Always run:
 
 ```powershell
-python docs/scripts/stage_agentcore_codezip.py
+python docs/scripts/agentcore_deploy.py --dry-run
+python docs/scripts/agentcore_deploy.py
 ```
 
-immediately before `agentcore.cmd deploy`, every time, no exceptions.
+instead of `stage_agentcore_codezip.py` + `agentcore.cmd deploy` by hand. The wrapper stages,
+gates on the backend test suite + `agentcore package`, deploys, then confirms via
+`agentcore/.cli/deployed-state.json`'s `deployHash` that the deployed content actually changed —
+so a deploy that silently ships nothing new is flagged, not silently accepted. No exceptions.
 
 ```powershell
 agentcore.cmd create --name SetuHaulAgent --framework LangChain_LangGraph --protocol HTTP --model-provider Gemini --memory none --build CodeZip
@@ -496,15 +505,18 @@ agentcore.cmd dev --logs
 $SESSION = "setuhaul-dev-session-000000000000000001"
 # CLI-only sticky id. Not used in the hosted Driver UI.
 
-python docs/scripts/stage_agentcore_codezip.py
-agentcore.cmd deploy --dry-run --yes
-agentcore.cmd deploy --yes
+python docs/scripts/agentcore_deploy.py --dry-run
+python docs/scripts/agentcore_deploy.py
 agentcore.cmd status
 agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION --prompt-file docs/scripts/agentcore_invoke_ravi.json
 agentcore.cmd logs --runtime SetuHaulAgent
 ```
 
-Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package plus `backend/pyproject.agentcore.toml` staged to `agentcore/codezip/pyproject.toml` (CDK requires it) — via `docs/scripts/stage_agentcore_codezip.py`, not by hand. CLI `--prompt-file` wraps JSON as a string prompt; `agentcore_main._normalize_runtime_payload` unwraps it. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only** (Step 9). Do not set it on Express Mode during Step 8.
+(E4.2/issue #32, 2026-08-26: `docs/scripts/agentcore_deploy.py` replaces calling `stage_agentcore_codezip.py`
+then `agentcore.cmd deploy` by hand — it stages, gates on tests + `agentcore package`, then deploys, then
+confirms via `deployHash` that content actually changed. Do not call `agentcore.cmd deploy` directly.)
+
+Thin in-repo entrypoint wrapping async `run_assistant` (no second agent tree, no duplicate tools). CodeZip includes the `backend/app` package plus a `pyproject.toml`/`requirements.txt` generated at staging time from `backend/pyproject.toml` (CDK requires a `pyproject.toml` at the codeLocation root) — via `docs/scripts/stage_agentcore_codezip.py` (called automatically by `agentcore_deploy.py`), not by hand. CLI `--prompt-file` wraps JSON as a string prompt; `agentcore_main._normalize_runtime_payload` unwraps it. Save Runtime ARN into gitignored `.env` as `AGENTCORE_RUNTIME_ARN` **for the hosted BFF only** (Step 9). Do not set it on Express Mode during Step 8.
 
 ### 5.7 CloudWatch / LangSmith
 
@@ -605,11 +617,12 @@ App Runner equivalent: console or `aws apprunner update-service` with RuntimeEnv
 **3. AgentCore code**
 
 ```powershell
-python docs/scripts/stage_agentcore_codezip.py
-agentcore.cmd deploy --dry-run --yes
-agentcore.cmd deploy --yes
+python docs/scripts/agentcore_deploy.py --dry-run
+python docs/scripts/agentcore_deploy.py
 agentcore.cmd invoke --runtime SetuHaulAgent --session-id $SESSION "Show my shipment"
 ```
+
+(E4.2/issue #32, 2026-08-26: do not call `agentcore.cmd deploy` directly — see the note above.)
 
 If the Runtime ARN **string** changes, do row 2 as well. If it stayed the same, BFF needs no update.
 

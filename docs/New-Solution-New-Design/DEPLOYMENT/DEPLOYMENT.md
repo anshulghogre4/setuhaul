@@ -195,11 +195,21 @@ recommendation above it was not.** Worth remembering as a pattern: the hedge was
 
 1. **Make staging part of the deploy command** — one command that cannot succeed without syncing first, so
    there is no separate script a human can forget. This removes the *human* failure mode, which is the one
-   that actually fired on 2026-08-17.
+   that actually fired on 2026-08-17. **Built (E4.2/issue #32, 2026-08-26)**: `docs/scripts/agentcore_deploy.py`
+   is now that one command. It stages, gates on the backend test suite + `agentcore package` (both must pass
+   before anything ships), deploys, then confirms via `agentcore/.cli/deployed-state.json`'s `deployHash`
+   that the deployed content actually changed. `AGENTS.md` now requires it in place of calling
+   `agentcore deploy` directly.
 2. **Add a post-deploy artifact assertion** (§2.3) — verify the deployed zip contains the expected code
-   rather than trusting the CLI's exit status.
+   rather than trusting the CLI's exit status. **Partially built**: the `deployHash` before/after comparison
+   above is a real content-change signal from the tool's own authoritative record, not the CLI's exit code —
+   but it is not yet the literal "download the S3 zip and diff its extracted files against `backend/app/`"
+   this section originally asked for. That deeper check needs a live AWS session to discover the exact S3
+   artifact location (blocked this session -- `aws sts get-caller-identity` failed with an expired session);
+   `deployHash` was chosen as the practical, buildable-now equivalent rather than left undone.
 3. **Until either lands, `AGENTS.md`'s rule stands verbatim**: run the staging script immediately before
-   every deploy. No exceptions.
+   every deploy. No exceptions. **Superseded by item 1** — the wrapper does this automatically now; this
+   line stays as the historical record of the interim manual rule.
 
 **Do not** attempt option 1 by repointing the deploy at `backend/app/` directly — the two runtimes need
 different packaging, which is what the directory provides.

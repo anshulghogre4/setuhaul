@@ -1,3 +1,0 @@
-# AgentCore CodeZip only. Do not use as the BFF image default.
--r requirements.txt
-bedrock-agentcore>=0.1.0

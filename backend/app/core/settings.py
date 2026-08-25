@@ -16,6 +16,14 @@ REPO_DIR = BACKEND_DIR.parent
 # roughly a dozen of them). Fail toward the decided region, not AWS's historical one.
 DESIGNED_AWS_REGION = "ap-south-1"
 
+# E4.1 (issue #31), TECH_STACK.md section 7, decision D-4: Vertex AI is the only evaluated
+# provider that serves Gemini in-region from India at all -- Bedrock/OpenAI both leave India
+# (~200-250ms), Bedrock's own APAC profiles land in a different country. `asia-south1` (Mumbai)
+# is therefore not an arbitrary regional preference, it is the entire reason Vertex was chosen
+# over the Developer API's simpler API-key auth, which Google's own docs warn can silently route
+# through the global endpoint regardless of configured location.
+DESIGNED_GCP_VERTEX_LOCATION = "asia-south1"
+
 
 class RegionMismatchError(RuntimeError):
     """Startup guard failure: compute is not co-located with Postgres/Redis."""
@@ -49,7 +57,16 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openrouter_api_key: str = ""
     google_api_key: str = ""
-    llm_provider: str = "auto"  # auto | openai | openrouter | gemini
+    # E4.1 (issue #31): the Vertex AI credential is a GCP project + ADC (Application Default
+    # Credentials resolved from the environment -- a service account key file, workload identity,
+    # or `gcloud auth application-default login`), not a string this app holds directly the way
+    # `google_api_key` above is. `gcp_project` being set is therefore what "Gemini is configured"
+    # actually means now; `google_api_key` alone is deliberately no longer sufficient (see
+    # `llm.py::resolve_llm` -- the Developer/API-key path this project used before is exactly the
+    # "trap" TECH_STACK.md section 7 warns can silently forfeit the in-region guarantee).
+    gcp_project: str = ""
+    gcp_vertex_location: str = DESIGNED_GCP_VERTEX_LOCATION
+    llm_provider: str = "auto"  # auto | gemini | openai | openrouter
     llm_model: str = ""  # optional override; defaults per provider
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
@@ -151,11 +168,17 @@ class Settings(BaseSettings):
         return self.ready_llm
 
     @property
+    def ready_gemini(self) -> bool:
+        """E4.1 (issue #31): `gcp_project` set, not `google_api_key` -- Vertex/ADC is the only
+        Gemini path this app resolves to now; see the field's own comment for why."""
+        return bool((self.gcp_project or "").strip())
+
+    @property
     def ready_llm(self) -> bool:
         return bool(
             (self.openai_api_key or "").strip()
             or (self.openrouter_api_key or "").strip()
-            or (self.google_api_key or "").strip()
+            or self.ready_gemini
         )
 
     @property

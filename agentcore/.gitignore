@@ -11,5 +11,9 @@ cdk/node_modules/
 # Ephemeral Staging
 .cache/*
 
+# E4.2 (issue #32): `agentcore package` output -- a build artifact, never source
+*.zip
+/SetuHaulAgent/
+
 # Exception: Commit the State
 !.cli/deployed-state.json

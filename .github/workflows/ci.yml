@@ -17,14 +17,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install uv
+        run: pip install uv==0.8.4
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+        # pyproject.toml + uv.lock, matching the Dockerfile -- not requirements.txt. That file
+        # drifted out of sync with the real dependency set (E4.2/issue #32: it still had the
+        # pre-E4.1 langchain-google-genai pin while this workflow used it, so CI had been testing
+        # a different dependency set than local dev/Docker without anyone noticing).
+        run: uv sync --frozen
       - name: Run unit tests
-        env:
-          PYTHONPATH: .
-        run: pytest tests/unit -q
+        # `uv run --no-sync pytest` (bare) does not add cwd to sys.path, so `from app...` imports
+        # fail -- `python -m pytest` does. Hit and worked around locally this same session.
+        run: uv run --no-sync python -m pytest tests/unit -q
 
   frontend-build:
     name: Frontend typecheck and build

@@ -244,6 +244,22 @@ nobody received is not a confirmation."*
 ("lower effort for routine turns") — recorded so a later reader does not "fix" it as an oversight. The
 rationale is in *The effort lever* below.
 
+**Naming note, added 2026-08-25 (E4.1/issue #31), does not change D-4**: Google announced "Vertex AI" as
+renamed/absorbed into the **Gemini Enterprise Agent Platform** at Cloud Next 2026 (2026-04-22), bundling
+Agent Studio/ADK/Agent Engine/200+ models under one brand — Vertex AI genuinely is now marketed as an agent
+*hosting* platform, not just a model-serving API, which is worth stating plainly rather than leaving this
+section's older framing to imply otherwise. Two things are unaffected by the rebrand: (1) the REST endpoint
+this integration actually calls, `aiplatform.googleapis.com`, is unchanged — it predates the "Vertex AI"
+name itself; (2) the SDK choice this section already made, `langchain-google-genai` (wrapping `google-genai`)
+over `langchain-google-vertexai`/`ChatVertexAI`, turns out to be the forward-compatible side of this exact
+transition — the *older* Vertex AI SDK (what `ChatVertexAI` wraps) is the one being deprecated, with updates
+stopping 2026-06-24; `google-genai` is not. This project deliberately still does not use any Agent
+Engine/Agent Builder surface — the integration below is a plain model-inference call (`ChatGoogleGenerativeAI`
+in Vertex mode), and AWS AgentCore remains the agent-hosting runtime per the owner's explicit AWS-credit
+constraint (§2, "Owner constraint; AWS credits cover hosting") — a cost decision, not a capability gap this
+rebrand fills. If that constraint is ever revisited, Gemini Enterprise Agent Platform's own Agent Engine
+would be the thing to evaluate against AgentCore, but that is a new decision, not implied by this rebrand.
+
 This section previously recorded an open three-way bake-off between Nova Lite, OpenAI, and Groq/Cerebras
 open-weights. **That bake-off is closed**, superseded by two findings: an in-region inference path that
 none of those candidates could offer, and a spike that settled the tool-calling gate empirically.

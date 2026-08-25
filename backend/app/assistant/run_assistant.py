@@ -407,12 +407,39 @@ async def _execute_tool_round(
     return tool_messages, should_break_after_round
 
 
+def _extract_text(content: Any) -> str:
+    """Text from a message's `.content`, whichever shape the provider returned.
+
+    E4.1 (issue #31): `langchain-core` 1.x introduced a standard content-blocks format
+    (`str | list[str | dict]`, each dict typically `{"type": "text", "text": ...}` alongside
+    non-text blocks like reasoning/tool-use) alongside the older plain-`str` shape -- and
+    TECH_STACK.md section 7's own spike notes this explicitly: "the 4.x message-content shape
+    differs (content blocks, not a plain string), so any code reading `.content` directly needs
+    checking." Which shape `gemini-3.7-flash` actually returns via Vertex AI cannot be confirmed
+    without live GCP credentials (this issue's own blocker), so this handles both defensively --
+    a plain string unchanged, a content-blocks list by concatenating each block's own text (a
+    `str` entry or a `{"type": "text", ...}` dict; anything else, e.g. a reasoning block, is
+    skipped, not stringified into visible output). Falls back to `""` for anything else rather
+    than surfacing a raw `repr`/JSON dump to the driver.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "".join(parts)
+    return ""
+
+
 def _finalize_content(ai: AIMessage, state: TurnState) -> str:
     """The content-fallback logic: what the driver actually sees when the model's own `content`
     is empty (common right after a tool call) or the loop broke on a confirmation/clarification
     gate."""
-    raw_content = ai.content if isinstance(ai.content, str) else json.dumps(ai.content)
-    content = raw_content.strip()
+    content = _extract_text(ai.content).strip()
     if content and state.ux_state not in ("confirmation_required", "clarification_required"):
         return content
     if not state.observed_tools:
@@ -770,7 +797,9 @@ async def _stream_llm_call(
     deltas: list[str] = []
     async for chunk in llm.astream(messages, config=invoke_config):
         accumulated = chunk if accumulated is None else accumulated + chunk
-        piece = chunk.content if isinstance(chunk.content, str) else ""
+        # `_extract_text`, not a bare `isinstance(..., str)` check: see its own docstring (E4.1,
+        # issue #31) -- a content-blocks chunk would otherwise silently stream as empty tokens.
+        piece = _extract_text(chunk.content)
         if piece:
             deltas.append(piece)
     turn.record_llm(

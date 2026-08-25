@@ -69,7 +69,12 @@ def _patch_prefetch(monkeypatch):
 def test_build_chat_model_passes_the_configured_timeout_to_openai():
     from app.assistant.llm import build_chat_model
 
-    settings = Settings(openai_api_key="sk-test-not-real", llm_call_timeout_seconds=12.5)
+    # llm_provider forced explicitly, same reasoning as the gemini test below: this process's
+    # real environment may have GCP_PROJECT set (from .env/.env.local), which would otherwise
+    # win under "auto" mode (gemini-first per issue #31) regardless of the openai_api_key here.
+    settings = Settings(
+        openai_api_key="sk-test-not-real", llm_call_timeout_seconds=12.5, llm_provider="openai",
+    )
     model = build_chat_model(settings)
     assert model.request_timeout == 12.5
 
@@ -77,11 +82,11 @@ def test_build_chat_model_passes_the_configured_timeout_to_openai():
 def test_build_chat_model_passes_the_configured_timeout_to_gemini():
     from app.assistant.llm import build_chat_model
 
-    # llm_provider forced explicitly: AUTO_ORDER tries openai first, and this process's real
-    # environment may have OPENAI_API_KEY set (from .env/.env.local), which would otherwise pick
-    # ChatOpenAI regardless of the google_api_key set here -- exactly the ordering issue #31 flags.
+    # llm_provider forced explicitly: this process's real environment may have OPENAI_API_KEY set
+    # (from .env/.env.local), which would otherwise win under "auto" mode regardless of the
+    # gcp_project set here -- exactly the ordering issue #31 flags.
     settings = Settings(
-        google_api_key="AIzaTestKeyNotReal", llm_call_timeout_seconds=8.0, llm_provider="gemini",
+        gcp_project="proj-x", llm_call_timeout_seconds=8.0, llm_provider="gemini",
     )
     model = build_chat_model(settings)
     assert model.timeout == 8.0
