@@ -8,6 +8,19 @@ last_updated: 2026-08-25
 
 # Wiki log
 
+## 2026-08-25 17:05 IST | implementation | M4 E4.3 (#33) + E4.4 (#34) — latency levers, loop hardening, live incident #50 found and fixed
+
+- M4 started after M3 closed. Owner chose "E4.3 + E4.4 first," pausing before E4.1/E4.2 (both need external credentials/an owner-run deploy).
+- E4.3: Lever 2 already done (E3.1). Lever 1 prefetch wired into a shared `_prepare_turn` helper. Lever 3 real SSE — refactored the ~450-line tool loop into shared pieces so blocking and streamed paths make identical decisions, only the LLM call mechanism differs. New additive `/chat/stream`, existing endpoints untouched.
+- Independent finding while refactoring: `for turn in history:` was silently shadowing the `TurnLatency` tracker — every thread's second message crashed with AttributeError, invisible to every existing test (all used empty history). Filed as its own incident (#50), fixed in the same pass, regression test added.
+- E4.4: LLM call timeout + whole-turn deadline (asyncio.wait_for for blocking, between-round check for streamed). DB session-hold fix — `release_transaction()` wired into identity resolution, prefetch, and every tool call — live-verified against production (in_transaction() True→False, session still usable). Native Redis protocol — opt-in via a new native URL setting, scoped narrowly to the two chat-turn hot-path methods, falls back byte-identically to REST when not configured; D1 booking-path Redis calls in allocation.py/eta_service.py deliberately left untouched.
+- Verified: 385 passed (361 baseline + 24 new), every ConversationMemory caller/test fixture updated for the new async signatures including a pre-existing test file not originally in scope.
+- Evidence on #33, #34, #50. All three left open, pending commit.
+
+## 2026-08-25 16:13 IST | verification | M3's remaining batch committed, pushed, milestone closed
+
+- Commit `38c4bd5` pushed by owner. `gh issue list`/`gh issue view` confirm all 6 M3 epics + #48 CLOSED, #49 (Sequencer gap) correctly still OPEN. **M3 complete.** Next: M4 (AgentCore rebuild), unscoped.
+
 ## 2026-08-25 16:07 IST | implementation | E3.4 (#28, M3) — admin console: users/roles, rule registry, policy simulate/publish, audit. M3 fully implemented.
 
 - All 13 SS7.5.7 tools built. Live migration: a real rule_type CHECK constraint on facility_rules (had none before, despite the design claiming otherwise) + a new policy_versions table (Module didn't exist, same gap-class as the Sequencer/notification outbox).

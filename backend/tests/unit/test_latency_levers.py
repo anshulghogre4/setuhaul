@@ -202,10 +202,10 @@ class _FakeMemory:
         self.summary_delay = 0.05
         self.summaries: list[str] = []
 
-    def load_turn_context(self, **_kwargs):
+    async def load_turn_context(self, **_kwargs):
         return {"history": [], "summaries": [], "session": {}}
 
-    def append_turn(self, **_kwargs):
+    async def append_turn(self, **_kwargs):
         return None
 
     async def maybe_summarize_history(self, **_kwargs):
@@ -509,7 +509,7 @@ async def test_duplicate_turn_is_measured_too(monkeypatch):
     from app.assistant.run_assistant import run_assistant
 
     class _DupMemory(_FakeMemory):
-        def load_turn_context(self, **_kwargs):
+        async def load_turn_context(self, **_kwargs):
             return {
                 "history": [
                     {"role": "user", "content": "hi", "client_message_id": "cm-1"},

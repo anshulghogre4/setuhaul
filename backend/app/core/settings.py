@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     llm_model: str = ""  # optional override; defaults per provider
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
+    # E4.4 (issue #34): Upstash's native Redis-protocol connection string (`rediss://...`), a
+    # different credential from the REST URL+token above -- opt-in, not derived from them. When
+    # unset, the chat turn's two hot-path Redis calls (`load_turn_context`/`append_turn`) fall
+    # back to the existing REST client, exactly today's behaviour. When set, they use
+    # `redis.asyncio` instead: a real non-blocking round trip rather than a synchronous HTTPS
+    # call that stalls the event loop for every concurrent request during a chat turn.
+    upstash_redis_native_url: str = ""
     langsmith_api_key: str = ""
     langsmith_tracing: bool = False
     langsmith_project: str = "setuhaul-agentcore"
@@ -80,6 +87,16 @@ class Settings(BaseSettings):
     pending_confirmation_ttl_minutes: int = 15  # D9
     held_slot_ttl_seconds: int = 90  # D2
     expiry_sweep_batch_limit: int = 50
+
+    # E4.4 (issue #34, M4): no timeout ceiling existed anywhere on the LLM path before this --
+    # a slow provider response had nothing bounding it. `llm_call_timeout_seconds` bounds one
+    # provider round trip (passed to the LangChain client itself); `turn_deadline_seconds` bounds
+    # the whole driver turn (prefetch + every LLM call + every tool call across all rounds), so a
+    # provider that times out on every retry still can't hang a request past a hard wall clock.
+    # 30s per call is generous versus NFR-002's 2.5s target turn -- the point is a ceiling that
+    # only fires on genuine provider trouble, not a budget tuned to the happy path.
+    llm_call_timeout_seconds: float = 30.0
+    turn_deadline_seconds: float = 45.0
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Starlette regex; allows Vercel preview/prod *.vercel.app without knowing the URL yet.

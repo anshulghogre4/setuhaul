@@ -1,9 +1,12 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_async_url(url: str) -> str:
@@ -76,3 +79,29 @@ class Database:
 
 
 db = Database()
+
+
+async def release_transaction(session: AsyncSession) -> None:
+    """End whatever implicit transaction the last statement opened, without holding the pooled
+    connection idle-in-transaction for the rest of a long-running request (E4.4, issue #34).
+
+    `get_db_session` yields one session for a whole FastAPI request, and SQLAlchemy's `AsyncSession`
+    autobegins a transaction on first use -- for a driver chat turn, that meant the identity
+    lookup's own SELECT opened a transaction that then sat idle-in-transaction for the entire LLM
+    think-time (seconds), holding one of only `pool_size=3, max_overflow=2` connections the whole
+    turn. The fix is shortening the *hold*, not raising `pool_size` (that would reproduce the
+    2026-08-17 `EMAXCONNSESSION` incident this class's own comment documents): call this after
+    identity resolution and after every read/write step of a turn, so each statement's transaction
+    closes as soon as that statement is done, not whenever the request happens to end.
+
+    Safe after both a read (nothing to commit; this just closes the transaction) and an
+    already-committed write (a no-op). Falls back to rollback and never raises -- this is
+    connection hygiene, not a business operation whose failure should break the caller's turn.
+    """
+    try:
+        await session.commit()
+    except Exception:  # noqa: BLE001
+        try:
+            await session.rollback()
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to release DB transaction between turn steps", exc_info=True)

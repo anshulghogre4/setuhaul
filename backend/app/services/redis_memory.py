@@ -65,6 +65,7 @@ class ConversationMemory:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._client = None
+        self._async_client = None
         self.degraded = False
         self.degrade_reason: str | None = None
         # Redis RTT for this turn. Upstash is reached over its REST API, so every batch
@@ -87,6 +88,20 @@ class ConversationMemory:
             self.degraded = True
             self.degrade_reason = f"UPSTASH_INIT_FAILED:{type(exc).__name__}"
             logger.warning("Upstash init failed: %s", type(exc).__name__)
+
+        # E4.4 (issue #34): opt-in native-protocol client for the chat turn's two hot-path calls
+        # (`load_turn_context`/`append_turn`) only -- every other method here still uses the REST
+        # client above unconditionally, a deliberate scope boundary (see those two methods'
+        # docstrings). Construction failure degrades to the REST fallback silently; it is not a
+        # fatal error, since the REST client above is already a fully working memory layer.
+        native_url = (settings.upstash_redis_native_url or "").strip()
+        if native_url:
+            try:
+                import redis.asyncio as aioredis
+
+                self._async_client = aioredis.from_url(native_url, decode_responses=True)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Native Redis client init failed, falling back to REST: %s", type(exc).__name__)
 
     @contextmanager
     def _timed(self, op: str, *, ops: int = 1) -> Iterator[None]:
@@ -280,7 +295,7 @@ class ConversationMemory:
             self.degrade_reason = f"UPSTASH_SESSION_READ_FAILED:{type(exc).__name__}"
             return {}
 
-    def load_turn_context(
+    async def load_turn_context(
         self, *, user_id: str, thread_id: str, session_id: str | None = None
     ) -> dict[str, Any]:
         """Full history + summaries + session state in one pipelined round trip.
@@ -288,13 +303,38 @@ class ConversationMemory:
         Callers should dedupe/slice the returned ``history`` locally instead of
         issuing a second ``load_history()`` call — this replaces what used to be
         three-to-four separate Upstash HTTP requests per turn with one.
+
+        E4.4 (issue #34): uses the native async client when configured (a real non-blocking
+        round trip); otherwise falls back to the existing synchronous REST pipeline below,
+        unchanged from before this epic. `async def` either way, so callers don't need to know
+        which transport actually ran.
         """
         empty: dict[str, Any] = {"history": [], "summaries": [], "session": {}}
-        if self._client is None:
-            return empty
         hkey = self._history_key(user_id, thread_id, session_id)
         skey = self._summaries_key(user_id, thread_id, session_id)
         sekey = self._session_key(user_id, thread_id, session_id)
+
+        if self._async_client is not None:
+            try:
+                pipe = self._async_client.pipeline()
+                pipe.lrange(hkey, -HISTORY_LIMIT, -1)
+                pipe.lrange(skey, -SUMMARY_CONTEXT_SIZE, -1)
+                pipe.get(sekey)
+                with self._timed("native_pipeline_turn_context"):
+                    history_raw, summaries_raw, session_raw = await pipe.execute()
+                summaries = [str(item) for item in (summaries_raw or [])]
+                session = json.loads(session_raw) if session_raw else {}
+                self.degraded = False
+                self.degrade_reason = None
+                return {"history": _parse_list_items(history_raw), "summaries": summaries, "session": session}
+            except Exception as exc:  # noqa: BLE001
+                self.degraded = True
+                self.degrade_reason = f"NATIVE_REDIS_PIPELINE_READ_FAILED:{type(exc).__name__}"
+                logger.warning("Native Redis pipelined read failed: %s", type(exc).__name__)
+                return empty
+
+        if self._client is None:
+            return empty
         try:
             pipe = self._client.pipeline()
             pipe.lrange(hkey, -HISTORY_LIMIT, -1)
@@ -328,7 +368,7 @@ class ConversationMemory:
             logger.warning("Upstash pipelined read failed: %s", type(exc).__name__)
             return empty
 
-    def append_turn(
+    async def append_turn(
         self,
         *,
         user_id: str,
@@ -339,27 +379,51 @@ class ConversationMemory:
         session: dict[str, Any] | None = None,
         client_message_id: str | None = None,
     ) -> None:
+        """E4.4 (issue #34): native async client when configured, else the existing synchronous
+        REST pipeline unchanged from before this epic -- see `load_turn_context`'s docstring for
+        the same shape of fallback."""
+        hkey = self._history_key(user_id, thread_id, session_id)
+        user_payload = {
+            "role": "user",
+            "content": user_message,
+            "client_message_id": client_message_id,
+            "session_id": normalize_memory_id(session_id),
+        }
+        asst_payload = {
+            "role": "assistant",
+            "content": assistant_message,
+            "session_id": normalize_memory_id(session_id),
+        }
+        active_payload = {
+            "user_id": normalize_memory_id(user_id, fallback="unknown-user"),
+            "session_id": normalize_memory_id(session_id),
+            "thread_id": normalize_memory_id(thread_id, fallback="unknown-thread"),
+        }
+
+        if self._async_client is not None:
+            try:
+                pipe = self._async_client.pipeline()
+                pipe.rpush(hkey, json.dumps(user_payload), json.dumps(asst_payload))
+                pipe.ltrim(hkey, -HISTORY_LIMIT, -1)
+                pipe.expire(hkey, TTL_SECONDS)
+                if session is not None:
+                    skey = self._session_key(user_id, thread_id, session_id)
+                    pipe.set(skey, json.dumps(session), ex=TTL_SECONDS)
+                pipe.set(self._active_key(user_id), json.dumps(active_payload), ex=TTL_SECONDS)
+                with self._timed("native_pipeline_append_turn"):
+                    await pipe.execute()
+                self.degraded = False
+                self.degrade_reason = None
+                return
+            except Exception as exc:  # noqa: BLE001
+                self.degraded = True
+                self.degrade_reason = f"NATIVE_REDIS_WRITE_FAILED:{type(exc).__name__}"
+                logger.warning("Native Redis write failed: %s", type(exc).__name__)
+                return
+
         if self._client is None:
             return
         try:
-            hkey = self._history_key(user_id, thread_id, session_id)
-            user_payload = {
-                "role": "user",
-                "content": user_message,
-                "client_message_id": client_message_id,
-                "session_id": normalize_memory_id(session_id),
-            }
-            asst_payload = {
-                "role": "assistant",
-                "content": assistant_message,
-                "session_id": normalize_memory_id(session_id),
-            }
-            active_payload = {
-                "user_id": normalize_memory_id(user_id, fallback="unknown-user"),
-                "session_id": normalize_memory_id(session_id),
-                "thread_id": normalize_memory_id(thread_id, fallback="unknown-thread"),
-            }
-
             # One pipelined round trip instead of up to five separate requests.
             pipe = self._client.pipeline()
             pipe.rpush(hkey, json.dumps(user_payload), json.dumps(asst_payload))
@@ -551,7 +615,7 @@ class ConversationMemory:
         history = self.load_history(user_id=user_id, thread_id=thread_id, session_id=session_id)
         return any(m.get("client_message_id") == client_message_id for m in history)
 
-    def snapshot(
+    async def snapshot(
         self,
         *,
         user_id: str,
@@ -560,6 +624,10 @@ class ConversationMemory:
         include_recent_messages: bool = True,
         recent_limit: int = 8,
     ) -> dict[str, Any]:
+        """`async def` because it calls `load_turn_context`, which is (E4.4, issue #34). Not
+        called from production code today -- only `load_turn_context`/`append_turn` are the
+        actual chat-turn hot path this epic targets -- but a method depending on an async one
+        cannot itself stay sync."""
         safe_session_id = normalize_memory_id(session_id)
         if self._client is None:
             return {
@@ -579,7 +647,7 @@ class ConversationMemory:
                 "degrade_reason": self.degrade_reason or "UPSTASH_NOT_CONFIGURED",
             }
 
-        turn_context = self.load_turn_context(user_id=user_id, thread_id=thread_id, session_id=safe_session_id)
+        turn_context = await self.load_turn_context(user_id=user_id, thread_id=thread_id, session_id=safe_session_id)
         history = turn_context["history"]
         summaries = turn_context["summaries"]
         session = turn_context["session"]

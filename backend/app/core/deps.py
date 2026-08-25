@@ -10,7 +10,7 @@ from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
 from app.core.security import JwtVerifier
 from app.core.settings import Settings, get_settings
-from app.db.session import db
+from app.db.session import db, release_transaction
 
 _FACILITY_OPS_PERMS = [
     "operations:read_facility",
@@ -175,6 +175,11 @@ async def get_execution_context(
             )
         ).mappings().first()
         carrier_id = str(scope_row["scope_value"]) if scope_row else None
+
+    # E4.4 (issue #34): close the identity-lookup transaction here rather than leaving it open
+    # for the rest of the request -- for the driver chat endpoint that request can run for
+    # seconds of LLM think-time, and this dependency runs first, on every authenticated request.
+    await release_transaction(session)
 
     return ExecutionContext(
         request_id=get_request_id(request),

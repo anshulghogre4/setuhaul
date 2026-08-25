@@ -84,10 +84,10 @@ class _FakeSummarizer:
         return SimpleNamespace(content=f"SUMMARY::{human[:80]}")
 
 
-def test_conversation_memory_snapshot_degrades_without_upstash_config():
+async def test_conversation_memory_snapshot_degrades_without_upstash_config():
     memory = ConversationMemory(Settings(upstash_redis_rest_url="", upstash_redis_rest_token=""))
 
-    snapshot = memory.snapshot(user_id="USR001", thread_id="THR-1")
+    snapshot = await memory.snapshot(user_id="USR001", thread_id="THR-1")
 
     assert snapshot["code"] == "REDIS_MEMORY_UNAVAILABLE"
     assert snapshot["non_authoritative"] is True
@@ -96,7 +96,7 @@ def test_conversation_memory_snapshot_degrades_without_upstash_config():
     assert snapshot["summaries"] == []
 
 
-def test_conversation_memory_snapshot_returns_bounded_ephemeral_context():
+async def test_conversation_memory_snapshot_returns_bounded_ephemeral_context():
     memory = ConversationMemory(Settings())
     fake = _FakeRedis()
     memory._client = fake  # type: ignore[attr-defined]
@@ -113,7 +113,7 @@ def test_conversation_memory_snapshot_returns_bounded_ephemeral_context():
         ex=TTL_SECONDS,
     )
 
-    snapshot = memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-1")
+    snapshot = await memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-1")
 
     assert snapshot["code"] == "REDIS_MEMORY_LOADED"
     assert snapshot["freshness"] == "ephemeral_24h"
@@ -124,12 +124,12 @@ def test_conversation_memory_snapshot_returns_bounded_ephemeral_context():
     assert snapshot["recent_messages"][0]["client_message_id"] == "m1"
 
 
-def test_conversation_memory_isolates_same_thread_by_session_id():
+async def test_conversation_memory_isolates_same_thread_by_session_id():
     memory = ConversationMemory(Settings())
     fake = _FakeRedis()
     memory._client = fake  # type: ignore[attr-defined]
 
-    memory.append_turn(
+    await memory.append_turn(
         user_id="USR001",
         thread_id="THR-1",
         session_id="web-alpha",
@@ -138,7 +138,7 @@ def test_conversation_memory_isolates_same_thread_by_session_id():
         session={"last_intent": "alpha"},
         client_message_id="same-client-message-id",
     )
-    memory.append_turn(
+    await memory.append_turn(
         user_id="USR001",
         thread_id="THR-1",
         session_id="web-beta",
@@ -148,8 +148,8 @@ def test_conversation_memory_isolates_same_thread_by_session_id():
         client_message_id="beta-message-id",
     )
 
-    alpha = memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-alpha")
-    beta = memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-beta")
+    alpha = await memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-alpha")
+    beta = await memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-beta")
 
     assert alpha["session"]["last_intent"] == "alpha"
     assert beta["session"]["last_intent"] == "beta"
@@ -202,7 +202,7 @@ async def test_maybe_summarize_history_rolls_oldest_chunk_into_summary():
 
     loaded = memory.load_summaries(user_id="USR001", thread_id="THR-1", session_id="web-1")
     assert loaded == [summary]
-    snap = memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-1")
+    snap = await memory.snapshot(user_id="USR001", thread_id="THR-1", session_id="web-1")
     assert snap["summary_count"] == 1
     assert snap["summaries"][0].startswith("SUMMARY::")
 
@@ -251,13 +251,13 @@ def test_recommendation_stale_marker_is_ephemeral_and_scoped():
     assert all(seconds == TTL_SECONDS for seconds in fake.expirations.values())
 
 
-def test_append_turn_sets_active_conversation_for_restore():
+async def test_append_turn_sets_active_conversation_for_restore():
     memory = ConversationMemory(Settings())
     fake = _FakeRedis()
     memory._client = fake  # type: ignore[attr-defined]
     memory.degraded = False
 
-    memory.append_turn(
+    await memory.append_turn(
         user_id="USR001",
         thread_id="THR-9",
         session_id="web-restore",

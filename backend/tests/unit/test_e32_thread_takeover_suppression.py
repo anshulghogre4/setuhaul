@@ -32,10 +32,10 @@ class _FakeMemory:
         self.redis_ms = 5.0
         self.appended: list[dict] = []
 
-    def load_turn_context(self, **_kwargs):
+    async def load_turn_context(self, **_kwargs):
         return {"history": [], "summaries": [], "session": {}}
 
-    def append_turn(self, **kwargs):
+    async def append_turn(self, **kwargs):
         self.appended.append(kwargs)
 
     async def maybe_summarize_history(self, **_kwargs):

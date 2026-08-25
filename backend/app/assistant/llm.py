@@ -123,17 +123,24 @@ def build_chat_model(settings: Settings) -> BaseChatModel:
     - gemini → ChatGoogleGenerativeAI (native LangChain Google integration)
     """
     resolved = resolve_llm(settings)
+    # E4.4 (issue #34): no timeout ceiling existed on the LLM path before this -- a slow
+    # provider response had nothing bounding it. Both client classes accept `timeout` and pass it
+    # straight to their underlying httpx client, so this is a real per-request ceiling, not just
+    # a connect timeout.
+    timeout = settings.llm_call_timeout_seconds
     if resolved.provider == "gemini":
         return ChatGoogleGenerativeAI(
             model=resolved.model,
             temperature=0,
             google_api_key=resolved.api_key,
+            timeout=timeout,
         )
 
     kwargs: dict[str, Any] = {
         "model": resolved.model,
         "temperature": 0,
         "api_key": resolved.api_key,
+        "timeout": timeout,
     }
     if resolved.base_url:
         kwargs["base_url"] = resolved.base_url
