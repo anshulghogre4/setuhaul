@@ -3,8 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      Single value, deliberately not a prefers-color-scheme-keyed pair: U69 locks light as
+      the shipped default for every role, so a keyed pair would tint the browser chrome dark
+      while the page rendered light.  #F8FAFC is surface-base -- NOT the reference mockup
+      board's #E2E8F0, which is that board's own chrome and not an app surface at all.
+    -->
+    <meta name="theme-color" content="#F8FAFC" />
+    <meta name="description" content="SetuHaul Dock Command — dock appointment coordination." />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      typography.md: Inter 400/500/600/700 and JetBrains Mono 400/500, Latin subset only,
+      because a driver on a cheap Android pays for every weight.  Self-hosted woff2 subsets
+      would remove the extra DNS + connection before first paint and are the right end state
+      (implementation-spec 1.4 records this as an engineering call, not a spec requirement);
+      the CDN link is the interim.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+
+    <title>SetuHaul Dock Command</title>
+
+    <script>
+      /*
+       * Theme boot -- MUST run here, ahead of the React bundle.
+       *
+       * This is not a micro-optimisation.  A React effect runs after first paint, so every
+       * dark-theme user would get a white flash on every single load.  implementation-spec
+       * 4.5 calls this out explicitly as a trap.  Keep it inline, keep it synchronous, and
+       * keep it before the module script below.
+       *
+       * Mirrors src/shared/lib/theme.ts.  Light is the default for every role (U69);
+       * prefers-color-scheme is consulted only for an explicit "system" choice.
+       */
+      (function () {
+        try {
+          var choice = localStorage.getItem('setuhaul.theme') || 'light'
+          var dark =
+            choice === 'dark' ||
+            (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {
+          /* storage blocked -- fall through to the locked light default */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

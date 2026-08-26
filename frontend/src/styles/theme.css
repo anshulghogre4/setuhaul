@@ -1,0 +1,651 @@
+@import 'tailwindcss';
+@import './primitives.css';
+
+/* ============================================================================
+   TIER 2 — functional tokens.  The only colour utilities that exist.
+
+   Naming: where shadcn already has a name for the role (--color-card,
+   --color-muted-foreground) we use shadcn's name so its primitives theme
+   correctly with zero patching.  Where shadcn has no name for the role
+   (promise state, priority, facility accent, escalation, feedback) we use
+   color.md's own name.  Mapping table: implementation-spec.md section 2.1.
+   ============================================================================ */
+
+/* U69: light is the shipped default for EVERY role.  `prefers-color-scheme` is
+   deliberately NOT consulted here -- it is consulted only when the user has
+   explicitly chosen "System" in the Appearance control, and that resolution
+   happens in JS (see src/shared/lib/theme.ts).  A media query here would
+   silently override the locked default for a planner on a dark-configured
+   Windows laptop, which is the exact outcome color.md records U69 as rejecting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Kill Tailwind's default palette.  This is what makes the tier rule
+     mechanical rather than a convention: after this line `bg-blue-600` and
+     `text-red-500` are not classes that exist.  See implementation-spec 1.0.
+     Note this also removes bg-white / text-black; `transparent`, `current` and
+     `inherit` are keywords in v4's colour resolution, not theme variables, so
+     bg-transparent and border-transparent are unaffected. */
+  --color-*: initial;
+
+  /* ---- surfaces (color.md - Surface and text tokens) ---- */
+  --color-background: var(--neutral-50); /* surface-base */
+  --color-card: var(--neutral-0); /* surface-raised, elevation tier 1 */
+  --color-popover: var(--neutral-0); /* surface-floating, tier 3 */
+  --color-overlay: var(--neutral-0); /* surface-overlay, tier 4 */
+  --color-sunken: var(--neutral-100); /* surface-sunken -- ALWAYS carries a 1px border-subtle in BOTH themes */
+  --color-hover: var(--neutral-100); /* surface-hover -- same value as sunken in light, which is why the segmented control's hover is a text change (components.md 12) */
+  --color-selected: var(--blue-50); /* surface-selected */
+  --color-floating-border: var(--neutral-200); /* border-floating, tier 3 */
+
+  /* ---- text ---- */
+  --color-foreground: var(--neutral-900); /* text-primary */
+  --color-muted-foreground: var(--neutral-600); /* text-secondary */
+  --color-subtle-foreground: var(--neutral-500); /* text-tertiary */
+  --color-disabled-foreground: var(--neutral-400); /* text-disabled */
+  --color-link: var(--blue-600); /* text-link */
+
+  /* ---- borders ---- */
+  --color-border: var(--neutral-200); /* border-subtle  -> shadcn --border */
+  --color-input: var(--neutral-300); /* border-default -> shadcn --input  */
+  --color-strong: var(--neutral-400); /* border-strong */
+  --color-ring: var(--blue-600); /* border-focus   -> shadcn --ring   */
+
+  /* ---- interactive (color.md - Interactive state colors) ---- */
+  --color-primary: var(--blue-600); /* interactive-default */
+  --color-primary-hover: var(--blue-700); /* interactive-hover */
+  --color-primary-pressed: var(--blue-800); /* interactive-pressed */
+  --color-primary-foreground: var(--neutral-0); /* interactive-on */
+  --color-disabled: var(--neutral-200); /* interactive-disabled-bg */
+
+  /* ---- control support (color.md - Control-support tokens) ----
+     Eight tokens added 2026-08-26 because eleven components in the mockup
+     reached a base primitive for want of a functional name.  Two of those
+     were live dark-mode defects (implementation-spec 4.2). */
+  --color-switch-track-off: var(--neutral-300);
+  --color-switch-knob: var(--neutral-0);
+  --color-marker-unmet: var(--neutral-500);
+  --color-avatar: var(--neutral-600);
+  --color-avatar-foreground: var(--neutral-0);
+  --color-skeleton: var(--neutral-200);
+
+  /* surface-inverse / surface-inverse-fg -- the tooltip ground.
+     NOTE: implementation-spec 1.2 declares --color-inverse-foreground twice with
+     different values (neutral-0 as `text-inverse`, then neutral-50 as
+     surface-inverse-fg).  A duplicate key is a real collision, not a style
+     nit; resolved here in favour of the tooltip pair, which is the only thing
+     in the shell that consumes it, and matches the mockup's own `.tip`. */
+  --color-inverse: var(--neutral-900);
+  --color-inverse-foreground: var(--neutral-50);
+
+  /* ---- promise state (color.md - the core of the system) ---- */
+  --color-state-shown-bg: var(--neutral-50);
+  --color-state-shown-border: var(--neutral-300);
+  --color-state-shown-text: var(--neutral-700);
+  --color-state-shown-icon: var(--neutral-500);
+  --color-state-held-bg: var(--amber-50);
+  --color-state-held-border: var(--amber-500);
+  --color-state-held-text: var(--amber-700);
+  --color-state-held-icon: var(--amber-600);
+  --color-state-pending-bg: var(--blue-50);
+  --color-state-pending-border: var(--blue-500);
+  --color-state-pending-text: var(--blue-600);
+  --color-state-pending-icon: var(--blue-600);
+  --color-state-confirmed-bg: var(--green-50);
+  --color-state-confirmed-border: var(--green-600);
+  --color-state-confirmed-text: var(--green-700);
+  --color-state-confirmed-icon: var(--green-600);
+
+  /* ---- priority -- a neutral VALUE ramp, never a hue (U10) ---- */
+  --color-priority-critical: var(--neutral-900);
+  --color-priority-high: var(--neutral-600);
+  --color-priority-normal: var(--neutral-400);
+  --color-priority-low: var(--neutral-200);
+
+  /* ---- TTL urgency (color.md - TTL urgency) ---- */
+  --color-urgent: var(--red-600);
+  --color-urgent-mid: var(--amber-600);
+  --color-expired-fg: var(--neutral-500);
+  --color-expired-bg: var(--neutral-100);
+
+  /* ---- feedback -- never rendered in a promise-state slot (color.md) ---- */
+  --color-success-bg: var(--green-50);
+  --color-success-fg: var(--green-700);
+  --color-success-border: var(--green-600);
+  --color-warning-bg: var(--amber-50);
+  --color-warning-fg: var(--amber-700);
+  --color-warning-border: var(--amber-500);
+  --color-danger-bg: var(--red-50);
+  --color-danger-fg: var(--red-700);
+  --color-danger-border: var(--red-600);
+  --color-info-bg: var(--blue-50);
+  --color-info-fg: var(--blue-700);
+  --color-info-border: var(--blue-500);
+  --color-destructive: var(--red-600);
+  --color-destructive-foreground: var(--neutral-0);
+
+  /* ---- escalation SLA -- the only danger colour in the stepper (U60) ---- */
+  --color-sla-ok: var(--neutral-600); /* = text-secondary, i.e. deliberately no colour */
+  --color-sla-warning: var(--amber-600);
+  --color-sla-breach: var(--red-600);
+
+  /* ---- facility accent (U59) ----
+     NOT here.  See the `--facility-*` block in :root below, and the measured
+     reason it had to move out of @theme. */
+
+  /* ---- chart tokens ----
+     UNSOURCED -- do not reference.  U66 defers the sparkline's colour to the
+     `dataviz` skill, which has not been run for this product.  Accepting five
+     unaudited hues would be the exact opposite of color.md's rationed-hue
+     argument.  Locked decision, implementation-spec 4.3.6.
+     --color-chart-1 .. --color-chart-5 are deliberately absent. */
+
+  /* ---- typography (typography.md) ---- */
+  --text-display: 2rem;
+  --text-display--line-height: 1.25;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+  --text-h1: 1.5rem;
+  --text-h1--line-height: 1.33;
+  --text-h1--font-weight: 600;
+  --text-h1--letter-spacing: -0.01em;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.4;
+  --text-h2--font-weight: 600;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h3: 1rem;
+  --text-h3--line-height: 1.5;
+  --text-h3--font-weight: 600;
+  --text-h3--letter-spacing: 0em;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 400;
+  --text-body--letter-spacing: 0em;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5;
+  --text-body-lg--font-weight: 400;
+  --text-body-lg--letter-spacing: 0em;
+  /* typography.md's own `text-sm` is 13px.  Tailwind's built-in text-sm is 14px
+     and is deliberately left alone -- it coincides with text-body, so shadcn
+     primitives that ship `text-sm` land on the right size unpatched.  Ours is
+     registered under a non-colliding name (locked, implementation-spec 4.3.1).
+     `text-sm` appearing in a search therefore means "shadcn shipped this". */
+  --text-supporting: 0.8125rem;
+  --text-supporting--line-height: 1.4;
+  --text-supporting--font-weight: 400;
+  --text-supporting--letter-spacing: 0em;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.33;
+  --text-label--font-weight: 600;
+  --text-label--letter-spacing: 0.04em;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.3;
+  --text-micro--font-weight: 500;
+  --text-micro--letter-spacing: 0.02em;
+
+  /* ---- elevation ----
+     NOT registered in the --shadow-* namespace.  See the :root block below and
+     the measured reason.  Utilities are defined by hand at the end of this file. */
+
+  /* ---- motion (motion.md) ----
+     The skeleton shimmer is 1600ms ease-in-out, NOT Tailwind's built-in
+     animate-pulse (2000ms, cubic-bezier(0.4,0,0.6,1)).  motion.md is the motion
+     authority and wins over U78's original text -- locked, spec 4.3.3.
+     The easing literal is --e-in-out; written out because @theme cannot resolve
+     a var() that lives outside it without `inline`. */
+  --animate-shim: shim 1600ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  --ease-out-quint: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quint: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out-quint: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Spacing (4px base), breakpoints and radius all already match
+     spacing-and-layout.md exactly at Tailwind v4's defaults -- verified in
+     implementation-spec 1.5.  Nothing to redeclare. */
+}
+
+@keyframes shim {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ---- shadcn alias layer ----
+   Thin, because section 1.2 already names our tokens shadcn-compatibly.
+   `inline` because every value here is a var() reference to another theme
+   variable, which is exactly the case the Tailwind docs say `inline` is for. */
+@theme inline {
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-data: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-data);
+
+  --color-secondary: var(--color-hover);
+  --color-secondary-foreground: var(--color-foreground);
+  --color-muted: var(--color-sunken);
+  /* shadcn's --accent is the hover/active background for menu items, dropdowns
+     and command palettes.  It has NOTHING to do with U59's facility accent --
+     mapping it to a facility hue would put that hue on every dropdown item and
+     command-palette row in the product.  See implementation-spec 2.2. */
+  --color-accent: var(--color-hover);
+  --color-accent-foreground: var(--color-foreground);
+  --color-card-foreground: var(--color-foreground);
+  --color-popover-foreground: var(--color-foreground);
+
+  --color-sidebar: var(--color-card);
+  --color-sidebar-foreground: var(--color-muted-foreground);
+  --color-sidebar-primary: var(--color-primary);
+  --color-sidebar-primary-foreground: var(--color-primary-foreground);
+  --color-sidebar-accent: var(--color-hover);
+  --color-sidebar-accent-foreground: var(--color-foreground);
+  --color-sidebar-border: var(--color-input);
+  --color-sidebar-ring: var(--color-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* 0.5rem derives 4 / 6 / 8 / 12px through shadcn's chain above -- exactly
+     spacing-and-layout.md's radius scale.  Computed, not chosen. */
+  --radius: 0.5rem;
+
+  --scrim: rgba(15, 23, 42, 0.5);
+
+  /* motion.md durations and easings, as plain custom properties for use in
+     component CSS.  Registered separately from the --ease-* theme namespace
+     above so that both `duration-(--d-fast)` and `var(--d-fast)` work. */
+  --d-instant: 0ms;
+  --d-fast: 120ms;
+  --d-base: 200ms;
+  --d-slow: 320ms;
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --e-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- elevation (elevation-and-depth.md) ----
+     Named raised/floating/overlay rather than sm/md/lg on purpose: they map 1:1
+     onto the five layers, so a developer picks a LAYER, and shadow-raised
+     resolving to `none` in dark stops reading as a bug.
+
+     ⚠ THESE ARE DELIBERATELY NOT IN `@theme`, and the reason is measured, not
+     stylistic.  implementation-spec 1.7 flagged "does a .dark override propagate
+     into the shadow-* utilities?" as the one v4 API detail to verify at scaffold
+     time rather than assume.  Verified: **it does not.**  Registering
+     `--shadow-raised` in `@theme` compiles the utility to
+       .shadow-raised{--tw-shadow:0 1px 2px var(--tw-shadow-color,#0f172a0f); ...}
+     -- the value is INLINED at build time, so `.dark { --shadow-raised: none }`
+     cannot reach it and every dark surface kept its light shadow.  The spec's own
+     stated fallback is taken instead: plain custom properties plus hand-written
+     `@utility` rules that go through var().  Call-site names are unchanged. */
+  --shadow-raised: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-floating: 0 4px 12px rgba(15, 23, 42, 0.1);
+  --shadow-overlay: 0 12px 32px rgba(15, 23, 42, 0.14);
+
+  /* ---- facility accent (U59) ----
+     May be referenced in exactly TWO places: the rail's 4px stripe and the
+     facility switcher's swatch.  Anywhere else and color.md's entire safety
+     argument for spending a hue on facility identity is gone.
+
+     ⚠ ALSO deliberately not in `@theme`, and this one was a live defect found by
+     rendering.  Tailwind v4 **tree-shakes `@theme` variables that no utility
+     references.**  Because the facility accent is (correctly, per
+     implementation-spec 1.3) never reachable through a class name, nothing
+     referenced `--color-facility-N`, so Tailwind dropped it from `:root`
+     entirely -- while the hand-written `.dark` block still emitted verbatim.
+     The result: `border-inline-start: 4px solid var(--color-facility-1)` was an
+     invalid declaration in LIGHT mode, so **every facility-scoped rail rendered
+     with no stripe at all**, and it worked in dark purely by accident.
+     Measured: `getPropertyValue('--color-facility-1')` returned '' and
+     `borderLeftWidth` computed to 0px.
+
+     Moving them here fixes that AND strengthens 1.3: with no `@theme` entry
+     there is no `bg-facility-1` utility for a component to reach for, so the
+     two-places restriction becomes structural rather than conventional. */
+  --facility-1: var(--violet-500);
+  --facility-2: var(--teal-500);
+  --facility-3: var(--rose-500);
+  --facility-4: var(--cyan-500);
+  --facility-5: var(--lime-600);
+  --facility-6: var(--orange-500);
+
+  /* The shadcn CLI injected eight raw --sidebar-* hsl() values here on install.
+     Removed: the `@theme inline` block above already defines --color-sidebar-*
+     from our own functional tokens, which is what `bg-sidebar` / `text-sidebar-
+     foreground` actually resolve against, so the raw pair was dead AND
+     off-system (hsl values from shadcn's default slate, not color.md's ramp).
+     If a future `shadcn add` re-injects them, delete them again rather than
+     letting eight unaudited values live in a system whose entire colour
+     argument is a rationed palette. */
+}
+
+/* ============================================================================
+   DARK THEME -- same token names, different primitives.
+   Class-based only (see @custom-variant above).  Never a media query.
+   ============================================================================ */
+.dark {
+  color-scheme: dark;
+
+  --color-background: var(--neutral-950);
+  --color-card: var(--neutral-900);
+  --color-popover: var(--neutral-800);
+  --color-overlay: var(--neutral-800);
+  /* identical to background by design -- 950 is the floor, so there is no
+     darker step available.  The mandatory 1px border-subtle is what carries the
+     separation instead (locked, implementation-spec 4.3.5).  A bg-muted region
+     with no border is a component bug, not a token gap. */
+  --color-sunken: var(--neutral-950);
+  --color-hover: var(--neutral-800);
+  --color-selected: #12203c; /* opaque (color.md) */
+  --color-floating-border: var(--neutral-700);
+
+  --color-foreground: var(--neutral-50);
+  --color-muted-foreground: var(--neutral-300);
+  --color-subtle-foreground: var(--neutral-400);
+  --color-disabled-foreground: var(--neutral-600);
+  --color-link: var(--blue-400);
+
+  --color-border: var(--neutral-800);
+  --color-input: var(--neutral-700);
+  --color-strong: var(--neutral-600);
+  --color-ring: var(--blue-400);
+
+  --color-primary: var(--blue-500);
+  --color-primary-hover: var(--blue-400);
+  --color-primary-pressed: var(--blue-300);
+  /* NOT neutral-0.  White on blue-500 is ~3.7:1, below AA for the 10px badge
+     text -- this exact pairing was a live defect in the mockup (spec 4.2). */
+  --color-primary-foreground: var(--neutral-950);
+  --color-disabled: var(--neutral-800);
+
+  --color-switch-track-off: var(--neutral-700);
+  --color-switch-knob: var(--neutral-50);
+  --color-marker-unmet: var(--neutral-400);
+  --color-avatar: var(--neutral-400);
+  --color-avatar-foreground: var(--neutral-950);
+  --color-skeleton: var(--neutral-800);
+  --color-inverse: var(--neutral-200);
+  --color-inverse-foreground: var(--neutral-900);
+
+  /* Opaque hex, not an alpha composite.  A promise-state chip renders on cards,
+     table rows, dock-board bars and inside popovers; a translucent token is a
+     different colour on each of those four backdrops.  For the one component in
+     the product that must never be misread, identical-everywhere is a
+     requirement.  Ratios below were computed during the correction. */
+  --color-state-shown-bg: var(--neutral-800);
+  --color-state-shown-border: var(--neutral-600);
+  --color-state-shown-text: var(--neutral-200);
+  --color-state-shown-icon: var(--neutral-400);
+  --color-state-held-bg: #3a2c10; /* 8.1:1 vs amber-400 */
+  --color-state-held-border: var(--amber-500);
+  --color-state-held-text: var(--amber-400);
+  --color-state-held-icon: var(--amber-400);
+  --color-state-pending-bg: #122040; /* 6.3:1 vs blue-400 */
+  --color-state-pending-border: var(--blue-500);
+  --color-state-pending-text: var(--blue-400);
+  --color-state-pending-icon: var(--blue-400);
+  --color-state-confirmed-bg: #0b2f26; /* 7.5:1 vs green-400 */
+  --color-state-confirmed-border: var(--green-500);
+  --color-state-confirmed-text: var(--green-400);
+  --color-state-confirmed-icon: var(--green-400);
+
+  --color-priority-critical: var(--neutral-0);
+  --color-priority-high: var(--neutral-300);
+  --color-priority-normal: var(--neutral-500);
+  --color-priority-low: var(--neutral-700);
+
+  --color-urgent: var(--red-400);
+  --color-urgent-mid: var(--amber-400);
+  --color-expired-fg: var(--neutral-400);
+  --color-expired-bg: var(--neutral-800);
+
+  --color-success-bg: #0b2f26;
+  --color-success-fg: var(--green-400);
+  --color-success-border: var(--green-500);
+  --color-warning-bg: #3a2c10;
+  --color-warning-fg: var(--amber-400);
+  --color-warning-border: var(--amber-500);
+  --color-danger-bg: #3a1414;
+  --color-danger-fg: var(--red-400);
+  --color-danger-border: var(--red-500);
+  --color-info-bg: #122040;
+  --color-info-fg: var(--blue-400);
+  --color-info-border: var(--blue-500);
+  --color-destructive: var(--red-500);
+  --color-destructive-foreground: var(--neutral-950);
+
+  --color-sla-ok: var(--neutral-300);
+  --color-sla-warning: var(--amber-400);
+  --color-sla-breach: var(--red-400);
+
+  --facility-1: var(--violet-400);
+  --facility-2: var(--teal-400);
+  --facility-3: var(--rose-400);
+  --facility-4: var(--cyan-400);
+  --facility-5: var(--lime-500);
+  --facility-6: var(--orange-400);
+
+  /* dark tier 1 uses lightness, not shadow (elevation-and-depth.md) */
+  --shadow-raised: none;
+  --shadow-floating: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.65);
+  /* CLI-injected raw --sidebar-* hsl() values removed here too -- see the note
+     in :root above. */
+}
+
+/* ============================================================================
+   DENSITY -- one variable set switched by an attribute, not three builds (U8).
+   Density changes padding and row height ONLY: never type size, never border
+   width, never icon size (spacing-and-layout.md).
+   Set once per route at the shell root; never per component, and never as a
+   user preference in v1.
+   ============================================================================ */
+[data-density='compact'] {
+  --row-h: 36px;
+  --cell-py: 8px;
+  --cell-px: 12px;
+  --card-p: 12px;
+  --stack: 8px;
+  --tap: 32px;
+  --btn-h: 32px;
+  --content-p: 16px;
+}
+[data-density='comfortable'] {
+  --row-h: 44px;
+  --cell-py: 12px;
+  --cell-px: 16px;
+  --card-p: 16px;
+  --stack: 12px;
+  --tap: 44px;
+  --btn-h: 40px;
+  --content-p: 24px;
+}
+[data-density='spacious'] {
+  --row-h: 64px;
+  --cell-py: 20px;
+  --cell-px: 24px;
+  --card-p: 24px;
+  --stack: 16px;
+  --tap: 56px;
+  --btn-h: 56px;
+  --content-p: 32px;
+}
+/* auth + the five full-page states: comfortable, with 44px controls.
+   These screens are the DRIVER's door as well as a desk user's, so the field
+   44x44 bar applies to the door even though it does not apply to the planner
+   console behind it.  Source: assumption, untested (spacing-and-layout.md). */
+[data-density='auth'] {
+  --row-h: 44px;
+  --cell-py: 12px;
+  --cell-px: 16px;
+  --card-p: 16px;
+  --stack: 12px;
+  --tap: 44px;
+  --btn-h: 44px;
+  --content-p: 24px;
+}
+
+/* ============================================================================
+   Z-INDEX -- explicit utilities, because every Radix overlay primitive ships
+   z-50 and portals to document.body.  Out of the box a toast and a dialog are
+   both z-50 and DOM order decides who wins, which means U41's time-boxed undo
+   can end up BEHIND a dialog -- and an undo that can be hidden is no undo.
+   z-toast (700) deliberately sits above z-modal (600).
+   ============================================================================ */
+@utility z-sticky {
+  z-index: 100;
+}
+@utility z-shell {
+  z-index: 200;
+}
+@utility z-rail-expand {
+  z-index: 300;
+}
+@utility z-dropdown {
+  z-index: 400;
+}
+@utility z-drawer {
+  z-index: 500;
+}
+@utility z-modal {
+  z-index: 600;
+}
+@utility z-toast {
+  z-index: 700;
+}
+@utility z-tooltip {
+  z-index: 800;
+}
+
+/* ============================================================================
+   ELEVATION UTILITIES -- hand-written, going through var(), because the
+   --shadow-* theme namespace inlines its values at build time and therefore
+   cannot be re-themed by .dark.  See the note beside the tokens in :root.
+   Verified by measurement: with these, shadow-raised computes to a real shadow
+   in light and to `none` in dark, which is what elevation-and-depth.md's dark
+   Level 1 requires ("lightness step plus a subtle border", no shadow at all).
+   ============================================================================ */
+@utility shadow-raised {
+  box-shadow: var(--shadow-raised);
+}
+@utility shadow-floating {
+  box-shadow: var(--shadow-floating);
+}
+@utility shadow-overlay {
+  box-shadow: var(--shadow-overlay);
+}
+/* Aliases kept as the stable hook for the forced-colors fallback below, so that
+   rule does not depend on which shadow utility a component happened to use. */
+@utility elev-1 {
+  box-shadow: var(--shadow-raised);
+}
+@utility elev-3 {
+  box-shadow: var(--shadow-floating);
+}
+@utility elev-4 {
+  box-shadow: var(--shadow-overlay);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* typography.md: rem at a 16px root, per its accessibility rule.  Never a
+       px-locked root -- a user who raises their browser font size must get it. */
+    font-size: 16px;
+    /* Declared explicitly rather than left to the default so native scrollbars,
+       form controls and the Windows dark-mode <select> render on the right
+       scheme.  `.dark` sets the counterpart. */
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+  }
+
+  /* Focus is TWO rings, always: 2px in the surface colour then 2px in --ring.
+     Never a glow -- planners operate the queue by keyboard, and a glow vanishes
+     against a selected row. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* tabular-nums is not optional.  Every table numeric cell, every countdown,
+     every queue position.  Applied as a base rule rather than remembered per
+     component (typography.md). */
+  .font-mono,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  button,
+  a,
+  input,
+  [role='switch'],
+  [role='radio'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ============================================================================
+   U41: the undo toast must stay OPERABLE over a modal, not merely painted above it.
+
+   z-toast(700) > z-modal(600) is necessary and NOT sufficient.  Radix Dialog sets
+   `pointer-events: none` on <body> for the whole time a modal is open, so the
+   portalled toast inherits it and every toast -- including a live 5-second undo --
+   becomes visually present and completely dead.  Measured: with a modal open, the
+   Undo button computed `pointer-events: none` and elementFromPoint at its centre
+   returned the dialog scrim, despite the toaster sitting at z-index 700.
+
+   "A time-boxed undo that can be hidden is no undo" applies just as much to one
+   that can be *disabled*.  This rule is the fix; do not remove it when a future
+   shadcn/Radix upgrade changes how the body lock is applied -- re-verify instead.
+   ============================================================================ */
+[data-sonner-toaster],
+[data-sonner-toast] {
+  pointer-events: auto !important;
+}
+
+/* U87 -- mandatory, not a nicety.  Windows High Contrast strips every
+   box-shadow, which flattens the whole light-theme layer model on planner and
+   admin, the two Windows desktop surfaces.  CanvasText and not one of our
+   tokens, because our tokens are exactly what the OS is overriding. */
+@media (forced-colors: active) {
+  .elev-1,
+  .elev-3,
+  .elev-4,
+  [data-elevation] {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* Reduced motion keeps INFORMATION and drops DECORATION.
+   Deliberately NOT the blanket `*{transition-duration:0}` the reference mockup
+   uses: motion.md requires the HELD pulse to be REPLACED by a solid
+   high-contrast border plus an "expiring" label, and the arrival flash to be
+   REPLACED by a persistent "new" badge.  Blanket-disabling would silently
+   delete an expiry warning for a user who set an OS preference.  Countdown
+   ticks and TTL colour warming stay unchanged.  Implemented per-motion. */
+@media (prefers-reduced-motion: reduce) {
+  [data-motion='decorative'] {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .animate-shim {
+    animation: none;
+  }
+}

@@ -1,0 +1,85 @@
+/* ============================================================================
+   TIER 1 — base primitives.  Verbatim from 00-foundations/color.md.
+
+   These live in a plain :root block and deliberately NOT in `@theme`, because
+   only `@theme` entries generate utilities.  Keeping them out means
+   `bg-neutral-500` does not exist as a class, so a component physically cannot
+   reach a primitive through a class name (U85 / implementation-spec.md 1.0).
+
+   Referenced ONLY by the functional layer in theme.css.  If you find yourself
+   wanting one of these in a component, the correct move is to add a functional
+   token, not to reach past the tier.
+   ============================================================================ */
+:root {
+  /* neutral — slate-tinted */
+  --neutral-0: #ffffff;
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+  --neutral-950: #020617;
+
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --blue-800: #1e40af;
+  --blue-900: #1e3a8a;
+
+  --amber-50: #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-800: #92400e;
+  --amber-900: #78350f;
+
+  --green-50: #ecfdf5;
+  --green-100: #d1fae5;
+  --green-200: #a7f3d0;
+  --green-300: #6ee7b7;
+  --green-400: #34d399;
+  --green-500: #10b981;
+  --green-600: #059669;
+  --green-700: #047857;
+  --green-800: #065f46;
+  --green-900: #064e3b;
+
+  --red-50: #fef2f2;
+  --red-100: #fee2e2;
+  --red-200: #fecaca;
+  --red-300: #fca5a5;
+  --red-400: #f87171;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+  --red-700: #b91c1c;
+  --red-800: #991b1b;
+  --red-900: #7f1d1d;
+
+  /* facility accent — only the steps color.md actually defines (U59) */
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --teal-400: #2dd4bf;
+  --teal-500: #14b8a6;
+  --rose-400: #fb7185;
+  --rose-500: #f43f5e;
+  --cyan-400: #22d3ee;
+  --cyan-500: #06b6d4;
+  --lime-500: #84cc16;
+  --lime-600: #65a30d;
+  --orange-400: #fb923c;
+  --orange-500: #f97316;
+}

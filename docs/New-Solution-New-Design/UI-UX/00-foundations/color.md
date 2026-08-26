@@ -124,21 +124,50 @@ state-shown-border            neutral-300        neutral-600
 state-shown-text              neutral-700        neutral-200
 state-shown-icon              neutral-500        neutral-400
 
-state-held-bg                 amber-50           amber-900 @ 25%
+state-held-bg                 amber-50           #3A2C10
 state-held-border             amber-500          amber-500
 state-held-text               amber-700          amber-400
 state-held-icon               amber-600          amber-400
 
-state-pending-bg              blue-50            blue-900 @ 25%
+state-pending-bg              blue-50            #122040
 state-pending-border          blue-500           blue-500
 state-pending-text            blue-600           blue-400
 state-pending-icon            blue-600           blue-400
 
-state-confirmed-bg            green-50           green-900 @ 25%
+state-confirmed-bg            green-50           #0B2F26
 state-confirmed-border        green-600          green-500
 state-confirmed-text          green-700          green-400
 state-confirmed-icon          green-600          green-400
 ```
+
+### The dark chip backgrounds are opaque hex, not an alpha composite (corrected 2026-08-26)
+
+These three used to read `amber-900 @ 25%`, `blue-900 @ 25%`, `green-900 @ 25%` — and so did six more tokens
+further down this file. **That notation was the error, and it was caught during the M5/E5.0 translation
+pass.** Two reasons it had to be resolved before implementation rather than left as shorthand:
+
+1. **The notation and the rendered mockup disagreed, and neither derived from the other.** `amber-900`
+   `#78350F` at 25% over `neutral-900` composites to `#291E23`; `mockup-shared-shell.html` shipped `#3A2C10`.
+   The computed composite is markedly duller — a chip that barely reads as amber, which undercuts the
+   background's job as one of U14's four redundant channels.
+2. **Alpha vs. opaque is not a cosmetic distinction.** A promise-state chip renders on cards, table rows,
+   dock-board bars and inside popovers — four different backdrops. A translucent token is a *different
+   colour* on each; an opaque one is identical everywhere. For the one component in this product that must
+   never be misread, identical everywhere is the requirement.
+
+**Resolution: the mockup's hexes are authoritative and the tokens are opaque.** Verified against their own
+foreground text, computed not assumed:
+
+| Pairing | Ratio | Verdict |
+|---|---:|---|
+| `amber-400` #FBBF24 on `#3A2C10` | **8.1:1** | AAA |
+| `blue-400` #60A5FA on `#122040` | **6.3:1** | AA, AAA for large |
+| `green-400` #34D399 on `#0B2F26` | **7.5:1** | AAA |
+| `red-400` #F87171 on `#3A1414` | **5.9:1** | AA |
+
+The six other affected tokens resolve to the same six hexes and are corrected in place below:
+`surface-selected` and `interactive-selected-bg` → `#12203C`; `feedback-warning-bg` → `#3A2C10`;
+`feedback-info-bg` → `#122040`; `feedback-success-bg` → `#0B2F26`; `feedback-danger-bg` → `#3A1414`.
 
 Note `state-held-text` and `state-confirmed-text` use the **700** step in light mode while blue uses
 **600**. That is not inconsistency — see *Contrast* below. Amber and green need one step darker than blue
@@ -240,19 +269,19 @@ Distinct from promise state. These are system feedback about an *action*, not th
 
 ```
                               LIGHT              DARK
-feedback-success-bg           green-50           green-900 @ 25%
+feedback-success-bg           green-50           #0B2F26
 feedback-success-text         green-700          green-400
 feedback-success-border       green-600          green-500
 
-feedback-warning-bg           amber-50           amber-900 @ 25%
+feedback-warning-bg           amber-50           #3A2C10
 feedback-warning-text         amber-700          amber-400
 feedback-warning-border       amber-500          amber-500
 
-feedback-danger-bg            red-50             red-900 @ 25%
+feedback-danger-bg            red-50             #3A1414
 feedback-danger-text          red-700            red-400
 feedback-danger-border        red-600            red-500
 
-feedback-info-bg              blue-50            blue-900 @ 25%
+feedback-info-bg              blue-50            #122040
 feedback-info-text            blue-700           blue-400
 feedback-info-border          blue-500           blue-500
 ```
@@ -280,10 +309,13 @@ rejected for the same reason: it would let two internal screens disagree with ea
                               LIGHT              DARK
 surface-base                  neutral-50         neutral-950
 surface-raised                neutral-0          neutral-900
+surface-floating              neutral-0          neutral-800
 surface-overlay               neutral-0          neutral-800
 surface-sunken                neutral-100        neutral-950
 surface-hover                 neutral-100        neutral-800
-surface-selected              blue-50            blue-900 @ 30%
+surface-selected              blue-50            #12203C
+surface-inverse               neutral-900        neutral-200
+surface-inverse-fg            neutral-50         neutral-900
 
 text-primary                  neutral-900        neutral-50
 text-secondary                neutral-600        neutral-300
@@ -295,8 +327,24 @@ text-link                     blue-600           blue-400
 border-subtle                 neutral-200        neutral-800
 border-default                neutral-300        neutral-700
 border-strong                 neutral-400        neutral-600
+border-floating               neutral-200        neutral-700
 border-focus                  blue-600           blue-400
 ```
+
+**`surface-sunken` is deliberately identical to `surface-base` in dark, and that is not an oversight.**
+`neutral-950` is the floor — there is nothing darker to recess into. Sunken therefore expresses itself in
+dark mode the same way `elevation-and-depth.md`'s Level 1 already does: **through a 1px `border-subtle`, not
+a fill step.** Any sunken container (the segmented control's track, a code block, an inset panel) carries
+that border unconditionally, in both themes, which is why the segmented control reads correctly in dark
+despite its fill matching the page. A sunken surface with no border is a bug in the component, not a gap in
+this table. Added 2026-08-26 during the M5/E5.0 pass, where mapping shadcn's `--muted` onto this token
+surfaced the collision.
+
+`surface-inverse` exists for exactly one thing today — the tooltip ground, which is intentionally the
+opposite polarity of everything around it. It was found missing when the shared-shell mockup's tooltip was
+caught reaching `neutral-900` directly (U85). It is a *functional* token rather than a component-scoped one
+because a second inverted surface is plausible (a toast on a light ground, a keyboard-shortcut key cap);
+if it stays single-use for long, demote it.
 
 Dark mode raises surfaces by *lightening* (`neutral-950` base → `neutral-900` raised) rather than by
 shadow, since shadow is nearly invisible on dark grounds. Full treatment in `elevation-and-depth.md`.
@@ -312,14 +360,63 @@ Applied consistently to every interactive element. Button-specific mappings are 
 interactive-default           blue-600           blue-500
 interactive-hover             blue-700           blue-400
 interactive-pressed           blue-800           blue-300
+interactive-on                neutral-0          neutral-950
 interactive-disabled-bg       neutral-200        neutral-800
 interactive-disabled-text     neutral-400        neutral-600
 interactive-focus-ring        blue-600           blue-400
-interactive-selected-bg       blue-50            blue-900 @ 30%
+interactive-selected-bg       blue-50            #12203C
+
+destructive-bg                red-600            red-500
+destructive-on                neutral-0          neutral-950
 ```
+
+**`interactive-on` is the fix for a real bug, so it is worth naming rather than assuming.** It is the
+foreground that sits *on* `interactive-default` — white in light, `neutral-950` in dark. Until 2026-08-26
+this existed only as prose inside `components.md` §1's variant table ("text white" / "text neutral-950"),
+which meant components had nothing to reference and hardcoded `neutral-0`. The shared shell's notification
+count badge did exactly that, and in dark mode rendered **white on `blue-500` at 3.7:1 — below AA** for its
+10px label. Referencing `interactive-on` yields `neutral-950` on `blue-500` at **5.5:1** and passes. Any
+filled interactive surface uses this token for its foreground; `destructive-on` is the same idea for the
+`destructive` variant's red fill.
 
 **Focus ring is 2px solid with a 2px offset**, never a subtle glow. Planners operate the queue by keyboard
 (§7.3), so focus must be unambiguous at a glance — and a glow disappears against a coloured row background.
+
+---
+
+## Control-support tokens (added 2026-08-26)
+
+Small, unglamorous tokens that existed only inside the shared-shell mockup's CSS or as prose in
+`components.md`, and were therefore being hardcoded to primitives by the components that needed them. Every
+one is here because a real component reached a tier too deep for lack of a name (U85), not because the
+palette needed enriching.
+
+```
+                              LIGHT              DARK
+switch-track-off              neutral-300        neutral-700
+switch-knob                   neutral-0          neutral-50
+marker-unmet                  neutral-500        neutral-400
+avatar-bg                     neutral-600        neutral-400
+avatar-fg                     neutral-0          neutral-950
+skeleton                      neutral-200        neutral-800
+scrim                         rgba(15,23,42,.5)  rgba(0,0,0,.65)
+urgent                        red-600            red-400
+```
+
+**`switch-track-off` is the other bug this batch fixed.** `components.md` §12 lists the toggle as a standard
+control but never gave its track a colour, so the mockup hardcoded `neutral-300` with no dark override — a
+light-grey pill on a near-black card, and because it reached a primitive, **no theme override could reach
+it.** That is the failure mode `tokens.md` exists to prevent, caught in the one place it had already
+happened. The disabled knob deliberately reuses `interactive-disabled-text` rather than getting a fifth
+token: low contrast against `interactive-disabled-bg` is the correct appearance for a disabled control.
+
+`marker-unmet` is the neutral dot on an unmet password requirement (`components.md` §12's "a check when met,
+a neutral dot when not"). The *shape* carries the meaning, so the dot is not required to clear 3:1 — but it
+matches `text-tertiary`'s value so the marker and its label read as one unit.
+
+`avatar-bg`/`avatar-fg` are a pair rather than a reuse of `surface-inverse`, on purpose: reusing the inverse
+pair would have turned the avatar from a mid-grey circle into a near-black one, and this pass was correcting
+tier violations, not changing rendered colours. Both pairings clear 8:1.
 
 ---
 

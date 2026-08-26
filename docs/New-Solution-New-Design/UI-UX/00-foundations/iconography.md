@@ -113,6 +113,44 @@ unlabelled dots, per U60.
 | Hold for information | `pause` | `neutral` |
 | Escalate | `arrow-up-right` | `cautionary` |
 
+### Rail destinations (added 2026-08-26)
+
+The sizing table above says `icon-lg` is for "Top bar, rail, section headers", but this inventory had **no
+navigation domain at all** — found during the M5/E5.0 implementation pass, when the icon rail turned out to
+have a prose spec, no rendering, and no icons. These are the six destinations the six roles actually get,
+and the list is short because **U101 governs it**: a destination exists only where
+`SOLUTION_DESIGN.md` §2 gives the role a job *and* §7.5.* gives it a tool. Nothing here was added to make a
+rail look less empty.
+
+**One destination per role — one surface per role.** The criterion is stated in `components.md` §7 (*What
+is a rail destination, and what is a tab*); this table is its application.
+
+| Destination | Role | Icon | Grounded in |
+|---|---|---|---|
+| **Exceptions** | Ops coordinator | `flag` | §2 "triage exceptions, resolve ambiguity, escalate"; §7.5.5 (8 tools) |
+| **Dock Command** | Warehouse planner | `chart-gantt` | §2 "confirm/reject, block docks, re-sequence"; §7.5.1 (8 tools) + §7.5.3. Queue and Board are **tabs** |
+| **Yard** | Gate / yard officer | `warehouse` | §2 "gate-in, yard queue, call-to-dock…"; §7.5.2 (5 tools). Two device contexts switch on a **segmented control** |
+| **Fleet** | Carrier manager | `package` | §2 "own fleet's shipments, exceptions, on-time performance"; §7.5.6 (5 tools). All three are **sections of one dashboard** — `05-carrier-portal/screens.md`: *"one sectioned dashboard,"* *"no tabs"* |
+| **Admin** | Administrator | `sliders-horizontal` | §2 "users, roles, facility_rules, policy weights, audit"; §7.5.7 (12 tools). Four **tabs** |
+
+**Corrected 2026-08-26.** Carrier initially had three destinations (Shipments · Exceptions · Performance),
+derived by counting §2's jobs and §7.5.6's tools. That contradicted the already-designed surface, which is a
+single sectioned dashboard. **A job in §2 is not a destination and neither is a tool in §7.5.\*** — the
+tool-catalog cross-check proves a job has backing, not that it has its own screen. `flag` is therefore
+Ops-only; `chart-line` is no longer a rail icon at all (the on-time figure is a stat tile on the Fleet
+dashboard).
+
+**Two further consequences, each of which prevented an invented icon:**
+
+- **The driver has no rail.** The PWA runs 320–768px and carries its own chrome; a 56px rail expanding to a
+  240px overlay on a 390px phone is not a viable shell. The driver's Profile is a separate surface.
+- **Settings is not a rail destination** — it is reached from the user menu, so no gear icon appears on the
+  rail. This also avoids `settings` colliding with `sliders-horizontal`'s admin meaning.
+
+⚠️ **Verify `chart-gantt` against the installed `lucide-react` version** — it was renamed in Lucide's
+`chart-*` sweep (from `gantt-chart`), so the export name depends on the version pinned. The glyph is the
+same either way; only the import breaks.
+
 ### System and connection
 
 For the status bar (`spacing-and-layout.md`) and the offline states (`auth-and-scoping.md`).

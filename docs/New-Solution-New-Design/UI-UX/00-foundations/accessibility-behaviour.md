@@ -36,6 +36,8 @@ user's current task to pause; `"assertive"` interrupts. Silence is a deliberate 
 | Successful writes | `polite` | A success does not need to interrupt; a failure does |
 | Toast content (`components.md` §8) | `role="status"` (info/success) or `role="alert"` (error) — already specified there | Cross-referenced, not restated |
 | Capacity-incident row expanding/collapsing (§17) | `polite`, count only | "4 shipments affected" — the same principle as the queue-arrival row above |
+| **Status bar — connection state** (`components.md` §7) | `polite` (`role="status"`) | The new state on transition only — "Offline", "Connected". **Added 2026-08-26**, found by a `web-design-guidelines` audit of the status-bar artboard: the general rule below routes ambient state *to* the status bar and leaves it silent, which would have silently swallowed going offline. That is not ambient — a planner who goes offline and keeps confirming is acting on stale capacity data (`auth-and-scoping.md`'s degradation policy). Polite rather than assertive because the *consequence* carries the urgency: primary content goes Inactive and Confirm goes with it, and that Inactive state is what interrupts |
+| **Status bar — last sync, pending count, active facility, policy version** | **Silent** | These tick and churn continuously. A live region here would make the status bar unusable with a screen reader, for the same reason the countdown is throttled to four thresholds. They are readable on demand, which is precisely the role the general rule below assigns the status bar |
 
 **The general rule underneath the table:** announce **location changes** and **unsuccessful actions**
 always; announce **other changes case-by-case**, weighing whether the change is something the user is

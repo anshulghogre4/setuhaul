@@ -401,7 +401,7 @@ Toggles carry state through position AND a text label ("On"/"Off") beside each �
 A two-option radio group labelled "Email delivery": "As it happens" and "Once daily digest". One line of tertiary helper text beneath: "Applies to email only. Web push is always sent as it happens." When "Mute everything" or the Email column is entirely off, this section is dimmed with the reason stated inline rather than silently doing nothing.
 
 **SECTION 4 — Appearance**
-A three-way segmented control labelled "Theme": "Light", "Dark", "System". Light is the default. The selected segment is marked by a filled background AND a weight change, never colour alone. One line of tertiary helper text: "This is saved to your account and follows you between devices."
+A three-way segmented control labelled "Theme": "Light", "Dark", "System". Light is the default. The selected segment is marked by a filled background AND a weight change, never colour alone. One line of tertiary helper text: "This is saved on this device."
 
 **SECTION 5 — Your access (read-only)**
 Two read-only blocks: **Role** (e.g. "Warehouse Planner") and **Facilities** (a plain vertical list of facility names, e.g. "Jaipur DC", "Gurugram Cross-Dock"). Beneath them one line of tertiary helper text: "Access is set by an admin. If this looks wrong, contact them."

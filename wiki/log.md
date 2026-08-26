@@ -3,10 +3,35 @@ title: SetuHaul Wiki Operation Log
 type: log
 status: append-only
 scope: wiki
-last_updated: 2026-08-25
+last_updated: 2026-08-27
 ---
 
 # Wiki log
+
+## 2026-08-27 02:26 IST | implementation | M5 E5.0 (#35): both open forks resolved by owner — one real fix, one confirmation
+
+- **Fork 1 (status-bar policy version) needed a fix.** Owner rule: only roles that have a facility show it. Enumerated all seven roles first — exactly one mismatch, `GATE_OFFICER`, which the spec's provisional "planner, ops, admin" wording had excluded. `statusBarFields.policyVersion` now derives from `hasFacilityScope(role)`; the two keys stay separate because they mean different things at the call site.
+- Verified by **measuring the rendered DOM**, not re-reading the predicate: artboard 31 extended from 2 rows to 5 (planner connected/offline/syncing, gate, carrier) with `data-statusbar-role` hooks; new 12-check suite asserts `showsPolicy === showsFacility` per bar, the two specific cases, no overflow, one live region each, and the rule holding on real `/planner` and `/settings` routes. 12/12 pass, screenshot confirms.
+- **Fork 2 (multi-role identity) confirmed as-built and now tracked as #52.** Fixture seam kept and marking strengthened: boxed header comment in `App.tsx` + four `FIXTURE SEAM — TODO(#52)` markers, greppable. Comment names the exact two constants to replace and states — verified by grep before writing it — that nothing under `components/shell/**` reads a fixture, so no component changes when #52 lands.
+- Re-verified green: `tsc -b`, `oxlint` exit 0, `vite build`, 36/36 + 31/31 + 12/12 checks, zero runtime errors.
+- **E5.0 complete**: 8/8 sub-issues, both forks closed. Uncommitted; #35 not closed on inference. Next: E5.1 (Driver chat).
+
+## 2026-08-27 01:58 IST | implementation | M5 E5.0 (#35): frontend tech stack + 32-artboard shared shell built and render-verified
+
+- First application of the New-Solution-New-Design workspace to `frontend/`, so that folder's writeback exemption ends here and normal writeback resumes.
+- Installed/configured: Tailwind v4.3.3 + `@tailwindcss/vite`, shadcn/ui (CLI 4.19.0, 18 primitives), cva/clsx/tailwind-merge, lucide-react 1.34.0, sonner, `@assistant-ui/react` 0.15.16, Kibo UI Gantt as **source**, `vite-plugin-pwa` 1.3.0, and a hand-written fetch-based SSE client (`EventSource` cannot do POST + Authorization — checked against MDN, not assumed).
+- Built all 32 shared-shell artboards as real components; `/_states` renders every one. Old `App.css`/`index.css`/`features/{driver,operator}`/`layouts/` retired — replacement, not extension.
+- **Seven findings from measuring a real render. Five real defects**: (1) `.dark` shadow overrides do not propagate — v4 inlines `--shadow-*` at build time, so the spec's stated `@utility` fallback was taken; (2) **every facility-scoped rail had no stripe** — v4 tree-shakes `@theme` vars no utility references, and facility accent is deliberately never a class, so `--color-facility-N` was dropped from `:root` and the border declaration was invalid in light mode; (3) **the undo toast was visible but dead over a modal** — Radix sets `pointer-events:none` on `<body>`, so z-index alone does not satisfy U41; (4) status bar overflowed on a long facility name; (5) duplicate nav landmark names + a dead `aria-label` on a roleless div. **Two were probe artifacts** (tooltip `elementFromPoint` vs `pointer-events:none`; switch read mid-`transition-colors`) and are recorded as such, not counted as fixes.
+- Also caught a **vacuously passing check** (active-marker clearance measured where no item was active, giving `NaN < 4` = pass); re-measured on `/planner` at 6-8px against a 0-4px stripe.
+- Removed a **dead `defaultOpen` prop** rather than special-casing components for the gallery: it set state correctly but Radix dismissed it on mount. Gallery popovers are click-to-open, and only one can be open at a time — the click that opens a second is a click outside the first.
+- `web-design-guidelines` skill genuinely invoked (fresh fetch), not cited. Applied `color-scheme: light`, safe-area insets, `translate="no"` on machine values; deliberately did not "fix" the ellipsis-placeholder rule, matching the design phase's recorded product-wide deferral.
+- Verified: `tsc -b` clean, `oxlint` exit 0, `vite build` clean, **36/36 measurement + 31/31 interaction checks** in headless Chromium, zero runtime errors, both themes screenshotted.
+- Open forks left for the owner: per-role status-bar **policy-version** visibility (carrier/gate), and the missing server contract for multi-role `grants[]` (`/auth/me` returns one `role_name`, so the role picker has nothing to sit on and the shell renders from a marked fixture seam).
+- #35 left OPEN pending commit and owner review. Nothing committed, nothing deployed.
+
+## 2026-08-26 07:58 IST | verification | E7.1 cleanup committed and pushed, session closing
+
+- deploy/apprunner-create.json retired. Issue #45 checklist updated (7/8), evidence posted, left open (orphaned Upstash DB decision pending owner). Commit 4aabc85 (Refs #45) verified landed, issue confirmed still OPEN. 413 tests passing. Next: M5 (frontend), not started.
 
 ## 2026-08-26 07:51 IST | verification | E7.1 core migration complete, cutover verified live
 

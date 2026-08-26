@@ -55,8 +55,17 @@ Single sign-in for all six roles. Role determines the landing surface, never a s
 | `OPERATIONS_EXECUTIVE` | Exception queue, cross-facility |
 | `WAREHOUSE_PLANNER` | Pending queue for their default facility |
 | `OPERATIONS_MANAGER` | Exception queue with escalations pinned |
+| `GATE_OFFICER` | Yard queue for the device's facility |
 | `TRANSPORT_MANAGER` | Carrier fleet status |
 | `ADMIN` | Admin console overview |
+
+**`GATE_OFFICER` added 2026-08-26.** This table shipped with six rows and no gate officer — even though
+`SOLUTION_DESIGN.md` §2 marks the role ✅ for v1 with its own kiosk surface, §7.5.2 gives it five tools, and
+this file's own "What each role never sees" table below already has a Gate officer row. Found during the
+M5/E5.0 pass while deriving rail destinations per role. The landing target is grounded in §2's job list
+("gate-in, **yard queue**, call-to-dock…") and §7.5.2's `update_queue_state`, not chosen. Note the facility
+is the *device's*, not the user's: `auth-and-scoping.md`'s session table already makes the gate session
+device-bound, so a gate officer does not pick a facility at sign-in.
 
 A user with multiple roles picks once at sign-in and can switch from the user menu — the active role is
 **always visible in the top bar**, because "which role am I acting as" changes what a click means.

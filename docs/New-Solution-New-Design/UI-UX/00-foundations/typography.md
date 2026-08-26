@@ -67,6 +67,23 @@ A 1.2 modular scale, rounded to whole pixels and snapped to the 4px baseline
 | `text-label` | 12px | 1.33 | 600 | 0.04em | Uppercase column headers, chip labels |
 | `text-micro` | 11px | 1.3 | 500 | 0.02em | Timestamps, metadata. **Floor — nothing smaller.** |
 
+### `text-sm` renders as the `text-supporting` utility (added 2026-08-26)
+
+A naming collision, resolved without renaming the design token. **Tailwind ships a built-in `text-sm` at
+14px**; ours is 13px. Overriding the built-in in place would leave every developer's muscle memory pointing
+at the wrong size forever, and would silently shrink every shadcn/ui primitive (which use `text-sm`
+liberally) by a pixel.
+
+**Resolution: this token keeps the name `text-sm` in the design system, and is registered in Tailwind as
+`--text-supporting`.** Tailwind's own `text-sm` is left untouched at 14px — which coincides with
+`text-body`'s size anyway, so a shadcn primitive that ships `text-sm` lands on the right size without
+patching. Components in our own code use `text-body` (14px/1.5) and `text-supporting` (13px/1.4)
+explicitly; `text-sm` in a codebase search means "shadcn shipped this and nobody has patched it yet."
+
+Clearing Tailwind's whole type scale with `--text-*: initial` — the trick that *does* work for colour, and
+is what enforces U85 there — was considered and rejected here: it would make `text-xs`/`text-base`/`text-lg`
+unknown utilities and break every shadcn primitive at install time.
+
 ### Two deliberate deviations
 
 **Body is 14px, not 16px.** The planner console must fit seven fields on a row and ~20 rows on screen

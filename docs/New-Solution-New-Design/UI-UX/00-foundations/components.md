@@ -278,9 +278,58 @@ often the ones that most need individual attention during a spike.
 ### Icon rail (U39)
 - 56px fixed; expands to 240px **as an overlay** on hover/focus — never pushes content, since reflow under
   the cursor is the U19 failure again.
-- Active item: 2px inner accent bar, not a background fill.
+- Active item: 2px inner accent bar, not a background fill. **It must clear U40's 4px facility stripe** —
+  the bar sits inside the rail's content box with a 2px gap from the stripe, never overlapping it. Caught by
+  measurement on 2026-08-26: the first implementation placed the marker at 1.5–3.5px, i.e. fully *inside*
+  the 0–4px stripe, so on every facility-scoped rail the active marker was painted over the facility colour
+  and neither signal read correctly. Two 2–4px vertical bars at the same edge is the hazard to design
+  against here.
+- **The hover/focus tooltip is `z-tooltip` and the rail is `z-shell`** (`spacing-and-layout.md`'s scale).
+  Not optional: the rail and the content region are sibling positioned boxes, so without an explicit
+  z-index the content paints over the rail purely because it comes later in the DOM — which buries the
+  tooltip underneath the content. The tooltip also carries `shadow-md`, per `elevation-and-depth.md`'s
+  Level 3, which names tooltips explicitly.
 - Destinations filtered by role (U29). A carrier user has no ops destination in the DOM at all, not merely
-  hidden.
+  hidden. **The destination set per role is enumerated in `iconography.md` §Rail destinations.**
+
+### What is a rail destination, and what is a tab (added 2026-08-26)
+
+This criterion was **missing**, and its absence caused a real error: the carrier portal was given three rail
+destinations (Shipments · Exceptions · Performance) derived by counting `SOLUTION_DESIGN.md` §2's jobs and
+§7.5.6's tools — while `05-carrier-portal/screens.md` had already designed that surface as *"one sectioned
+dashboard"* with *"no tabs."* Two derivation methods, two different answers, no rule to adjudicate.
+
+**The rule, stated once:**
+
+> **A rail destination is a *surface*. This product has one surface per role.**
+
+Everything *inside* a surface is internal navigation and never a rail item:
+
+| Mechanism | Used by | Why not a destination |
+|---|---|---|
+| **Tabs** | Planner (Queue · Board), Admin (Users · Facility Rules · Policy · Audit) | Different views or objects within one workspace the role occupies all shift |
+| **Sections on one page** | Carrier (shipments · exceptions · on-time tile) | One scroll, one refresh, one data fetch — a reference surface, not a workspace |
+| **Segmented control** (§12) | Gate (two device contexts) | Two views of the same yard state |
+
+**Two corollaries that prevent the same error recurring:**
+
+1. **A job in §2's persona table is not a destination, and neither is a tool in §7.5.\*.** The tool-catalog
+   cross-check (U101) proves a listed job *has backing*; it says nothing about navigation shape. §7.5.6 has
+   five tools and three of them feed a single page.
+2. **The surface's own `screens.md` is authoritative for its navigation structure.** If it hasn't been
+   written yet, that is a gap to raise — not something to infer from a job count.
+
+Consequences worth knowing before building the rail: **all five internal roles have exactly one
+destination**, **the driver surface has no rail at all**, and **Settings is not on the rail** — it is
+reached from the user menu.
+
+The rail is therefore not a navigation tree. It carries the facility accent stripe (U40), the active/scope
+indicator, and headroom for §2's two deferred personas (facility manager, regional ops head), which are
+genuine future destinations. That is a deliberate, owner-confirmed position, not an oversight.
+- **No facility accent stripe for the carrier role.** Carriers are scoped by `carrier_id`, not by facility
+  (`SOLUTION_DESIGN.md` §7.5.6), so there is no facility to colour — the stripe is absent, and so is the
+  facility switcher (Hidden, not disabled, per §18).
+- Rendered reference: `mockup-shared-shell.html` section G, artboard 30.
 - 4px facility accent stripe on the outer edge (U40).
 - Keyboard: `Tab` reaches the rail, arrows move within, `Cmd/Ctrl+B` toggles pinned-expanded.
 
@@ -416,18 +465,31 @@ views of the same data**, all valid at once, selection visible at a glance — n
 (that's `radio`, which supports more options and a per-option help text row) and not for navigation between
 different destinations (that's tabs, `components.md` §7's top bar / rail pattern).
 
-**Anatomy**: a single-row, one-piece container — `surface-base` fill, `border-subtle` 1px border,
-`radius-md` (6px). Segments sit inside with no gap and no individual border; the selected segment gets a
-`surface-raised` fill radius-inset by 2px from the container so its corners never collide with the
-container's own radius, `text-primary` at weight 600. Unselected segments are `text-secondary` at weight
-500, transparent fill.
+**Anatomy**: a single-row, one-piece container — `surface-sunken` fill, `border-subtle` 1px border,
+`radius-md` (6px), **4px padding**. Segments sit inside at `radius-sm` (4px) with no individual border; the
+selected segment gets a `surface-raised` fill plus `shadow-raised`, `text-primary` at weight 600. Unselected
+segments are `text-secondary` at weight 500, transparent fill.
+
+**Two corrections, 2026-08-26** (both found during the M5/E5.0 translation pass, both were internal
+contradictions rather than preferences):
+
+1. **The container's inset is 4px, not the "2px" this section originally specified.** 2px is not a multiple
+   of the 4px base unit, which `spacing-and-layout.md`'s opening line forbids without exception. 4px padding
+   with `radius-sm` segments inside a `radius-md` container achieves the same thing — corners that never
+   collide — while staying on the grid.
+2. **Unselected hover is a text-colour change, not a `surface-hover` fill.** The fill was unimplementable:
+   the container is `surface-sunken`, and `surface-sunken` and `surface-hover` are **the same value in light
+   mode** (`neutral-100`), so the specified hover was invisible. Rather than mint a surface token for one
+   component, hover raises the label to `text-primary`. The container's mandatory 1px `border-subtle` is
+   what keeps the track legible in dark mode, where `surface-sunken` matches the page — see `color.md`'s
+   note on sunken surfaces.
 
 **States**:
 | State | Treatment |
 |---|---|
-| Selected | `surface-raised` fill, `text-primary`, weight 600 — the visual "chip" that reads as one physical position |
+| Selected | `surface-raised` fill + `shadow-raised`, `text-primary`, weight 600 — the visual "chip" that reads as one physical position |
 | Unselected | Transparent, `text-secondary`, weight 500 |
-| Hover (unselected) | `surface-hover` fill — background only, no scale, no lift |
+| Hover (unselected) | **`text-primary`** — colour only, no fill, no scale, no lift |
 | Focus | `shadow-focus` two-ring on the segment, not the container |
 | Disabled | `interactive-disabled-text`, whole segment non-interactive, paired with a tooltip stating why (U32) |
 
@@ -548,10 +610,16 @@ content is a layout jump, and a jump under a cursor is a mis-click.
 
 **Implementation technique (U78):** render the real content **invisible** (`visibility: hidden`, not
 `display: none`) so it holds its true layout dimensions, then overlay a pulsing block at
-`absolute inset-0 rounded-[inherit] animate-pulse` using the surface's own muted token. This needs no
+`absolute inset-0 rounded-[inherit] animate-shim` using the `skeleton` token (`color.md`). This needs no
 `ResizeObserver`, no manual height measurement, and automatically inherits whatever token the surface is
 already using — a skeleton row is exactly the shape of the real row because it *is* the real row, just
 invisible with a pulse drawn over it.
+
+**`animate-shim`, not `animate-pulse` — corrected 2026-08-26.** This section originally named Tailwind's
+built-in `animate-pulse`, which runs **2000ms on `cubic-bezier(0.4,0,0.6,1)`**. `motion.md`'s inventory
+specifies the skeleton shimmer as **1600ms `ease-in-out`**, and `motion.md` is the motion authority, so it
+wins. Define a custom `shim` keyframe (`0%,100% { opacity: 1 } 50% { opacity: .55 }`) at 1600ms with
+`--e-in-out`; do not reach for the built-in because its class name is shorter.
 
 ---
 

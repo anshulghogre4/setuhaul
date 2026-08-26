@@ -3,8 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#E2E8F0" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
+<!-- Single value: this board defaults to light regardless of OS (U69), so a
+     prefers-color-scheme-keyed pair would tint the browser chrome dark while
+     the page rendered light. The real app's manifest uses surface-base
+     (#F8FAFC), not this board's own #E2E8F0 chrome. -->
+<meta name="theme-color" content="#E2E8F0">
 <title>Shared shell, auth and account mockups — SetuHaul Dock Command</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +18,15 @@
    TOKENS — verbatim from 00-foundations/color.md
    (copied unchanged from 01-driver-chat/mockup.html)
    Light palette on bare :root. Dark redefines tokens only.
+
+   U69: light is the shipped default for EVERY role, and
+   `prefers-color-scheme` is deliberately NOT consulted here.
+   Dark is opt-in via [data-theme="dark"] only. The Appearance
+   control's "System" option is resolved in JS (add/remove the
+   dark class), never by a CSS media query — otherwise a
+   dark-configured OS silently overrides the locked default.
+   The two @media (prefers-color-scheme) blocks this file used
+   to carry were removed 2026-08-26 for exactly that reason.
    ============================================================ */
 :root {
   /* neutral — slate-tinted */
@@ -27,7 +39,7 @@
   --amber-50:#FFFBEB; --amber-400:#FBBF24;--amber-500:#F59E0B;--amber-600:#D97706;--amber-700:#B45309;--amber-900:#78350F;
   --green-50:#ECFDF5; --green-400:#34D399;--green-500:#10B981;--green-600:#059669;--green-700:#047857;--green-900:#064E3B;
   --red-50:#FEF2F2;   --red-400:#F87171;  --red-500:#EF4444;  --red-600:#DC2626;  --red-900:#7F1D1D;
-  --violet-500:#8B5CF6;
+  --violet-400:#A78BFA; --violet-500:#8B5CF6; --teal-400:#2DD4BF; --teal-500:#14B8A6;
 
   /* surfaces + text */
   --surface-base:var(--neutral-50);
@@ -39,6 +51,7 @@
   --text-tertiary:var(--neutral-500);
   --border-subtle:var(--neutral-200);
   --border-default:var(--neutral-300);
+  --border-strong:var(--neutral-400);
   --border-focus:var(--blue-600);
 
   /* promise state */
@@ -61,47 +74,23 @@
 
   --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    color-scheme:dark;
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --surface-selected:#12203c;
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --border-focus:var(--blue-400);
-    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
-    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
-    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
-    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
-    --urgent:var(--red-400);
-    --board-bg:var(--neutral-950);
-    --board-panel:var(--neutral-900);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-    --board-line:var(--neutral-800);
-  }
-}
 :root[data-theme="dark"]{
   color-scheme:dark;
   --surface-base:var(--neutral-950);
   --surface-raised:var(--neutral-900);
   --surface-hover:var(--neutral-800);
-  --surface-selected:#12203c;
+  --surface-selected:#12203C;
   --text-primary:var(--neutral-50);
   --text-secondary:var(--neutral-300);
   --text-tertiary:var(--neutral-400);
   --border-subtle:var(--neutral-800);
   --border-default:var(--neutral-700);
+  --border-strong:var(--neutral-600);
   --border-focus:var(--blue-400);
   --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
-  --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
+  --state-held-bg:#3A2C10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
   --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
-  --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
+  --state-confirmed-bg:#0B2F26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
   --urgent:var(--red-400);
   --board-bg:var(--neutral-950);
   --board-panel:var(--neutral-900);
@@ -145,36 +134,25 @@
 
   /* color.md — facility accent (rail stripe + switcher swatch only) */
   --facility-1:var(--violet-500);
+  --facility-2:var(--teal-500);
 
   --skeleton:var(--neutral-200);
+
+  /* color.md — added 2026-08-26. Six components previously reached a
+     primitive directly because these had no functional name (U85).
+     Values are unchanged from what those components already rendered
+     in light mode; the dark column is what was actually missing. */
+  --surface-inverse:var(--neutral-900);      /* tooltip ground */
+  --surface-inverse-fg:var(--neutral-50);
+  --marker-unmet:var(--neutral-500);         /* unmet-requirement dot */
+  --switch-track-off:var(--neutral-300);
+  --switch-knob:var(--neutral-0);
   --avatar-bg:var(--neutral-600);
+  --avatar-fg:var(--neutral-0);
 
   /* motion.md — duration and easing */
   --d-instant:0ms; --d-fast:120ms; --d-base:200ms; --d-slow:320ms;
   --e-out:cubic-bezier(0.16,1,0.3,1);
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --shadow-sm:none;
-    --shadow-md:0 4px 12px rgba(0,0,0,.40);
-    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
-    --scrim:rgba(0,0,0,.65);
-    --surface-sunken:var(--neutral-950);
-    --surface-floating:var(--neutral-800);
-    --border-floating:var(--border-default);
-    --surface-overlay:var(--neutral-800);
-    --interactive-default:var(--blue-500);
-    --interactive-hover:var(--blue-400);
-    --interactive-on:var(--neutral-950);
-    --interactive-disabled-bg:var(--neutral-800);
-    --interactive-disabled-text:var(--neutral-600);
-    --text-disabled:var(--neutral-600);
-    --text-link:var(--blue-400);
-    --fb-danger-bg:#3a1414;  --fb-danger-text:var(--red-400); --fb-danger-border:var(--red-500);
-    --fb-info-bg:#122040;    --fb-info-text:var(--blue-400);  --fb-info-border:var(--blue-500);
-    --destructive-bg:var(--red-500); --destructive-on:var(--neutral-950);
-    --skeleton:var(--neutral-800);
-  }
 }
 :root[data-theme="dark"]{
   --shadow-sm:none;
@@ -192,10 +170,19 @@
   --interactive-disabled-text:var(--neutral-600);
   --text-disabled:var(--neutral-600);
   --text-link:var(--blue-400);
-  --fb-danger-bg:#3a1414;  --fb-danger-text:var(--red-400); --fb-danger-border:var(--red-500);
+  --fb-danger-bg:#3A1414;  --fb-danger-text:var(--red-400); --fb-danger-border:var(--red-500);
   --fb-info-bg:#122040;    --fb-info-text:var(--blue-400);  --fb-info-border:var(--blue-500);
   --destructive-bg:var(--red-500); --destructive-on:var(--neutral-950);
   --skeleton:var(--neutral-800);
+  --facility-1:var(--violet-400);
+  --facility-2:var(--teal-400);
+  --surface-inverse:var(--neutral-200);
+  --surface-inverse-fg:var(--neutral-900);
+  --marker-unmet:var(--neutral-400);
+  --switch-track-off:var(--neutral-700);
+  --switch-knob:var(--neutral-50);
+  --avatar-bg:var(--neutral-400);
+  --avatar-fg:var(--neutral-950);
 }
 
 *{box-sizing:border-box;}
@@ -320,7 +307,7 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
   transition:border-color var(--d-fast) var(--e-out);
 }
 .inp::placeholder{color:var(--text-tertiary);}
-.inp:hover{border-color:var(--neutral-400);}
+.inp:hover{border-color:var(--border-strong);}
 .pwwrap{position:relative;}
 .pwwrap .inp{padding-right:40px;}
 .pwbtn{
@@ -388,7 +375,113 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
 .reqs{margin:8px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px;}
 .reqs li{display:flex; gap:8px; align-items:center; font-size:13px; line-height:1.4; color:var(--text-tertiary);}
 .reqs li.met{color:var(--text-secondary);}
-.dot{width:6px; height:6px; border-radius:50%; background:var(--neutral-400); flex:none; margin:0 5px;}
+.dot{width:6px; height:6px; border-radius:50%; background:var(--marker-unmet); flex:none; margin:0 5px;}
+
+/* ---------- app shell: icon rail (components.md §7, U39/U40) ---------- */
+.shellframe{display:flex; width:100%; min-height:220px; background:var(--surface-base);}
+.rail{
+  width:56px; flex:none; position:relative;
+  /* z-shell (spacing-and-layout.md §Z-index scale). Without this the rail and the
+     content region are both position:relative/z-index:auto siblings, so the LATER
+     one in DOM order (the content) paints on top — which silently buried the
+     rail's hover tooltip underneath the content bars. Verified with
+     elementFromPoint, not by eye. */
+  z-index:200;
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 0;
+  background:var(--surface-raised);
+  border-right:1px solid var(--border-default);   /* tier 2: content-facing edge */
+  border-left:4px solid var(--facility-1);        /* U40 accent stripe, outer edge */
+}
+.rail.nofac{border-left:0;}                       /* carrier: no facility scope, no stripe */
+.railitem{
+  position:relative; width:40px; height:40px; display:grid; place-items:center; padding:0;
+  background:none; border:0; border-radius:var(--r-md);
+  color:var(--text-secondary); cursor:pointer;
+  transition:background-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.railitem:hover,.railitem.hov{background:var(--surface-hover); color:var(--text-primary);}
+.railitem.active{color:var(--text-primary);}
+.railitem.active::before{                         /* 2px inner accent bar, never a fill */
+  /* Must clear U40's 4px facility stripe. The 40px button is centred in the rail's
+     51px content box, so its left edge sits 5.5px in; left:-8px put the marker at
+     1.5..3.5px — measured as fully INSIDE the 0..4px stripe, painting over it.
+     -3.5px lands the marker at 6..8px, 2px clear of the stripe. */
+  content:""; position:absolute; left:-3.5px; top:8px; bottom:8px; width:2px;
+  background:var(--interactive-default); border-radius:1px;
+}
+.railtip{
+  position:absolute; top:50%; transform:translateY(-50%); white-space:nowrap;
+  /* Clear the rail, don't sit on it. The button is 40px inside a 56px rail, so
+     left:48px put the tooltip's left edge 0.5px INSIDE the rail's right border
+     (measured: GAP_RAIL_TO_TIP = -0.5px). calc(100% + 16px) lands it ~9.5px clear. */
+  left:calc(100% + 16px);
+  z-index:800;                                   /* z-tooltip */
+  background:var(--surface-inverse); color:var(--surface-inverse-fg);
+  font:500 12px/1.3 var(--font-ui); padding:6px 8px; border-radius:var(--r-md);
+  box-shadow:var(--shadow-md);                   /* tier 3 Floating — tooltips are named at Level 3 */
+}
+/* expanded: an OVERLAY over content, never a push — reflow under the cursor is the U19 failure */
+.railexp{
+  position:absolute; left:0; top:0; bottom:0; width:240px;
+  z-index:300;                                   /* z-rail-expand — correct by construction, not by DOM order */
+  display:flex; flex-direction:column; gap:4px; padding:8px;
+  background:var(--surface-floating); border-right:1px solid var(--border-floating);
+  box-shadow:var(--shadow-md);
+}
+.railexp .railitem{
+  width:100%; height:40px; display:flex; justify-content:flex-start; gap:12px; padding:0 12px;
+  font:400 14px/1.5 var(--font-ui);
+}
+.railexp .railitem.active::before{left:0;}
+.fakecontent{flex:1; min-width:0; padding:16px; position:relative;}
+.fakebar{height:12px; border-radius:var(--r-sm); background:var(--border-subtle);}
+.fakebar + .fakebar{margin-top:12px;}
+
+/* ---------- app shell: status bar (components.md §7, U43) ---------- */
+.statusbar{
+  width:100%; height:28px; flex:none;
+  display:flex; align-items:center; gap:12px; padding:0 12px;
+  background:var(--surface-raised); border-top:1px solid var(--border-default);
+  font:400 11px/1.3 var(--font-ui); color:var(--text-secondary);
+}
+.sbi{display:inline-flex; align-items:center; gap:6px; white-space:nowrap; min-width:0;}
+/* The facility name is the only variable-length field, so it is the one that truncates.
+   Everything else is nowrap and keeps its full value — a truncated "14 pending" or a
+   half-shown policy version is worse than no field at all. */
+.sbi.sbfac{overflow:hidden; text-overflow:ellipsis; display:block;}
+.sbi .ic{color:var(--text-tertiary);}
+.sbi.off{color:var(--fb-danger-text);}
+.sbi.off .ic{color:var(--fb-danger-text);}
+.sbsep{width:1px; height:12px; background:var(--border-subtle); flex:none;}
+.sbend{margin-left:auto;}
+
+/* ---------- facility switcher, open (components.md §7, U40) ---------- */
+.fpop{
+  width:280px; margin-top:8px;
+  background:var(--surface-floating); border:1px solid var(--border-floating);
+  border-radius:var(--r-md); box-shadow:var(--shadow-md); overflow:hidden;
+  overscroll-behavior:contain;   /* the option list scrolls once there are more facilities */
+}
+.fsearch{display:flex; align-items:center; gap:8px; padding:8px 12px;}
+.fsearch .ic{color:var(--text-tertiary);}
+.fsearch input{
+  flex:1; min-width:0; border:0; background:none; padding:0;
+  font:400 14px/1.5 var(--font-ui); color:var(--text-primary);
+}
+.fsearch input::placeholder{color:var(--text-tertiary);}
+.fitem{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  min-height:44px; padding:10px 12px; background:none; border:0;
+  font:400 14px/1.5 var(--font-ui); color:var(--text-primary); cursor:pointer;
+  transition:background-color var(--d-fast) var(--e-out);
+}
+.fitem:hover,.fitem.hov{background:var(--surface-hover);}
+.fitem .ic{margin-left:auto; color:var(--interactive-default);}
+.fitem .fswatch{width:12px; height:12px; border-radius:var(--r-sm); flex:none;}
+.fitem .allfac{
+  width:12px; height:12px; border-radius:var(--r-sm); flex:none;
+  border:1px dashed var(--border-strong);
+}
 
 /* ---------- app shell: top bar (components.md §7) ---------- */
 .topbar{
@@ -426,23 +519,21 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
 .iconbtn:hover,.iconbtn.hov{background:var(--surface-hover); color:var(--text-primary);}
 .badge{
   position:absolute; top:-2px; right:-2px; min-width:16px; height:16px; padding:0 4px;
-  border-radius:9999px; background:var(--interactive-default); color:var(--neutral-0);
+  border-radius:9999px; background:var(--interactive-default); color:var(--interactive-on);
   font:600 10px/16px var(--font-data); text-align:center;
 }
 .avatar{
   width:32px; height:32px; border-radius:50%; border:0; padding:0; cursor:pointer;
-  background:var(--avatar-bg); color:var(--neutral-0);
+  background:var(--avatar-bg); color:var(--avatar-fg);
   font:600 12px/1 var(--font-ui); display:grid; place-items:center;
   transition:box-shadow var(--d-fast) var(--e-out);
 }
 .avatar:hover{box-shadow:0 0 0 2px var(--border-default);}
 .tip{
   margin-top:8px; align-self:center;
-  background:var(--neutral-900); color:var(--neutral-50);
+  background:var(--surface-inverse); color:var(--surface-inverse-fg);
   font:500 12px/1.3 var(--font-ui); padding:6px 8px; border-radius:var(--r-md);
 }
-:root[data-theme="dark"] .tip{background:var(--neutral-200); color:var(--neutral-900);}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tip{background:var(--neutral-200); color:var(--neutral-900);}}
 
 /* ---------- popover (tier 3 · Floating) ---------- */
 .popwrap{width:100%; display:flex; flex-direction:column; align-items:flex-end; padding:0 16px 24px;}
@@ -532,7 +623,6 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
   border:1px solid transparent; overflow:hidden; overscroll-behavior:contain;
 }
 :root[data-theme="dark"] .palette{border-color:var(--border-default);}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .palette{border-color:var(--border-default);}}
 .qrow{display:flex; align-items:center; gap:12px; height:56px; padding:0 16px;}
 .qrow .qin{
   flex:1; border:0; background:none; padding:0;
@@ -587,18 +677,18 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
 .swlab{font-size:13px; line-height:1.4; color:var(--text-secondary); min-width:22px; text-align:left;}
 .sw2{
   width:36px; height:20px; border-radius:9999px; border:0; padding:0; position:relative;
-  background:var(--neutral-300); cursor:pointer; flex:none;
+  background:var(--switch-track-off); cursor:pointer; flex:none;
   transition:background-color var(--d-base) var(--e-out), box-shadow var(--d-fast) var(--e-out);
 }
 .sw2::after{
   content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
-  background:var(--neutral-0); transition:transform var(--d-base) var(--e-out);
+  background:var(--switch-knob); transition:transform var(--d-base) var(--e-out);
 }
 .sw2:hover{box-shadow:0 0 0 2px var(--border-subtle);}
 .sw2[aria-checked="true"]{background:var(--interactive-default);}
 .sw2[aria-checked="true"]::after{transform:translateX(16px);}
 .sw2[disabled]{background:var(--interactive-disabled-bg); cursor:not-allowed; box-shadow:none;}
-.sw2[disabled]::after{background:var(--neutral-100);}
+.sw2[disabled]::after{background:var(--interactive-disabled-text);}
 .muterow{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:12px;}
 .dim{opacity:.5;}
 .radios{display:flex; flex-direction:column; gap:12px;}
@@ -618,7 +708,6 @@ button,a,input,[role="switch"],[role="radio"]{-webkit-tap-highlight-color:transp
   overscroll-behavior:contain;
 }
 :root[data-theme="dark"] .modal{border:1px solid var(--border-default);}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .modal{border:1px solid var(--border-default);}}
 .modal .acts{display:flex; gap:16px; justify-content:flex-end; margin-top:24px;}
 
 /* ---------- focus (elevation-and-depth.md · two-ring) ---------- */
@@ -633,7 +722,13 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
   .card,.pop,.palette,.modal,.scard,.plate{border:1px solid CanvasText;}
 }
 
-/* motion.md — reduced motion keeps information, drops decoration */
+/* motion.md — reduced motion keeps information, drops decoration.
+   NOTE for implementation: the blanket `*` reset below is acceptable on a
+   static reference board (nothing here carries information *through* motion).
+   It is NOT the app's behaviour — motion.md requires the HELD border pulse to
+   be REPLACED by a solid high-contrast border plus an "expiring" label, and
+   the arrival flash to be REPLACED by a persistent "new" badge. Blanket-
+   disabling would silently delete an expiry warning. Implement per-motion. */
 @media (prefers-reduced-motion:reduce){
   *{transition-duration:0ms !important;}
   .sk{animation:none;}
@@ -668,6 +763,18 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
   <symbol id="i-shield-off" viewBox="0 0 24 24"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1 1 0 0 1 1.52 0C14.51 4.2 17.02 5 20 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/></symbol>
   <symbol id="i-map-pin-off" viewBox="0 0 24 24"><path d="M12.75 7.09a3 3 0 0 1 2.16 2.16"/><path d="M17.072 17.072c-1.634 2.17-3.527 3.912-4.471 4.727a1 1 0 0 1-1.202.03C9.539 20.193 4 14.993 4 10a8 8 0 0 1 1.432-4.568"/><path d="m2 2 20 20"/><path d="M8.475 2.818A8 8 0 0 1 20 10a7.9 7.9 0 0 1-.577 2.978"/></symbol>
   <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+  <!-- Rail destination icons. `flag` (ops), `warehouse` (gate) and `sliders-horizontal` (admin) are
+       defined but not <use>d: artboard 30 renders the planner and carrier rails only, and those three
+       roles' rails are identical in every respect except the glyph. They stay in the sprite because they
+       are part of the shell's icon set (iconography.md §Rail destinations), unlike `chart-line`, which was
+       removed 2026-08-26 because it ceased to be a destination icon at all when Carrier collapsed to one. -->
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-chart-gantt" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 11h7"/><path d="M10 6h8"/><path d="M12 16h6"/></symbol>
+  <symbol id="i-warehouse" viewBox="0 0 24 24"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/><rect width="12" height="12" x="6" y="10"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></symbol>
+  <symbol id="i-sliders-horizontal" viewBox="0 0 24 24"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
@@ -676,9 +783,11 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
     <p class="eyebrow">SetuHaul Dock Command · shared shell</p>
     <h1>Cross-cutting screens — auth, shell chrome and account</h1>
     <p>The surfaces every role touches and no surface owns: signing in, picking a role, resetting a
-    password, the top bar and its three popovers, global search, account settings, and the states that
-    replace a whole content region. Values are swept against <code>00-foundations/</code>; nothing here
-    is a new decision.</p>
+    password, the whole shell (rail, top bar, status bar and its three popovers), global search, account
+    settings, and the states that replace a whole content region. Values are swept against
+    <code>00-foundations/</code>; nothing here is a new decision. The one thing genuinely <em>derived</em>
+    is section G’s rail-destination list, taken from <code>SOLUTION_DESIGN.md</code> §2 cross-checked against
+    each role’s own §7.5.* tool catalog.</p>
   </div>
   <button class="toggle" id="tt" type="button">Switch to <span id="ttl">Dark</span></button>
 </header>
@@ -1061,8 +1170,10 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
     <p>56px top bar: facility switcher left, global search centre, then notifications, help and the user
     menu on the right. Both popovers are tier-3 Floating, opaque, 8px below the bar, non-modal — no scrim,
     nothing behind them is dimmed or blocked, <span class="mono" translate="no">Escape</span> closes and returns focus to
-    the trigger. The icon rail and status bar are out of frame here; the rail’s destinations are role-scoped
-    and are not this file’s to invent.</p>
+    the trigger. The icon rail and status bar are out of frame in this section — they are drawn in
+    <strong>section G</strong>, added 2026-08-26, together with the facility switcher’s open state. The rail’s
+    destinations are role-scoped and are now derived there from <code>SOLUTION_DESIGN.md</code> §2 and the
+    §7.5.* tool catalogs rather than invented.</p>
   </div>
 
   <!-- 11 · TOP BAR -->
@@ -1605,7 +1716,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
               <button type="button" role="radio" aria-checked="false">Dark</button>
               <button type="button" role="radio" aria-checked="false">System</button>
             </div>
-            <p class="helper stack-12">This is saved to your account and follows you between devices.</p>
+            <p class="helper stack-12">This is saved on this device.</p>
           </section>
 
           <section class="scard" aria-labelledby="s5">
@@ -1818,26 +1929,236 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
     countdown’s mono/tabular treatment <em>is</em> spec-sourced.</p>
   </div>
 
+  <!-- ============ G · THE REST OF THE SHELL ============ -->
+  <div class="sec">
+    <h2>G · The rest of the shell — rail, status bar, facility switcher</h2>
+    <p>Added 2026-08-26. Section C drew the top bar and said the other two persistent regions were out of
+    frame — which left the two things on screen 100% of the time for five of six roles with a prose spec and
+    no rendering. These three close that. Every value is already decided in
+    <code>spacing-and-layout.md</code> and <code>components.md</code> §7; the only thing genuinely derived
+    here is the <strong>destination list per role</strong>, taken from <code>SOLUTION_DESIGN.md</code> §2’s
+    persona table cross-checked against each role’s own §7.5.* tool catalog, per U101 — a job with no tool
+    does not get a destination.</p>
+  </div>
+
+  <!-- 30 · ICON RAIL -->
+  <div class="cell s5">
+    <div class="cap"><h3>Icon rail — at rest, and expanded as an overlay</h3>
+      <span>56px fixed, 4px facility stripe on the <em>outer</em> edge, active item marked by a 2px inner accent bar and never a background fill. Expanding to 240px <strong>overlays</strong> the content and never pushes it — reflow under the cursor is the same class of error as re-sorting under a click.</span>
+      <span class="ref">spacing-and-layout.md §App shell (U39/U40/U43) · components.md §7 · color.md §Facility accent (U59)</span></div>
+    <div class="plate pad0 left" style="gap:0;display:block">
+      <div style="display:flex;flex-wrap:wrap;gap:24px;padding:24px">
+
+        <div style="flex:1;min-width:300px">
+          <p class="note stack-8" style="margin-bottom:8px"><strong>Planner</strong> — one destination, facility-scoped. The stripe is Jaipur DC’s violet.</p>
+          <div class="shellframe" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);overflow:hidden;min-height:180px">
+            <nav class="rail" aria-label="Main — planner">
+              <button class="railitem active" type="button" aria-current="page" aria-label="Dock Command">
+                <svg class="ic s24" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
+              </button>
+            </nav>
+            <div class="fakecontent">
+              <div class="fakebar" style="width:45%"></div>
+              <div class="fakebar" style="width:80%"></div>
+              <div class="fakebar" style="width:65%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:300px">
+          <p class="note stack-8" style="margin-bottom:8px"><strong>Carrier</strong> — one destination, hovered. <strong>No stripe:</strong> carriers are scoped by <span class="mono" translate="no">carrier_id</span>, not by facility, so there is no facility to colour.</p>
+          <div class="shellframe" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);overflow:hidden;min-height:180px;position:relative">
+            <nav class="rail nofac" aria-label="Main — carrier">
+              <button class="railitem active hov" type="button" aria-current="page" aria-label="Fleet" aria-describedby="tip-fleet">
+                <svg class="ic s24" aria-hidden="true"><use href="#i-package"/></svg>
+                <span class="railtip" role="tooltip" id="tip-fleet">Fleet</span>
+              </button>
+            </nav>
+            <div class="fakecontent">
+              <div class="fakebar" style="width:45%"></div>
+              <div class="fakebar" style="width:80%"></div>
+              <div class="fakebar" style="width:65%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:300px">
+          <p class="note stack-8" style="margin-bottom:8px"><strong>Carrier, expanded.</strong> 240px, tier-3 Floating, sitting <em>on top of</em> the content — the bars behind it have not moved.</p>
+          <div class="shellframe" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);overflow:hidden;min-height:180px;position:relative">
+            <div class="fakecontent" style="padding:16px 16px 16px 72px">
+              <div class="fakebar" style="width:45%"></div>
+              <div class="fakebar" style="width:80%"></div>
+              <div class="fakebar" style="width:65%"></div>
+            </div>
+            <nav class="railexp" aria-label="Main — carrier, expanded">
+              <button class="railitem active" type="button" aria-current="page">
+                <svg class="ic s24" aria-hidden="true"><use href="#i-package"/></svg> Fleet
+              </button>
+            </nav>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <p class="note"><strong>One destination per role — because a rail destination is a <em>surface</em>, and
+    this product has one surface per role</strong> (criterion in <code>components.md</code> §7). Ops →
+    Exceptions (<span class="mono" translate="no">flag</span>). Planner → Dock Command
+    (<span class="mono" translate="no">chart-gantt</span>; Queue and Board are <em>tabs</em>). Gate → Yard
+    (<span class="mono" translate="no">warehouse</span>; the two device contexts switch on a <em>segmented
+    control</em>, per §12). Carrier → Fleet (<span class="mono" translate="no">package</span>; shipments,
+    exceptions and the on-time tile are <em>sections of one dashboard</em>). Admin → Admin
+    (<span class="mono" translate="no">sliders-horizontal</span>; Users, Rules, Policy and Audit are four
+    <em>tabs</em>). <strong>The driver has no rail at all</strong> — the PWA runs 320–768px and carries its own
+    chrome. Settings is reached from the user menu, not the rail, so it is not a destination either.</p>
+    <p class="note"><strong>Corrected 2026-08-26.</strong> Carrier first had three destinations here, derived
+    by counting <code>SOLUTION_DESIGN.md</code> §2’s jobs and §7.5.6’s tools — which contradicted
+    <code>05-carrier-portal/screens.md</code>, where that surface was already designed as “one sectioned
+    dashboard … no tabs.” <strong>A job in §2 is not a destination, and neither is a tool in §7.5.*</strong>:
+    the tool-catalog cross-check proves a job has backing, not that it has its own screen. The surface’s own
+    <code>screens.md</code> is authoritative for navigation shape.</p>
+    <p class="note"><strong>All five internal roles therefore have a single-destination rail</strong> —
+    owner-confirmed, not an oversight. The rail earns its 56px by carrying the facility stripe (U40), the
+    active/scope indicator, and headroom for §2’s two deferred personas (facility manager, regional ops head),
+    which are genuine future destinations. Inventing a second icon to make it look busier is exactly what
+    U101 forbids.</p>
+  </div>
+
+  <!-- 31 · STATUS BAR -->
+  <div class="cell s3">
+    <div class="cap"><h3>Status bar — connected, and offline</h3>
+      <span>28px. Five fields, fixed order: connection state · last sync · active facility · pending count · policy version. Connection state always carries an icon <em>and</em> text — never a coloured dot alone.</span>
+      <span class="ref">spacing-and-layout.md §App shell (U43) · iconography.md §System and connection · components.md §7</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div style="height:40px;background:var(--surface-base)"></div>
+        <div class="statusbar">
+          <!-- Only the connection field is a live region. "Last sync" ticks and the pending
+               count churns; announcing either would make the status bar unusable with a
+               screen reader. See accessibility-behaviour.md's matrix row. -->
+          <span class="sbi" role="status"><svg class="ic s14" aria-hidden="true"><use href="#i-wifi"/></svg> Connected</span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi">Last sync <span class="mono" translate="no">09:52:14</span></span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi sbfac">Jaipur DC</span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi"><span class="mono" translate="no">14</span> pending</span>
+          <span class="sbi sbend">Policy <span class="mono" translate="no">v12</span></span>
+        </div>
+        <div style="height:16px;background:var(--board-bg)"></div>
+        <div class="statusbar">
+          <span class="sbi off" role="status"><svg class="ic s14" aria-hidden="true"><use href="#i-wifi-off"/></svg> Offline</span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi">Last sync <span class="mono" translate="no">6m</span> ago</span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi sbfac">Jaipur DC</span>
+          <span class="sbsep" aria-hidden="true"></span>
+          <span class="sbi"><span class="mono" translate="no">14</span> pending</span>
+          <span class="sbi sbend">Policy <span class="mono" translate="no">v12</span></span>
+        </div>
+      </div>
+    </div>
+    <p class="note">Two more connection states exist in <code>iconography.md</code> and are not drawn here:
+    syncing (<span class="mono" translate="no">refresh-cw</span>, the one icon in the system permitted to spin)
+    and sync-failed (<span class="mono" translate="no">cloud-alert</span>). Offline is the only one that takes
+    danger colour, and it takes it on the icon <em>and</em> the word — the “last sync” value beside it is what
+    makes “Offline” actionable rather than merely alarming, per the degradation rule that a stale number is a
+    warning, not a fire.</p>
+    <p class="flag"><strong>Flagged:</strong> <code>spacing-and-layout.md</code> specifies the five fields once,
+    for all roles, but two of them cannot apply universally — <strong>carrier has no active facility</strong>
+    (scoped by <span class="mono" translate="no">carrier_id</span>, §7.5.6) and the <strong>policy version</strong>
+    is only meaningful where a decision receipt is rendered (planner, ops, admin). Per-role field presence is
+    an open decision, not something to resolve inside a mockup.</p>
+  </div>
+
+  <!-- 32 · FACILITY SWITCHER, OPEN -->
+  <div class="cell">
+    <div class="cap"><h3>Facility switcher — open</h3>
+      <span>A combobox, search-filterable, always showing the facility <em>name</em> and never an icon alone. The swatch here and the rail stripe are the only two places facility accent is permitted to appear.</span>
+      <span class="ref">components.md §7 (U40) · color.md §Facility accent (U59) · auth-and-scoping.md</span></div>
+    <div class="plate pad0">
+      <div style="width:100%">
+        <div class="topbar">
+          <button class="fsw" type="button" aria-haspopup="listbox" aria-expanded="true">
+            <span class="fswatch" aria-hidden="true"></span>
+            Jaipur DC
+            <svg class="ic s14" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+        </div>
+        <div style="background:var(--surface-base);padding:0 0 24px 16px;display:flex">
+          <!-- A listbox may only contain option/group children. The filter input and the
+               separators therefore sit OUTSIDE the listbox: the input is the combobox that
+               controls it, and the rules are aria-hidden so the listbox's accessible children
+               are exactly its three options. -->
+          <div class="fpop">
+            <div class="fsearch">
+              <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+              <input type="search" role="combobox" aria-expanded="true" aria-controls="fac-list"
+                     autocomplete="off" spellcheck="false"
+                     aria-label="Filter facilities" placeholder="Filter facilities">
+            </div>
+            <hr class="sep" aria-hidden="true">
+            <div id="fac-list" role="listbox" aria-label="Facility">
+              <button class="fitem" type="button" role="option" aria-selected="true">
+                <span class="fswatch" aria-hidden="true" style="background:var(--facility-1)"></span>
+                Jaipur DC
+                <svg class="ic s14" aria-hidden="true"><use href="#i-check"/></svg>
+              </button>
+              <button class="fitem hov" type="button" role="option" aria-selected="false">
+                <span class="fswatch" aria-hidden="true" style="background:var(--facility-2)"></span>
+                Gurugram Cross-Dock
+              </button>
+              <hr class="sep" aria-hidden="true">
+              <button class="fitem" type="button" role="option" aria-selected="false">
+                <span class="allfac" aria-hidden="true"></span>
+                All facilities
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Changing facility <strong>clears row focus and any pending selection</strong>, so a stale
+    selection can never be acted on in a new context. “All facilities” renders only for the cross-facility ops
+    roles (§7.5.5 takes <span class="mono" translate="no">facility_id?</span>, omitted = every facility in
+    scope) and carries a dashed outline rather than a colour, because it is not a facility and must not borrow
+    a facility’s hue. For the carrier role this whole control is <strong>absent from the DOM</strong>, not
+    disabled — scope-denied is Hidden (U83).</p>
+    <p class="flag"><strong>Flagged:</strong> two facility names are rendered because two are all any document
+    in scope names. §2 says six facilities; the other four names are not stated anywhere I was given, and
+    inventing operational data is forbidden. The remaining four hues (rose, cyan, lime, orange) are already
+    fixed in <code>color.md</code> and assigned by creation order.</p>
+  </div>
+
 </main>
 
 <p class="foot-note">
-  Twenty-nine artboards, one design system, six roles. What this board is testing: can a driver, a planner,
+  Thirty-two artboards, one design system, six roles. What this board is testing: can a driver, a planner,
   a gate officer, a carrier manager and an admin all pass through the same door without any of them
   meeting a screen built for someone else? Three rules do most of the work here — an error never says
   which half of a credential was wrong, an operational time never appears without its dock and its date,
   and a control that is out of scope is absent rather than greyed. Tokens trace to
   <code>00-foundations/</code>; screen contents to
-  <code>00-foundations/stitch-prompts-shared-shell.md</code>. Four items are flagged inline as gaps or
+  <code>00-foundations/stitch-prompts-shared-shell.md</code>. Six items are flagged inline as gaps or
   placeholders rather than quietly invented.
+  <br><br>
+  <strong>Revised 2026-08-26</strong> for M5/E5.0: section G added (rail, status bar, facility switcher —
+  the three regions this board previously declared out of frame); the
+  <span class="mono" translate="no">prefers-color-scheme</span> auto-dark blocks removed, because U69 locks light
+  as the shipped default for every role and a CSS media query silently overrode it; and six components that
+  reached a base primitive directly now go through a functional token (U85), which fixed two real dark-mode
+  defects — a badge rendering white-on-<span class="mono" translate="no">blue-500</span> at 3.7:1, and a toggle
+  whose off-track was a light-grey pill on a near-black card that no theme override could reach.
 </p>
 
 <script>
 (function(){
   var root=document.documentElement, btn=document.getElementById('tt'), lbl=document.getElementById('ttl');
+  /* U69: light is the default for every role, regardless of OS preference.
+     matchMedia is deliberately NOT consulted as a fallback — that is what the
+     app's "System" Appearance option is for, and it is an explicit user choice,
+     not a default. */
   function current(){
-    var s=root.getAttribute('data-theme');
-    if(s) return s;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    return root.getAttribute('data-theme') || 'light';
   }
   function sync(){ lbl.textContent = current()==='dark' ? 'Light' : 'Dark'; }
   btn.addEventListener('click',function(){

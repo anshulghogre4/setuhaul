@@ -45,6 +45,26 @@ at a roadside justify it — but it is a self-imposed bar, not a conformance req
 this way so that a later "we only need AA" review does not shrink the kiosk to 24px believing it still
 meets our stated standard. `compact`'s 32px still clears the actual AA minimum comfortably.
 
+### Auth and full-page states — the group the table above missed (added 2026-08-26)
+
+The three densities are assigned to *operational surfaces*. **Sign-in, the role picker, both password-reset
+screens, and the five states that replace a whole content region (404, error boundary, maintenance,
+out-of-scope, idle warning) belong to none of them** — they render before a surface is chosen, or instead of
+one. Found during the M5/E5.0 pass, where the shared-shell mockup had settled on 44px controls without a
+density row to justify them.
+
+**Resolution: this group runs `comfortable`, with one stated override — controls are 44px, not 40px.**
+
+| | Value | Why it differs |
+|---|---|---|
+| Input height | 44px | — |
+| **Button height** | **44px** (not `comfortable`'s 40px) | These screens are the *driver's* entry point as well as a desk user's. A driver signs in one-handed at a roadside, so the field 44×44 bar applies to the door even though it does not apply to the planner console behind it. |
+| Everything else | Per `comfortable` | Card padding 16px, stack gap 12px, min tap target 44px |
+
+`Source: assumption, untested.` The 44px figure is `spacing-and-layout.md`'s own field bar applied to a
+new context, not a measured result — it is recorded as an assumption so a later review can challenge it
+without having to reverse-engineer where it came from.
+
 **Density is a surface-level setting, not a user preference toggle** in v1. A planner cannot switch their
 queue to spacious. If that becomes a request, it is a preference on top of the surface default, not a
 replacement for it.
@@ -96,7 +116,7 @@ switcher swatch are the *only* two places that palette is permitted to appear.
 
 | Region | Size | Contents |
 |---|---|---|
-| **Icon rail** | 56px fixed, expands to 240px overlay on hover/focus | Role-scoped destinations, icon + tooltip. Active item marked by a 2px inner accent bar, not a fill. |
+| **Icon rail** | 56px fixed, expands to 240px overlay on hover/focus | Role-scoped destinations, icon + tooltip — **enumerated in `iconography.md` §Rail destinations** (added 2026-08-26; derived from `SOLUTION_DESIGN.md` §2 × §7.5.*, per U101). Active item marked by a 2px inner accent bar, not a fill — it must clear the 4px facility stripe. **A rail destination is a *surface*, and this product has one surface per role** (criterion in `components.md` §7), so all five internal roles have exactly one destination; the driver has no rail at all. |
 | **Top bar** | 56px | Facility switcher (left) · global search (centre) · notifications, help, user menu (right) |
 | **Status bar** | 28px | Connection state · last sync · active facility · pending count · policy version |
 | **Content** | fills | Per-surface |
