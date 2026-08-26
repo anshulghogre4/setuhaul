@@ -4,13 +4,13 @@
       "resources": {
         "runtimes": {
           "SetuHaulAgent": {
-            "runtimeId": "SetuHaulAgent_SetuHaulAgent-18B4pX4XF1",
-            "runtimeArn": "arn:aws:bedrock-agentcore:us-east-1:118490268011:runtime/SetuHaulAgent_SetuHaulAgent-18B4pX4XF1",
-            "roleArn": "arn:aws:iam::118490268011:role/AgentCore-SetuHaulAgent-d-ApplicationAgentSetuHaulA-CR9xksGyWbGA"
+            "runtimeId": "SetuHaulAgent_SetuHaulAgent-E9mrbf5VGD",
+            "runtimeArn": "arn:aws:bedrock-agentcore:ap-south-1:118490268011:runtime/SetuHaulAgent_SetuHaulAgent-E9mrbf5VGD",
+            "roleArn": "arn:aws:iam::118490268011:role/AgentCore-SetuHaulAgent-d-ApplicationAgentSetuHaulA-WhTuGOyFcRID"
           }
         },
         "stackName": "AgentCore-SetuHaulAgent-default",
-        "deployHash": "b65fea3b9abe341b"
+        "deployHash": "f77e26ce7247d24c"
       }
     }
   }

@@ -8,6 +8,34 @@ last_updated: 2026-08-25
 
 # Wiki log
 
+## 2026-08-26 07:51 IST | verification | E7.1 core migration complete, cutover verified live
+
+- Owner fixed Vercel's VITE_API_BASE_URL (Config not Secret type) and redeployed. Verified independently by grepping the live production JS bundle -- confirms the new CloudFront URL is genuinely baked in, old URL gone. AgentCore+ECS+Redis+Postgres all now co-located in ap-south-1. Remaining: orphaned Upstash DB cleanup, us-east-1 decommission timing, apprunner-create.json retirement.
+
+## 2026-08-26 07:41 IST | implementation | E7.1: CloudFront HTTPS added; real cutover blocked on Vercel access
+
+- Found live BFF entry point (Express Mode's auto-HTTPS domain). New ap-south-1 stack had no equivalent -- would break the browser via mixed content. Owner chose CloudFront over buying a domain; built it, verified HTTPS end-to-end (database_reachable:true). Actual VITE_API_BASE_URL cutover needs owner's own Vercel access -- no CLI/MCP auth available here.
+
+## 2026-08-26 07:31 IST | implementation | E7.1: new ap-south-1 ECS stack built and verified, clean run
+
+- Secrets replicated to ap-south-1 SSM, ARM64 image built+pushed, ALB/TG/SG networking replicated from the real us-east-1 config, ECS cluster+service created. services-stable completed clean (no incident, unlike the earlier ARN cutover). Verified: target healthy, /health/live 200, /health/ready 200 with database_reachable:true -- first fully co-located compute+DB connection this session. Traffic not yet cut over; us-east-1 still live.
+
+## 2026-08-25 20:24 IST | incident | ECS outage during ARN cutover: deleted ECR repo + region-guard rejection, both fixed, service restored
+
+- ARN cutover surfaced a deleted ECR repo (owner's earlier ECS removal actually deleted it); rebuilt+pushed image, confirming E4.1's deps build in Docker too. Second crash: RegionMismatchError from assert_region_alignment (added earlier this session, image predated it -- ECS's own deploy-drift moment). Fixed via ALLOW_REGION_MISMATCH=true (owner-confirmed, classifier correctly blocked it pending that). Service restored, verified via live health-check logs, not just ECS status. Chat traffic now flows through the co-located ap-south-1 AgentCore+Redis pair.
+
+## 2026-08-25 19:54 IST | implementation | E7.1 started: AgentCore live in ap-south-1, Redis migrated, near-incident caught, tooling bug fixed
+
+- New ap-south-1 AgentCore runtime deployed and confirmed READY (E9mrbf5VGD), old us-east-1 runtime untouched as rollback. New Upstash DB (ap-south-1) live in SSM by owner's explicit choice after an accidental early push was caught and reverted via SSM parameter history. Fixed agentcore_deploy.py's read_runtime_version to be region-aware (was silently failing for non-default-region runtimes). 413 passed/0 failed. Traffic not yet cut over to new AgentCore runtime -- partial migration state, intentional.
+
+## 2026-08-25 19:24 IST | tracking | M3 milestone closed; #49 moved to new M8 (Sequencer)
+
+- Owner noticed M3 still "Open, 85%" due to #49 (Sequencer) sitting on it. Created M8 milestone, moved #49 there, manually closed M3 (6/6, 0 open).
+
+## 2026-08-25 19:21 IST | verification | M4 committed, pushed, milestone fully closed
+
+- Commit `3a9229e` pushed. gh confirms #31/#32/#33/#34 all CLOSED, milestone 4/4. M4 fully complete end-to-end.
+
 ## 2026-08-25 19:15 IST | tracking | Filed E7.3 (#51, M7): CloudWatch tool-level tracing
 
 - Owner asked if CloudWatch was tracked (no); asked to add it. Filed #51 under M7, citing COMPARISON-deployment.md §7's "keep as-is" verdict being deliberately reversed per current priority, not a missed gap. risk:low.

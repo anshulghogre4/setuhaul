@@ -71,6 +71,54 @@ def test_read_runtime_version_parses_aws_cli_json(monkeypatch):
     assert deploy_mod.read_runtime_version("some-id") == "10"
 
 
+def test_read_runtime_version_passes_region_when_given(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kw):
+        captured["args"] = args
+        return SimpleNamespace(returncode=0, stdout=json.dumps({"agentRuntimeVersion": "1"}))
+
+    monkeypatch.setattr(deploy_mod.subprocess, "run", fake_run)
+    deploy_mod.read_runtime_version("some-id", region="ap-south-1")
+
+    assert "--region" in captured["args"]
+    assert "ap-south-1" in captured["args"]
+
+
+def test_read_runtime_version_omits_region_when_not_given(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kw):
+        captured["args"] = args
+        return SimpleNamespace(returncode=0, stdout=json.dumps({"agentRuntimeVersion": "1"}))
+
+    monkeypatch.setattr(deploy_mod.subprocess, "run", fake_run)
+    deploy_mod.read_runtime_version("some-id")
+
+    assert "--region" not in captured["args"]
+
+
+def test_read_target_region_parses_the_real_shape(tmp_path, monkeypatch):
+    path = tmp_path / "aws-targets.json"
+    path.write_text(json.dumps([{"name": "default", "account": "123", "region": "ap-south-1"}]), encoding="utf-8")
+    monkeypatch.setattr(deploy_mod, "AWS_TARGETS_PATH", path)
+
+    assert deploy_mod.read_target_region() == "ap-south-1"
+
+
+def test_read_target_region_returns_none_when_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(deploy_mod, "AWS_TARGETS_PATH", tmp_path / "missing.json")
+    assert deploy_mod.read_target_region() is None
+
+
+def test_read_target_region_returns_none_when_target_not_found(tmp_path, monkeypatch):
+    path = tmp_path / "aws-targets.json"
+    path.write_text(json.dumps([{"name": "other", "region": "us-east-1"}]), encoding="utf-8")
+    monkeypatch.setattr(deploy_mod, "AWS_TARGETS_PATH", path)
+
+    assert deploy_mod.read_target_region(target="default") is None
+
+
 def test_read_runtime_version_returns_none_on_cli_failure(monkeypatch):
     monkeypatch.setattr(
         deploy_mod.subprocess, "run",
@@ -150,7 +198,7 @@ def test_main_warns_when_runtime_version_is_unchanged_after_a_real_deploy(monkey
     monkeypatch.setattr(deploy_mod, "local_verify", lambda **kw: True)
     monkeypatch.setattr(deploy_mod, "deploy", lambda **kw: True)
     monkeypatch.setattr(deploy_mod, "read_runtime_id", lambda **kw: "runtime-1")
-    monkeypatch.setattr(deploy_mod, "read_runtime_version", lambda runtime_id: "9")
+    monkeypatch.setattr(deploy_mod, "read_runtime_version", lambda runtime_id, **kw: "9")
     monkeypatch.setattr(sys, "argv", ["agentcore_deploy.py"])
 
     exit_code = deploy_mod.main()
@@ -165,7 +213,7 @@ def test_main_does_not_warn_when_runtime_version_changes(monkeypatch, capsys):
     monkeypatch.setattr(deploy_mod, "deploy", lambda **kw: True)
     monkeypatch.setattr(deploy_mod, "read_runtime_id", lambda **kw: "runtime-1")
     versions = iter(["9", "10"])
-    monkeypatch.setattr(deploy_mod, "read_runtime_version", lambda runtime_id: next(versions))
+    monkeypatch.setattr(deploy_mod, "read_runtime_version", lambda runtime_id, **kw: next(versions))
     monkeypatch.setattr(sys, "argv", ["agentcore_deploy.py"])
 
     exit_code = deploy_mod.main()

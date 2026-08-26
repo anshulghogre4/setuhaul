@@ -27,7 +27,7 @@
         },
         {
           "name": "AWS_REGION",
-          "value": "us-east-1"
+          "value": "ap-south-1"
         },
         {
           "name": "UNIFIED_TRACES_DESTINATION_ENABLED",

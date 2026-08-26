@@ -51,7 +51,21 @@ def read_runtime_id(*, target: str = "default", runtime: str = RUNTIME_NAME) -> 
         return None
 
 
-def read_runtime_version(runtime_id: str) -> str | None:
+AWS_TARGETS_PATH = ROOT / "agentcore" / "aws-targets.json"
+
+
+def read_target_region(*, target: str = "default") -> str | None:
+    """Read agentcore/aws-targets.json's region for one deploy target, or None if absent."""
+    if not AWS_TARGETS_PATH.is_file():
+        return None
+    data = json.loads(AWS_TARGETS_PATH.read_text(encoding="utf-8"))
+    for entry in data:
+        if entry.get("name") == target:
+            return entry.get("region")
+    return None
+
+
+def read_runtime_version(runtime_id: str, *, region: str | None = None) -> str | None:
     """The live AWS-reported agentRuntimeVersion for one runtime, or None if unreachable.
 
     Tried `deployHash` from deployed-state.json first (E4.2/issue #32's first attempt) -- it
@@ -61,14 +75,18 @@ def read_runtime_version(runtime_id: str) -> str | None:
     real signal -- verified live: it changes exactly when a new deployment actually lands.
     Uses the `aws` CLI via subprocess, not boto3 -- this machine's current AWS login flow needs
     `botocore[crt]` for boto3's credential provider, which the CLI itself does not require.
+
+    `region` must be passed explicitly (from `read_target_region()`) once a runtime lives outside
+    the CLI's default region -- E7.1's ap-south-1 deploy hit exactly this: the deploy itself
+    succeeded (independently confirmed live) but this function silently returned None because it
+    queried the wrong region, and the caller had no way to tell "verification failed" apart from
+    "nothing to verify." Fixed here rather than left as a known gap.
     """
-    result = subprocess.run(
-        [
-            "aws", "bedrock-agentcore-control", "get-agent-runtime",
-            "--agent-runtime-id", runtime_id, "--output", "json",
-        ],
-        capture_output=True, text=True,
-    )
+    args = ["aws", "bedrock-agentcore-control", "get-agent-runtime", "--agent-runtime-id", runtime_id]
+    if region:
+        args += ["--region", region]
+    args += ["--output", "json"]
+    result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         return None
     try:
@@ -146,8 +164,9 @@ def main() -> int:
         print("LOCAL VERIFY FAILED -- deploy aborted. Fix the artifact before deploying.")
         return 1
 
+    region = read_target_region()
     pre_runtime_id = None if args.dry_run else read_runtime_id()
-    pre_version = read_runtime_version(pre_runtime_id) if pre_runtime_id else None
+    pre_version = read_runtime_version(pre_runtime_id, region=region) if pre_runtime_id else None
 
     if not deploy(agentcore_cmd=args.agentcore_cmd, dry_run=args.dry_run):
         print("DEPLOY FAILED.")
@@ -158,7 +177,7 @@ def main() -> int:
         return 0
 
     post_runtime_id = read_runtime_id()
-    post_version = read_runtime_version(post_runtime_id) if post_runtime_id else None
+    post_version = read_runtime_version(post_runtime_id, region=region) if post_runtime_id else None
     print(f"[confirm] agentRuntimeVersion before={pre_version!r} after={post_version!r}")
     if pre_version is None or post_version is None:
         print(
