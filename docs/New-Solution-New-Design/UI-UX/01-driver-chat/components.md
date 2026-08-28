@@ -43,6 +43,7 @@ The single most consequential component on this surface (U16, U48). Anatomy in `
 | **Pressed** | `surface-hover` + 10ms haptic, fires immediately on touch-down for perceived responsiveness |
 | **Committing** | Card locks, inline spinner replaces the differentiator line, other cards in the set dim to 40% |
 | **Held (won)** | Transitions in place to `HELD` treatment — 2px dashed amber border, countdown appears |
+| **Sibling of a held card** *(added 2026-08-27, E5.1)* | **Unchanged — plain `Default (selectable)`.** No dimming, no strikethrough, no lock. During the 90 seconds one card is `HELD`, its siblings are still `SHOWN` and still selectable, and the quick reply beside them says **"Choose a different one"** |
 | **Lost (conflict)** | Struck through, 40% opacity, `SLOT_CONFLICT` notice below (U50) |
 | **Withdrawn** | Struck through, 40% opacity, `OPTION_WITHDRAWN` notice — dock went down mid-conversation |
 | **Disabled (offline)** | 40% opacity, `wifi-off` icon, one-line reason. **Visible, never hidden** (U68) |
@@ -59,6 +60,21 @@ The single most consequential component on this surface (U16, U48). Anatomy in `
   thing changed, not just that something did.
 - Tapping a superseded or disabled card does nothing and gives no haptic — silence is the correct feedback
   for a non-target.
+- **A hold does not dim its siblings, and this matrix used to have no row saying so — which is how the
+  mockup got it wrong.** Added 2026-08-27 after E5.1 measured the render: artboard 3 drew the two siblings
+  of a `HELD` card with `class="opt dead"` — struck through at 40%, the treatment reserved for Lost /
+  Withdrawn / lapsed — while a quick reply directly beneath them read *"Choose a different one."* The
+  interface was simultaneously telling the driver those slots were dead **and** inviting them to pick one.
+  The nearest existing row, **Committing**, is dim-only with no strikethrough and describes a different
+  moment: `Committing` is the ~1 second while a tap is in flight and nothing is decided, so dimming the
+  set is correct there. A `HELD` card is the opposite situation — the outcome is known, exclusivity is
+  granted, and the driver has a full 90 seconds in which changing their mind is an expected, supported
+  action (D2's whole purpose is to give them that deliberation window). Dimming the alternatives during
+  the one state that exists to allow reconsideration works against the mechanic.
+  **The held card does not need its siblings suppressed to stand out** — it already carries a 2px dashed
+  amber border, the filled amber ground, and a live countdown; three channels none of the others have.
+  *Only visible in a render: the markup read fine, and the two struck-through siblings had no status line
+  at all, so at a glance they were indistinguishable from genuinely dead cards.*
 
 ---
 

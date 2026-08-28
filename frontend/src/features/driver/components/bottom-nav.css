@@ -1,0 +1,41 @@
+/* ============================================================================
+   Bottom nav — the driver shell exception (E5.1 implementation-spec 4.2, closes F5).
+
+   The driver has no icon rail (`identity.ts` returns `rail: null` for DRIVER, and a
+   56px rail expanding to a 240px overlay is not viable on a 390px phone), so
+   `spacing-and-layout.md`'s shell model does not cover a two-item bottom nav and
+   `theme.css` has no tokens for one — which is exactly what the design's own F5
+   flagged.
+
+   **Component-scoped, deliberately NOT in `@theme`** (tokens.md's tier rule, U85):
+   nothing else in the product has a bottom nav, so promoting these to theme
+   variables would create `h-driver-nav`-class utilities for a single component and
+   invite a second consumer that should not exist.
+
+   Values derived from the mockup's rendered box model, and 56px is
+   `01-driver-chat/accessibility.md`'s own floor for a bottom-nav item (the audit
+   measured 39px on 2 of 12 frames before the fix pass).
+   ============================================================================ */
+
+.driver-nav {
+  block-size: 56px;
+  /* Clears the iOS home indicator. The composer does this too; both need it because
+     either can be the bottom-most element depending on the route. */
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: content-box;
+}
+
+.driver-nav-item {
+  /* text-tertiary. Not `currentColor` inheritance: the nav sits on surface-raised and
+     an inherited body colour would make the inactive item read as active. */
+  color: var(--color-subtle-foreground);
+  min-block-size: 56px;
+}
+
+/* `aria-current="page"` carries the state for assistive tech, so the selector keys off
+   the SAME attribute the screen reader reads — colour is never the only signal, and the
+   two cannot drift apart the way a separate `.is-active` class would. */
+.driver-nav-item[aria-current='page'] {
+  color: var(--color-primary);
+  font-weight: 600;
+}

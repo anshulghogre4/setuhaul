@@ -28,6 +28,20 @@ user's current task to pause; `"assertive"` interrupts. Silence is a deliberate 
 |---|---|---|
 | Promise-state chip transition (`components.md` §2) | `assertive` | The new state, once, on the hard-swap — "Confirmed, Dock D1, 13:00" |
 | Countdown (`components.md` §3) | `polite`, throttled | **Only** at 50%, 20%, 10s and expiry — never per-tick. A per-second live region is unusable and is explicitly called out as such in the countdown's own implementation requirements; this file is where that throttle is promoted from one component's rule to the product's general announcement policy. |
+
+> ⚠️ **These first two rows land on the same element, and that is the one collision in this matrix.**
+> Recorded 2026-08-27 (E5.1), found by rendering a chip and its countdown together and tracing them for a
+> minute — not by reading either file. `components.md` §2's anatomy nests the countdown **inside** the chip
+> and §3 makes it mandatory for `HELD` and `PENDING_CONFIRMATION`, so one DOM element is simultaneously
+> owed an `assertive` announcement on transition and a `polite`, four-times-only announcement as it ticks.
+> A single live region cannot do both: it re-announces its whole contents on every mutation, which turns
+> the chip into a per-second talker — the exact thing row 2 forbids. **Neither row is wrong; the chip's own
+> ARIA bullet was.** It has been corrected in `components.md` §2 to a three-node structure (visible content
+> `aria-hidden`, one `role="alert"` for the transition, one gated `aria-live="polite"` for the thresholds).
+> **The general lesson, which is why this note sits in the matrix rather than only in §2: when two rows here
+> resolve to the same element, the element needs one live region per row, not one region per element.**
+
+
 | Planner queue — new row arrives | `polite` | The count only ("3 new requests"), not each row's content — announcing full row detail for every arrival during a spike is Primer's "distracting stream" case, and a spike is exactly when this would fire most |
 | Planner queue — a row a user is not focused on disappears (confirmed/expired elsewhere) | **Silent** | No announcement. This is the frozen-sort-on-focus principle (U19) extended to audio: a background change to a row the user isn't attending to must not interrupt them any more than it visually reorders under them |
 | Planner queue — the row a user **is** focused on is acted on elsewhere (`ALREADY_ACTIONED`, §7.5.1) | `assertive` | This is the nastiest race in the product (`SOLUTION_DESIGN.md` §9.2) — a user about to act on a row that just changed underneath them must be interrupted, not politely queued |

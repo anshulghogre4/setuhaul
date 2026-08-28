@@ -89,7 +89,38 @@ declare what it does, which is the right discipline when confirming can silently
   container is too small.
 - **Never render feedback colours in the state slot** — a green banner means an action succeeded; a green
   chip means CONFIRMED. Position disambiguates what colour cannot (`color.md`).
-- Always `role="status"` so assistive tech announces transitions.
+- **Announcement is three nodes, not `role="status"` on the chip. Corrected 2026-08-27 (E5.1).**
+  This bullet used to read *"Always `role="status"` so assistive tech announces transitions"*, and that was
+  wrong in two ways at once — which only became visible when the chip and the countdown were rendered
+  together and traced for a minute:
+  1. **Wrong politeness.** `role="status"` is implicitly `aria-live="polite"`.
+     `accessibility-behaviour.md`'s matrix puts a promise-state transition at **`assertive`**. A chip
+     announcing itself politely can sit in a queue behind whatever the screen reader is already saying —
+     for the one component in this product that must never be misread.
+  2. **Wrong mechanism, and this is the serious one.** A live region re-announces its **entire contents**
+     on any mutation. This section's own anatomy puts the countdown *inside* the chip, and §3 makes that
+     countdown mandatory for `HELD` and `PENDING_CONFIRMATION`. So the literal reading of the old bullet
+     produces *"Held one twenty-three… Held one twenty-two… Held one twenty-one…"* **once per second** —
+     exactly what §3 forbids in its own implementation requirements, and what the matrix promotes to
+     product-wide policy. The two rules were individually correct and jointly unbuildable; nothing said so.
+
+  **Build it as three nodes.** The visible content is `aria-hidden`; two `sr-only` siblings carry the two
+  announcements at their own politeness:
+
+  ```html
+  <span class="chip" key={state}>                     <!-- key: forces the U75 hard-swap remount -->
+    <Icon aria-hidden="true"/>
+    <span aria-hidden="true">HELD</span>
+    <span aria-hidden="true" class="font-data tabular-nums">1:24</span>
+
+    <span role="alert" class="sr-only">Held. One minute twenty-four seconds remaining.</span>
+    <span aria-live="polite" class="sr-only">{thresholdCrossed ? spokenThreshold : ''}</span>
+  </span>
+  ```
+
+  The second region is gated on the **threshold changing** (50% / 20% / 10s / expiry), never on the tick.
+  Spoken forms use words, not the glyph string. Both regions stay mounted and empty rather than being
+  added and removed, so the announcement fires on content change rather than on insertion.
 - The chip is **the only component permitted to use state hues**. Nothing else may borrow them.
 - **Transitions between states are hard-swaps, not a morph (U75).** When a promise moves from `HELD` to
   `PENDING_CONFIRMATION` to `CONFIRMED`, the chip does not animate one shape into another — the old chip's

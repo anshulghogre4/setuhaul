@@ -34,11 +34,28 @@
   --border-focus:var(--blue-600);
 
   /* promise state */
-  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
-  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  /* R9 (E5.1, 2026-08-27) — two state BORDERS were raised one ramp step to clear WCAG 1.4.11's
+     3:1 for non-text. The border is one of U14's four redundant channels, so it has to be a real
+     signal, not a hairline. Measured against the page (`surface-base #F8FAFC`):
+        SHOWN   neutral-300 1.42 FAIL  ->  neutral-500 4.55 PASS
+        HELD    amber-500   2.05 FAIL  ->  amber-600   3.04 PASS
+        PENDING blue-500    3.52 PASS  (unchanged)
+        CONFIRMED green-600 3.60 PASS  (unchanged)
+     Both replacements stay inside `color.md`'s existing ramps and keep their hue family, so
+     nothing outside this surface moves. HELD's border also stays DASHED, which is the channel
+     that actually survives glare — see the R9 note in the footer. */
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-500); --state-shown-text:var(--neutral-700);
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-600);    --state-held-text:var(--amber-700);
   --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
   --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
   --urgent:var(--red-600);
+  /* R2 (E5.1) — the 20-50% band had no token here at all, which is why the band was never built.
+     `components.md` §3: >50% state hue, 20-50% amber-600, <20% red-600 weight 600. */
+  --urgent-mid:var(--amber-600);
+  /* R3 (E5.1) — the expiry state had no tokens either. `components.md` §3: at zero the countdown
+     is REPLACED IN PLACE by this treatment, never removed and never restarted. */
+  --expired-fg:var(--neutral-500);
+  --expired-bg:var(--neutral-100);
 
   /* board chrome — deliberately not app surface, so phones read as objects */
   --board-bg:var(--neutral-200);
@@ -53,30 +70,16 @@
 
   --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --surface-selected:#12203c;
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --border-focus:var(--blue-400);
-    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
-    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
-    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
-    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
-    --urgent:var(--red-400);
-    --board-bg:var(--neutral-950);
-    --board-panel:var(--neutral-900);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-    --board-line:var(--neutral-800);
-  }
-}
+/* R1 (E5.1, 2026-08-27) — the `@media (prefers-color-scheme:dark)` block that used to sit here
+   was REMOVED. It violated U69 (light is the shipped default for every role) and, worse on this
+   surface specifically, it contradicted `accessibility.md`'s own rule that light "cannot be
+   overridden to dark without a warning" — dark UI in direct sunlight on a cheap LCD is
+   unreadable. Measured before the fix: this board came up DARK by default in a headless render
+   (`--state-shown-bg` resolved to `rgb(30,41,59)`), i.e. the reference implementers copy from was
+   defaulting to the one theme this surface forbids. Same fix E5.0 applied to
+   `mockup-shared-shell.html` (its §4.1.4); the surface mockups were not swept at the time.
+   Dark is still fully reachable — it lives in `:root[data-theme="dark"]` below, an EXPLICIT
+   choice, which is the only way U69 permits consulting theme preference at all. */
 :root[data-theme="dark"]{
   --surface-base:var(--neutral-950);
   --surface-raised:var(--neutral-900);
@@ -93,6 +96,10 @@
   --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
   --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
   --urgent:var(--red-400);
+  /* R2/R3 (E5.1) — dark counterparts, at parity with the light set. */
+  --urgent-mid:var(--amber-400);
+  --expired-fg:var(--neutral-400);
+  --expired-bg:var(--neutral-800);
   --board-bg:var(--neutral-950);
   --board-panel:var(--neutral-900);
   --board-ink:var(--neutral-50);
@@ -169,9 +176,28 @@ body{
   flex:none; padding:12px 14px; border-bottom:1px solid var(--border-subtle);
   background:var(--surface-raised); display:flex; flex-direction:column; gap:5px;
 }
-.hdr-row{display:flex; align-items:center; gap:9px; min-height:24px;}
+/* R8 (E5.1, 2026-08-27) — was `min-height:24px`, which is what forced the back control to be a
+   bare 18px glyph. `accessibility.md` puts the back button at 48x48 and says why: "top-left is
+   the hardest place to hit one-handed". Measured before the fix: 18 x 6.9px, 7 of 7 instances —
+   the worst target on the board, on the one element the surface file singles out as needing to
+   be ABOVE the 44px floor. Raising the row to 48px also gives F2 (conversation header height
+   unstated) a real number: two rows of 48 + 12px padding, not the 56px the spec asserts for a
+   header it draws two rows inside. */
+.hdr-row{display:flex; align-items:center; gap:9px; min-height:48px;}
 .hdr-ttl{font-size:15px; font-weight:600; letter-spacing:-.01em;}
-.back{color:var(--text-tertiary); font-size:18px; line-height:1;}
+/* R8 — a 48x48 hit area around an 18px glyph. The negative inline-start margin keeps the glyph
+   optically aligned with the content below while pushing the TARGET out toward the screen edge,
+   which is the cheap Fitts win on a phone held one-handed. */
+.back{
+  color:var(--text-tertiary); font-size:18px; line-height:1;
+  inline-size:48px; block-size:48px; flex:none;
+  display:inline-flex; align-items:center; justify-content:center;
+  margin-inline-start:-10px; margin-inline-end:-6px;
+  cursor:pointer;
+}
+/* R7 — the absolute deadline, sitting BESIDE the chip rather than inside it, so it is neither
+   uppercased nor competing with the countdown for the same 340px line. */
+.stateline-sub{font-size:14px; color:var(--text-secondary); white-space:nowrap;}
 .gear{margin-left:auto; color:var(--text-tertiary); font-size:15px;}
 
 .body{flex:1; overflow:hidden; padding:12px; display:flex; flex-direction:column; gap:10px;}
@@ -180,15 +206,48 @@ body{
 /* ---------- promise-state chip (filled variant — driver surface) ---------- */
 .chip{
   display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
-  font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
-  padding:4px 9px; border-radius:var(--r-sm); white-space:nowrap;
+  /* F1 (E5.1, 2026-08-27) — was 11px. `accessibility.md` and `typography.md` both state a hard
+     14px floor on this surface ("the 11px floor elsewhere does not apply here"), and the chip is
+     the component `components.md` §2 calls the most important in the product — it was the
+     third-smallest text on its own surface. This is the driver-surface exception to
+     `text-label` (12px): same weight and tracking, `text-body` size. */
+  font-size:14px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  /* U31 — layouts tolerate ~30% expansion and Devanagari runs taller, so the chip grows
+     vertically rather than clipping. `PENDING CONFIRMATION` wraps; it never abbreviates. */
+  padding:4px 9px; border-radius:var(--r-sm);
 }
 .chip .t{font-family:var(--font-data); font-variant-numeric:tabular-nums; letter-spacing:0;}
 .chip.shown{background:var(--state-shown-bg); border:1px solid var(--state-shown-border); color:var(--state-shown-text);}
 .chip.held{background:var(--state-held-bg); border:2px dashed var(--state-held-border); color:var(--state-held-text);}
 .chip.pending{background:var(--state-pending-bg); border:2px solid var(--state-pending-border); color:var(--state-pending-text);}
 .chip.confirmed{background:var(--state-confirmed-bg); border:2px solid var(--state-confirmed-border); color:var(--state-confirmed-text);}
-.chip .t.urgent{color:var(--urgent); font-weight:600;}
+
+/* ---------- countdown urgency — components.md §3 ----------
+   R4 (E5.1, 2026-08-27) — these three rules were `.chip .t.urgent`, scoped to the chip. The
+   option card's own inline countdown ("Held for you · 0:09") is `.opt .diff .t`, which that
+   selector never matched, so at the SAME INSTANT on the SAME hold the header chip rendered
+   red-600 (urgent) while the card the driver is actually looking at rendered amber-700 (rest).
+   Measured live at t=35s on a 46-second hold. Two renderings of one hold, disagreeing about how
+   urgent it is, on the most consequential component in the product. Now unscoped, so any
+   countdown anywhere gets the same treatment. A class rule beats an inherited colour, which is
+   what lets it win over `.diff`'s inline `color`.
+   R2 — `.t.mid` is new: the 20-50% band had no implementation at all (the tick had one
+   threshold, not two). */
+.t.mid{color:var(--urgent-mid);}
+.t.urgent{color:var(--urgent); font-weight:600;}
+/* R3 — at zero the countdown is REPLACED IN PLACE, never removed and never restarted. */
+.t.expired{color:var(--expired-fg); background:var(--expired-bg); padding:0 5px; border-radius:var(--r-sm); font-weight:400;}
+
+/* ---------- R5: the HELD pulse — claimed by a caption, never implemented ----------
+   Before this fix the file contained ZERO @keyframes, yet artboard 3's own note read "the
+   chip's dashed border pulses". `components.md` §3: below 20% remaining, HELD only, 1 Hz.
+   Never on PENDING — a fifteen-minute element pulsing for its final three minutes is
+   intolerable, which the artboard-6 note already says correctly. */
+@keyframes held-pulse{
+  0%,100%{border-color:var(--state-held-border);}
+  50%    {border-color:var(--urgent);}
+}
+.chip.held.expiring,.opt.held.expiring{animation:held-pulse 1000ms cubic-bezier(.65,0,.35,1) infinite;}
 
 /* ---------- thread card ---------- */
 .tcard{
@@ -203,14 +262,14 @@ body{
 .tcard.resolved{opacity:.6;}
 .tcard.resolved::before{display:none;}
 .tcard .desc{font-size:15px; font-weight:600; letter-spacing:-.01em; line-height:1.3;}
-.tcard .ord{font-family:var(--font-data); font-size:10.5px; color:var(--text-tertiary);}
-.tcard .op{font-size:13px; color:var(--text-secondary); font-variant-numeric:tabular-nums;}
+.tcard .ord{font-family:var(--font-data); font-size:14px; color:var(--text-tertiary);}
+.tcard .op{font-size:14px; color:var(--text-secondary); font-variant-numeric:tabular-nums;}
 .tcard .foot{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
-.tcard .prev{font-size:12.5px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.tcard .ts{font-family:var(--font-data); font-size:10.5px; color:var(--text-tertiary); flex:none;}
+.tcard .prev{font-size:14px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.tcard .ts{font-family:var(--font-data); font-size:14px; color:var(--text-tertiary); flex:none;}
 .divider{
   display:flex; align-items:center; gap:9px; margin:4px 0 0;
-  font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-tertiary);
+  font-size:14px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-tertiary);
 }
 .divider::after{content:""; flex:1; height:1px; background:var(--border-subtle);}
 
@@ -218,24 +277,28 @@ body{
 .msg{display:flex; flex-direction:column; gap:3px; max-width:84%;}
 .msg.me{align-self:flex-end; align-items:flex-end;}
 .msg.them{align-self:flex-start;}
-.who{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-tertiary); font-weight:500;}
+.who{display:flex; align-items:center; gap:6px; font-size:14px; color:var(--text-tertiary); font-weight:500;}
+/* F1 exclusion, stated rather than silently skipped — the avatar's initial is a NON-TEXT GRAPHIC,
+   not body text: it is `aria-hidden`, and the sender's name is spelled out beside it at 14px, so
+   nothing is carried by the glyph alone. The 14px floor does not apply to it, and forcing 14px
+   into a 17px circle would clip. Circle enlarged 17 -> 20px so the glyph is at least legible. */
 .who .av{
-  width:17px;height:17px;border-radius:50%; flex:none;
-  display:grid;place-items:center; font-size:9px; font-weight:700; color:#fff; background:var(--board-accent);
+  width:20px;height:20px;border-radius:50%; flex:none;
+  display:grid;place-items:center; font-size:11px; font-weight:700; color:#fff; background:var(--board-accent);
 }
 .bub{padding:9px 12px; border-radius:var(--r-lg); line-height:1.45; font-size:15px;}
 .me .bub{background:var(--surface-selected); border:1px solid var(--border-subtle);}
 .them .bub{background:var(--surface-raised); border:1px solid var(--border-subtle);}
 .them.human .bub{border:1px solid var(--border-default);}
-.meta{font-family:var(--font-data); font-size:10px; color:var(--text-tertiary);}
+.meta{font-family:var(--font-data); font-size:14px; color:var(--text-tertiary);}
 
 .sys{
-  align-self:center; text-align:center; font-size:12.5px; color:var(--text-secondary);
+  align-self:center; text-align:center; font-size:14px; color:var(--text-secondary);
   line-height:1.45; max-width:92%; padding:2px 0;
 }
 .rule{
   align-self:stretch; display:flex; align-items:center; gap:9px;
-  font-size:12px; color:var(--text-secondary); text-align:center;
+  font-size:14px; color:var(--text-secondary); text-align:center;
 }
 .rule::before,.rule::after{content:""; flex:1; height:1px; background:var(--border-default);}
 
@@ -247,22 +310,27 @@ body{
 }
 .opt .dock{font-size:14.5px; font-weight:600; letter-spacing:-.01em;}
 .opt .time{font-family:var(--font-data); font-size:15px; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
-.opt .diff{font-size:12.5px; color:var(--text-secondary);}
+.opt .diff{font-size:14px; color:var(--text-secondary);}
 .opt.dead{opacity:.4;}
 .opt.dead .dock,.opt.dead .time{text-decoration:line-through;}
 .opt.held{border:2px dashed var(--state-held-border); background:var(--state-held-bg);}
 .opt.off{opacity:.4;}
-.opt .why{font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:5px;}
+.opt .why{font-size:14px; color:var(--text-tertiary); display:flex; align-items:center; gap:5px;}
 
 /* ---------- composer ---------- */
 .qr{
   flex:none; display:flex; gap:7px; padding:9px 12px;
   border-top:1px solid var(--border-subtle); background:var(--surface-raised); flex-wrap:wrap;
 }
+/* F7 (E5.1, 2026-08-27) — measured at 34px minimum, 4 of 15 chips below the floor.
+   `accessibility.md` puts quick-reply chips at >=44px and `screens.md` asserts a 48px region;
+   F7's own note is right that 44 + comfortable's padding cannot fit inside 48, so the region is
+   described by its padding and the CHIP carries the floor. Font also raised 13.5 -> 14 (F1). */
 .qr button{
-  font:inherit; font-size:13.5px; cursor:pointer;
+  font:inherit; font-size:14px; cursor:pointer;
   background:var(--surface-base); color:var(--text-primary);
   border:1px solid var(--border-default); border-radius:999px; padding:8px 13px;
+  min-block-size:44px; display:inline-flex; align-items:center;
 }
 .qr button:hover{background:var(--surface-hover);}
 .qr button:focus-visible{outline:2px solid var(--border-focus); outline-offset:2px;}
@@ -274,8 +342,12 @@ body{
   flex:1; border:1px solid var(--border-default); border-radius:999px;
   padding:10px 14px; font-size:16px; color:var(--text-tertiary); background:var(--surface-base);
 }
+/* R8 (E5.1) — was 38x38 against `accessibility.md`'s stated 44x44 floor for the composer send.
+   The addendum screens already used 44 (`.std .comp .send`); only the four original hero
+   artboards were short, which is exactly the kind of drift a measurement pass catches and a
+   spec read does not. */
 .comp .send{
-  width:38px;height:38px;flex:none;border-radius:50%; display:grid;place-items:center;
+  width:44px;height:44px;flex:none;border-radius:50%; display:grid;place-items:center;
   background:var(--blue-600); color:#fff; font-size:15px;
 }
 .comp .send.dim{background:var(--neutral-400);}
@@ -283,7 +355,8 @@ body{
   flex:none; display:flex; border-top:1px solid var(--border-subtle); background:var(--surface-raised);
 }
 .nav div{
-  flex:1; text-align:center; padding:11px 0 13px; font-size:12px; color:var(--text-tertiary); font-weight:500;
+  flex:1; text-align:center; padding:14px 0; font-size:14px; color:var(--text-tertiary); font-weight:500;
+  min-block-size:56px; display:flex; align-items:center; justify-content:center;
 }
 .nav div.on{color:var(--blue-600); font-weight:600;}
 :root[data-theme="dark"] .nav div.on{color:var(--blue-400);}
@@ -296,7 +369,28 @@ body{
   max-width:1200px; margin:0 auto; padding:0 24px 64px;
   font-size:12.5px; color:var(--board-muted); line-height:1.6; max-width:76ch;
 }
-@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important;}}
+/* R5 (E5.1, 2026-08-27) — this was a blanket
+   `*{animation:none!important; transition:none!important}`. E5.0 already called that pattern
+   wrong for the app (its §1.8): it would silently DELETE the expiry warning for a driver who set
+   an OS preference, which is an accessibility failure dressed as compliance. `motion.md` and
+   `accessibility.md` are both explicit that the HELD pulse is REPLACED, not removed. Per-motion
+   now, matching `accessibility.md`'s own table:
+     countdown ticks      unchanged  (this is data)
+     TTL colour warming   unchanged  (already instant)
+     HELD border pulse    REPLACED   (solid high-contrast border + an explicit "expiring" label)
+     typing dots          replaced by a static label
+     card mutation        instant                                                              */
+@media (prefers-reduced-motion:reduce){
+  .chip.held.expiring,.opt.held.expiring{
+    animation:none;
+    border-style:solid; border-color:var(--urgent);
+  }
+  /* the warning survives as text, not as motion. Externalised as a data attribute so U31's
+     translation job can reach it. */
+  .chip.held.expiring::after{content:" · " attr(data-expiring-label); letter-spacing:.04em;}
+  .dots{animation:none;}
+  .opt,.tcard,.bub{transition:none;}
+}
 </style>
 
 <style>
@@ -311,9 +405,10 @@ body{
    primitive directly.
    ============================================================ */
 :root{
-  /* both themes are real on this board, so native controls, scrollbars and form
-     chrome must follow the active one rather than assuming light */
-  color-scheme:light dark;
+  /* R1 (E5.1) — was `color-scheme:light dark`, which let native chrome (scrollbars, form
+     controls) follow the OS while the page itself rendered light. Light is the default; the
+     dark counterpart is set on `:root[data-theme="dark"]` only, on an explicit choice. */
+  color-scheme:light;
   /* elevation-and-depth.md — shadow tokens */
   --shadow-sm:0 1px 2px rgba(15,23,42,.06);
   --shadow-md:0 4px 12px rgba(15,23,42,.10);
@@ -331,17 +426,8 @@ body{
   /* U47 message tiers — neutral avatars: see the deviation note at the foot of this file */
   --avatar-bg:var(--neutral-600);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --shadow-sm:none; --shadow-md:0 4px 12px rgba(0,0,0,.40);
-    --skeleton:var(--neutral-800);
-    --fb-warn-bg:#3a2c10; --fb-warn-border:var(--amber-500); --fb-warn-text:var(--amber-400);
-    --verdict-pass:var(--green-400); --verdict-fail:var(--red-400);
-    --text-link:var(--blue-400);
-    --btn-pri-bg:var(--blue-500); --btn-pri-text:var(--neutral-950);
-    --avatar-bg:var(--neutral-600);
-  }
-}
+/* R1 (E5.1) — second `prefers-color-scheme` block removed, same reason as the first. The
+   `:root[data-theme="dark"]` block below already carries every one of these values. */
 :root[data-theme="dark"]{
   color-scheme:dark;
   --shadow-sm:none; --shadow-md:0 4px 12px rgba(0,0,0,.40);
@@ -383,11 +469,11 @@ body{
 .std .hdr{padding:12px 24px; gap:8px;}
 .std .hdr-ttl{font-size:16px;}                               /* text-h3 */
 .std .body{padding:24px; gap:12px;}
-.std .chip{font-size:12px; padding:5px 9px; gap:6px;}        /* text-label */
+.std .chip{font-size:14px; padding:5px 9px; gap:6px;}   /* F1: 14px floor, not text-label */
 .std .chip.wrap{white-space:normal;}
 /* ⚑F3 — escalation reference: plain secondary text on header row two, never the chip slot.
    Unscoped on purpose: the core-arc takeover screen needs it too. */
-.escref{font-size:13px; color:var(--text-secondary);}
+.escref{font-size:14px; color:var(--text-secondary);}
 .std .escref{font-size:14px;}
 .std .hbtn{
   width:44px; height:44px; flex:none; display:grid; place-items:center; padding:0;
@@ -404,7 +490,7 @@ body{
 .std .tcard .op,.std .tcard .prev{font-size:14px;}
 .std .tcard.skc{padding-left:16px;}
 .std .tcard.skc::before{display:none;}
-.std .divider{font-size:12px;}
+.std .divider{font-size:14px;}
 
 .std .who{font-size:14px; gap:8px;}
 .std .bub{font-size:16px; padding:12px;}
@@ -482,7 +568,7 @@ body{
 .pblk{display:flex; flex-direction:column; gap:4px;}
 .pname{font-size:16px; font-weight:600;}
 .pval{font-size:16px; color:var(--text-secondary); line-height:1.5;}
-.plabel{font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-tertiary);}
+.plabel{font-size:14px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-tertiary);}
 .psep{border:0; border-top:1px solid var(--border-subtle); align-self:stretch; margin:12px 0;}
 .prow{
   display:flex; align-items:center; gap:8px; min-height:56px; width:100%;
@@ -548,7 +634,7 @@ body{
   padding:24px; display:flex; flex-direction:column; gap:24px; box-shadow:var(--shadow-md);
 }
 .sheet .slabel{
-  font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  font-size:14px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
   color:var(--text-tertiary); margin-bottom:8px;
 }
 .compbox{border:1px solid var(--border-subtle); border-radius:var(--r-lg); overflow:hidden;}
@@ -661,7 +747,7 @@ body{
       <div class="body scrolly">
         <div class="msg me"><div class="bub">Traffic after Shahpura. Reaching around 11:20.</div><div class="meta">09:34 ✓✓</div></div>
         <div class="msg them">
-          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">Your current slot is 10:00–11:00 at Jaipur DC — that won't work now. Three options are open. <b>Nothing is held yet</b> — another driver can take any of these.</div>
         </div>
         <div class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span><span class="diff">soonest</span></div>
@@ -685,14 +771,24 @@ body{
         <span class="chip held">⏱ Held <span class="t" data-cd="46"></span> <span style="opacity:.6">ⓘ</span></span>
       </div>
       <div class="body scrolly">
-        <div class="opt dead"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span></div>
+        <!-- R6 (E5.1, 2026-08-27) — these two siblings were `class="opt dead"`: struck through at
+             40%, which is the treatment for Lost / Withdrawn / lapsed. Directly beneath them a
+             quick reply says "Choose a different one", so the interface was simultaneously
+             telling the driver those slots were dead AND inviting them to pick one. No state in
+             `01-driver-chat/components.md` §2 covers "sibling of a held card"; the nearest,
+             Committing, is dim-only with no strikethrough. The correct answer is simpler than
+             either: during a 90-second hold the siblings are still SHOWN and still selectable,
+             so they render as plain default option cards. The held card already stands out on
+             its own — 2px dashed border, amber fill, and a live countdown. Only visible in a
+             render; the markup read fine. -->
+        <div class="opt"><span class="dock">Dock D4 · Tue 4 Aug</span><span class="time">12:15 – 13:30</span><span class="diff">soonest</span></div>
         <div class="opt held">
           <span class="dock">Dock D1 · Tue 4 Aug</span><span class="time">13:00 – 14:15</span>
           <span class="diff" style="color:var(--state-held-text);font-weight:600">Held for you · <span class="t" data-cd="46" style="font-family:var(--font-data);font-variant-numeric:tabular-nums"></span></span>
         </div>
-        <div class="opt dead"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span></div>
+        <div class="opt"><span class="dock">Dock D2 · Tue 4 Aug</span><span class="time">14:30 – 15:45</span><span class="diff">most buffer</span></div>
         <div class="msg them">
-          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">Dock D1 · Tue 4 Aug · 13:00–14:15 is held for you. <b>This is not a booking yet.</b> Send it to the warehouse to request it.</div>
         </div>
       </div>
@@ -714,7 +810,7 @@ body{
           <span class="why" style="color:var(--urgent)">Hold lapsed</span>
         </div>
         <div class="sys">That hold has lapsed — Dock D1 · 13:00–14:15 is available to other drivers again. Nothing has been lost; I can look again right now.</div>
-        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+        <div class="msg them"><div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">Want me to find what's open now?</div></div>
       </div>
       <div class="qr"><button>Find options again</button></div>
@@ -732,7 +828,7 @@ body{
       <div class="body scrolly">
         <div class="msg me"><div class="bub">Evening traffic. ETA 6:30. Can the reefer unload tonight?</div><div class="meta">16:24 ✓✓</div></div>
         <div class="msg them">
-          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+          <div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">Nothing works at Jaipur DC today — the reefer dock is down for maintenance until 22:00 and the site closes then. <b>The earliest I can offer is tomorrow.</b></div>
         </div>
         <div class="opt"><span class="dock">Dock D5 · Wed 5 Aug</span><span class="time">06:00 – 07:15</span><span class="diff">first of the day</span></div>
@@ -755,7 +851,7 @@ body{
         <div class="escref">Escalated · <span class="mono">ESC-4471</span></div>
       </div>
       <div class="body scrolly">
-        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+        <div class="msg them"><div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">I've passed this to operations. Reference ESC-4471.</div></div>
         <div class="rule">Neha from Operations joined</div>
         <div class="msg them human">
@@ -807,12 +903,12 @@ body{
         <span class="chip confirmed">✓ Confirmed · Dock D1 · Tue 4 Aug 13:00</span>
       </div>
       <div class="body scrolly">
-        <div class="msg them"><div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
+        <div class="msg them"><div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
           <div class="bub">Requested: Dock D1 · Tue 4 Aug · 13:00–14:15. The warehouse hasn't confirmed this yet — a planner will decide by 11:57.</div></div>
         <div class="sys">A planner confirmed your request.</div>
         <div class="msg them">
-          <div class="who"><span class="av">⬡</span>SetuHaul assistant</div>
-          <div class="bub"><b>✓ Confirmed</b> — Dock D1 · Tue 4 Aug · 13:00–14:15, Jaipur DC.<br>Reference <span style="font-family:var(--font-data);font-size:13.5px">APT-1042</span>.<br><br>You may check in from 12:00 (60 minutes early limit). If you haven't checked in by 13:30 the appointment may be marked no-show.</div>
+          <div class="who"><span class="av" aria-hidden="true">⬡</span>SetuHaul assistant</div>
+          <div class="bub"><b>✓ Confirmed</b> — Dock D1 · Tue 4 Aug · 13:00–14:15, Jaipur DC.<br>Reference <span style="font-family:var(--font-data);font-size:14px">APT-1042</span>.<br><br>You may check in from 12:00 (60 minutes early limit). If you haven't checked in by 13:30 the appointment may be marked no-show.</div>
         </div>
       </div>
       <div class="comp"><div class="fld">Message</div><div class="send">➤</div></div>
@@ -934,9 +1030,21 @@ body{
           <button class="hbtn wide" aria-label="Back"><svg aria-hidden="true" focusable="false" class="ic ic20"><use href="#i-chevron-left"/></svg></button>
           <span class="hdr-ttl">Kota load → IndustrialHub</span>
         </div>
-        <div class="hdr-row" style="gap:4px">
+        <!-- R7 (E5.1, 2026-08-27) — the chip used to read
+             "PENDING CONFIRMATION 12:44 · DECISION BY 11:57": a relative countdown and an
+             absolute deadline meaning the same thing, inside one chip, with the middot separator
+             orphaned onto its own line above "DECISION" once it wrapped at 340px. It also put a
+             lowercase sentence fragment through the chip's `text-transform:uppercase`, so it
+             shouted.
+             The two rules only look contradictory: `components.md` §2 governs the CHIP (countdown
+             mandatory for PENDING), while `01-driver-chat/components.md` §6 governs the
+             PERSISTENT STATE LINE, which HOSTS a chip. So the chip keeps its countdown and the
+             absolute deadline moves OUT of the chip onto the state line beside it — which is
+             also what stops it being uppercased and what removes the orphaned middot. -->
+        <div class="hdr-row" style="gap:6px">
           <span class="chip pending wrap" role="status"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-clock-fade"/></svg>
-            Pending confirmation <span class="t" data-cd="767"></span> · decision by 11:57</span>
+            Pending confirmation <span class="t" data-cd="767"></span></span>
+          <span class="stateline-sub">decision by 11:57</span>
           <button class="hbtn" aria-label="What does pending confirmation mean?"><svg aria-hidden="true" focusable="false" class="ic ic14"><use href="#i-circle-help"/></svg></button>
         </div>
       </div>
@@ -996,7 +1104,7 @@ body{
         </div>
         <div class="rule" role="status">Neha from Operations joined</div>
         <div class="msg them human">
-          <div class="who"><span class="avc">N</span>Neha · Operations</div>
+          <div class="who"><span class="avc" aria-hidden="true">N</span>Neha · Operations</div>
           <div class="bub">Hi Manoj — I'm looking at your reefer load now.</div>
           <div class="meta">16:29</div>
         </div>
@@ -2092,9 +2200,11 @@ body{
 (function(){
   var root=document.documentElement, btn=document.getElementById('tt'), lbl=document.getElementById('ttl');
   function current(){
-    var s=root.getAttribute('data-theme');
-    if(s) return s;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    /* R1 (E5.1) — was `matchMedia('(prefers-color-scheme: dark)')`. U69: light is the shipped
+       default for every role, and `prefers-color-scheme` is consulted ONLY when the user has
+       explicitly chosen "System" in the Appearance control — which this board does not have.
+       Falling back to the OS here is what made the whole board render dark by default. */
+    return root.getAttribute('data-theme') || 'light';
   }
   function sync(){ lbl.textContent = current()==='dark' ? 'Light' : 'Dark'; }
   btn.addEventListener('click',function(){
@@ -2103,19 +2213,49 @@ body{
   sync();
 
   // one shared 1 Hz tick for every countdown — components.md §3
+  //
+  // E5.1 (2026-08-27) fixes three defects found by tracing this live for 60 seconds rather than
+  // reading it:
+  //   R2  only ONE threshold existed (`<= max*0.2`). components.md §3 specifies THREE bands:
+  //       >50% state hue, 20-50% amber-600, <20% red-600 weight 600. The middle band was never
+  //       built, so it could never fire — traced at 0:44 of 90 (49%) still rendering rest colour.
+  //   R3  at zero this did `c.t = c.max`, i.e. it RESTARTED. §3 requires the component be
+  //       "replaced in place by the expiry state" so the record persists. There was no artboard
+  //       anywhere in this file showing a countdown at zero. It now holds the expiry treatment
+  //       for EXPIRED_HOLD_TICKS before recycling, so the state is actually on screen and
+  //       measurable; the recycle is a property of this being a live reference board, not of the
+  //       component (in the app, expiry is terminal).
+  //   R5  nothing ever added the pulse class, because no keyframe existed to add it for.
+  var MID=0.5, URGENT=0.2, EXPIRED_HOLD_TICKS=6;
   var cds=[].slice.call(document.querySelectorAll('[data-cd]')).map(function(el){
-    return {el:el, t:parseInt(el.getAttribute('data-cd'),10), max:parseInt(el.getAttribute('data-cd'),10)};
+    var n=parseInt(el.getAttribute('data-cd'),10);
+    return {el:el, t:n, max:n, held:0};
   });
   function fmt(s){ return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
   function paint(){
     cds.forEach(function(c){
-      c.el.textContent=fmt(c.t);
-      c.el.classList.toggle('urgent', c.t <= c.max*0.2);
+      var frac = c.max ? c.t/c.max : 0;
+      var expired = c.t<=0, urgent = !expired && frac<=URGENT, mid = !expired && !urgent && frac<=MID;
+      c.el.textContent = fmt(c.t);
+      c.el.classList.toggle('mid', mid);
+      c.el.classList.toggle('urgent', urgent);
+      c.el.classList.toggle('expired', expired);
+      // R5 — the pulse belongs to the HELD container, not the digits, and only below 20%.
+      // Never PENDING: `.chip.pending` is deliberately not in this selector.
+      var box = c.el.closest('.chip.held, .opt.held');
+      if(box){
+        box.classList.toggle('expiring', urgent);
+        box.setAttribute('data-expiring-label','expiring');
+      }
     });
   }
   paint();
   setInterval(function(){
-    cds.forEach(function(c){ c.t = c.t>0 ? c.t-1 : c.max; });
+    cds.forEach(function(c){
+      if(c.t>0){ c.t--; return; }
+      // hold at zero long enough for the expiry treatment to be seen and measured
+      if(++c.held > EXPIRED_HOLD_TICKS){ c.t=c.max; c.held=0; }
+    });
     paint();
   },1000);
 })();

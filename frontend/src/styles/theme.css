@@ -78,13 +78,41 @@
   --color-inverse: var(--neutral-900);
   --color-inverse-foreground: var(--neutral-50);
 
-  /* ---- promise state (color.md - the core of the system) ---- */
+  /* ---- promise state (color.md - the core of the system) ----
+
+     ⚠ TWO BORDERS RAISED ONE RAMP STEP, 2026-08-27 (E5.1 / issue #36).  This is the
+     only place the built tokens deviate from color.md's own table, and it is a
+     correction that file has not yet received rather than a new decision:
+     01-driver-chat/accessibility.md's "Contrast under glare" row was amended the same
+     day to record it, and driver-chat/implementation-spec.md section 5.3-R9 carries the
+     ramp sweep behind it.  color.md line 123/128 still say neutral-300 / amber-500 --
+     flagged to the owner as a docs follow-up, NOT silently reconciled here.
+
+     The defect it fixes is real, not stylistic: the chip's border is one of U14's four
+     redundant encodings, so WCAG 1.4.11's 3:1 for non-text applies to it.  Recomputed
+     independently against surface-base (#F8FAFC) before making the change rather than
+     trusting the doc's numbers -- all four reproduced exactly:
+
+       shown      neutral-300  1.42:1  FAIL   ->  neutral-500  4.55:1  pass
+       held       amber-500    2.05:1  FAIL   ->  amber-600    3.04:1  pass
+       pending    blue-500     3.52:1  pass   (unchanged)
+       confirmed  green-600    3.60:1  pass   (unchanged)
+
+     LIGHT ONLY.  The `.dark` values below are untouched -- they were never measured in
+     that pass, and changing a token on the strength of a number nobody computed would be
+     the exact move this comment exists to avoid.
+
+     Deliberately changed at the shared token rather than overridden inside
+     features/driver: the dark-theme note further down argues that this one component must
+     be identical on every backdrop, and a driver-only override would break that. It does
+     move the chip on the gate/planner/ops surfaces too, which is intended -- the contrast
+     failure was theirs as well. */
   --color-state-shown-bg: var(--neutral-50);
-  --color-state-shown-border: var(--neutral-300);
+  --color-state-shown-border: var(--neutral-500);
   --color-state-shown-text: var(--neutral-700);
   --color-state-shown-icon: var(--neutral-500);
   --color-state-held-bg: var(--amber-50);
-  --color-state-held-border: var(--amber-500);
+  --color-state-held-border: var(--amber-600);
   --color-state-held-text: var(--amber-700);
   --color-state-held-icon: var(--amber-600);
   --color-state-pending-bg: var(--blue-50);
@@ -210,6 +238,29 @@
   }
   50% {
     opacity: 0.55;
+  }
+}
+
+/* ============================================================================
+   HELD BORDER PULSE -- the one motion E5.1 adds (driver-chat implementation-spec
+   4.1).  Registered in @theme so `animate-held-pulse` exists as a utility;
+   the keyframe itself has to live outside @theme like `shim` does.
+
+   Applied ONLY below 20% remaining and ONLY on HELD (00-foundations/components.md
+   section 3).  Never on PENDING_CONFIRMATION: that TTL is fifteen minutes, so the
+   same rule would pulse an element for three solid minutes.
+   ============================================================================ */
+@theme {
+  --animate-held-pulse: held-pulse 1000ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes held-pulse {
+  0%,
+  100% {
+    border-color: var(--color-state-held-border);
+  }
+  50% {
+    border-color: var(--color-urgent);
   }
 }
 
@@ -378,7 +429,16 @@
      the product that must never be misread, identical-everywhere is a
      requirement.  Ratios below were computed during the correction. */
   --color-state-shown-bg: var(--neutral-800);
-  --color-state-shown-border: var(--neutral-600);
+  /* Raised neutral-600 -> neutral-500, 2026-08-27 (E5.1), for the same WCAG 1.4.11 reason as
+     the light-mode pair above -- and this one was NOT in the design's fix pass at all, which
+     only measured light. Found by re-running the same contrast probe with `.dark` forced:
+     neutral-600 measured **2.66:1** against the rendered page (neutral-950), a real failure on
+     the shared chip. neutral-500 measures **4.24:1** on the page and **3.75:1** on a card
+     (neutral-900), so it clears 3:1 in both places a chip actually sits. The other three dark
+     borders already pass (pending 5.48, confirmed 7.95 vs page). Text contrast is untouched and
+     was never the problem: neutral-200 on neutral-800 is 11.87:1.
+     Reported to the owner alongside the light-mode pair as a `color.md` follow-up. */
+  --color-state-shown-border: var(--neutral-500);
   --color-state-shown-text: var(--neutral-200);
   --color-state-shown-icon: var(--neutral-400);
   --color-state-held-bg: #3a2c10; /* 8.1:1 vs amber-400 */
@@ -647,5 +707,25 @@
   }
   .animate-shim {
     animation: none;
+  }
+
+  /* The HELD pulse is REPLACED, not removed (motion.md; 01-driver-chat/accessibility.md
+     "Motion and reduced motion").  Dropping it silently would delete an expiry warning
+     for a driver who set an OS preference -- an accessibility failure dressed as
+     compliance.  The replacement is a solid high-contrast border plus a text label, so
+     the warning survives in two channels that do not depend on motion at all.
+
+     `content` is set here rather than in the component because the component's own
+     markup must not carry a string that only appears under a media query -- but note the
+     i18n consequence: this literal is the one piece of driver-facing copy not in
+     features/driver/lib/copy.ts.  Recorded rather than hidden. */
+  .held-expiring {
+    animation: none;
+    border-style: solid;
+    border-width: 2px;
+    border-color: var(--color-urgent);
+  }
+  .held-expiring::after {
+    content: ' · expiring';
   }
 }

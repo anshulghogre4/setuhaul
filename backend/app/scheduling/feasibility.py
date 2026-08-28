@@ -47,6 +47,38 @@ FACILITY_RULE_LAST_NEW_START = "LAST_NEW_START_TIME"
 FACILITY_RULE_HEAVY_DOCK_KG = "HEAVY_DOCK_REQUIRED_KG"
 FACILITY_RULE_REEFER_DOCK = "REEFER_DOCK_REQUIRED"
 
+# ---------------------------------------------------------------------------
+# Option-card differentiator (E5.1 / issue #36, owner "Fork A", 2026-08-27)
+# ---------------------------------------------------------------------------
+# UI-UX/01-driver-chat/components.md section 2 and screens.md section 4 both require
+# exactly one short differentiator line per option card -- and both say it is
+# "never computed by the interface" (U48: the interface renders receipts, it never
+# reasons). Before this change no such string existed anywhere in the backend:
+# ranking_factors carries raw numbers, and ranking_explanation carries four
+# long internal-voice sentences that do not fit a 340px card. The owner closed
+# that gap by putting the label on the server, which is what these constants and
+# `assign_differentiators` are.
+#
+# The vocabulary is CLOSED and is exactly the three labels the design names. It is
+# deliberately not open-ended: a free-text label would put ranking language back
+# into something that can drift from what the ranker actually did.
+DIFFERENTIATOR_SOONEST = "soonest"
+DIFFERENTIATOR_NO_WAITING = "no waiting"
+DIFFERENTIATOR_MOST_BUFFER = "most buffer"
+DIFFERENTIATOR_VOCABULARY = frozenset(
+    {DIFFERENTIATOR_SOONEST, DIFFERENTIATOR_NO_WAITING, DIFFERENTIATOR_MOST_BUFFER}
+)
+
+# "no waiting" has to be TRUE, not merely comparatively-least. An option whose
+# feasible start is 100 minutes after the driver's ETA is not "no waiting" just
+# because the alternatives are worse -- printing that on a card is precisely the
+# mis-promise this product exists to remove. So the label is gated on a real
+# threshold as well as on being the minimum in the set.
+# Source: assumption, untested. No documented "acceptable dwell before unload"
+# policy exists in constraints.json or facility_rules; 15 minutes is the value
+# used here and it is stated as an assumption rather than presented as policy.
+NO_WAITING_MAX_MINUTES = 15
+
 
 class FeasibleSlotOption(BaseModel):
     slot_id: str
@@ -70,6 +102,18 @@ class FeasibleSlotOption(BaseModel):
     ranking_explanation: list[str]
     checked_constraints: list[str]
     option_status: str = "DISPLAYED_NOT_RESERVED"
+    # E5.1 Fork A. One short comparative label from DIFFERENTIATOR_VOCABULARY, or ""
+    # when no label in the closed vocabulary is TRUE of this option. Empty is a real
+    # answer, not a missing one: the renderer omits the line rather than inventing a
+    # fourth phrase (data-formatting.md's blank-vs-zero rule, U81).
+    #
+    # Deliberately NOT set by evaluate_candidate_slot: the label is comparative
+    # ("soonest" only means anything against the set it is shown with), and
+    # evaluate_candidate_slot only ever sees one candidate at a time and is also
+    # called by allocation.py's single-slot revalidation path, which has no set to
+    # compare against. It is assigned once, in find_feasible_slots, after the sort
+    # and the truncate -- see assign_differentiators.
+    differentiator: str = ""
 
 
 class InfeasibleSlotReason(BaseModel):
@@ -398,6 +442,70 @@ def _explain_option(
             f"dock match {ranking_factors['dock_match']}."
         ),
     ]
+
+
+def assign_differentiators(options: list[FeasibleSlotOption]) -> None:
+    """Stamp one comparative differentiator label onto each displayed option, in place.
+
+    E5.1 / issue #36, owner "Fork A" (2026-08-27). `01-driver-chat/components.md` section 2
+    requires one differentiator per option card and forbids the interface computing it
+    (U48). This is the server side of that contract.
+
+    Called once per option SET, after ranking and truncation, because every label in the
+    vocabulary is comparative -- "soonest" is a claim about this card set, not about a slot.
+    That is also why it cannot live in `evaluate_candidate_slot`: that function is shared
+    with `allocation.py`'s single-slot revalidation, which has no set.
+
+    Assignment is a fixed pass order, each label claimed by at most one option, an already
+    labelled option skipped. Ties break on `slot_id` so the same input always produces the
+    same labels (the same determinism requirement `recommendation_id_for` exists for):
+
+      1. "soonest"     -> earliest `feasible_start_ts`.
+      2. "no waiting"  -> smallest `wait_after_eta_minutes`, AND that value must actually
+                          be <= NO_WAITING_MAX_MINUTES. Comparative-least is not enough;
+                          see the constant.
+      3. "most buffer" -> largest `fit_slack_minutes`, AND strictly larger than every other
+                          option's. "Most" is false in a tie, so nothing is labelled.
+
+    Anything left over keeps "" -- there is no fourth comparative fact in the vocabulary,
+    and a card with no differentiator line is honest where an invented one is not.
+    """
+    if not options:
+        return
+
+    unlabelled = {option.slot_id: option for option in options}
+
+    def _claim(candidate: FeasibleSlotOption | None, label: str) -> None:
+        if candidate is None:
+            return
+        candidate.differentiator = label
+        unlabelled.pop(candidate.slot_id, None)
+
+    soonest = min(
+        unlabelled.values(),
+        key=lambda o: (_parse_timestamp(o.feasible_start_ts), o.slot_id),
+    )
+    _claim(soonest, DIFFERENTIATOR_SOONEST)
+
+    if unlabelled:
+        least_wait = min(
+            unlabelled.values(),
+            key=lambda o: (int(o.ranking_factors.get("wait_after_eta_minutes", 0)), o.slot_id),
+        )
+        if int(least_wait.ranking_factors.get("wait_after_eta_minutes", 0)) <= NO_WAITING_MAX_MINUTES:
+            _claim(least_wait, DIFFERENTIATOR_NO_WAITING)
+
+    if unlabelled:
+        def _slack(option: FeasibleSlotOption) -> int:
+            return int(option.ranking_factors.get("fit_slack_minutes", 0))
+
+        # sorted(-slack, slot_id) rather than max(): max()'s tie-break would need an
+        # inverted string key to stay deterministic, which reads worse than this.
+        most_buffer = sorted(unlabelled.values(), key=lambda o: (-_slack(o), o.slot_id))[0]
+        top = _slack(most_buffer)
+        # Strictly greater than every OTHER remaining option, so "most" is a true claim.
+        if all(_slack(other) < top for other in unlabelled.values() if other.slot_id != most_buffer.slot_id):
+            _claim(most_buffer, DIFFERENTIATOR_MOST_BUFFER)
 
 
 def evaluate_candidate_slot(
@@ -780,6 +888,10 @@ async def find_feasible_slots(
     )
 
     displayed_options = options[:limit]
+    # E5.1 Fork A: after the sort AND after the truncate, because the label is a claim
+    # about the set the driver actually sees. Labelling before the truncate could stamp
+    # "soonest" on an option that never reaches the card set.
+    assign_differentiators(displayed_options)
     same_day_option_count = sum(1 for option in displayed_options if option.is_same_day)
 
     # The candidate scan is ordered by slot_start_ts, so same-day intervals are always
