@@ -114,6 +114,11 @@ async def run_expiry_sweep(
             pending_ttl_minutes=settings.pending_confirmation_ttl_minutes,
             held_ttl_seconds=settings.held_slot_ttl_seconds,
             batch_limit=settings.expiry_sweep_batch_limit,
+            # One flag gates both halves of the two-phase path (issue #53). It has to be the same
+            # flag `request_slot` reads: sweeping for HELD rows while nothing can create one would
+            # query a column that does not exist on a deploy where the migration has not been
+            # applied, turning a healthy sweep into a 500 on the D9 leg too.
+            held_enabled=settings.two_phase_hold_enabled,
         )
     except Exception:
         # The sweeper commits per appointment, so a rollback here can only discard the partial

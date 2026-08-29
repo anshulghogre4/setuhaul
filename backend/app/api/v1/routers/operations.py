@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import OPS_PORTAL_ROLES, get_db_session, get_request_id, require_roles
+from app.core.deps import (
+    OPS_PORTAL_ROLES,
+    get_db_session,
+    get_request_id,
+    get_settings_dep,
+    require_roles,
+)
 from app.core.envelope import ok
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import Settings
 from app.services import operations_reads
 from app.services.escalation_service import (
     EscalateExceptionCommand,
@@ -21,8 +28,10 @@ from app.services.escalation_service import (
     hand_back_thread,
     reassign_escalation,
     resolve_escalation,
+    start_escalation_work,
     take_over_thread,
 )
+from app.services.thread_message_service import post_operations_message
 
 router = APIRouter(prefix="/api/v1", tags=["operations"])
 
@@ -53,6 +62,20 @@ class TakeOverThreadBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     escalation_id: str = Field(min_length=1, max_length=100)
+
+
+class PostOperationsMessageBody(BaseModel):
+    """Issue #55's request body. Deliberately carries **no** sender, driver, or facility field.
+
+    The sender is the verified token's `user_id`, the driver comes from the thread, and the
+    facility comes from the thread's shipment -- all resolved server-side (M15/NFR-019).
+    `extra="forbid"` means a client that tries to add one gets a 422, not a silently ignored field.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    message_text: str = Field(min_length=1, max_length=4000)
+    client_message_id: str | None = Field(default=None, max_length=128)
 
 
 def _require_idempotency_key(idempotency_key: str | None) -> str:
@@ -149,6 +172,24 @@ async def reassign_escalation_endpoint(
     return ok(result, get_request_id(request))
 
 
+@router.post("/operations/escalations/{escalation_id}/start")
+async def start_escalation_work_endpoint(
+    escalation_id: str,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    """Issue #56: advance an acknowledged escalation to `IN_PROGRESS` (the middle stepper dot)."""
+    key = _require_idempotency_key(idempotency_key)
+    try:
+        result = await start_escalation_work(session, ctx, escalation_id, key)
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(result, get_request_id(request))
+
+
 @router.post("/operations/threads/{thread_id}/take-over")
 async def take_over_thread_endpoint(
     thread_id: str,
@@ -156,11 +197,14 @@ async def take_over_thread_endpoint(
     request: Request,
     ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
     key = _require_idempotency_key(idempotency_key)
     try:
-        result = await take_over_thread(session, ctx, thread_id, body.escalation_id, key)
+        result = await take_over_thread(
+            session, ctx, thread_id, body.escalation_id, key, settings=settings
+        )
     except Exception:
         await session.rollback()
         raise
@@ -173,9 +217,51 @@ async def hand_back_thread_endpoint(
     request: Request,
     ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
 ) -> dict[str, Any]:
     try:
-        result = await hand_back_thread(session, ctx, thread_id)
+        result = await hand_back_thread(session, ctx, thread_id, settings=settings)
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(result, get_request_id(request))
+
+
+@router.get("/operations/threads/{thread_id}/messages")
+async def thread_messages(
+    thread_id: str,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """The ops-side read of a thread's durable transcript (`chat_messages`).
+
+    `chat.py`'s `/chat/history` is DRIVER-only and Redis-backed, so before this the console had no
+    way to read the conversation it was about to take over.
+    """
+    return ok(
+        await operations_reads.get_thread_messages(session, ctx, thread_id),
+        get_request_id(request),
+    )
+
+
+@router.post("/operations/threads/{thread_id}/messages")
+async def post_thread_message(
+    thread_id: str,
+    body: PostOperationsMessageBody,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    """Issue #55: the coordinator reply path. The one thing the takeover composer exists to do."""
+    key = _require_idempotency_key(idempotency_key)
+    try:
+        result = await post_operations_message(
+            session, ctx, thread_id=thread_id, message_text=body.message_text,
+            idempotency_key=key, client_message_id=body.client_message_id, settings=settings,
+        )
     except Exception:
         await session.rollback()
         raise

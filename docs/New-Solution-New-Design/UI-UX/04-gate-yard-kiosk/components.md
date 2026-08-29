@@ -90,9 +90,13 @@ outcome screen, §5 below).
 - **Label is the imperative verb matching the state table exactly** — "Gate in," "Call to dock," "Dock in,"
   "Start unload," "End unload," "Gate out." Never a generic "Next" or "Continue," since the specific verb
   is itself confirmation the officer is about to do the right thing.
-- Idempotency-keyed (U70), same as every capacity-or-record-affecting action elsewhere in the product —
-  stated once here since this surface's actions are event-stream writes, not capacity mutations, but the
-  same double-tap/retry-safety concern applies identically.
+- Retry-safe against a double-tap (U70's underlying concern), but not uniformly by an idempotency key.
+  **Corrected 2026-08-29, M5/E5.4:** only `record_gate_in` actually carries an `Idempotency-Key` header
+  server-side (`gate.py:78-83, 93-96`). The other four (`update_queue_state`, `record_dock_in`,
+  `record_unload_start_end`, `record_gate_out`) achieve the same double-tap safety through their own
+  state-machine guards instead — a retry either lands on a transition already made (returns the same
+  restated fact, e.g. `ALREADY_GATED_OUT`) or fails a precondition that's already satisfied. The end
+  result — retry-safe — is real and verified for all five; the mechanism is not one thing.
 
 ---
 

@@ -120,12 +120,12 @@ rather than a border colour change.
 ```
                               LIGHT              DARK
 state-shown-bg                neutral-50         neutral-800
-state-shown-border            neutral-300        neutral-600
+state-shown-border            neutral-500        neutral-500
 state-shown-text              neutral-700        neutral-200
 state-shown-icon              neutral-500        neutral-400
 
 state-held-bg                 amber-50           #3A2C10
-state-held-border             amber-500          amber-500
+state-held-border             amber-600          amber-500
 state-held-text               amber-700          amber-400
 state-held-icon               amber-600          amber-400
 
@@ -139,6 +139,21 @@ state-confirmed-border        green-600          green-500
 state-confirmed-text          green-700          green-400
 state-confirmed-icon          green-600          green-400
 ```
+
+### `state-shown-border` and `state-held-border` were raised for contrast (corrected 2026-08-29)
+
+The table above previously read `state-shown-border: neutral-300 / neutral-600` and `state-held-border:
+amber-500 / amber-500`. Both failed WCAG 1.4.11 (non-text contrast) against their own page background —
+measured during M5/E5.1's driver-chat build: light `shown` `neutral-300` **1.42:1**, light `held`
+`amber-500` **2.05:1**, dark `shown` `neutral-600` **2.66:1** (found in the same pass, not part of the
+original complaint). No amber step clears 3:1 while the corresponding text token stays at 4.5:1, so the
+fix is a border-only ramp step, not a token-family swap: light `shown` → `neutral-500` (**4.55:1**), light
+`held` → `amber-600` (**3.04:1**), dark `shown` → `neutral-500` (**4.24:1** on the page, **3.75:1** on a
+card). Dark `held` was already passing and is unchanged.
+
+`frontend/src/styles/theme.css` carried this fix from the day it was found; this table did not, which
+left the written record briefly instructing the opposite of what was shipped and verified. This entry
+closes that gap — `theme.css` was correct, this table was stale.
 
 ### The dark chip backgrounds are opaque hex, not an alpha composite (corrected 2026-08-26)
 
@@ -183,11 +198,17 @@ component never changes identity; it changes temperature.
 
 | Remaining | `HELD` countdown | `PENDING` countdown | Additional signal |
 |---|---|---|---|
-| > 50% | `amber-600` | `blue-600` | — |
-| 20–50% | `amber-600` | `amber-600` | — |
+| > 50% | `amber-700` | `blue-600` | — |
+| 20–50% | `amber-700` | `amber-700` | — |
 | < 20% | `red-600` | `red-600` | Countdown switches to `font-weight: 600` |
 | < 10s (HELD only) | `red-600` | — | Haptic pulse on driver device (U21) |
 | Expired | `neutral-500` on `neutral-100` | same | Struck through; state chip replaced by the expiry message |
+
+**`amber-600` raised to `amber-700` in this table (corrected 2026-08-29, M5/E5.3 Fork E).** This table
+assigned `amber-600` — the Contrast section below marks it **3.2:1, fails normal text** — to a countdown
+that renders as small text (12px on the planner dock board). Same defect class as `escalation-sla-warning`,
+which E5.2 found and fixed the same way one surface earlier; this table just hadn't been checked against
+its own Contrast section yet. The standing rule below is what should prevent a third instance.
 
 **Never animate the colour transition.** The value change should be perceptible as a *state* change, not
 a gradual fade a user might not notice. Motion rules in `motion.md`.
@@ -254,9 +275,16 @@ them (e.g. colouring every step red once one deadline is close) would blur both.
 ```
                               LIGHT              DARK
 escalation-sla-ok              text-secondary     text-secondary     (no colour — normal state)
-escalation-sla-warning         amber-600          amber-400          (< 25% of SLA window remaining)
-escalation-sla-breach          red-600            red-400            (SLA missed)
+escalation-sla-warning         amber-700          amber-400          (< 25% of SLA window remaining)
+escalation-sla-breach          red-700            red-400            (SLA missed)
 ```
+
+**Light `warning`/`breach` raised one step each (corrected 2026-08-29).** `amber-600`/`red-600` measured
+**3.04:1** and **4.44:1 on a selected row** during M5/E5.2's ops-console build — the first fails AA for
+normal text outright (and this table's own contrast section, below, already said `amber-600` fails at
+normal text weight), the second only cleared 4.5:1 on the unselected background. Raised to `amber-700`
+(**4.58–4.80:1** across contexts) and `red-700` (**5.95–6.18:1**), dark unchanged since `amber-400`/`red-400`
+already passed against the dark surfaces.
 
 Uses the existing `red`/`amber` ramps — this is not a new primitive, just a new semantic assignment,
 consistent with the rule that danger always reads as danger regardless of which specific thing is wrong.
@@ -275,7 +303,7 @@ feedback-success-border       green-600          green-500
 
 feedback-warning-bg           amber-50           #3A2C10
 feedback-warning-text         amber-700          amber-400
-feedback-warning-border       amber-500          amber-500
+feedback-warning-border       amber-600          amber-500
 
 feedback-danger-bg            red-50             #3A1414
 feedback-danger-text          red-700            red-400
@@ -441,6 +469,20 @@ Computed, not assumed:
 **This is why the token table uses 700 for amber and green text but 600 for blue and red.** Amber and
 green are perceptually lighter at equivalent steps. Using `green-600` for body text would fail — a real
 trap, since it looks fine to a designer with good vision on a good monitor.
+
+**Standing rule (added 2026-08-29, M5/E5.3 Fork E):** any token assigned to render as text — not a large
+heading, not a UI/border component covered by the 3:1 bar above — must clear **4.5:1** against this table
+before it is written into a semantic-token table elsewhere in this file. This file disagreed with itself
+twice on exactly this point (`escalation-sla-warning`, found by E5.2; the TTL-urgency table above, found by
+E5.3) before either was caught — checking a new text token against this section at authoring time is
+cheaper than a third audit finding it later.
+
+**`feedback-warning-border` raised `amber-500` → `amber-600` in light mode (corrected 2026-08-29, found
+independently by M5/E5.4).** Same failure as `state-held-border`'s original value — `amber-500` on a light
+page background measures 2.05:1, under the 3:1 non-text bar. This is the fourth time this file has shipped
+a value its own Contrast section would have rejected (`state-shown-border`, `state-held-border`,
+`escalation-sla-warning`/TTL-urgency, now this) — worth treating as a systemic authoring gap, not four
+unrelated typos. Dark unchanged; `amber-500` already passes against the dark surface.
 
 ### Verified pairings — dark mode on `neutral-900`
 

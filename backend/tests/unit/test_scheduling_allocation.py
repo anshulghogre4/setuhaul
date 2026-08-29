@@ -139,10 +139,17 @@ def test_allocation_unique_constraint_name_ignores_unrelated_integrity_errors():
 
 
 def test_driver_tool_allowlist_includes_request_slot():
-    """E3.1 (issue #25): 11 of SOLUTION_DESIGN.md section 7.5.4's 12-tool driver allowlist
-    (confirm_held_slot deferred). reschedule_appointment/scheduling_capability_disabled are
-    gone -- D1 collapses a reschedule into cancel_appointment + request_slot, both already
-    on the allowlist, so there is nothing left to disable a stub tool for.
+    """SOLUTION_DESIGN.md section 7.5.4's driver allowlist, now 12 of 12 (issue #53).
+
+    E3.1 (issue #25) bound 11 and deferred `confirm_held_slot` because the D2 HELD state had no
+    schema to live in. Issue #53 gave it one, so the list is complete. Section 7.5.4's own
+    justification for the count -- "the honest reason it is not 9: `confirm_held_slot` and
+    `explain_slot_eligibility` are new and both are load-bearing" -- is now satisfied by both
+    rather than one.
+
+    reschedule_appointment/scheduling_capability_disabled remain gone -- D1 collapses a reschedule
+    into cancel_appointment + request_slot, both already on the allowlist, so there is nothing left
+    to disable a stub tool for.
     """
     tools = build_driver_tools(session=None, ctx=_driver_ctx(), thread_id="THR-TEST")  # type: ignore[arg-type]
     names = {tool.name for tool in tools}
@@ -155,6 +162,7 @@ def test_driver_tool_allowlist_includes_request_slot():
         "report_delay_or_update_eta",
         "find_feasible_slots",
         "request_slot",
+        "confirm_held_slot",
         "get_appointment_request_status",
         "explain_slot_eligibility",
         "cancel_appointment",
@@ -251,6 +259,13 @@ async def test_confirm_appointment_transitions_pending_row_and_commits(monkeypat
     )
     store = AsyncMock()
     monkeypatch.setattr(allocation, "store_idempotency", store)
+    # Covered on its own in the E5.3 snapshot-guard tests below; stubbed here so this test keeps
+    # asserting the confirm transition itself rather than the guard in front of it.
+    monkeypatch.setattr(
+        allocation,
+        "_snapshot_guard",
+        AsyncMock(return_value={"snapshot_hash": "hash-after"}),
+    )
 
     result = await confirm_appointment(
         session,
@@ -258,6 +273,7 @@ async def test_confirm_appointment_transitions_pending_row_and_commits(monkeypat
         shipment_id="SHP1002",
         command=ConfirmAppointmentCommand(
             appointment_id="APT021",
+            snapshot_hash="hash-the-planner-saw",
             warehouse_confirmation_ref="WH-JAI-2026-021",
         ),
         idempotency_key="confirm-key",
@@ -265,6 +281,9 @@ async def test_confirm_appointment_transitions_pending_row_and_commits(monkeypat
 
     assert result.code == "APPOINTMENT_CONFIRMED"
     assert result.status == "CONFIRMED"
+    # The token the caller should carry into its next write on this row, so a planner acting twice
+    # never has to re-read the queue just to obtain a fresh hash.
+    assert result.snapshot_hash == "hash-after"
     update_params = session.execute.await_args_list[0].args[1]
     assert update_params["appointment_id"] == "APT021"
     assert update_params["warehouse_confirmation_ref"] == "WH-JAI-2026-021"
@@ -934,13 +953,18 @@ async def test_confirm_appointment_binds_datetimes_not_iso_strings(monkeypatch):
     )
     monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
     monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+    monkeypatch.setattr(
+        allocation, "_snapshot_guard", AsyncMock(return_value={"snapshot_hash": "h"})
+    )
 
     await confirm_appointment(
         session,
         _ops_ctx(),
         shipment_id="SHP1002",
         command=ConfirmAppointmentCommand(
-            appointment_id="APT021", warehouse_confirmation_ref="WH-JAI-2026-021"
+            appointment_id="APT021",
+            snapshot_hash="h-seen",
+            warehouse_confirmation_ref="WH-JAI-2026-021",
         ),
         idempotency_key="confirm-bind-key",
     )

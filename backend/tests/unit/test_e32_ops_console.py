@@ -281,12 +281,25 @@ async def test_resolve_escalation_rejects_an_uncontrolled_reason_code():
 # ---------------------------------------------------------------------------------------------
 
 
+def _acknowledged_state(**overrides) -> dict:
+    """E5.2 (#56): `take_over_thread` now reads the escalation's lifecycle state, not just its
+    facility, because it refuses on an unacknowledged escalation and advances an acknowledged one
+    to `IN_PROGRESS`."""
+    base = {
+        "escalation_id": "ESC-1", "facility_id": FACILITY,
+        "escalation_status": "ACKNOWLEDGED", "owner_user_id": "USR-OPS-1",
+    }
+    base.update(overrides)
+    return base
+
+
 @pytest.mark.asyncio
 async def test_take_over_thread_escalates_and_posts_a_system_notice():
     session = _session_with(
-        {"facility_id": FACILITY},  # _escalation_facility_id
+        _acknowledged_state(),  # _escalation_queue_state
         {"thread_id": "THR-1", "shipment_id": "SHP1", "thread_status": "OPEN"},  # chat_threads lookup
         None,  # UPDATE chat_threads
+        None,  # UPDATE escalation_queue -> IN_PROGRESS
         None,  # INSERT chat_messages
     )
     result = await escalation_service.take_over_thread(session, _ops_ctx(), "THR-1", "ESC-1", "idem-t1")
@@ -297,7 +310,7 @@ async def test_take_over_thread_escalates_and_posts_a_system_notice():
 @pytest.mark.asyncio
 async def test_take_over_thread_reports_already_taken_over():
     session = _session_with(
-        {"facility_id": FACILITY},
+        _acknowledged_state(),
         {"thread_id": "THR-1", "shipment_id": "SHP1", "thread_status": "ESCALATED"},
     )
     result = await escalation_service.take_over_thread(session, _ops_ctx(), "THR-1", "ESC-1", "idem-t2")
@@ -305,7 +318,7 @@ async def test_take_over_thread_reports_already_taken_over():
 
 
 @pytest.mark.asyncio
-async def test_hand_back_thread_reverses_an_acknowledged_takeover():
+async def test_hand_back_thread_reverses_an_in_progress_takeover():
     session = _session_with(
         {"thread_id": "THR-1", "shipment_id": "SHP1", "thread_status": "ESCALATED"},  # chat_threads
         {"escalation_id": "ESC-1", "facility_id": FACILITY, "owner_user_id": "USR-OPS-1"},  # linked escalation
@@ -328,7 +341,7 @@ async def test_hand_back_thread_refuses_a_thread_that_was_never_escalated():
 async def test_hand_back_thread_refuses_when_the_linked_escalation_is_unacknowledged():
     session = _session_with(
         {"thread_id": "THR-1", "shipment_id": "SHP1", "thread_status": "ESCALATED"},
-        None,  # no ACKNOWLEDGED/IN_PROGRESS escalation found for this shipment
+        None,  # no IN_PROGRESS escalation found for this shipment
     )
     result = await escalation_service.hand_back_thread(session, _ops_ctx(), "THR-1")
     assert result["code"] == "NOT_IN_PROGRESS"

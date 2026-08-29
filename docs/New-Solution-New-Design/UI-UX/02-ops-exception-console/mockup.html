@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#E2E8F0" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
+<!-- E5.2 2026-08-29 (R1/U69): the media-scoped theme-color pair was the same system-following
+     default one layer up. With the CSS dark block gone, a dark-preference browser would have
+     rendered a light page and painted its own chrome #020617. One unconditional value now. -->
+<meta name="theme-color" content="#E2E8F0">
 <title>Ops Console Mockups</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,8 +46,8 @@
 
   /* escalation severity — color.md §Escalation severity, U60 */
   --escalation-sla-ok:var(--text-secondary);
-  --escalation-sla-warning:var(--amber-600);
-  --escalation-sla-breach:var(--red-600);
+  --escalation-sla-warning:var(--amber-700); /* E5.2 R2: was amber-600 = 3.04:1, fails AA as text (color.md's own table says so) */
+  --escalation-sla-breach:var(--red-700); /* E5.2 R3: red-600 measured 4.44:1 on surface-selected */
 
   /* feedback — color.md §Feedback colors */
   --feedback-warning-bg:var(--amber-50);
@@ -72,36 +74,11 @@
   --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px;
 
   /* native form controls + scrollbars follow the theme */
-  color-scheme: light dark;
+  color-scheme: light; /* E5.2 R1: was "light dark" — system must not pick the theme (U69) */
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --surface-selected:#12203c;
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --border-focus:var(--blue-400);
-    --escalation-sla-warning:var(--amber-400);
-    --escalation-sla-breach:var(--red-400);
-    --feedback-warning-bg:#3a2c10;
-    --feedback-warning-text:var(--amber-400);
-    --feedback-warning-border:var(--amber-500);
-    --feedback-info-bg:#122040;
-    --feedback-info-text:var(--blue-400);
-    --feedback-info-border:var(--blue-500);
-    --facility-accent:var(--neutral-700);
-    --board-bg:var(--neutral-950);
-    --board-panel:var(--neutral-900);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-    --board-line:var(--neutral-800);
-  }
-}
+/* E5.2 2026-08-29 (R1/U69): the prefers-color-scheme:dark block was removed.
+   Light is the default everywhere and dark is user-switchable, never system-following.
+   The identical :root[data-theme="dark"] block below is the sole dark source. */
 :root[data-theme="dark"]{
   color-scheme: dark;
   --surface-base:var(--neutral-950);
@@ -175,7 +152,7 @@ body{
 }
 .searchbar{
   flex:1; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface-hover);
-  border-radius:var(--r-md); color:var(--text-tertiary); font-size:13px;
+  border-radius:var(--r-md); color:var(--text-secondary); font-size:13px; /* E5.2 R5: text-tertiary measured 4.34:1 here */
 }
 /* icon-lg (24px) — top bar, per iconography.md's sizing scale */
 .topbar-icons{ display:flex; gap:16px; color:var(--text-tertiary); font-size:20px; align-items:center; line-height:1; }
@@ -210,10 +187,11 @@ body{
 .row.selected{ background:var(--surface-selected); border-left-color:var(--blue-600); }
 .row .id{ font-family:var(--font-data); font-weight:600; font-size:13px; color:var(--text-primary);
   font-variant-numeric:tabular-nums; }
-.row .owner{ float:right; font-size:11px; color:var(--text-tertiary); }
+.row .owner{ float:right; font-size:11px; color:var(--text-secondary); } /* E5.2 R4 */
 .row .owner.unowned{ color:var(--feedback-warning-text); font-weight:600; }
 .row .reason{ font-size:11px; color:var(--text-secondary); margin-top:0px; }
-.row .meta{ font-size:11px; color:var(--text-tertiary); margin-top:0px; }
+/* E5.2 2026-08-29 (R4): text-tertiary measured 4.37:1 on a selected row's blue-50 tint. */
+.row .meta{ font-size:11px; color:var(--text-secondary); margin-top:0px; }
 .row .sla{
   font-family:var(--font-data); font-variant-numeric:tabular-nums; font-size:12px; margin-top:4px;
   display:flex; align-items:center; gap:4px;
@@ -223,10 +201,12 @@ body{
 .sla.breach{ color:var(--escalation-sla-breach); font-weight:700; }
 
 .incident-row{ padding:8px 12px; border-bottom:1px solid var(--border-subtle); }
-.incident-row .head{ font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+/* E5.2 R6: the disclosure control measured 16px tall — below compact's 32px floor. */
+.incident-row .head{ min-height:32px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
 .incident-row .sub{ font-size:11px; color:var(--text-secondary); margin:0 0 8px 20px; }
 .pill-btn{
-  font-size:11px; font-weight:600; padding:4px 12px; border-radius:var(--r-sm);
+  /* E5.2 R6: measured 25px tall — below compact's 32px floor */
+  min-height:32px; font-size:11px; font-weight:600; padding:4px 12px; border-radius:var(--r-sm);
   border:1px solid var(--border-default); background:var(--surface-raised); color:var(--text-primary);
   margin-left:20px;
 }
@@ -313,47 +293,46 @@ body{
 <h2 class="screen-label">State 1 — <span>Queue at rest, nothing selected</span></h2>
 <div class="frame">
   <div class="topbar">
-    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
-    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
-    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
-      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
-      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    <div class="rail" role="navigation" aria-label="Console sections">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-flag"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="pane-head">Escalations <span>(7)</span></div>
       <div class="row">
         <span class="id">ESC-104</span><span class="owner unowned">Unowned</span>
         <div class="reason">NO_FEASIBLE_SLOT</div>
         <div class="meta">SHP1015 · Jaipur</div>
-        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+        <div class="sla warning"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">4:12</span> to breach</div>
       </div>
       <div class="row">
         <span class="id">ESC-102</span><span class="owner">Neha B.</span>
         <div class="reason">NOTIFICATION_FAILED</div>
         <div class="meta">SHP1009 · Gurugram</div>
-        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">22m</span> to breach</div>
+        <div class="sla ok"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">22m</span> to breach</div>
       </div>
       <div class="row">
         <span class="id">ESC-099</span><span class="owner">Neha B.</span>
         <div class="reason">AMBIGUOUS_SHIPMENT</div>
         <div class="meta">DRV004 · Kota</div>
-        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">12m</span> (soft)</div>
+        <div class="sla ok"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">12m</span> (soft)</div>
       </div>
       <div class="incident-row">
-        <div class="head"><span aria-hidden="true">▶ 🔌</span> Capacity incident</div>
+        <div class="head" role="button" tabindex="0" aria-expanded="false"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-chev-right"/></svg><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg> Capacity incident</div>
         <div class="sub">DOCK-JAI-D3 · 4&nbsp;shipments · 09:15–13:00</div>
         <button class="pill-btn">Review incident</button>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="text-align:center;color:var(--text-tertiary);font-size:13px;padding:24px;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="pane-head">Co-pilot</div>
       <div class="copilot-empty">
         Available once you take over a thread.<br><br>
@@ -375,37 +354,36 @@ body{
 <h2 class="screen-label">State 2 — <span>Escalation under takeover, co-pilot active with an approved draft</span></h2>
 <div class="frame">
   <div class="topbar">
-    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
-    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
-    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
-      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
-      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    <div class="rail" role="navigation" aria-label="Console sections">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-flag"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="pane-head">Escalations <span>(7)</span></div>
       <div class="row selected">
         <span class="id">ESC-104</span><span class="owner">You</span>
         <div class="reason">NO_FEASIBLE_SLOT</div>
         <div class="meta">SHP1015 · Jaipur</div>
-        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+        <div class="sla warning"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">4:12</span> to breach</div>
       </div>
       <div class="row">
         <span class="id">ESC-102</span><span class="owner">Neha B.</span>
         <div class="reason">NOTIFICATION_FAILED</div>
         <div class="meta">SHP1009 · Gurugram</div>
-        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">22m</span> to breach</div>
+        <div class="sla ok"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">22m</span> to breach</div>
       </div>
       <div class="row">
         <span class="id">ESC-099</span><span class="owner">Neha B.</span>
         <div class="reason">AMBIGUOUS_SHIPMENT</div>
         <div class="meta">DRV004 · Kota</div>
-        <div class="sla ok"><span aria-hidden="true">⏱</span> <span class="tabular">12m</span> (soft)</div>
+        <div class="sla ok"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">12m</span> (soft)</div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="detail-body">
         <div class="esc-title">ESC-104 · NO_FEASIBLE_SLOT</div>
         <div class="stepper-row">
@@ -415,7 +393,7 @@ body{
             <div class="dot filled" aria-hidden="true"></div><div class="step-line" aria-hidden="true"></div>
             <div class="dot" aria-hidden="true"></div>
           </div>
-          <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+          <div class="sla warning"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">4:12</span> to breach</div>
         </div>
         <div style="font-size:11px;color:var(--text-tertiary);">OPEN — ACK — IN PROGRESS — RESOLVED · Owner: You</div>
 
@@ -431,7 +409,7 @@ body{
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="pane-head">Co-pilot</div>
       <div class="copilot-body">
         <button class="copilot-btn">Summarise thread</button>
@@ -461,25 +439,24 @@ body{
 <h2 class="screen-label">State 3 — <span>Capacity incident expanded, proposal requested</span></h2>
 <div class="frame">
   <div class="topbar">
-    <div class="switcher"><span aria-hidden="true">🏢</span> All facilities <span aria-hidden="true">▾</span></div>
-    <div class="searchbar"><span aria-hidden="true">🔍</span> Search shipment, driver, carrier…</div>
-    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><span aria-hidden="true">🔔</span></button><button class="tb-btn" aria-label="Help"><span aria-hidden="true" style="font-size:13px;">?</span></button><button class="tb-btn" aria-label="Settings"><span aria-hidden="true">⚙︎</span></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
+    <div class="switcher"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-building"/></svg> All facilities <svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-chev-down"/></svg></div>
+    <div class="searchbar"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-search"/></svg> Search shipment, driver, carrier…</div>
+    <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
-      <a class="active" href="#" aria-label="Escalations" aria-current="page"><span aria-hidden="true">⚑</span></a>
-      <a href="#" aria-label="Profile"><span aria-hidden="true">👤</span></a>
+    <div class="rail" role="navigation" aria-label="Console sections">
+      <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-md"><use href="#i-flag"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="pane-head">Escalations <span>(7)</span></div>
       <div class="row">
         <span class="id">ESC-104</span><span class="owner unowned">Unowned</span>
         <div class="reason">NO_FEASIBLE_SLOT</div>
         <div class="meta">SHP1015 · Jaipur</div>
-        <div class="sla warning"><span aria-hidden="true">⏱</span> <span class="tabular">4:12</span> to breach</div>
+        <div class="sla warning"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg> <span class="tabular">4:12</span> to breach</div>
       </div>
       <div class="incident-row" style="background:var(--surface-selected);">
-        <div class="head"><span aria-hidden="true">▼ 🔌</span> Capacity incident</div>
+        <div class="head" role="button" tabindex="0" aria-expanded="true"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-chev-down"/></svg><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg> Capacity incident</div>
         <div class="sub">DOCK-JAI-D3 · 09:15–13:00</div>
         <div style="margin-left:20px;font-size:11px;line-height:1.8;font-family:var(--font-data);color:var(--text-primary);">
           SHP1005&nbsp;&nbsp;CRITICAL<br>
@@ -492,9 +469,9 @@ body{
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="detail-body">
-        <div class="esc-title"><span aria-hidden="true">🔌</span> Capacity incident · DOCK-JAI-D3</div>
+        <div class="esc-title"><svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-network"/></svg> Capacity incident · DOCK-JAI-D3</div>
         <div class="section-label">Window</div>
         <div class="reason-text tabular">09:15–13:00</div>
         <div class="section-label">Affected shipments (4)</div>
@@ -509,7 +486,7 @@ body{
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="pane-head">Co-pilot</div>
       <div class="copilot-empty">
         Available once you take over a thread.<br><br>
@@ -576,33 +553,9 @@ body{
      Outer ring = border-focus, inner = surface-base, per elevation-and-depth.md. */
   --sh-focus:inset 0 0 0 2px var(--border-focus), inset 0 0 0 4px var(--surface-base);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --priority-critical-marker:var(--neutral-0);
-    --priority-high-marker:var(--neutral-300);
-    --priority-normal-marker:var(--neutral-500);
-    --priority-low-marker:var(--neutral-700);
-    --feedback-danger-bg:rgba(127,29,29,.25);
-    --feedback-danger-text:var(--red-400);
-    --feedback-danger-border:var(--red-500);
-    --feedback-success-bg:rgba(6,78,59,.25);
-    --feedback-success-text:var(--green-400);
-    --feedback-success-border:var(--green-500);
-    --interactive-default:var(--blue-500);
-    --interactive-hover:var(--blue-400);
-    --interactive-disabled-bg:var(--neutral-800);
-    --interactive-disabled-text:var(--neutral-600);
-    --border-strong:var(--neutral-600);
-    --text-disabled:var(--neutral-600);
-    --text-link:var(--blue-400);
-    --surface-overlay:var(--neutral-800);
-    --surface-sunken:var(--neutral-950);
-    --shadow-sm:none;
-    --shadow-md:0 4px 12px rgba(0,0,0,.40);
-    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
-    --scrim:rgba(0,0,0,.65);
-  }
-}
+/* E5.2 2026-08-29 (R1/U69): the prefers-color-scheme:dark block was removed.
+   Light is the default everywhere and dark is user-switchable, never system-following.
+   The identical :root[data-theme="dark"] block below is the sole dark source. */
 :root[data-theme="dark"]{
   --priority-critical-marker:var(--neutral-0);
   --priority-high-marker:var(--neutral-300);
@@ -666,7 +619,8 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       border:1px solid var(--border-default);border-radius:var(--r-sm);padding:4px 8px;
       font-size:12px;line-height:1.33;color:var(--text-primary)}
 .chip .facet{color:var(--text-secondary)}
-.newpill{display:inline-flex;align-items:center;gap:4px;background:var(--feedback-info-bg);
+/* E5.2 R6: measured 26px tall — below compact's 32px floor */
+.newpill{display:inline-flex;align-items:center;min-height:32px;gap:4px;background:var(--feedback-info-bg);
          border:1px solid var(--feedback-info-border);border-radius:var(--r-sm);padding:4px 8px;
          font-size:12px;line-height:1.33;font-weight:600;color:var(--feedback-info-text);
          font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0}
@@ -675,8 +629,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
 .qrow-top{display:flex;align-items:baseline;gap:8px}
 .qid{font-family:var(--font-data);font-size:14px;line-height:1.5;font-weight:600;color:var(--text-primary);
      font-variant-numeric:tabular-nums}
+/* E5.2 2026-08-29 (R4): was text-tertiary — measured 4.37:1 against a selected row's blue-50
+   tint, i.e. below AA for 11px text. text-secondary is the next step up and clears it. */
 .qowner{margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-        font-size:11px;line-height:1.3;font-weight:500;letter-spacing:.02em;color:var(--text-tertiary)}
+        font-size:11px;line-height:1.3;font-weight:500;letter-spacing:.02em;color:var(--text-secondary)}
 .qowner.unowned{color:var(--feedback-warning-text);font-weight:600}
 .qreason{display:flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;line-height:1.33;
          font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-secondary)}
@@ -707,9 +663,11 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
 .b-inact{background:var(--surface-hover);border-color:var(--border-default);color:var(--text-primary)}
 .b-dis{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text);cursor:not-allowed}
 .b-ghost{background:transparent;color:var(--text-secondary);min-width:0;width:32px;padding:0}
-.b-pill{height:auto;min-width:0;padding:4px 12px;font-size:12px;border-radius:var(--r-sm);
+.b-pill{min-height:32px;min-width:0;padding:4px 12px;font-size:12px;border-radius:var(--r-sm); /* E5.2 R6 */
         border-color:var(--border-default);background:var(--surface-raised);color:var(--text-primary)}
-.b-text{height:auto;min-width:0;padding:0;background:none;color:var(--text-link);font-size:12px}
+/* E5.2 R6: height:auto collapsed these to 14px tall. Text buttons keep their type size
+   but not a 14px hit area. */
+.b-text{min-height:32px;min-width:0;padding:0 4px;background:none;color:var(--text-link);font-size:12px}
 .b-full{width:100%;justify-content:flex-start}
 .b-row{display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap}
 .b-far{margin-left:auto}
@@ -865,9 +823,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
 .tb-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;
         border:0;border-radius:var(--r-md);background:none;color:inherit;font-size:inherit;line-height:1;
         cursor:default}
-.chip-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;
+/* E5.2 R6: was 16x16 — below compact's 32px floor AND below WCAG 2.2 SC 2.5.8's 24x24 AA
+   minimum. The glyph stays 16px; the hit area grows around it. */
+.chip-x{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin:-8px -6px;padding:0;
         border:0;border-radius:var(--r-sm);background:none;color:var(--text-tertiary);cursor:default}
-.rail a{display:inline-flex;align-items:center;justify-content:center;color:inherit;text-decoration:none}
+/* E5.2 R6: rail links measured 24x20 — below compact's 32px floor. */
+.rail a{display:inline-flex;align-items:center;justify-content:center;inline-size:32px;block-size:32px;color:inherit;text-decoration:none}
 
 /* hover — background/border only, never a lift or a scale (motion.md) */
 .b-con:hover,.btn-primary:hover{background:var(--interactive-hover)}
@@ -1040,11 +1001,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(5)</span></span></div>
       <div class="qtools">
         <button class="b b-neu">Filter: reason <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></button>
@@ -1068,12 +1028,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1103,11 +1063,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
       <div class="qtools">
         <button class="b b-neu">Filter: reason <svg aria-hidden="true" focusable="false" class="ic ic-sm"><use href="#i-chev-down"/></svg></button>
@@ -1123,12 +1082,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <button class="b b-neu">Clear filters</button>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1163,11 +1122,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead">
         <span>Escalations <span class="cnt">(9)</span></span>
         <button class="newpill"><span class="tab">2</span>&nbsp;new · press&nbsp;R</button>
@@ -1197,12 +1155,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">41m</span> to breach</div>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1235,11 +1193,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane" aria-busy="true">
+    <div class="pane" aria-busy="true" role="region" aria-label="Escalation queue">
       <span class="sr-only" role="status">Loading escalations…</span>
       <div class="qhead"><span>Escalations <span class="skel" style="display:inline-block;width:28px;height:12px;vertical-align:middle;"></span></span></div>
       <div class="skelrow"><div class="skel" style="width:38%"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:46%"></div><div class="skel" style="width:30%"></div></div>
@@ -1249,12 +1206,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       <div class="skelrow"><div class="skel" style="width:42%"></div><div class="skel" style="width:58%"></div><div class="skel" style="width:50%"></div><div class="skel" style="width:30%"></div></div>
       <div class="skelrow"><div class="skel" style="width:34%"></div><div class="skel" style="width:64%"></div><div class="skel" style="width:42%"></div><div class="skel" style="width:26%"></div></div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1286,11 +1243,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations</span></div>
       <div class="state-block" role="alert">
         <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-cloud-alert"/></svg>
@@ -1298,12 +1254,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <button class="b b-neu">Retry</button>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1334,11 +1290,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations</span></div>
       <div class="state-block" role="alert">
         <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-octagon-alert"/></svg>
@@ -1349,7 +1304,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="dbody">
         <div class="dtitle">
           <span class="mono16">ESC-104</span><span class="mid">·</span>
@@ -1374,7 +1329,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-body">
         <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
@@ -1408,11 +1363,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
       <div class="state-block">
         <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-circle-check-big"/></svg>
@@ -1420,12 +1374,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="sub">New ones appear here automatically.</div>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1454,11 +1408,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail" style="border-right-color:var(--board-accent);">
+    <div class="rail" role="navigation" aria-label="Console sections" style="border-right-color:var(--board-accent);">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(0)</span></span></div>
       <div class="state-block">
         <svg aria-hidden="true" focusable="false" class="ic ic-xl"><use href="#i-inbox"/></svg>
@@ -1466,12 +1419,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="sub">Once shipments start arriving, they'll show up here.</div>
       </div>
     </div>
-    <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+    <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
       <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
         Select an escalation to see its detail and thread.
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1508,11 +1461,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
       <div class="qrow is-sel">
         <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner unowned">Unowned</span></div>
@@ -1538,7 +1490,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="inc-act"><button class="b b-pill">Review incident</button></div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="dbody">
         <div class="dtitle">
           <span class="mono16">ESC-104</span><span class="mid">·</span>
@@ -1574,7 +1526,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="b-row"><button class="b b-neu">Take over thread</button></div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1683,11 +1635,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
       <div class="qrow is-sel">
         <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">You</span></div>
@@ -1708,7 +1659,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="dbody">
         <div class="dtitle">
           <span class="mono16">ESC-104</span><span class="mid">·</span>
@@ -1728,7 +1679,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
           <div class="who"><span>Driver</span><span class="ts">18 minutes ago</span></div>
           <div class="txt">Still waiting on a dock, what's happening?</div>
         </div>
-        <div class="divider-takeover" role="status">You joined the thread</div>
+        <div class="divider-takeover" role="alert">You joined the thread</div>
         <div class="crow" style="margin-top:12px;">
           <div class="field" style="color:var(--text-tertiary);">Write a reply…</div>
           <button class="b b-con">Send</button>
@@ -1739,7 +1690,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         </div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-body">
         <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
@@ -1788,11 +1739,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
       <div class="qrow is-sel">
         <div class="qrow-top"><span class="qid">ESC-097</span><span class="qowner unowned">Unowned</span></div>
@@ -1807,7 +1757,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="qsla warn"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">4:12</span> to breach</div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="dbody">
         <div class="dtitle">
           <span class="mono16">ESC-097</span><span class="mid">·</span>
@@ -1848,7 +1798,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="b-row" style="margin-top:8px;"><button class="b b-neu">Take over thread</button></div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -1885,11 +1835,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
   </div>
   <div class="body">
-    <div class="rail">
+    <div class="rail" role="navigation" aria-label="Console sections">
       <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-      <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation queue">
       <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
       <div class="qrow is-sel is-focus">
         <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">Neha B.</span></div>
@@ -1904,7 +1853,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Escalation detail and thread">
       <div class="dbody">
         <div class="dtitle">
           <span class="mono16">ESC-104</span><span class="mid">·</span>
@@ -1935,7 +1884,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <div class="b-row"><button class="b b-neu">Take over thread</button></div>
       </div>
     </div>
-    <div class="pane">
+    <div class="pane" role="region" aria-label="Co-pilot">
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
     </div>
@@ -2074,7 +2023,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       <div class="qhead"><span>Co-pilot</span></div>
       <div class="cp-body">
         <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
-        <div class="cp-result">
+        <div class="cp-result" role="status" aria-live="polite">
           Driver reported a 70-minute delay at <span class="mono-in">08:31</span>.
           Assistant offered two windows; both lapsed unheld.
           Driver has asked twice since <span class="mono-in">09:20</span> with no dock assigned.
@@ -2174,7 +2123,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
         <button class="cp-btn"><span class="cp-lead"></span>Fetch context</button>
         <div class="slabel" style="margin:8px 0;">Draft reply</div>
         <button class="cp-btn inact"><span class="cp-lead"></span>Draft a reply</button>
-        <div class="cp-result">Not offered on safety-related escalations — write this reply yourself.</div>
+        <div class="cp-result" role="status" aria-live="polite">Not offered on safety-related escalations — write this reply yourself.</div>
       </div>
     </div>
   </div>
@@ -2335,11 +2284,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
     </div>
     <div class="body">
-      <div class="rail">
+      <div class="rail" role="navigation" aria-label="Console sections">
         <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-        <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
       </div>
-      <div class="pane">
+      <div class="pane" role="region" aria-label="Escalation queue">
         <div class="qhead"><span>Escalations <span class="cnt">(7)</span></span></div>
         <div class="qrow is-sel">
           <div class="qrow-top"><span class="qid">ESC-104</span><span class="qowner">You</span></div>
@@ -2354,7 +2302,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
           <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">22m</span> to breach</div>
         </div>
       </div>
-      <div class="pane">
+      <div class="pane" role="region" aria-label="Escalation detail and thread">
         <div class="dbody">
           <div class="dtitle">
             <span class="mono16">ESC-104</span><span class="mid">·</span>
@@ -2368,7 +2316,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
           <div class="divider-takeover">You joined the thread</div>
         </div>
       </div>
-      <div class="pane">
+      <div class="pane" role="region" aria-label="Co-pilot">
         <div class="qhead"><span>Co-pilot</span></div>
         <div class="cp-body">
           <button class="cp-btn"><span class="cp-lead"></span>Summarise thread</button>
@@ -2429,7 +2377,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
 </p>
 <div class="strip">
   <div class="cardwrap"><div class="card-cap">Resolve variant · one reason, pre-selected</div>
-    <div class="modal" role="dialog" aria-labelledby="mt-resolve">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt-resolve">
       <h3 class="mtitle" id="mt-resolve">Resolve escalation <span class="mid">·</span> <span class="mono-in">ESC-104</span></h3>
       <div class="flabel" style="margin-top:0;">Reason</div>
       <div class="radio-row"><span class="radio on"><i></i></span> Issue fixed</div>
@@ -2444,7 +2392,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
     </div>
   </div>
   <div class="cardwrap"><div class="card-cap">Cancel variant · no reason chosen — commit Disabled, note failed validation on blur</div>
-    <div class="modal" role="dialog" aria-labelledby="mt-cancel2">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt-cancel2">
       <h3 class="mtitle" id="mt-cancel2">Cancel escalation <span class="mid">·</span> <span class="mono-in">ESC-104</span></h3>
       <div class="flabel" style="margin-top:0;">Reason</div>
       <div class="radio-row"><span class="radio"></span> Shipment cancelled</div>
@@ -2495,11 +2443,10 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       <div class="topbar-icons"><button class="tb-btn" aria-label="Notifications"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-bell"/></svg></button><button class="tb-btn" aria-label="Help"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-help"/></svg></button><button class="tb-btn" aria-label="Settings"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-settings"/></svg></button><button class="tb-btn" aria-label="Account"><span class="avatar" aria-hidden="true">AB</span></button></div>
     </div>
     <div class="body">
-      <div class="rail">
+      <div class="rail" role="navigation" aria-label="Console sections">
         <a class="active" href="#" aria-label="Escalations" aria-current="page"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-flag"/></svg></a>
-        <a href="#" aria-label="Profile"><svg aria-hidden="true" focusable="false" class="ic ic-lg"><use href="#i-user"/></svg></a>
       </div>
-      <div class="pane">
+      <div class="pane" role="region" aria-label="Escalation queue">
         <div class="qhead"><span>Escalations <span class="cnt">(6)</span></span></div>
         <div class="qrow settled">
           <div class="qrow-top"><span class="qid">ESC-102</span><span class="qowner">Neha B.</span></div>
@@ -2514,12 +2461,12 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
           <div class="qsla"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-timer"/></svg><span class="tab">12m</span> (soft)</div>
         </div>
       </div>
-      <div class="pane" style="display:flex;align-items:center;justify-content:center;">
+      <div class="pane" style="display:flex;align-items:center;justify-content:center;" role="region" aria-label="Escalation detail and thread">
         <div style="font-size:13px;line-height:1.4;color:var(--text-tertiary);padding:24px;text-align:center;">
           Select an escalation to see its detail and thread.
         </div>
       </div>
-      <div class="pane">
+      <div class="pane" role="region" aria-label="Co-pilot">
         <div class="qhead"><span>Co-pilot</span></div>
         <div class="cp-note">Available once you take over a thread.<br><br>Summarise, fetch context, and draft replies for your approval.</div>
       </div>
@@ -2537,7 +2484,7 @@ svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
       <div style="display:flex;gap:8px;align-items:flex-start;">
         <svg aria-hidden="true" focusable="false" class="ic ic-sm" style="margin-top:4px;color:var(--feedback-danger-border);"><use href="#i-circle-alert"/></svg>
         <div style="flex:1;min-width:0;">Retry send failed. Nothing has changed.</div>
-        <button class="b b-ghost" style="height:20px;width:20px;" aria-label="Dismiss"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button>
+        <button class="b b-ghost" style="height:32px;width:32px;margin:-6px;" aria-label="Dismiss"><svg aria-hidden="true" focusable="false" class="ic ic-xs"><use href="#i-x"/></svg></button>
       </div>
     </div>
     <div class="toast" role="status">

@@ -69,47 +69,46 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import Clock, resolve_clock
 from app.core.errors import AppError
 from app.scheduling import allocation
+from app.scheduling.holds import HeldSweepResult, sweep_held_holds
+
+__all__ = [
+    "DEFAULT_BATCH_LIMIT",
+    "DEFAULT_HELD_TTL_SECONDS",
+    "DEFAULT_PENDING_TTL_MINUTES",
+    "EXPIRY_REASON",
+    "ExpiredAppointment",
+    "HeldSweepResult",
+    "SweepResult",
+    "sweep_expired_appointments",
+    "sweep_held_holds",
+]
 
 logger = logging.getLogger(__name__)
 
 # D9: "Pending TTL = 15 min, then release + escalate" (SOLUTION_DESIGN.md section 0 locked
-# decisions). The deadline is *derived* as `booked_at + ttl`, not stored: `public.appointments` has
-# no deadline/expires_at column, so there is nowhere for section 7.5.1's `hold_for_information`
-# ("pauses the D9 clock exactly once", returning a `new_deadline`) to record an extension. Until
-# that column exists, a planner cannot buy time on a request -- flagged rather than worked around,
-# because faking it by touching `booked_at` would corrupt the request's own history.
+# decisions). The deadline is ordinarily *derived* as `booked_at + ttl` rather than stored.
+#
+# Issue #64 changed half of that: `public.appointments` now has an `expires_at` column
+# (20260829134929_d2_held_state_dock_occupancy.sql step 7) so that section 7.5.1's
+# `hold_for_information` ("pauses the D9 clock exactly once", returning a `new_deadline`) has
+# somewhere honest to record an extension -- previously there was nowhere, and faking it by
+# touching `booked_at` would have corrupted the request's own history. The *tool* is still not
+# built; the column and this sweeper's handling of it are, so that the first writer of it inherits
+# correct expiry behaviour instead of a column the sweeper silently ignores.
+#
+# The precedence rule, stated once here because it is the whole semantics of the column:
+# `expires_at IS NOT NULL` overrides the derived deadline; NULL means the derived deadline applies.
 DEFAULT_PENDING_TTL_MINUTES = 15
-# D2: "Default TTL 90 s, per-facility configurable." Declared here so the number lives beside the
-# D9 one, even though nothing can currently be swept against it (see below).
+# D2: "Default TTL 90 s, per-facility configurable."
 DEFAULT_HELD_TTL_SECONDS = 90
 DEFAULT_BATCH_LIMIT = 50
 
 EXPIRY_REASON = "PENDING_CONFIRMATION expired unactioned (D9, 15-minute TTL)"
 
-# Why the HELD half of this sweeper is a reported gap rather than code: the live schema has nowhere
-# to put a hold. Verified directly against production on 2026-08-23 --
-# `appointments_appointment_status_check` admits only PENDING_CONFIRMATION / CONFIRMED /
-# IN_PROGRESS / COMPLETED / CANCELLED / NO_SHOW / REJECTED / EXPIRED (no HELD), and the shipped
-# `public.dock_occupancy` (supabase/migrations/20260823060000_d1_correctness_bedrock.sql:175) has
-# neither the `state` column nor the `expires_at` column that D2's design shape
-# (SOLUTION_DESIGN.md section 0.8) puts a hold in. Emitting `held_expired: 0` on its own would read
-# as "nothing to do"; this string makes it read as "not implementable yet, and here is exactly
-# what is missing".
-HELD_SWEEP_UNSUPPORTED_REASON = (
-    "D2 HELD expiry is not implementable against the live schema: appointments has no HELD status "
-    "(appointments_appointment_status_check) and dock_occupancy has neither a state nor an "
-    "expires_at column, so no row can currently be in a hold. Needs the D2 columns from "
-    "SOLUTION_DESIGN.md section 0.8 before this leg does anything."
-)
-
-
-class HeldSweepResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    supported: bool
-    expired: int = 0
-    ttl_seconds: int
-    unsupported_reason: str | None = None
+# The D2 HELD leg moved to `app/scheduling/holds.py` when issue #53 gave the state a schema to live
+# in. It is re-exported here because `HeldSweepResult` is part of this module's public surface (the
+# `/internal/jobs/expiry-sweep` response embeds it) and callers should not have to know which of
+# the two modules currently owns the implementation.
 
 
 class ExpiredAppointment(BaseModel):
@@ -145,21 +144,6 @@ class SweepResult(BaseModel):
     held: HeldSweepResult
 
 
-def sweep_held_holds(*, ttl_seconds: int = DEFAULT_HELD_TTL_SECONDS) -> HeldSweepResult:
-    """D2's 90-second HELD sweep -- reported as unsupported, not silently skipped.
-
-    Kept as a real function with a real return value so the endpoint response, the log line and
-    `TESTING_STRATEGY.md`'s eventual `hold_expiry_vs_confirm` test all see the same explicit answer.
-    When the D2 columns land, this becomes the only place that has to change.
-    """
-    return HeldSweepResult(
-        supported=False,
-        expired=0,
-        ttl_seconds=ttl_seconds,
-        unsupported_reason=HELD_SWEEP_UNSUPPORTED_REASON,
-    )
-
-
 async def _assert_actor_exists(session: AsyncSession, actor_user_id: str) -> None:
     """Fail the whole sweep before it writes anything if the audit actor is not a real user.
 
@@ -189,6 +173,7 @@ async def _pending_candidates(
     session: AsyncSession,
     *,
     deadline: datetime,
+    now: datetime,
     limit: int,
 ) -> list[dict[str, Any]]:
     """Unlocked scan for rows past the D9 deadline. Cheap, bounded, and only a hint.
@@ -197,23 +182,34 @@ async def _pending_candidates(
     without a lock first keeps the locking statements short and lets the batch be bounded before any
     lock is taken, which is what keeps the whole cycle inside EventBridge's 5-second invocation
     timeout.
+
+    Two deadlines, one predicate (issue #64). A request whose `expires_at` a planner extended
+    through `hold_for_information` is due at *that* instant; every other request is due at
+    `booked_at + ttl`. The CASE picks per row rather than the caller picking per sweep, because a
+    single batch will routinely contain both kinds. Today no code writes `expires_at`, so the ELSE
+    branch is taken for 100% of rows and this scan is behaviourally identical to the pre-#64 one --
+    the column is wired up before its writer exists specifically so that it is not a trap for
+    whoever builds that writer.
     """
     rows = (
         await session.execute(
             text(
                 """
-                SELECT a.appointment_id, a.shipment_id, a.slot_id, a.booked_at,
+                SELECT a.appointment_id, a.shipment_id, a.slot_id, a.booked_at, a.expires_at,
                        sl.facility_id
                 FROM public.appointments a
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
                 WHERE a.appointment_status = 'PENDING_CONFIRMATION'
                   AND a.is_current = 1
-                  AND a.booked_at < :deadline
-                ORDER BY a.booked_at ASC
+                  AND CASE
+                        WHEN a.expires_at IS NOT NULL THEN a.expires_at < :now
+                        ELSE a.booked_at < :deadline
+                      END
+                ORDER BY COALESCE(a.expires_at, a.booked_at) ASC
                 LIMIT :limit
                 """
             ),
-            {"deadline": deadline, "limit": limit},
+            {"deadline": deadline, "now": now, "limit": limit},
         )
     ).mappings().all()
     return [dict(row) for row in rows]
@@ -375,6 +371,7 @@ async def sweep_expired_appointments(
     pending_ttl_minutes: int = DEFAULT_PENDING_TTL_MINUTES,
     held_ttl_seconds: int = DEFAULT_HELD_TTL_SECONDS,
     batch_limit: int = DEFAULT_BATCH_LIMIT,
+    held_enabled: bool = False,
 ) -> SweepResult:
     """One sweeper cycle. M8's "pending expiry releases capacity", D9's 15-minute TTL.
 
@@ -392,7 +389,7 @@ async def sweep_expired_appointments(
 
     await _assert_actor_exists(session, actor_user_id)
 
-    candidates = await _pending_candidates(session, deadline=deadline, limit=limit)
+    candidates = await _pending_candidates(session, deadline=deadline, now=now, limit=limit)
     expired: list[ExpiredAppointment] = []
     deferred_or_lost = 0
     for candidate in candidates:
@@ -444,15 +441,30 @@ async def sweep_expired_appointments(
         # of looking like a healthy sweep.
         batch_limit_reached=len(candidates) >= limit,
         expired=expired,
-        held=sweep_held_holds(ttl_seconds=held_ttl_seconds),
+        # D2's HELD leg, after the D9 work rather than before it. Ordering is not arbitrary: a
+        # lapsed hold blocks strictly less capacity than a sterilised PENDING row (90 seconds
+        # against 15 minutes), so if a cycle runs out of EventBridge's 5-second budget it should
+        # run out on the cheaper half. Its own transaction commits below, separately from the
+        # per-appointment commits above.
+        held=await sweep_held_holds(
+            session,
+            actor_user_id=actor_user_id,
+            now=now,
+            ttl_seconds=held_ttl_seconds,
+            batch_limit=limit,
+            enabled=held_enabled,
+        ),
     )
+    if result.held.expired:
+        await session.commit()
     logger.info(
         "expiry sweep: candidates=%d expired=%d deferred_or_lost=%d batch_limit_reached=%s "
-        "held_supported=%s",
+        "held_supported=%s held_expired=%d",
         result.pending_candidates,
         result.pending_expired,
         result.pending_deferred_or_lost,
         result.batch_limit_reached,
         result.held.supported,
+        result.held.expired,
     )
     return result

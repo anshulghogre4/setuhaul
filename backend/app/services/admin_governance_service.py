@@ -302,14 +302,95 @@ async def simulate_policy_weights(
     }
 
 
+async def get_active_policy_version(session: AsyncSession, ctx: ExecutionContext) -> dict[str, Any]:
+    """The currently-active `policy_versions` row, plus the weights the live engine is actually
+    running (A-G7, issue #75).
+
+    Two things need this and neither had a read before: `screens.md` section 4's Policy tab renders
+    "read-only current version" as the baseline an admin edits away from, and
+    `publish_policy_version`'s new `based_on_version_id` guard is unusable if there is no way to
+    learn what the current version id *is*. **Not in section 7.5.7's own catalog** -- flagged as an
+    addition rather than silently folded in, the same discipline
+    `planner_service.get_dock_block_impact` uses.
+
+    `live_weights` comes from `constraints.json`, not from the active row, and the two can honestly
+    disagree: `publish_policy_version`'s own docstring records that publishing writes a durable
+    decision but does **not** rewrite the file the ranking engine reads. Returning both, plus
+    `engine_matches_active_version`, states that divergence rather than letting the UI imply the
+    published version is live.
+    """
+    if not ctx.is_admin:
+        raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT policy_version_id, weights_json, published_at, published_by_user_id
+                FROM public.policy_versions
+                WHERE is_active = 1
+                """
+            )
+        )
+    ).mappings().first()
+
+    live = load_scheduling_constraints().ranking_policy
+    live_weights = dict(live.score_weights)
+    active: dict[str, Any] | None = None
+    if row is not None:
+        active = {
+            "policy_version_id": str(row["policy_version_id"]),
+            "published_at": row["published_at"],
+            "published_by_user_id": row["published_by_user_id"],
+            "weights": json.loads(row["weights_json"]),
+        }
+    return {
+        "as_of": _as_of(), "source": "postgresql", "active_version": active,
+        "live_weights": live_weights,
+        "live_priority_scores": dict(live.priority_scores or DEFAULT_PRIORITY_SCORES),
+        "engine_matches_active_version": (
+            active is not None and active["weights"] == live_weights
+        ),
+        "note": (
+            "live_weights is scheduling/constraints.json -- the file the ranking engine actually "
+            "reads. publish_policy_version records a decision durably; it does not rewrite that "
+            "file, so a just-published version can legitimately differ from what is running."
+        ),
+    }
+
+
 async def publish_policy_version(
     session: AsyncSession, ctx: ExecutionContext, *, weights: dict[str, Any], idempotency_key: str,
+    based_on_version_id: str | None = None,
 ) -> dict[str, Any]:
     """SS7.5.7 `publish_policy_version` -- creates a new, immutable `policy_versions` row (D7);
     never mutates a prior version. Does **not** write `scheduling/constraints.json`: that file is
     the live ranking engine's actual input and changing it is a deploy-time decision, not a runtime
     admin write -- this tool records the decision durably and auditably; wiring the live engine to
     read the active `policy_versions` row instead of the static file is separate, larger scope.
+
+    **`based_on_version_id` is the optimistic-concurrency guard `edge-cases.md` #3 requires**
+    (A-G7, issue #75): "if another admin publishes a version between this admin's simulation and
+    their own Publish attempt, the tool refuses with a named conflict -- same shape as
+    `confirm_request`'s `ALREADY_ACTIONED`." It is an argument section 7.5.7's table does not list,
+    so it is a deliberate extension of that catalog, not an implementation of it -- but without it
+    the refusal that edge case documents is not expressible at all: the pre-#75 tool cleared
+    whatever row happened to be active and inserted its own, so Admin A publishing on top of Admin
+    B's just-published version succeeded silently.
+
+    **It is required whenever an active version exists**, rather than optional-and-honoured. An
+    optional guard is not a guard: any caller that forgets the argument gets exactly the old
+    silent-overwrite behaviour back, which is the defect. The first-ever publish (no active row)
+    correctly takes no baseline.
+
+    **Why `FOR UPDATE`, and why the "no active row" branch is a conflict too.** Two genuinely
+    simultaneous publishes serialise on that row lock. Under READ COMMITTED the loser then
+    re-evaluates its `WHERE is_active = 1` against the winner's committed version of the row
+    (PostgreSQL "Transaction Isolation" 13.2.1 -- SELECT FOR UPDATE re-checks the updated row), and
+    the winner has set `is_active = 0`, so the loser sees **no** active row while holding a
+    `based_on_version_id` -- which is why "baseline supplied but nothing is active" is treated as
+    a conflict rather than a first publish. Before this change that same race did not silently
+    succeed either: it died on `idx_policy_versions_one_active` with a raw IntegrityError, i.e. a
+    500 rather than a named refusal.
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
@@ -318,10 +399,34 @@ async def publish_policy_version(
         raise AppError("Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400)
 
     route = "POST /api/v1/admin/policy/publish"
-    req_hash = payload_hash({"weights": weights})
+    req_hash = payload_hash({"weights": weights, "based_on_version_id": based_on_version_id})
     replay = await lookup_idempotency(session, key=key, user_id=ctx.user_id, route=route, request_hash=req_hash)
     if replay is not None:
         return {**replay["response"], "idempotent_replay": True}
+
+    baseline = (based_on_version_id or "").strip() or None
+    active = (
+        await session.execute(
+            text(
+                """
+                SELECT policy_version_id, published_by_user_id, published_at
+                FROM public.policy_versions
+                WHERE is_active = 1
+                FOR UPDATE
+                """
+            )
+        )
+    ).mappings().first()
+    current_id = str(active["policy_version_id"]) if active is not None else None
+
+    if current_id is not None and baseline is None:
+        raise AppError(
+            "Publishing over an existing active policy version requires based_on_version_id.",
+            code="BASE_VERSION_REQUIRED", status_code=422,
+            detail=f"The current active version is {current_id}.",
+        )
+    if baseline is not None and baseline != current_id:
+        raise await _policy_version_conflict(session, attempted_baseline=baseline, active=active)
 
     version_id = new_id("POLV")
     await session.execute(
@@ -339,10 +444,60 @@ async def publish_policy_version(
             "published_at": datetime.now(timezone.utc), "published_by": ctx.user_id,
         },
     )
-    result = {"as_of": _as_of(), "code": "PUBLISHED", "policy_version_id": version_id}
+    result = {
+        "as_of": _as_of(), "code": "PUBLISHED", "policy_version_id": version_id,
+        "superseded_version_id": current_id,
+    }
     await store_idempotency(session, key=key, user_id=ctx.user_id, route=route, request_hash=req_hash, response=result)
     await session.commit()
     return result
+
+
+async def _policy_version_conflict(
+    session: AsyncSession, *, attempted_baseline: str, active: Any
+) -> AppError:
+    """The loser-facing refusal for A-G7, shaped exactly like `allocation._already_actioned_error`.
+
+    Same code (`ALREADY_ACTIONED`), same 409, same "name the winning transition rather than a
+    generic failure" rule -- section 7.5.1's reason for that shape applies unchanged here: the
+    difference between "your click failed" and "someone else published first" is the difference
+    between retrying blind and re-simulating against what is actually current.
+
+    Costs one extra query **only on the error path**, and only in the branch where the active row
+    is already gone (the true simultaneous race) -- the common sequential case names the winner
+    from the row `publish_policy_version` already locked.
+    """
+    winner = active
+    if winner is None:
+        winner = (
+            await session.execute(
+                text(
+                    """
+                    SELECT policy_version_id, published_by_user_id, published_at
+                    FROM public.policy_versions
+                    ORDER BY published_at DESC
+                    LIMIT 1
+                    """
+                )
+            )
+        ).mappings().first()
+    if winner is None:
+        return AppError(
+            "Cannot publish against a baseline version that no longer exists: no policy version "
+            "has ever been published.",
+            code="ALREADY_ACTIONED", status_code=409,
+            detail=f"based_on_version_id={attempted_baseline}",
+        )
+    winner_id = str(winner["policy_version_id"])
+    return AppError(
+        f"Cannot publish this policy version: {winner_id} was published first. "
+        "Re-read the current version and re-run the simulation against it before publishing.",
+        code="ALREADY_ACTIONED", status_code=409,
+        detail=(
+            f"based_on_version_id={attempted_baseline}, current_version_id={winner_id}, "
+            f"published_by={winner['published_by_user_id']}"
+        ),
+    )
 
 
 # --------------------------------------------------------------------------------------

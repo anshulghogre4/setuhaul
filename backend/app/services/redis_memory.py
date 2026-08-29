@@ -142,6 +142,21 @@ class ConversationMemory:
         uid = normalize_memory_id(user_id, fallback="unknown-user")
         return f"setuhaul:chat:{uid}:active"
 
+    def _thread_pointer_key(self, user_id: str, thread_id: str) -> str:
+        """Which session a given thread's history lives under (E5.2, issue #58).
+
+        The history key is namespaced by user **and session and thread**. An ops coordinator taking
+        over a thread knows the thread id (it is `chat_threads.thread_id`) and can derive the
+        driver's `user_id` from Postgres, but has no way to know which chat *session* the driver's
+        bubbles were appended under -- and without it the history key cannot be reconstructed at
+        all. `_active_key` only answers this for the driver's single most recent thread; this
+        answers it per thread. Written inside `append_turn`'s existing pipeline, so it costs one
+        extra queued command and zero extra round trips.
+        """
+        uid = normalize_memory_id(user_id, fallback="unknown-user")
+        tid = normalize_memory_id(thread_id, fallback="unknown-thread")
+        return f"setuhaul:chat:{uid}:thread:{tid}:session"
+
     def _recommendation_key(self, *, user_id: str, shipment_id: str) -> str:
         uid = normalize_memory_id(user_id, fallback="unknown-user")
         shipment = normalize_memory_id(shipment_id, fallback="unknown-shipment")
@@ -400,6 +415,12 @@ class ConversationMemory:
             "thread_id": normalize_memory_id(thread_id, fallback="unknown-thread"),
         }
 
+        # E5.2 (issue #58): one extra queued command inside the pipeline that already runs, not a
+        # new round trip -- see `_thread_pointer_key`. This is what makes an ops coordinator's
+        # `OPERATIONS` message able to find the driver's own history key later.
+        pointer_key = self._thread_pointer_key(user_id, thread_id)
+        pointer_payload = {"session_id": normalize_memory_id(session_id)}
+
         if self._async_client is not None:
             try:
                 pipe = self._async_client.pipeline()
@@ -410,6 +431,7 @@ class ConversationMemory:
                     skey = self._session_key(user_id, thread_id, session_id)
                     pipe.set(skey, json.dumps(session), ex=TTL_SECONDS)
                 pipe.set(self._active_key(user_id), json.dumps(active_payload), ex=TTL_SECONDS)
+                pipe.set(pointer_key, json.dumps(pointer_payload), ex=TTL_SECONDS)
                 with self._timed("native_pipeline_append_turn"):
                     await pipe.execute()
                 self.degraded = False
@@ -433,6 +455,7 @@ class ConversationMemory:
                 skey = self._session_key(user_id, thread_id, session_id)
                 pipe.set(skey, json.dumps(session), ex=TTL_SECONDS)
             pipe.set(self._active_key(user_id), json.dumps(active_payload), ex=TTL_SECONDS)
+            pipe.set(pointer_key, json.dumps(pointer_payload), ex=TTL_SECONDS)
             with self._timed("pipeline_append_turn"):
                 pipe.exec()
 
@@ -479,6 +502,109 @@ class ConversationMemory:
             self.degrade_reason = f"UPSTASH_ACTIVE_READ_FAILED:{type(exc).__name__}"
             return None
 
+    def resolve_thread_session_id(self, *, user_id: str, thread_id: str) -> str | None:
+        """Which Redis session namespace this user's `thread_id` history lives under.
+
+        Tries the per-thread pointer `append_turn` writes, then falls back to the user's single
+        `active` pointer when it happens to name the same thread (covers a thread whose last turn
+        predates this pointer existing but is still the driver's current conversation). Returns
+        `None` when neither answers -- which the caller must treat as "cannot deliver", never as
+        "deliver to the default session", since guessing would append a coordinator's message into
+        a conversation the driver is not reading.
+        """
+        if self._client is None:
+            return None
+        target = normalize_memory_id(thread_id, fallback="unknown-thread")
+        try:
+            raw = self._client.get(self._thread_pointer_key(user_id, thread_id))
+            if raw:
+                data = raw if isinstance(raw, dict) else json.loads(raw)
+                session_id = str(data.get("session_id") or "").strip()
+                if session_id:
+                    return session_id
+        except Exception as exc:  # noqa: BLE001
+            self.degraded = True
+            self.degrade_reason = f"UPSTASH_THREAD_POINTER_READ_FAILED:{type(exc).__name__}"
+            logger.warning("Upstash thread pointer read failed: %s", type(exc).__name__)
+            return None
+
+        active = self.get_active_conversation(user_id=user_id)
+        if active and active["thread_id"] == target:
+            return active["session_id"]
+        return None
+
+    async def append_agent_side_message(
+        self,
+        *,
+        user_id: str,
+        thread_id: str,
+        session_id: str,
+        content: str,
+        sender: str,
+        sender_name: str | None = None,
+        message_id: str | None = None,
+        message_ts: str | None = None,
+    ) -> bool:
+        """Project one already-committed non-driver message into the driver's live feed (issue #58).
+
+        **This is a projection, not a write of record.** The authoritative row is the
+        `chat_messages` row the caller has already committed to PostgreSQL; this only makes it
+        visible in the bounded 24h Redis feed the driver's chat surface actually renders
+        (`chat.py`'s `/chat/history` and `run_assistant`'s per-turn history both read Redis, and
+        neither has ever read `chat_messages`). Returning `False` therefore means "durably
+        recorded but not shown live", which is a different and much weaker failure than a lost
+        message -- callers surface it rather than swallowing it.
+
+        `role` stays `"assistant"` deliberately, rather than a new `"operations"`/`"system"` role:
+        every existing consumer of this list (`load_conversation_for_restore`'s role filter,
+        `run_assistant._prepare_turn`'s history→LangChain mapping, the driver chat UI's bubble
+        renderer) understands exactly two roles, and a third would be silently dropped by all
+        three. Provenance rides on `sender`/`sender_name` instead, which are additive and cannot
+        break a consumer that ignores them. It also means the assistant, after hand-back, sees
+        what the coordinator actually promised the driver instead of a hole in the transcript.
+        """
+        hkey = self._history_key(user_id, thread_id, session_id)
+        payload = {
+            "role": "assistant",
+            "content": content,
+            "session_id": normalize_memory_id(session_id),
+            "sender": sender,
+            "sender_name": sender_name,
+            "message_id": message_id,
+            "ts": message_ts,
+        }
+
+        if self._async_client is not None:
+            try:
+                pipe = self._async_client.pipeline()
+                pipe.rpush(hkey, json.dumps(payload))
+                pipe.ltrim(hkey, -HISTORY_LIMIT, -1)
+                pipe.expire(hkey, TTL_SECONDS)
+                with self._timed("native_append_agent_side_message"):
+                    await pipe.execute()
+                return True
+            except Exception as exc:  # noqa: BLE001
+                self.degraded = True
+                self.degrade_reason = f"NATIVE_REDIS_PROJECTION_FAILED:{type(exc).__name__}"
+                logger.warning("Native Redis projection failed: %s", type(exc).__name__)
+                return False
+
+        if self._client is None:
+            return False
+        try:
+            pipe = self._client.pipeline()
+            pipe.rpush(hkey, json.dumps(payload))
+            pipe.ltrim(hkey, -HISTORY_LIMIT, -1)
+            pipe.expire(hkey, TTL_SECONDS)
+            with self._timed("append_agent_side_message"):
+                pipe.exec()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.degraded = True
+            self.degrade_reason = f"UPSTASH_PROJECTION_FAILED:{type(exc).__name__}"
+            logger.warning("Upstash projection failed: %s", type(exc).__name__)
+            return False
+
     def load_conversation_for_restore(
         self,
         *,
@@ -516,11 +642,19 @@ class ConversationMemory:
             "source": "upstash_redis",
             "thread_id": normalize_memory_id(resolved_thread, fallback="unknown-thread"),
             "session_id": normalize_memory_id(resolved_session),
+            # E5.2 (issue #58): `sender`/`sender_name` are additive and always present, so a driver
+            # client can tell an ops coordinator's message and the takeover divider apart from an
+            # ordinary assistant reply. Defaulted for every message written before this existed,
+            # rather than emitted as `null` only sometimes -- a consumer branching on this field
+            # should never have to handle a third "unknown" case.
             "messages": [
                 {
                     "role": item.get("role"),
                     "content": str(item.get("content") or ""),
                     "client_message_id": item.get("client_message_id"),
+                    "sender": item.get("sender")
+                    or ("DRIVER" if item.get("role") == "user" else "AGENT"),
+                    "sender_name": item.get("sender_name"),
                 }
                 for item in history
                 if item.get("role") in {"user", "assistant"}

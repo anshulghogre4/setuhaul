@@ -130,9 +130,15 @@
   --color-priority-normal: var(--neutral-400);
   --color-priority-low: var(--neutral-200);
 
-  /* ---- TTL urgency (color.md - TTL urgency) ---- */
+  /* ---- TTL urgency (color.md - TTL urgency) ----
+     amber-600 raised to amber-700 (corrected 2026-08-29, M5/E5.3 Fork E): color.md's
+     20-50% band assigned amber-600 -- the Contrast section marks it 3.2:1, fails normal
+     text -- to a countdown that renders as small text (12px on the planner dock board).
+     Same defect class as escalation-sla-warning, which E5.2 found and fixed one surface
+     earlier. LIGHT ONLY, matching color.md's own note: dark's amber-400 already passes
+     and color.md states no dark-specific change. */
   --color-urgent: var(--red-600);
-  --color-urgent-mid: var(--amber-600);
+  --color-urgent-mid: var(--amber-700);
   --color-expired-fg: var(--neutral-500);
   --color-expired-bg: var(--neutral-100);
 
@@ -142,7 +148,11 @@
   --color-success-border: var(--green-600);
   --color-warning-bg: var(--amber-50);
   --color-warning-fg: var(--amber-700);
-  --color-warning-border: var(--amber-500);
+  /* amber-500 raised to amber-600 in light mode (corrected 2026-08-29, found independently
+     by M5/E5.4, applied here by M5/E5.3 since this is the shared token file): amber-500 on
+     a light page background measures 2.05:1, under WCAG 1.4.11's 3:1 non-text bar -- the
+     same failure state-held-border's original value had. Dark unchanged per color.md. */
+  --color-warning-border: var(--amber-600);
   --color-danger-bg: var(--red-50);
   --color-danger-fg: var(--red-700);
   --color-danger-border: var(--red-600);
@@ -154,8 +164,15 @@
 
   /* ---- escalation SLA -- the only danger colour in the stepper (U60) ---- */
   --color-sla-ok: var(--neutral-600); /* = text-secondary, i.e. deliberately no colour */
-  --color-sla-warning: var(--amber-600);
-  --color-sla-breach: var(--red-600);
+  /* amber-600/red-600 measured 3.04:1 / 4.44:1 (on a selected row) during M5/E5.2's ops-console
+     build (2026-08-29) -- amber-600 fails AA for normal text outright, red-600 only cleared
+     4.5:1 on the unselected background. color.md's escalation-severity table was corrected the
+     same day to amber-700/red-700 (4.58-4.80:1 / 5.95-6.18:1); this was the one live token that
+     doc fix had not yet reached -- same gap class as the state-shown/held border fix E5.1 found
+     already shipped in code but never written back to color.md, just the other direction here
+     (doc fixed, code hadn't caught up yet). Dark unchanged: amber-400/red-400 already pass. */
+  --color-sla-warning: var(--amber-700);
+  --color-sla-breach: var(--red-700);
 
   /* ---- facility accent (U59) ----
      NOT here.  See the `--facility-*` block in :root below, and the measured

@@ -1,8 +1,11 @@
 """Gate and yard REST surface (`E3.6`, issue #30, `SOLUTION_DESIGN.md` section 7.5.2).
 
-The five `services/gate_yard_service.py` writes. Thin by the E2.2 rule: authorise, delegate,
-envelope -- state-machine enforcement, bind-type handling and the `facility_checkins` write all
-live in the service, not here.
+The five `services/gate_yard_service.py` writes, plus the one
+`services/gate_yard_reads.py` read (`GY-G1`, issue #67) that reaches them -- until that read
+existed this router had zero `GET` routes, so `UI-UX/04-gate-yard-kiosk/flows-and-states.md`
+Flow 1 (the entry point to every other screen on the surface) had no endpoint at all. Thin by the
+E2.2 rule: authorise, delegate, envelope -- state-machine enforcement, bind-type handling, match
+semantics and the `facility_checkins` write all live in the services, not here.
 
 Role gate: `WAREHOUSE_PLANNER` and `FACILITY_MANAGER` plus `ADMIN`. Section 7.5.2's own "Gate/yard
 officer" persona (`SOLUTION_DESIGN.md` line 328, `auth-and-scoping.md` line 200) has no seeded DB
@@ -17,7 +20,7 @@ same role-gate-agrees-with-scope-rule shape `carrier.py` uses.
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +28,7 @@ from app.core.deps import get_db_session, get_request_id, require_roles
 from app.core.envelope import ok
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
+from app.services.gate_yard_reads import MAX_QUERY_LENGTH, search_gate_yard_trucks
 from app.services.gate_yard_service import (
     record_dock_in,
     record_gate_in,
@@ -81,6 +85,28 @@ def _require_idempotency_key(idempotency_key: str | None) -> str:
             "Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400
         )
     return idempotency_key.strip()
+
+
+@router.get("/trucks")
+async def search_trucks(
+    request: Request,
+    ctx: GateCtx,
+    session: DbSession,
+    query: Annotated[str, Query(min_length=1, max_length=MAX_QUERY_LENGTH)],
+) -> dict[str, Any]:
+    """`GY-G1` (issue #67) / section 7.5.2, `04-gate-yard-kiosk/flows-and-states.md` Flow 1.
+
+    No `facility_id` parameter, deliberately (`M15`/`NFR-019`): the scope is derived from the
+    verified token inside the service. `flows-and-states.md` Flow 8 also makes this the *refresh*
+    endpoint -- `edge-cases.md` #3 requires the kiosk to re-fetch a truck's current state after an
+    `INVALID_TRANSITION`, and re-searching that shipment id returns exactly that one truck, so no
+    separate per-shipment route exists.
+
+    No `try/rollback` wrapper unlike this router's five writes: nothing here opens a transaction to
+    roll back.
+    """
+    result = await search_gate_yard_trucks(session, ctx, query=query)
+    return ok(result.model_dump(), get_request_id(request))
 
 
 @router.post("/shipments/{shipment_id}/gate-in")

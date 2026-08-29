@@ -1,7 +1,8 @@
-"""Planner dock-blocking REST surface (`E3.6`, issue #30, `SOLUTION_DESIGN.md` section 7.5.1).
+"""Planner console REST surface (`E3.6`/issue #30, issue #60, `SOLUTION_DESIGN.md` section 7.5.1).
 
-`block_dock` / `end_dock_block` / the `get_dock_block_impact` preview -- the three functions
-`services/planner_service.py` implements. Thin by the E2.2 rule: authorise, delegate, envelope.
+`get_planner_queue` plus `block_dock` / `end_dock_block` / the `get_dock_block_impact` preview --
+the functions `services/planner_service.py` implements. Thin by the E2.2 rule: authorise,
+delegate, envelope.
 
 Role gate: `WAREHOUSE_PLANNER` (section 7.5.1's own persona) plus `ADMIN` (the project's existing
 write-authorised superset -- see `core/execution_context.py::is_admin`). Deliberately narrower
@@ -21,7 +22,14 @@ from app.core.deps import get_db_session, get_request_id, require_roles
 from app.core.envelope import ok
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
-from app.services.planner_service import block_dock, end_dock_block, get_dock_block_impact
+from app.services.planner_service import (
+    DEFAULT_QUEUE_LIMIT,
+    MAX_QUEUE_LIMIT,
+    block_dock,
+    end_dock_block,
+    get_dock_block_impact,
+    get_planner_queue,
+)
 
 router = APIRouter(prefix="/api/v1/planner", tags=["planner"])
 
@@ -43,6 +51,29 @@ def _require_idempotency_key(idempotency_key: str | None) -> str:
             "Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400
         )
     return idempotency_key.strip()
+
+
+@router.get("/queue")
+async def planner_queue(
+    request: Request,
+    ctx: PlannerCtx,
+    session: DbSession,
+    facility_id: Annotated[str | None, Query()] = None,
+    horizon_hours: Annotated[int | None, Query(ge=1, le=168)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_QUEUE_LIMIT)] = DEFAULT_QUEUE_LIMIT,
+) -> dict[str, Any]:
+    """FR-PLN-010 / section 7.5.1 `get_planner_queue` -- the seven-field row of section 7.3.
+
+    `facility_id` is accepted but never trusted: the service passes it through
+    `repositories.scope.resolve_facility_scope`, so it can only narrow a global-read persona's
+    view or match an operator's own facility (M15/`NFR-019`). It exists because an `ADMIN` (the
+    other role this router admits) holds global read scope and therefore has to name which
+    facility's queue they want.
+    """
+    result = await get_planner_queue(
+        session, ctx, facility_id=facility_id, horizon_hours=horizon_hours, limit=limit
+    )
+    return ok(result.model_dump(), get_request_id(request))
 
 
 @router.get("/docks/{dock_id}/block-impact")

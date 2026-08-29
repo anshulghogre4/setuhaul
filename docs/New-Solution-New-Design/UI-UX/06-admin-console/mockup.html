@@ -46,23 +46,6 @@
 
   --r-sm:4px; --r-md:6px; --r-lg:8px;
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --feedback-warning-bg:#3a2c10; --feedback-warning-text:#FBBF24; --feedback-warning-border:var(--amber-500);
-    --feedback-danger-bg:#3f1414;  --feedback-danger-text:#F87171;  --feedback-danger-border:var(--red-500);
-    --board-bg:var(--neutral-950);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-  }
-}
 :root[data-theme="dark"]{
   --surface-base:var(--neutral-950);
   --surface-raised:var(--neutral-900);
@@ -112,16 +95,26 @@ body{ margin:0; background:var(--board-bg); color:var(--board-ink); font-family:
 
 .toolbar{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
 .filter{ font-size:12px; color:var(--text-tertiary); border:1px solid var(--border-default); border-radius:var(--r-sm); padding:8px 12px; }
-.searchbar{ flex:1; font-size:13px; color:var(--text-tertiary); background:var(--surface-hover); border-radius:var(--r-sm); padding:8px 12px; }
+/* R2 2026-08-29: was --text-tertiary. #64748B on surface-hover #F1F5F9 measured 4.34:1,
+   below WCAG AA 4.5 for 13px normal text. --text-secondary #475569 measures 7.24:1.
+   Same defect class as E5.2/R5 on the ops board. */
+.searchbar{ flex:1; font-size:13px; color:var(--text-secondary); background:var(--surface-hover); border-radius:var(--r-sm); padding:8px 12px; }
 .btn{ font-size:13px; font-weight:600; padding:8px 16px; border-radius:var(--r-sm); border:1px solid transparent; }
 .btn-primary{ background:var(--blue-600); color:#fff; }
 .btn-neutral{ background:var(--surface-raised); border-color:var(--border-default); color:var(--text-primary); }
 
 table.a{ width:100%; border-collapse:collapse; font-size:14px; }
-table.a th{ text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); padding:12px 16px; border-bottom:1px solid var(--border-subtle); }
+/* R16 2026-08-29: was 11px/700. typography.md has no 11px/700 token -- `text-micro` is 11/1.3/500
+   and column headers are `text-label` (12px/600/0.04em), which the numbered artboards' own
+   `table.tbl th` already uses. Snapped to the token the rest of the file follows. */
+table.a th{ text-align:left; font:600 12px/1.33 var(--font-ui); text-transform:uppercase; letter-spacing:.04em; color:var(--text-tertiary); padding:12px 16px; border-bottom:1px solid var(--border-subtle); }
 table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); height:44px; vertical-align:middle; }
 .mono{ font-family:var(--font-data); }
-.status-active{ color:var(--green-700); font-weight:600; }
+/* R17 2026-08-29: was a hardcoded var(--green-700), so :root[data-theme="dark"] never took effect --
+   measured 3.68:1 under dark (need 4.5). --status-active is the token this exact case exists for
+   (green-700 light / green-400 dark, already defined below); .st-on already references it correctly
+   elsewhere in this file -- this was the one holdout. */
+.status-active{ color:var(--status-active); font-weight:600; }
 .status-inactive{ color:var(--text-tertiary); }
 .overflow{ color:var(--text-tertiary); font-weight:700; }
 
@@ -190,28 +183,6 @@ table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); hei
 
   --chev:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-overlay:var(--neutral-800);
-    --surface-sunken:var(--neutral-950);
-    --text-disabled:var(--neutral-600);
-    --border-strong:var(--neutral-600);
-    --border-focus:var(--blue-400);
-    --interactive-disabled-bg:var(--neutral-800);
-    --interactive-disabled-text:var(--neutral-600);
-    --feedback-success-bg:#0D252E; /* green-900 @25% over neutral-900 */
-    --feedback-success-text:var(--green-400);
-    --feedback-success-border:var(--green-500);
-    --feedback-danger-border:var(--red-500);
-    --status-active:var(--green-400);
-    --shadow-sm:none;
-    --shadow-md:0 4px 12px rgba(0,0,0,.40);
-    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
-    --scrim:rgba(0,0,0,.65);
-    --skeleton:var(--neutral-700);
-    --chev:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  }
-}
 :root[data-theme="dark"]{
   --surface-overlay:var(--neutral-800);
   --surface-sunken:var(--neutral-950);
@@ -252,6 +223,11 @@ table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); hei
 .tab2{appearance:none;border:0;background:transparent;font:600 13px/1 var(--font-ui);color:var(--text-tertiary);
       padding:8px 12px;height:44px;border-radius:var(--r-sm);cursor:pointer;}
 .tab2[aria-selected="true"]{background:var(--surface-hover);color:var(--blue-600);}
+/* R19 2026-08-29: no dark override existed -- measured 2.83:1 under data-theme="dark" (need 4.5), since
+   surface-hover darkens but blue-600 does not lighten to compensate. --blue-400 is the token already used
+   for this exact light-on-dark-surface case (--border-focus below). Same pattern as .menu/.modal's own
+   dark border overrides just below. */
+:root[data-theme="dark"] .tab2[aria-selected="true"]{color:var(--blue-400);}
 .tbicons{margin-left:auto;display:flex;align-items:center;gap:16px;}
 .ibtn{appearance:none;background:transparent;border:0;color:var(--text-tertiary);width:44px;height:44px;
       display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-md);cursor:pointer;}
@@ -269,9 +245,19 @@ table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); hei
 .pill{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;font:400 12px/1 var(--font-ui);
       color:var(--text-tertiary);background:var(--surface-raised);border:1px solid var(--border-default);
       border-radius:var(--r-sm);cursor:pointer;}
+/* R2 2026-08-29: --text-tertiary on surface-hover measured 4.34:1 (below AA). Raised one step.
+   R7 2026-08-29: the input was 19px tall inside a 40px wrapper, so its true hit area (measured by
+   hit-testing, not box model) was 81x19 -- under WCAG 2.2 SC 2.5.8s 24x24 Level AA minimum.
+   .srch is now a <label>, so the whole 40px row forwards the click to the input. */
 .srch{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
-      background:var(--surface-hover);border-radius:var(--r-sm);color:var(--text-tertiary);font-size:13px;}
+      background:var(--surface-hover);border-radius:var(--r-sm);color:var(--text-secondary);font-size:13px;
+      cursor:text;}
 .srch input{border:0;background:transparent;font:400 13px/1 var(--font-ui);color:var(--text-primary);width:100%;outline:none;}
+/* R24 2026-08-29 (web-design-guidelines gate): outline:none above had no replacement anywhere in the
+   file -- no artboard demonstrated a focused search box, and this is real CSS (not a static per-artboard
+   class) so :focus-within genuinely lights up when clicked in a live render, unlike .is-kbfocus which
+   only exists as a manually-applied demo class. Same ring token every other focusable control uses. */
+.srch:focus-within{box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus);}
 .popwrap{position:relative;}
 
 /* ---------- buttons (components.md §1) ---------- */
@@ -283,9 +269,23 @@ table.a td{ padding:12px 16px; border-bottom:1px solid var(--border-subtle); hei
 .b-neu.is-hover{background:var(--surface-hover);}
 .b-des{background:var(--red-600);color:#fff;}
 .b-cau{background:var(--feedback-warning-bg);border-color:var(--feedback-warning-border);color:var(--feedback-warning-text);}
-.b:disabled{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text);border-color:transparent;cursor:not-allowed;}
-.b-link{min-width:0;height:auto;padding:0;background:transparent;border:0;color:var(--text-secondary);
+/* R5 2026-08-29: these seven commit buttons were natively `disabled`, which removes them from the
+   tab order -- so the `title` and `aria-describedby` reason each already carried was unreachable to
+   the exact user this folder's accessibility.md writes the rule for ("a screen-reader user must be
+   told the button is unavailable and why ... not discover it only by a failed activation attempt").
+   aria-disabled + tabindex="0" keeps the Disabled *appearance* (components.md §18) while making the
+   explanation reachable on focus, which is what Button §1's "always paired with a tooltip" assumes. */
+.b:disabled,.b[aria-disabled="true"]{background:var(--interactive-disabled-bg);color:var(--interactive-disabled-text);border-color:transparent;cursor:not-allowed;}
+/* R6 2026-08-29: measured hit area 18.4x18.2 (Resend / Revoke / Try again) -- under WCAG 2.2
+   SC 2.5.8's 24x24 Level AA minimum. Height grown to 44px via an inset overlay.
+   R20 2026-08-29 correction: that fix only extended height -- `left:0;right:0` matched the link's own
+   text width exactly, so Resend/Revoke (~18.5px wide) still measured under 24px on the *width* axis
+   after R6 shipped. WCAG 2.5.8 requires both dimensions. `.chipx::after{inset:-12px}` -- the technique
+   R6's own comment claimed this used -- actually extends all four sides; this did not. Fixed to match:
+   -6px each side (Resend/Revoke -> ~30.5px effective width; "Try again", already 54px wide, unaffected). */
+.b-link{position:relative;min-width:0;height:auto;padding:0;background:transparent;border:0;color:var(--text-secondary);
         font:600 13px/1.4 var(--font-ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+.b-link::after{content:"";position:absolute;left:-6px;right:-6px;top:50%;height:44px;transform:translateY(-50%);}
 .is-kbfocus{box-shadow:0 0 0 2px var(--surface-raised),0 0 0 4px var(--border-focus);}
 .footer-actions{display:flex;justify-content:flex-end;align-items:center;gap:16px;margin-top:24px;}
 
@@ -312,7 +312,10 @@ tr.is-focus{box-shadow:inset 0 0 0 2px var(--surface-raised),inset 0 0 0 4px var
                color:var(--feedback-warning-text);border:1px solid var(--feedback-warning-border);white-space:nowrap;}
 
 /* ---------- floating layer (elevation tier 3) ---------- */
-.menu{position:absolute;z-index:400;background:var(--surface-overlay);border:1px solid var(--border-subtle);
+/* R12 2026-08-29: overscroll-behavior was absent file-wide (0 occurrences). The ops board
+   carries it on its modals; this one did not. A scrollable overlay without it chains its
+   scroll to the page underneath. */
+.menu{overscroll-behavior:contain;position:absolute;z-index:400;background:var(--surface-overlay);border:1px solid var(--border-subtle);
       border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:4px;min-width:200px;}
 .menu button,.menu label{display:flex;width:100%;align-items:center;gap:8px;height:44px;padding:0 12px;
       font:400 13px/1 var(--font-ui);color:var(--text-primary);background:transparent;border:0;
@@ -320,16 +323,14 @@ tr.is-focus{box-shadow:inset 0 0 0 2px var(--surface-raised),inset 0 0 0 4px var
 .menu button.is-hover{background:var(--surface-hover);}
 .menu .sep{height:1px;background:var(--border-subtle);margin:4px 0;}
 .menu .danger{color:var(--feedback-danger-text);}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .menu{border-color:var(--border-default);}}
 :root[data-theme="dark"] .menu{border-color:var(--border-default);}
 
 /* ---------- overlay layer (tier 4) ---------- */
 .scrim{background:var(--scrim);display:flex;justify-content:center;padding:40px 24px;min-height:320px;}
-.modal{width:640px;max-width:100%;background:var(--surface-overlay);border:1px solid transparent;
+.modal{overscroll-behavior:contain;width:640px;max-width:100%;background:var(--surface-overlay);border:1px solid transparent;
        border-radius:var(--r-xl);box-shadow:var(--shadow-lg);padding:24px;}
 .modal-sm{width:480px;}
 .modal h2{font:600 20px/1.4 var(--font-ui);letter-spacing:-.01em;margin:0 0 16px;color:var(--text-primary);}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .modal{border-color:var(--border-default);}}
 :root[data-theme="dark"] .modal{border-color:var(--border-default);}
 
 /* ---------- form controls (components.md §12) ---------- */
@@ -391,7 +392,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue-600);}
 
 /* ---------- policy editor ---------- */
 .col800{max-width:800px;}
-.verhdr{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);padding-bottom:12px;
+/* R18 2026-08-29: was --text-tertiary, measured 4.34:1 against surface-hover/surface-raised (below AA
+   4.5 for 13px normal text). Same defect class as R2/R5 on this file and E5.2/E5.3's own R5-R8. */
+.verhdr{font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);padding-bottom:12px;
         border-bottom:1px solid var(--border-subtle);margin-bottom:20px;}
 .tiers{display:flex;flex-wrap:wrap;align-items:baseline;gap:24px;margin-bottom:20px;}
 .tiers dt{font:600 12px/1.33 var(--font-ui);letter-spacing:.04em;text-transform:uppercase;color:var(--text-tertiary);}
@@ -402,17 +405,25 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue-600);}
 
 /* ---------- simulation panel ---------- */
 .sim{background:var(--surface-hover);border-radius:var(--r-md);padding:20px;margin-top:16px;}
-.sim .cap{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);margin:0 0 4px;}
+/* R18 2026-08-29: same 4.34:1 defect as .verhdr above. */
+.sim .cap{font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);margin:0 0 4px;}
 .sim .head{font:700 20px/1.25 var(--font-ui);letter-spacing:-.01em;color:var(--text-primary);margin:0 0 12px;
            font-variant-numeric:tabular-nums;}
-.sim.is-stale .head,.sim.is-stale .cap,.sim.is-stale .caselist{color:var(--text-tertiary);}
+/* R22 2026-08-29: this rule's higher specificity ((0,3,0) vs .sim .cap's (0,2,0)) was silently
+   re-breaking .cap back to text-tertiary on the stale-simulation state specifically -- the R18 fix above
+   never reached it. .cap is 13px/400 (needs 4.5:1, text-tertiary measures 4.34:1); .head is 20px/700,
+   already clears the 3:1 large-text threshold at text-tertiary, so it -- and .caselist, which carries no
+   text of its own -- are left as-is. */
+.sim.is-stale .head,.sim.is-stale .caselist{color:var(--text-tertiary);}
+.sim.is-stale .cap{color:var(--text-secondary);}
 .caselist{border-top:1px solid var(--border-subtle);}
 details.case{border-bottom:1px solid var(--border-subtle);}
 details.case>summary{display:flex;align-items:flex-start;gap:8px;padding:6px 0;list-style:none;cursor:pointer;
                      font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);}
 details.case>summary::-webkit-details-marker{display:none;}
 details.case[open]>summary .ic{transform:rotate(90deg);}
-.moreline{padding:6px 0;font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);}
+/* R18 2026-08-29: same 4.34:1 defect as .verhdr above. */
+.moreline{padding:6px 0;font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);}
 .simfoot{display:flex;gap:8px;margin-top:24px;}
 .sk{background:var(--skeleton);border-radius:var(--r-sm);animation:skpulse 1600ms ease-in-out infinite;}
 @keyframes skpulse{0%,100%{opacity:1}50%{opacity:.45}}
@@ -425,13 +436,16 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
 .empty p{font:400 14px/1.5 var(--font-ui);color:var(--text-secondary);margin:8px 0 0;max-width:60ch;}
 .empty .act{margin-top:24px;display:flex;gap:8px;}
 
-:root{ color-scheme:light dark; }
+:root{ color-scheme:light; }
+:root[data-theme="dark"]{ color-scheme:dark; }
 
 /* ---------- helper text ----------
    `.hint` was used in the markup above before it was ever declared. 13px/1.4/400
    is typography.md's `text-sm` (Secondary/supporting text); colour is the
    existing `--text-tertiary` functional token. No new value introduced. */
-.hint{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);margin:8px 0 0;}
+/* R18 2026-08-29: same 4.34:1 defect as .verhdr above -- this instance carries the fairness-simulation
+   explainer text (edge-cases.md's "never composed prose" receipt copy), which must be legible. */
+.hint{font:400 13px/1.4 var(--font-ui);color:var(--text-secondary);margin:8px 0 0;}
 .pb-sm{font-size:13px;line-height:1.5;}
 .tiers dd{margin:0;}
 .wlabel-note{font:400 13px/1.4 var(--font-ui);color:var(--text-tertiary);}
@@ -460,23 +474,33 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
   <div class="frame">
     <div class="topbar">
       <div class="brand">Admin</div>
-      <div class="tab active">Users</div><div class="tab">Facility Rules</div><div class="tab">Policy</div><div class="tab">Audit</div>
-      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections"><button type="button" class="tab2" role="tab" id="tha-users" aria-controls="thpa" aria-selected="true" tabindex="0">Users</button><button type="button" class="tab2" role="tab" id="tha-rules" aria-controls="thpa" aria-selected="false" tabindex="-1">Facility Rules</button><button type="button" class="tab2" role="tab" id="tha-policy" aria-controls="thpa" aria-selected="false" tabindex="-1">Policy</button><button type="button" class="tab2" role="tab" id="tha-audit" aria-controls="thpa" aria-selected="false" tabindex="-1">Audit</button></div>
+      <div class="tbicons"><button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button><button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button><button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button><button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button></div>
     </div>
-    <div class="body">
-      <div class="rail"><div class="active">▤</div><div>👤</div></div>
-      <div class="main">
+    <!-- Cross-surface rule (owner-settled 2026-08-29, applied here directly per standing direction,
+         not re-raised as a new fork): the rail's second item ("Profile") duplicated the top-bar
+         account control (the avatar button, right). Dropped file-wide (all 20 frames) -- the rail is
+         now single-destination, matching ops/planner's already-applied fix for the same duplication
+         (their own Fork E/Fork H). -->
+    <!-- R21 2026-08-29: role="main" was absent file-wide -- 0 of 20 frames had a main landmark, though
+         all 20 correctly had a nav (the rail). A keyboard/AT user had no way to skip straight to content.
+         .main2 is already role="tabpanel" (a widget role, can't also carry role="main"), so the landmark
+         goes on this containing element instead -- nav nested inside main is valid ARIA (landmark nesting
+         is permitted where semantically justified), and it avoids restructuring 20 artboards' markup. -->
+    <div class="body" role="main" aria-label="Admin console">
+      <nav class="rail2" aria-label="Primary"><a href="#sA" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a></nav>
+      <div class="main" id="thpa" role="tabpanel" aria-labelledby="tha-users" tabindex="0">
         <div class="toolbar">
-          <span class="filter">Filter: role ▾</span>
-          <span class="filter">Filter: facility ▾</span>
-          <span class="searchbar">🔍 Search</span>
+          <span class="filter">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
+          <span class="filter">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
+          <span class="searchbar"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> Search users, emails, roles…</span>
           <button class="btn btn-primary">Invite user</button>
         </div>
         <table class="a">
-          <tr><th>Name</th><th>Email</th><th>Role</th><th>Scope</th><th>Status</th><th></th></tr>
-          <tr><td>Neha B.</td><td class="mono">neha@...</td><td>Ops</td><td>Jaipur, Gurugram</td><td class="status-active">Active</td><td class="overflow">⋯</td></tr>
-          <tr><td>Ramesh K.</td><td class="mono">ramesh@...</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-active">Active</td><td class="overflow">⋯</td></tr>
-          <tr><td>Priya S.</td><td class="mono">priya@...</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-inactive">Inactive</td><td class="overflow">⋯</td></tr>
+          <tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr>
+          <tr><td>Neha B.</td><td class="mono">neha@…</td><td>Ops</td><td>Jaipur, Gurugram</td><td class="status-active">Active</td><td class="overflow"><svg class="ic" aria-hidden="true"><use href="#i-ellipsis"/></svg></td></tr>
+          <tr><td>Ramesh K.</td><td class="mono">ramesh@…</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-active">Active</td><td class="overflow"><svg class="ic" aria-hidden="true"><use href="#i-ellipsis"/></svg></td></tr>
+          <tr><td>Priya S.</td><td class="mono">priya@…</td><td>Gate/Yard</td><td>Jaipur</td><td class="status-inactive">Inactive</td><td class="overflow"><svg class="ic" aria-hidden="true"><use href="#i-ellipsis"/></svg></td></tr>
         </table>
       </div>
     </div>
@@ -488,12 +512,12 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
   <div class="frame">
     <div class="topbar">
       <div class="brand">Admin</div>
-      <div class="tab">Users</div><div class="tab">Facility Rules</div><div class="tab active">Policy</div><div class="tab">Audit</div>
-      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections"><button type="button" class="tab2" role="tab" id="thb-users" aria-controls="thpb" aria-selected="false" tabindex="-1">Users</button><button type="button" class="tab2" role="tab" id="thb-rules" aria-controls="thpb" aria-selected="false" tabindex="-1">Facility Rules</button><button type="button" class="tab2" role="tab" id="thb-policy" aria-controls="thpb" aria-selected="true" tabindex="0">Policy</button><button type="button" class="tab2" role="tab" id="thb-audit" aria-controls="thpb" aria-selected="false" tabindex="-1">Audit</button></div>
+      <div class="tbicons"><button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button><button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button><button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button><button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button></div>
     </div>
-    <div class="body">
-      <div class="rail"><div>▤</div><div class="active">👤</div></div>
-      <div class="main">
+    <div class="body" role="main" aria-label="Admin console">
+      <nav class="rail2" aria-label="Primary"><a href="#sB" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a></nav>
+      <div class="main" id="thpb" role="tabpanel" aria-labelledby="thb-policy" tabindex="0">
         <div class="policy-header">Current policy: v3 · published 2026-08-11 · Anshul G.</div>
         <div class="weight-row"><span class="label">Lateness (w_lateness)</span><input value="4"><span class="unit">/min, cap 720</span></div>
         <div class="weight-row"><span class="label">Wait (w_wait)</span><input value="-6"><span class="unit">/min</span></div>
@@ -501,7 +525,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <div class="weight-row"><span class="label">Dock mismatch (P_dock)</span><input value="-25"><span class="unit"></span></div>
 
         <div class="dangerbox">
-          <div class="head">⚠ Fairness term (w_fairness) — currently disabled (0)</div>
+          <div class="head"><svg class="ic" aria-hidden="true"><use href="#i-tri-alert"/></svg> Fairness term (w_fairness) — currently disabled (0)</div>
           <p>Enabling this is a business-risk decision, not routine tuning — see the carrier-concentration canary on the Audit tab.</p>
           <button class="btn btn-neutral">Enable fairness term</button>
         </div>
@@ -510,8 +534,8 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
 
         <div class="simresult">
           <div class="headline">12 of 340 decisions in the last 30 days would flip</div>
-          <div class="case">▶ SHP1014 vs SHP1009 — under these weights, SHP1014 loses to SHP1009</div>
-          <div class="case">▶ SHP1002 vs SHP1021 — under these weights, SHP1002 wins (was: loses)</div>
+          <div class="case"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg> SHP1014 vs SHP1009 — under these weights, SHP1014 loses to SHP1009</div>
+          <div class="case"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg> SHP1002 vs SHP1021 — under these weights, SHP1002 wins (was: loses)</div>
           <div style="margin-top:16px;display:flex;gap:8px;">
             <button class="btn btn-neutral">Discard</button>
             <button class="btn btn-primary">Publish as v4</button>
@@ -527,23 +551,23 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
   <div class="frame">
     <div class="topbar">
       <div class="brand">Admin</div>
-      <div class="tab">Users</div><div class="tab">Facility Rules</div><div class="tab">Policy</div><div class="tab active">Audit</div>
-      <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
+      <div class="tabs" role="tablist" aria-label="Admin console sections"><button type="button" class="tab2" role="tab" id="thc-users" aria-controls="thpc" aria-selected="false" tabindex="-1">Users</button><button type="button" class="tab2" role="tab" id="thc-rules" aria-controls="thpc" aria-selected="false" tabindex="-1">Facility Rules</button><button type="button" class="tab2" role="tab" id="thc-policy" aria-controls="thpc" aria-selected="false" tabindex="-1">Policy</button><button type="button" class="tab2" role="tab" id="thc-audit" aria-controls="thpc" aria-selected="true" tabindex="0">Audit</button></div>
+      <div class="tbicons"><button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button><button type="button" class="ibtn" aria-label="Help"><svg class="ic ic-md" aria-hidden="true"><use href="#i-help"/></svg></button><button type="button" class="ibtn" aria-label="Settings"><svg class="ic ic-md" aria-hidden="true"><use href="#i-settings"/></svg></button><button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button></div>
     </div>
-    <div class="body">
-      <div class="rail"><div>▤</div><div class="active">👤</div></div>
-      <div class="main">
+    <div class="body" role="main" aria-label="Admin console">
+      <nav class="rail2" aria-label="Primary"><a href="#sB" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a></nav>
+      <div class="main" id="thpc" role="tabpanel" aria-labelledby="thc-audit" tabindex="0">
         <div class="toolbar">
-          <span class="filter">Date range: last 7 days ▾</span>
-          <span class="filter">Actor ▾</span>
-          <span class="filter">Event type ▾</span>
-          <span class="searchbar">🔍</span>
+          <span class="filter">Date range: last 7 days <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
+          <span class="filter">Actor <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
+          <span class="filter">Event type <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
+          <span class="searchbar"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> Search the audit log…</span>
           <button class="btn btn-neutral">Export</button>
         </div>
         <table class="a">
-          <tr><th>Time</th><th>Actor</th><th>Event</th><th>Resource</th></tr>
+          <tr><th scope="col" aria-sort="descending">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
           <tr><td class="mono">14:02 today</td><td>Anshul G.</td><td>Policy published</td><td class="mono">policy_versions v4</td></tr>
-          <tr><td class="mono">13:40 today</td><td>Neha B.</td><td>User removed</td><td class="mono">priya@... (Gate/Yard, Jaipur)</td></tr>
+          <tr><td class="mono">13:40 today</td><td>Neha B.</td><td>User removed</td><td class="mono">priya@… (Gate/Yard, Jaipur)</td></tr>
           <tr><td class="mono">11:15 today</td><td style="color:var(--text-tertiary);">(system)</td><td>Rule updated</td><td class="mono">Jaipur · NEW_START_CUTOFF</td></tr>
         </table>
       </div>
@@ -612,10 +636,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t17-users" aria-controls="tp17" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t17-rules" aria-controls="tp17" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t17-policy" aria-controls="tp17" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t17-audit" aria-controls="tp17" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -624,12 +648,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#1" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#1" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2"></div>
+      <div class="main2" id="tp17" role="tabpanel" aria-labelledby="t17-users" tabindex="0"></div>
     </div>
   </div>
 </div>
@@ -647,10 +670,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t16-users" aria-controls="tp16" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t16-rules" aria-controls="tp16" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t16-policy" aria-controls="tp16" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t16-audit" aria-controls="tp16" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -659,19 +682,17 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#2" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#2" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp16" role="tabpanel" aria-labelledby="t16-users" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="u1-q">Search users</label>
-            <input id="u1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="u1-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search users</span><input id="u1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-con">Invite user</button>
         </div>
         <div class="tablecard">
@@ -725,10 +746,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t15-users" aria-controls="tp15" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t15-rules" aria-controls="tp15" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t15-policy" aria-controls="tp15" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t15-audit" aria-controls="tp15" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -737,19 +758,17 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#2b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#2b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp15" role="tabpanel" aria-labelledby="t15-users" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="u2-q">Search users</label>
-            <input id="u2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="u2-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search users</span><input id="u2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-con">Invite user</button>
         </div>
         <div class="tablecard" style="position:relative;">
@@ -993,7 +1012,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         </div>
         <div class="footer-actions">
           <button type="button" class="b b-neu">Cancel</button>
-          <button type="button" class="b b-des" disabled title="Type the user's email to confirm" aria-describedby="rm1-why">Remove user</button>
+          <button type="button" class="b b-des" aria-disabled="true" tabindex="0" title="Type the user's email to confirm" aria-describedby="rm1-why">Remove user</button>
           <span class="vh" id="rm1-why">Type the user's email to confirm</span>
         </div>
       </div>
@@ -1056,7 +1075,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         </div>
         <div class="footer-actions">
           <button type="button" class="b b-neu">Cancel</button>
-          <button type="button" class="b b-des" disabled title="Type the user's email to confirm" aria-describedby="rm3-why">Remove user</button>
+          <button type="button" class="b b-des" aria-disabled="true" tabindex="0" title="Type the user's email to confirm" aria-describedby="rm3-why">Remove user</button>
           <span class="vh" id="rm3-why">Type the user's email to confirm</span>
         </div>
       </div>
@@ -1079,10 +1098,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t14-users" aria-controls="tp14" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t14-rules" aria-controls="tp14" aria-selected="true" tabindex="0">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t14-policy" aria-controls="tp14" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t14-audit" aria-controls="tp14" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1091,12 +1110,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#5" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#5" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp14" role="tabpanel" aria-labelledby="t14-rules" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <span style="flex:1"></span>
@@ -1162,6 +1180,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
           </select>
         </div>
         <div class="group">
+          <!-- R25 2026-08-29: this live-region line was duplicated verbatim (two identical <p>s) --
+               a screen-reader user would have heard "Fields updated for DOCK_PIN" announced twice for
+               one type change. One copy removed. -->
+          <p class="vh" role="status" aria-live="polite">Fields updated for DOCK_PIN</p>
           <p class="grouplabel">DOCK_PIN values</p>
           <div class="frow">
             <label class="lbl" for="re1-dock">Dock</label>
@@ -1214,6 +1236,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
           </select>
         </div>
         <div class="group">
+          <p class="vh" role="status" aria-live="polite">Fields updated for EARLY_LIMIT</p>
           <p class="grouplabel">EARLY_LIMIT value</p>
           <div class="frow">
             <label class="lbl" for="re2-min">Early arrival limit</label>
@@ -1344,7 +1367,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         </div>
         <div class="footer-actions">
           <button type="button" class="b b-neu">Cancel</button>
-          <button type="button" class="b b-des" disabled title="Type the rule type to confirm" aria-describedby="dep1-why">Apply rule change</button>
+          <button type="button" class="b b-des" aria-disabled="true" tabindex="0" title="Type the rule type to confirm" aria-describedby="dep1-why">Apply rule change</button>
           <span class="vh" id="dep1-why">Type the rule type to confirm</span>
         </div>
       </div>
@@ -1418,10 +1441,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t13-users" aria-controls="tp13" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t13-rules" aria-controls="tp13" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t13-policy" aria-controls="tp13" aria-selected="true" tabindex="0">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t13-audit" aria-controls="tp13" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1430,12 +1453,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#8" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#8" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp13" role="tabpanel" aria-labelledby="t13-policy" tabindex="0">
         <div class="col800">
           <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
           <dl class="tiers">
@@ -1524,7 +1546,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         </div>
         <div class="footer-actions">
           <button type="button" class="b b-neu">Cancel</button>
-          <button type="button" class="b b-cau" disabled title="Type ENABLE FAIRNESS to confirm" aria-describedby="fz1-why">Enable fairness term</button>
+          <button type="button" class="b b-cau" aria-disabled="true" tabindex="0" title="Type ENABLE FAIRNESS to confirm" aria-describedby="fz1-why">Enable fairness term</button>
           <span class="vh" id="fz1-why">Type ENABLE FAIRNESS to confirm</span>
         </div>
       </div>
@@ -1582,10 +1604,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t12-users" aria-controls="tp12" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t12-rules" aria-controls="tp12" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t12-policy" aria-controls="tp12" aria-selected="true" tabindex="0">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t12-audit" aria-controls="tp12" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1594,19 +1616,18 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#10a" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#10a" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp12" role="tabpanel" aria-labelledby="t12-policy" tabindex="0">
         <div class="col800">
           <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
           <div class="wrow"><span class="wlabel">Lateness (<span class="mono">w_lateness</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">4</span><span class="unit">per minute, cap 720</span></div>
           <div class="wrow"><span class="wlabel">Wait (<span class="mono">w_wait</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">-6</span><span class="unit">per minute</span></div>
           <div class="wrow"><span class="wlabel">Slack (<span class="mono">w_slack</span>)</span><span class="inp inp-num" style="display:inline-flex;align-items:center;justify-content:flex-end;">2</span><span class="unit">per minute, cap 120</span></div>
           <div style="margin-top:24px;">
-            <button type="button" class="b b-con" disabled title="A simulation is already running">Simulate against last 30 days</button>
+            <button type="button" class="b b-con" aria-disabled="true" tabindex="0" title="A simulation is already running">Simulate against last 30 days</button>
           </div>
           <div class="sim" aria-busy="true" aria-labelledby="sim-a-status">
             <div class="sk" style="height:20px;width:62%;"></div>
@@ -1634,10 +1655,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t11-users" aria-controls="tp11" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t11-rules" aria-controls="tp11" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t11-policy" aria-controls="tp11" aria-selected="true" tabindex="0">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t11-audit" aria-controls="tp11" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1646,12 +1667,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#10b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#10b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp11" role="tabpanel" aria-labelledby="t11-policy" tabindex="0">
         <div class="col800">
           <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
           <div class="wrow">
@@ -1664,7 +1684,9 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
           </div>
           <div class="sim">
             <p class="cap">Simulation: proposed weights vs. current policy <span class="mono">v3</span></p>
-            <p class="head"><span class="tnum">12</span> of <span class="tnum">340</span> decisions in the last 30 days would flip</p>
+            <!-- R4 2026-08-29: was a bare <p>. accessibility.md gives the aggregate count `polite`
+                 and "the first thing announced"; aria-live was 0 file-wide before this pass. -->
+            <p class="head" role="status" aria-live="polite" aria-atomic="true"><span class="tnum">12</span> of <span class="tnum">340</span> decisions in the last 30 days would flip</p>
             <div class="caselist">
               <details class="case">
                 <summary><svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-right"/></svg><span><span class="enum">SHP1014</span> vs <span class="enum">SHP1009</span> — under these weights, SHP1014 loses to SHP1009</span></summary>
@@ -1699,10 +1721,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t10-users" aria-controls="tp10" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t10-rules" aria-controls="tp10" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t10-policy" aria-controls="tp10" aria-selected="true" tabindex="0">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t10-audit" aria-controls="tp10" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1711,12 +1733,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#10c" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#10c" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp10" role="tabpanel" aria-labelledby="t10-policy" tabindex="0">
         <div class="col800">
           <p class="verhdr">Current policy: <span class="mono tnum">v3</span> · published <span class="mono tnum">2026-08-11</span> · Anshul G.</p>
           <div class="wrow">
@@ -1743,7 +1764,7 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
             </div>
             <div class="simfoot">
               <button type="button" class="b b-neu">Discard</button>
-              <button type="button" class="b b-con" disabled title="Re-run the simulation against the current weights" aria-describedby="sim-c-why">Publish as v4</button>
+              <button type="button" class="b b-con" aria-disabled="true" tabindex="0" title="Re-run the simulation against the current weights" aria-describedby="sim-c-why">Publish as v4</button>
               <span class="vh" id="sim-c-why">Re-run the simulation against the current weights</span>
             </div>
           </div>
@@ -1768,10 +1789,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t9-users" aria-controls="tp9" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t9-rules" aria-controls="tp9" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t9-policy" aria-controls="tp9" aria-selected="true" tabindex="0">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t9-audit" aria-controls="tp9" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1780,12 +1801,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#10d" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#10d" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp9" role="tabpanel" aria-labelledby="t9-policy" tabindex="0">
         <div class="col800">
           <p class="verhdr">Current policy: <span class="mono tnum">v4</span> · published <span class="mono tnum">2026-08-21</span> · Anshul G.</p>
           <div class="wrow">
@@ -1796,7 +1816,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
           <div style="margin-top:24px;">
             <button type="button" class="b b-con">Simulate against last 30 days</button>
           </div>
-          <div class="banner banner-ok" style="margin-top:16px;" role="status">
+          <!-- R4 2026-08-29: was role="status" (implicitly polite). This folder's accessibility.md
+     puts a successful high-consequence commit in the `assertive` tier. Same defect shape as
+     E5.2/R10 on the ops board. -->
+          <div class="banner banner-ok" style="margin-top:16px;" role="alert">
             <svg class="ic" aria-hidden="true"><use href="#i-circle-check"/></svg>
             <span>Published as v4. Every decision from now on is scored against this version.</span>
           </div>
@@ -1823,10 +1846,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t8-users" aria-controls="tp8" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t8-rules" aria-controls="tp8" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t8-policy" aria-controls="tp8" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t8-audit" aria-controls="tp8" aria-selected="true" tabindex="0">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1835,27 +1858,25 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#11" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#11" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp8" role="tabpanel" aria-labelledby="t8-audit" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Date range: last 7 days <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Actor <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Event type <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="a1-q">Search the audit log</label>
-            <input id="a1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="a1-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search the audit log</span><input id="a1-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-neu is-hover"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
         </div>
         <div class="tablecard">
           <table class="tbl">
             <colgroup><col style="width:16%"><col style="width:18%"><col style="width:22%"><col style="width:44%"></colgroup>
             <thead>
-              <tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
+              <tr><th scope="col" aria-sort="descending">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
             </thead>
             <tbody>
               <tr>
@@ -1902,10 +1923,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t7-users" aria-controls="tp7" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t7-rules" aria-controls="tp7" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t7-policy" aria-controls="tp7" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t7-audit" aria-controls="tp7" aria-selected="true" tabindex="0">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1914,12 +1935,11 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#11b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#11b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <div class="main2" id="tp7" role="tabpanel" aria-labelledby="t7-audit" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Date range: last 7 days <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Actor <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
@@ -1933,17 +1953,16 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
               <label><input type="checkbox" checked> Rule updated</label>
             </div>
           </div>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="a2-q">Search the audit log</label>
-            <input id="a2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="a2-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search the audit log</span><input id="a2-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-neu"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
         </div>
         <div class="tablecard">
           <table class="tbl">
             <colgroup><col style="width:16%"><col style="width:18%"><col style="width:22%"><col style="width:44%"></colgroup>
             <thead>
-              <tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
+              <tr><th scope="col" aria-sort="descending">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Resource</th></tr>
             </thead>
             <tbody>
               <tr><td class="mono tnum">14:02 today</td><td title="user_id 8f2c…a417">Anshul G.</td><td>Policy published</td><td class="mono">policy_versions v4</td></tr>
@@ -1972,10 +1991,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t6-users" aria-controls="tp6" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t6-rules" aria-controls="tp6" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t6-policy" aria-controls="tp6" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t6-audit" aria-controls="tp6" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1984,12 +2003,15 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12a" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12a" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R26 2026-08-29: id/aria-labelledby carried a corrupted, duplicated attribute string
+           (`id="tp5" ... aria-labelledby="t5-users" tabindex="0">id="tp6" role="tabpanel"
+           aria-labelledby="t6-users" tabindex="0">`) -- the malformed leading half removed, leaving
+           the one that matches this artboard's own tab strip (t6-*/tp6). -->
+      <div class="main2" id="tp6" role="tabpanel" aria-labelledby="t6-users" tabindex="0">
         <div class="empty">
           <svg class="ic ic-xl" aria-hidden="true"><use href="#i-inbox"/></svg>
           <h3>No users have been invited yet.</h3>
@@ -2011,10 +2033,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t5-users" aria-controls="tp5" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t5-rules" aria-controls="tp5" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t5-policy" aria-controls="tp5" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t5-audit" aria-controls="tp5" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2023,19 +2045,20 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12b" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12b" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R23 2026-08-29: id/aria-labelledby were "tp4"/"t4-audit" -- a third instance of the same
+           stray-id class as the two duplicate-attribute corruptions already fixed earlier in this pass
+           and the 12.C/12.D pair just above. This artboard's own tab strip is t5-*/tp5, Users selected. -->
+      <div class="main2" id="tp5" role="tabpanel" aria-labelledby="t5-users" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="e2-q">Search users</label>
-            <input id="e2-q" type="search" value="rj14" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="e2-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search users</span><input id="e2-q" type="search" value="rj14" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-con">Invite user</button>
         </div>
         <div class="empty">
@@ -2061,10 +2084,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="false">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="true">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t4-users" aria-controls="tp4" aria-selected="false" tabindex="-1">Users</button>
+        <button type="button" class="tab2" role="tab" id="t4-rules" aria-controls="tp4" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t4-policy" aria-controls="tp4" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t4-audit" aria-controls="tp4" aria-selected="true" tabindex="0">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2073,21 +2096,22 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12c" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12c" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R23 2026-08-29: id/aria-labelledby were "tp3"/"t3-users" -- belonging to a different
+           artboard's tab strip entirely. This artboard's own tabs (above) are t4-*/aria-controls="tp4",
+           with Audit selected -- the panel now matches its own tab strip instead of a stray one. -->
+      <div class="main2" id="tp4" role="tabpanel" aria-labelledby="t4-audit" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Date range: today <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Actor: Ramesh K. <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Event type: Policy published <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="e3-q">Search the audit log</label>
-            <input id="e3-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
-          <button type="button" class="b b-neu" disabled title="There is nothing to export with this filter" aria-describedby="e3-why"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+          <label class="srch" for="e3-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search the audit log</span><input id="e3-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="button" class="b b-neu" aria-disabled="true" tabindex="0" title="There is nothing to export with this filter" aria-describedby="e3-why"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
           <span class="vh" id="e3-why">There is nothing to export with this filter</span>
         </div>
         <div class="empty">
@@ -2114,10 +2138,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t3-users" aria-controls="tp3" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t3-rules" aria-controls="tp3" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t3-policy" aria-controls="tp3" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t3-audit" aria-controls="tp3" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2126,19 +2150,20 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12d" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12d" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R23 2026-08-29: role="tabpanel" was entirely absent -- this artboard's own tab strip
+           (above) claims aria-controls="tp3"/id="t3-users", which pointed nowhere in this artboard
+           until now (the ids had been misplaced onto the 12.C artboard's panel instead). -->
+      <div class="main2" id="tp3" role="tabpanel" aria-labelledby="t3-users" tabindex="0">
         <div class="tb">
           <button type="button" class="pill">Filter: role <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
           <button type="button" class="pill">Filter: facility <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <div class="srch"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-            <label class="vh" for="e4-q">Search users</label>
-            <input id="e4-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
-          </div>
+          <label class="srch" for="e4-q"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="vh">Search users</span><input id="e4-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false">
+          </label>
           <button type="button" class="b b-con">Invite user</button>
         </div>
         <div class="tablecard" aria-busy="true" aria-describedby="e4-status">
@@ -2200,10 +2225,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t2-users" aria-controls="tp2" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t2-rules" aria-controls="tp2" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t2-policy" aria-controls="tp2" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t2-audit" aria-controls="tp2" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2212,12 +2237,15 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12e" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12e" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R27 2026-08-29: same corrupted-attribute class as R26 above
+           (`id="tp1" ... aria-labelledby="t1-users" tabindex="0">id="tp2" role="tabpanel"
+           aria-labelledby="t2-users" tabindex="0">`) -- resolved to the half matching this
+           artboard's own tab strip (t2-*/tp2). -->
+      <div class="main2" id="tp2" role="tabpanel" aria-labelledby="t2-users" tabindex="0">
         <div class="empty" role="alert">
           <svg class="ic ic-xl" aria-hidden="true"><use href="#i-octagon-alert"/></svg>
           <h3>Couldn't load the user list — usually a connection problem.</h3>
@@ -2240,10 +2268,10 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
     <div class="topbar">
       <div class="brand">Admin</div>
       <div class="tabs" role="tablist" aria-label="Admin console sections">
-        <button type="button" class="tab2" role="tab" aria-selected="true">Users</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Facility Rules</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Policy</button>
-        <button type="button" class="tab2" role="tab" aria-selected="false">Audit</button>
+        <button type="button" class="tab2" role="tab" id="t1-users" aria-controls="tp1" aria-selected="true" tabindex="0">Users</button>
+        <button type="button" class="tab2" role="tab" id="t1-rules" aria-controls="tp1" aria-selected="false" tabindex="-1">Facility Rules</button>
+        <button type="button" class="tab2" role="tab" id="t1-policy" aria-controls="tp1" aria-selected="false" tabindex="-1">Policy</button>
+        <button type="button" class="tab2" role="tab" id="t1-audit" aria-controls="tp1" aria-selected="false" tabindex="-1">Audit</button>
       </div>
       <div class="tbicons">
         <button type="button" class="ibtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2252,12 +2280,12 @@ details.case[open]>summary .ic{transform:rotate(90deg);}
         <button type="button" class="ibtn" aria-label="Account — Anshul B."><span class="avatar" aria-hidden="true">AB</span></button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" role="main" aria-label="Admin console">
       <nav class="rail2" aria-label="Primary">
         <a href="#12f" class="railitem" aria-current="page" aria-label="Console"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-dash"/></svg></a>
-        <a href="#12f" class="railitem" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-user"/></svg></a>
       </nav>
-      <div class="main2">
+      <!-- R23 2026-08-29: role="tabpanel" was absent, same class as the 12.D fix above. -->
+      <div class="main2" id="tp1" role="tabpanel" aria-labelledby="t1-users" tabindex="0">
         <div class="banner banner-dang" role="alert" style="margin-bottom:16px;">
           <svg class="ic" aria-hidden="true"><use href="#i-circle-alert"/></svg>
           <span>That didn't save. <strong style="font-weight:600;">Nothing has changed.</strong>

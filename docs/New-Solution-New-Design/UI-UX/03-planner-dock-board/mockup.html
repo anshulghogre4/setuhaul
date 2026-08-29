@@ -2,9 +2,10 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- theme-color tracks body's --board-bg in each scheme (neutral-200 / neutral-950) -->
-<meta name="theme-color" content="#E2E8F0" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
+<!-- R2 (2026-08-29, E5.3): one unconditional value. The scheme-paired version would have
+     painted near-black browser chrome around a page that, after R1, always renders light on a
+     dark-preference machine - the same U69 failure one layer up. --board-bg, default theme. -->
+<meta name="theme-color" content="#E2E8F0">
 <title>Planner Dock Board Mockups</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +20,7 @@
 :root {
   /* both schemes are implemented below, so the UA gets both — scrollbars,
      form controls and canvas follow the theme instead of staying light */
-  color-scheme:light dark;
+  color-scheme:light;   /* R1: the UA must not follow the OS either */
 
   --neutral-0:#FFFFFF; --neutral-50:#F8FAFC; --neutral-100:#F1F5F9;
   --neutral-200:#E2E8F0; --neutral-300:#CBD5E1; --neutral-400:#94A3B8;
@@ -43,8 +44,8 @@
   --border-focus:var(--blue-600);
 
   /* promise-state tokens — color.md §Promise-state tokens, reused verbatim for dock_occupancy bars (components.md §3) */
-  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
-  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-500); --state-shown-text:var(--neutral-700); /* R3: neutral-300 measured 1.42:1 (E5.1); color.md corrected 2026-08-29 */
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-600);    --state-held-text:var(--amber-700); /* R4: amber-500 measured 1.96:1 on the board track; color.md corrected 2026-08-29 */
   --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
   --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
 
@@ -63,33 +64,10 @@
 
   --r-sm:4px; --r-md:6px; --r-lg:8px;
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --surface-selected:#12203c;
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --border-focus:var(--blue-400);
-    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
-    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
-    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
-    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
-    --feedback-warning-bg:#3a2c10;
-    --feedback-warning-text:var(--amber-400);
-    --feedback-warning-border:var(--amber-500);
-    --feedback-info-text:var(--blue-400);
-    --board-bg:var(--neutral-950);
-    --board-panel:var(--neutral-900);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-  }
-}
-:root[data-theme="dark"]{
+/* R1 (2026-08-29, E5.3): system-following dark removed. U69 says the user picks the theme,
+   never the OS. The :root[data-theme="dark"] block below is byte-identical (verified property
+   by property), so dark stays fully available; only the automatic switch is gone. Fourth
+   recurrence: E5.0 shared shell, E5.1 driver board, E5.2 ops board, here. */:root[data-theme="dark"]{
   color-scheme:dark;
   --surface-base:var(--neutral-950);
   --surface-raised:var(--neutral-900);
@@ -101,7 +79,7 @@
   --border-subtle:var(--neutral-800);
   --border-default:var(--neutral-700);
   --border-focus:var(--blue-400);
-  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-500); --state-shown-text:var(--neutral-200); /* R3 dark: color.md gives neutral-500 in both schemes */
   --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:var(--amber-400);
   --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-400);
   --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:var(--green-400);
@@ -138,7 +116,7 @@ body{ margin:0; background:var(--board-bg); color:var(--board-ink); font-family:
 .tabs{ display:flex; gap:4px; }
 .tab{ padding:8px 12px; font-size:13px; font-weight:600; color:var(--text-tertiary); border-radius:var(--r-md); }
 .tab.active{ background:var(--surface-selected); color:var(--blue-600); }
-.searchbar{ flex:1; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface-hover); border-radius:var(--r-md); color:var(--text-tertiary); font-size:13px; }
+.searchbar{ flex:1; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface-hover); border-radius:var(--r-md); color:var(--text-secondary); font-size:13px; } /* R5: text-tertiary on surface-hover measured 4.34:1 - a placeholder is still text */
 .topbar-icons{ display:flex; gap:16px; color:var(--text-tertiary); font-size:20px; align-items:center; line-height:1; }
 
 .body{ display:grid; grid-template-columns:56px 1fr; min-height:0; }
@@ -157,7 +135,7 @@ table.q tr.focused td{ background:var(--surface-selected); }
 .pmark{ display:inline-block; width:3px; height:16px; background:var(--neutral-800); vertical-align:middle; margin-right:6px; }
 .mono{ font-family:var(--font-data); font-variant-numeric:tabular-nums; }
 .receipt{ font-size:11px; color:var(--text-secondary); }
-.displ-none{ font-size:11px; color:var(--text-tertiary); }
+.displ-none{ font-size:11px; color:var(--text-secondary); } /* R6: measured 4.34-4.37:1. Section 7.3 calls the displacement check "the single most important field" */
 .displ-warn{ font-size:11px; color:var(--red-600); font-weight:600; }
 .eta-low{ display:inline-block; background:var(--feedback-warning-bg); color:var(--feedback-warning-text); border:1px solid var(--feedback-warning-border); border-radius:var(--r-sm); padding:1px 6px; font-size:11px; font-weight:600; }
 .ttl{ font-family:var(--font-data); font-variant-numeric:tabular-nums; font-size:12px; }
@@ -167,11 +145,24 @@ table.q tr.focused td{ background:var(--surface-selected); }
 .toolbar{ display:flex; align-items:center; gap:8px; padding:8px 0; font-size:12px; color:var(--text-tertiary); }
 .pill-btn{ font-size:11px; font-weight:600; padding:4px 12px; border-radius:var(--r-sm); border:1px solid var(--border-default); background:var(--surface-raised); color:var(--text-primary); }
 .pill-btn.primary{ background:var(--blue-600); color:#fff; border-color:var(--blue-600); }
+/* R23: Inactive, per components.md §18 - not faded, still focusable, explains itself. Mirrors
+   .btn-inactive so the two Inactive treatments on this surface look like one decision. */
+.pill-btn.pill-inactive{ color:var(--text-primary); background:transparent;
+  text-decoration:underline dotted var(--border-default) 2px; text-underline-offset:3px; }
 
 /* Gantt board */
-.ganttwrap{ overflow-x:auto; }
-.gantthead{ display:flex; padding-left:64px; gap:0; font-size:11px; color:var(--text-tertiary); font-family:var(--font-data); }
-.gantthead span{ width:120px; }
+.ganttwrap{ overflow-x:auto; padding-top:4px; } /* R11c: 4px so the now marker pill sits fully inside the wrap - overflow-x:auto forces overflow-y to auto, so anything escaping the box is simply never painted */
+/* R19 (2026-08-29, E5.3): THE TIME AXIS DID NOT DESCRIBE THE TASK BARS. .gantthead was padded
+   64px while .docklabel is 56px, and every tick was a FIXED 120px while .track is flex:1 and
+   fluid. Measured at 1440px: the track is 1142px for a 6-hour horizon (190.3px/hour) against an
+   axis drawn at 120px/hour - a 1.59x scale error. The now-line at x=799 therefore sat under the
+   axis 13:53 tick while the board called it 12:45, and every bar on every board artboard was
+   positioned against an axis that did not describe it. The axis now shares the track exact box:
+   the same 56px inset, and n-1 fluid interval cells, so tick k lands on hour k of the same scale
+   the bars use. This is a Gantt: the axis IS the reading instrument. */
+.gantthead{ display:flex; padding-left:56px; gap:0; font-size:11px; color:var(--text-tertiary); font-family:var(--font-data); overflow:visible; }
+.gantthead span{ flex:1 1 0; min-width:0; }
+.gantthead span:last-child{ flex:0 0 44px; margin-left:-44px; text-align:right; } /* R19b: translateX(-100%) on a 0-width box is a 0px translate - the closing tick never rendered */
 .dockrow{ display:flex; align-items:center; height:32px; border-bottom:1px solid var(--border-subtle); }
 .docklabel{ width:56px; font-size:12px; font-weight:600; font-family:var(--font-data); flex-shrink:0; }
 .track{ position:relative; display:flex; flex:1; height:20px; background:var(--surface-hover); border-radius:var(--r-sm); overflow:visible; }
@@ -179,12 +170,42 @@ table.q tr.focused td{ background:var(--surface-selected); }
 .bar.confirmed{ background:var(--state-confirmed-bg); border:2px solid var(--state-confirmed-border); }
 .bar.pending{ background:var(--state-pending-bg); border:2px solid var(--state-pending-border); }
 .bar.held{ background:var(--state-held-bg); border:2px dashed var(--state-held-border); }
+/* R18 (2026-08-29, E5.3): the hatch light band was var(--neutral-100) - byte-identical to
+   .track own background - so "blocked" and "free" differed only by a 1px border measured at
+   1.36:1 light / 1.41:1 dark. The band moves to the raised surface, the stripe darkens a step,
+   the border goes to 2px. Still a hatch; still never a promise-state token (components.md
+   section 4 - a booking and an unavailability must not share an encoding). */
 .bar.blocked{
-  background:repeating-linear-gradient(45deg, var(--neutral-300), var(--neutral-300) 4px, var(--neutral-100) 4px, var(--neutral-100) 8px);
-  border:1px solid var(--border-default); color:var(--text-secondary); font-weight:600;
+  background:repeating-linear-gradient(45deg, var(--neutral-400), var(--neutral-400) 4px, var(--surface-raised) 4px, var(--surface-raised) 8px);
+  border:2px solid var(--text-tertiary); color:var(--text-primary); font-weight:600;
 }
-.now-line{ position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--red-600); }
-.now-label{ position:absolute; top:-16px; font-size:11px; color:var(--red-600); font-weight:700; font-family:var(--font-data); }
+.bar.blocked > *{ background:var(--surface-raised); padding:0 6px; border-radius:var(--r-sm); }
+/* R11 (2026-08-29, E5.3): the now-line lived inside ONE .track (top/bottom -4px), so it
+   rendered 28px tall and stopped at the first dock - measured on every board, against lane
+   stacks 78-162px tall. screens.md section 3 draws it top-to-bottom across every lane, which is
+   what makes "already in the past" readable on D2/D3/D5 too. The label was also positioned 8%
+   LEFT of the line, where it overprinted the 13:00 axis tick; it now centres on the line and
+   carries a surface backplate. .nowlayer matches .track box exactly (the same 56px docklabel
+   inset), so left:52% resolves against the same scale R19 just gave the axis and the bars. */
+.now-line{ position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--red-600); z-index:2; }
+.now-label{ position:absolute; top:-16px; font-size:11px; color:var(--red-600); font-weight:700;
+  font-family:var(--font-data); transform:translateX(-50%); background:var(--surface-base);
+  padding:0 3px; z-index:3; white-space:nowrap; }
+.lanes{ position:relative; }
+.nowlayer{ position:absolute; left:56px; right:0; top:0; bottom:0; pointer-events:none; }
+.nowlayer > .now-line{ top:0; bottom:0; }
+/* R11c (2026-08-29, E5.3): two dead ends before this one, both recorded because the reasoning
+   is the useful part. (a) Centring the label on the line just relocated the collision - the line
+   is by definition inside some hour cell, so it always overprints that cell's tick; measured
+   785.9-811.7 against the 12:00 tick text at 776-806. (b) Moving it below the lane stack put it
+   outside .ganttwrap, whose overflow-x:auto computes overflow-y to auto too, so it was clipped
+   and simply never painted (labelBottom 1236.5 vs wrapBottom 1220.5).
+   The answer is the ordinary Gantt convention: the now marker is a filled pill on the timeline
+   header, not prose competing with a tick for the same row. Overlapping a tick now reads as a
+   marker sitting on the axis rather than as broken text, and the fill is the same red-600 the
+   line already uses - no new hue. */
+.nowlayer > .now-label{ top:-16px; background:var(--red-600); color:var(--neutral-0);
+  border-radius:9999px; padding:1px 6px; letter-spacing:.04em; }
 
 .banner{
   display:flex; align-items:center; justify-content:space-between; padding:8px 12px; margin-bottom:8px;
@@ -193,6 +214,18 @@ table.q tr.focused td{ background:var(--surface-selected); }
 }
 .pick-target{ outline:2px solid var(--blue-600); outline-offset:1px; }
 .dim{ opacity:.35; }
+/* R9 (2026-08-29, E5.3): .dockrow.dim dimmed its own label and reason along with the track -
+   measured 2.23:1 (the "D5" label) and 1.73:1 (the reason text). components.md section 18
+   requires a Disabled control to explain itself, and an explanation at 1.73:1 does not. The
+   track still recedes; the dock identity and the reason stay readable. */
+.dockrow.dim{ opacity:1; }
+/* R9b: opacity on .track builds a stacking context the child .lane-reason cannot climb out
+   of, so the reason stayed at 1.74:1 after the first attempt. Recede the track with a muted
+   fill and a dashed edge instead - no opacity anywhere on this subtree. */
+.dockrow.dim .track{ background:var(--surface-base); border:1px dashed var(--border-default); }
+.dockrow.dim .track > .bar{ opacity:.35; }
+.dockrow.dim .docklabel{ color:var(--text-secondary); }
+.dockrow.dim .lane-reason{ opacity:1; color:var(--text-secondary); }
 
 .statusbar{ display:flex; align-items:center; gap:16px; padding:0 12px; font-size:11px; color:var(--text-tertiary); border-top:1px solid var(--border-subtle); background:var(--surface-raised); }
 .dot-status{ width:8px; height:8px; border-radius:50%; background:var(--green-600); display:inline-block; margin-right:4px; }
@@ -214,7 +247,7 @@ table.q tr.focused td{ background:var(--surface-selected); }
 <div class="frame">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -223,21 +256,21 @@ table.q tr.focused td{ background:var(--surface-selected); }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="toolbar">
         <span>24 pending · 6 bulk-eligible</span>
         <button class="pill-btn primary">Select all eligible (6)</button>
         <span>Filter: CRITICAL · 6 shown</span>
+        <span class="pinline" style="margin-left:auto;">Sort pinned · press R to re-sort</span>
       </div>
-      <table class="q" aria-label="Pending appointment requests">
-        <tr><th scope="col"></th><th scope="col">Driver · carrier</th><th scope="col">Requested interval</th><th scope="col">Decision receipt</th><th scope="col">Displacement</th><th scope="col">ETA</th><th scope="col">Driver's limit</th><th scope="col">TTL</th></tr>
+      <table class="q fixed" aria-label="Pending appointment requests">
+        <tr><th scope="col"><span class="vh">Select</span></th><th scope="col">Driver · carrier</th><th scope="col">Requested interval</th><th scope="col">Decision receipt</th><th scope="col">Displacement</th><th scope="col">ETA</th><th scope="col">Driver's limit</th><th scope="col">TTL</th></tr>
         <tr class="focused">
-          <td><span class="pmark"></span><span class="cb on" role="checkbox" aria-checked="true" tabindex="0"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
-          <td>Ravi K.<br><span style="color:var(--text-tertiary);font-size:11px;">Rajasthan Roadlines</span></td>
+          <td class="selcell p-critical"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Select SHP1014"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
+          <td>Ravi K.<br><span class="cell-carrier">Rajasthan Roadlines</span></td>
           <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
           <td class="receipt">CRITICAL · 70 min late<br>exact dock · 0 min wait</td>
           <td class="displ-none">conflicts with none</td>
@@ -246,8 +279,8 @@ table.q tr.focused td{ background:var(--surface-selected); }
           <td class="ttl warn">2:14</td>
         </tr>
         <tr>
-          <td><span class="cb on" role="checkbox" aria-checked="true" tabindex="0"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
-          <td>Amit S.<br><span style="color:var(--text-tertiary);font-size:11px;">Kota Transport</span></td>
+          <td class="selcell p-high"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Select SHP1021"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
+          <td>Amit S.<br><span class="cell-carrier">Kota Transport</span></td>
           <td class="mono">D2 · Tue 4 Aug · 14:00–14:45</td>
           <td class="receipt">HIGH · 20 min late<br>exact dock · 5 min wait</td>
           <td class="displ-none">conflicts with none</td>
@@ -256,8 +289,8 @@ table.q tr.focused td{ background:var(--surface-selected); }
           <td class="ttl ok">6:42</td>
         </tr>
         <tr>
-          <td><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
-          <td>Neha P.<br><span style="color:var(--text-tertiary);font-size:11px;">GGN Logistics</span></td>
+          <td class="selcell p-normal"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select SHP1013"></span></td>
+          <td>Neha P.<br><span class="cell-carrier">GGN Logistics</span></td>
           <td class="mono">D3 · Tue 4 Aug · 15:00–16:00</td>
           <td class="receipt">NORMAL · 0 min late<br>nearest dock · 0 min wait</td>
           <td class="displ-warn">Confirming this delays SHP1013 to 19:45.</td>
@@ -269,7 +302,7 @@ table.q tr.focused td{ background:var(--surface-selected); }
       <div style="margin-top:8px;font-size:11px;color:var(--text-tertiary);">focused row: [C] Confirm &nbsp; [R] Reject &nbsp; [O] Counter-offer &nbsp; [H] Hold &nbsp; [E] Escalate</div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Corrected while finishing this file.</b> The original draft of this artboard rendered intervals as
@@ -285,7 +318,7 @@ table.q tr.focused td{ background:var(--surface-selected); }
 <div class="frame">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -294,44 +327,58 @@ table.q tr.focused td{ background:var(--surface-selected); }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="toolbar">
         <span style="font-weight:600;color:var(--text-primary);">Jaipur · Board</span>
         <span class="mono" style="color:var(--text-secondary);">Tue 4 Aug</span>
         <button class="pill-btn" style="margin-left:auto;">Block a dock</button>
-        <button class="pill-btn">Review proposal (0)</button>
+        <button type="button" class="pill-btn pill-inactive" aria-disabled="true" title="No sequencer run is pending for Jaipur. A proposal appears here when you request a re-sequence, or when Ops requests one on a capacity incident’s behalf.">Review proposal (0)</button>
       </div>
       <div class="ganttwrap">
         <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-        <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-          <div class="bar confirmed" style="left:5%;width:15%;">SHP1002</div>
-          <div class="bar pending" style="left:45%;width:12%;">SHP1014</div>
-          <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D2</div><div class="track">
-          <div class="bar confirmed" style="left:15%;width:14%;">SHP1009</div>
-          <div class="bar confirmed" style="left:55%;width:14%;">SHP1015</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D3</div><div class="track">
-          <div class="bar held" style="left:30%;width:12%;">SHP1013</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D5</div><div class="track">
-          <div class="bar blocked" style="left:0%;width:100%;">blocked — DEVT002 outage</div>
-        </div></div>
+        <div class="lanes">
+          <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+          <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+            <div class="bar confirmed" style="left:5%;width:15%;">SHP1002</div>
+            <div class="bar pending" style="left:45%;width:12%;">SHP1014</div>
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D2</div><div class="track">
+            <div class="bar confirmed" style="left:15%;width:14%;">SHP1009</div>
+            <div class="bar confirmed" style="left:55%;width:14%;">SHP1015</div>
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D3</div><div class="track">
+            <div class="bar held" style="left:30%;width:12%;">SHP1013</div>
+          </div></div>
+          <!-- R22: IN_PROGRESS — components.md §3 maps it to the CONFIRMED tokens plus a
+               truck-loading icon inside the bar. Same hue family on purpose: a driver
+               physically at the dock is still the committed category, and adding a fifth
+               hue would spend budget U10/U59/U85 already fixed. It rendered nowhere. -->
+          <div class="dockrow"><div class="docklabel">D4</div><div class="track">
+            <div class="bar confirmed" style="left:38%;width:13%;" title="SHP1007 · Marwar Freight · D4 · Tue 4 Aug · 11:15–12:00 · in progress"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-truck"/></svg>SHP1007</div>
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D5</div><div class="track">
+            <div class="bar blocked" style="left:0%;width:100%;">blocked — DEVT002 outage</div>
+          </div></div>
+          <!-- R12: D6 is entirely free for the whole horizon. screens.md §3 draws it, and a
+               board that renders only occupied docks hides the free capacity a planner is
+               looking for. An empty lane is a fact, not an absence of one. -->
+          <div class="dockrow"><div class="docklabel">D6</div><div class="track">
+          </div></div>
+        </div>
       </div>
       <div style="margin-top:8px;display:flex;gap:16px;font-size:11px;color:var(--text-tertiary);">
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--state-confirmed-bg);border:2px solid var(--state-confirmed-border);border-radius:2px;vertical-align:middle;"></span> Confirmed</span>
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--state-pending-bg);border:2px solid var(--state-pending-border);border-radius:2px;vertical-align:middle;"></span> Pending</span>
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--state-held-bg);border:2px dashed var(--state-held-border);border-radius:2px;vertical-align:middle;"></span> Held</span>
-        <span><span style="display:inline-block;width:8px;height:8px;background:repeating-linear-gradient(45deg,var(--neutral-300),var(--neutral-300) 2px,var(--neutral-100) 2px,var(--neutral-100) 4px);border:1px solid var(--border-default);border-radius:2px;vertical-align:middle;"></span> Blocked (dock_status_events)</span>
+        <span><svg class="ic ic-xs" aria-hidden="true" style="vertical-align:middle;"><use href="#i-truck"/></svg> In progress</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:repeating-linear-gradient(45deg,var(--neutral-400),var(--neutral-400) 2px,var(--surface-raised) 2px,var(--surface-raised) 4px);border:1px solid var(--text-tertiary);border-radius:2px;vertical-align:middle;"></span> Blocked (dock_status_events)</span>
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 
 <!-- STATE 3 — Counter-offer picker active -->
@@ -339,7 +386,7 @@ table.q tr.focused td{ background:var(--surface-selected); }
 <div class="frame">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -348,32 +395,33 @@ table.q tr.focused td{ background:var(--surface-selected); }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="banner">
         Picking a new slot for <span class="mono">SHP1014</span> (Ravi K. · Rajasthan Roadlines) — click an open interval on an eligible dock.
         <button class="pill-btn">Cancel</button>
       </div>
       <div class="ganttwrap" style="padding-top:20px;">
         <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-        <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-          <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-          <button type="button" class="lane-open pick" style="left:65%;width:14%;">Pick 13:30–14:45</button>
-          <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D2</div><div class="track">
-          <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
-        </div></div>
-        <div class="dockrow dim"><div class="docklabel">D5</div><div class="track">
-          <span class="lane-reason">Heavy-load dock — not eligible for this shipment.</span>
-        </div></div>
+        <div class="lanes">
+          <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+          <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+            <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+            <button type="button" class="lane-open pick" style="left:65%;width:14%;">Pick 13:30–14:45</button>
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D2</div><div class="track">
+            <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
+          </div></div>
+          <div class="dockrow dim"><div class="docklabel">D5</div><div class="track">
+            <span class="lane-reason">Heavy-load dock — not eligible for this shipment.</span>
+          </div></div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced 3 s ago</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Corrected while finishing this file.</b> The original draft drew the pickable interval as a
@@ -442,38 +490,10 @@ table.q tr.focused td{ background:var(--surface-selected); }
   --button-destructive-bg:var(--red-600);
   --button-destructive-text:var(--neutral-0);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --shadow-sm:none;
-    --shadow-md:0 4px 12px rgba(0,0,0,.40);
-    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
-    --scrim:rgba(0,0,0,.65);
-    --feedback-danger-bg:rgba(127,29,29,.25);   /* red-900 @ 25% */
-    --feedback-danger-text:var(--red-400);
-    --feedback-danger-border:var(--red-500);
-    --feedback-success-bg:rgba(6,78,59,.25);    /* green-900 @ 25% */
-    --feedback-success-text:var(--green-400);
-    --feedback-success-border:var(--green-500);
-    --feedback-info-bg:rgba(30,58,138,.25);     /* blue-900 @ 25% */
-    --feedback-info-border:var(--blue-500);
-    --surface-overlay:var(--neutral-800);
-    --text-disabled:var(--neutral-600);
-    --interactive-hover:var(--blue-400);
-    --interactive-disabled-bg:var(--neutral-800);
-    --interactive-disabled-text:var(--neutral-600);
-    --priority-critical-marker:var(--neutral-0);
-    --priority-high-marker:var(--neutral-300);
-    --priority-normal-marker:var(--neutral-500);
-    --priority-low-marker:var(--neutral-700);
-    --railStripe-borderColor:var(--violet-400);
-    --facilitySwitcher-swatch-bgColor:var(--violet-400);
-    --button-constructive-bg:var(--blue-500);
-    --button-constructive-text:var(--neutral-950);
-    --button-destructive-bg:var(--red-500);
-    --button-destructive-text:var(--neutral-950);
-  }
-}
-:root[data-theme="dark"]{
+/* R1 (2026-08-29, E5.3): system-following dark removed. U69 says the user picks the theme,
+   never the OS. The :root[data-theme="dark"] block below is byte-identical (verified property
+   by property), so dark stays fully available; only the automatic switch is gone. Fourth
+   recurrence: E5.0 shared shell, E5.1 driver board, E5.2 ops board, here. */:root[data-theme="dark"]{
   --shadow-sm:none;
   --shadow-md:0 4px 12px rgba(0,0,0,.40);
   --shadow-lg:0 12px 32px rgba(0,0,0,.55);
@@ -614,18 +634,21 @@ tr.selrow td:first-child{ box-shadow:inset 2px 0 0 var(--blue-600); }
 tr.settled td{ color:var(--text-secondary); }
 tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 .cell-driver{ font-size:14px; font-weight:500; color:var(--text-primary); }
-.cell-carrier{ font-size:11px; color:var(--text-tertiary); }
+.cell-carrier{ font-size:11px; color:var(--text-secondary); } /* R7: measured 4.34-4.37:1 */
 .trunc{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .displ-harm{ font-size:11px; line-height:1.4; color:var(--feedback-danger-text); font-weight:600;
   white-space:normal; }             /* never truncates — the column grows instead */
-.struck{ text-decoration:line-through; color:var(--text-tertiary); }
+.struck{ text-decoration:line-through; color:var(--text-secondary); } /* R8b: text-tertiary measured 4.37:1 - a struck value is still read */
 .hintline{ font-size:11px; color:var(--text-tertiary); font-family:var(--font-data); }
 .pinline{ margin-left:auto; font-size:11px; font-weight:600; color:var(--feedback-info-text); }
+/* R17: visually-hidden, for the selection column header that carries no visible label */
+.vh{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
 /* TTL thresholds — step AT the threshold, never a gradient (color.md, motion.md U77) */
 .t-ok{ color:var(--state-pending-text); }
 .t-mid{ color:var(--amber-600); }
 .t-crit{ color:var(--red-600); font-weight:600; }
-.t-exp{ color:var(--text-tertiary); background:var(--neutral-100); text-decoration:line-through;
+.t-exp{ color:var(--text-secondary); background:var(--neutral-100); text-decoration:line-through; /* R8: measured 4.34:1 */
   padding:1px 4px; border-radius:var(--r-sm); }
 /* paused is deliberately OFF the amber→red urgency scale (components.md §3, U67) */
 .t-paused{ font-family:var(--font-ui); font-size:11px; font-weight:500; color:var(--text-tertiary);
@@ -730,7 +753,12 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 .bar.proposed{ background:transparent; box-shadow:var(--shadow-md); top:-2px; bottom:2px; }
 .bar.proposed.confirmed{ border:2px dashed var(--state-confirmed-border); }
 .bar.proposed.pending{ border:2px dashed var(--state-pending-border); }
-.bar.current-dim{ opacity:.5; }
+/* R10 (2026-08-29, E5.3): opacity:.5 put the current bar own shipment id at 2.21:1 - and the id
+   is what a planner reads the diff BY. Recede with a muted fill and a dotted border instead of
+   opacity, so the text keeps full contrast and the bar still reads as "beneath" the dashed
+   proposal bar above it. No new hue (U10/U59/U85). */
+.bar.current-dim{ opacity:1; background:var(--surface-hover); border-style:dotted;
+  border-color:var(--text-tertiary); color:var(--text-secondary); } /* R10b: border-default measured 1.36:1 against the new fill */
 .diffbadge{ font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
   font-family:var(--font-ui); }
 .ovl{ position:absolute; left:12px; right:12px; top:64px; z-index:600; background:var(--surface-overlay);
@@ -812,7 +840,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host" style="height:400px;">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -821,18 +849,17 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main"><div class="placeholder">Content region — Queue (State 1) or Board (State 2). The shell never unmounts on navigation.</div></div>
+    </nav>
+    <div class="main" role="main" aria-label="Planner console"><div class="placeholder">Content region — Queue (State 1) or Board (State 2). The shell never unmounts on navigation.</div></div>
   </div>
   <!-- expands to 240px as an OVERLAY; it never pushes the content region (components.md §7) -->
   <div class="railexp">
     <a href="#" class="active" aria-current="page"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg>Dock command</a>
     <a href="#"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg>Profile</a>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Values.</b> Top bar 56px, rail 56px, status bar 28px, content padding 16px (<code>spacing-and-layout.md</code>
@@ -852,7 +879,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host" style="height:300px;">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -861,13 +888,12 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main"><div class="placeholder">Content region stays operable — the queue is readable, writes are refused with the standard "Nothing has changed." message.</div></div>
+    </nav>
+    <div class="main" role="main" aria-label="Planner console"><div class="placeholder">Content region stays operable — the queue is readable, writes are refused with the standard "Nothing has changed." message.</div></div>
   </div>
-  <div class="statusbar offline"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi-off"/></svg> Offline · last synced 09:41</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar offline"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi-off"/></svg> Offline · last synced 09:41</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   Connection state carries <b>icon + text, never a coloured dot alone</b> (<code>components.md</code> §7). Colours are
@@ -892,7 +918,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">1 · default</td></tr>
     <tr>
-      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier trunc" title="Rajasthan Roadlines Private Limited">Rajasthan Roadlines Priv…</span></td>
       <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
       <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
@@ -915,7 +941,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">2 · hover — background and border only, no lift, no scale</td></tr>
     <tr style="background:var(--surface-hover);">
-      <td class="selcell p-high" style="background:var(--surface-hover);"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-high" style="background:var(--surface-hover);"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td style="background:var(--surface-hover);"><span class="cell-driver">Amit S.</span><br><span class="cell-carrier">Kota Transport</span></td>
       <td class="mono" style="background:var(--surface-hover);">D2 · Tue 4 Aug · 14:00–14:45</td>
       <td class="receipt" style="background:var(--surface-hover);">HIGH · 20 min late · exact dock · 5 min wait</td>
@@ -938,7 +964,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">3 · focused (keyboard) — sort is pinned while this row holds focus</td></tr>
     <tr class="focusrow">
-      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier trunc" title="Rajasthan Roadlines Private Limited">Rajasthan Roadlines Priv…</span></td>
       <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
       <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
@@ -962,7 +988,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">4 · selected (part of a bulk batch) — selection and focus are distinct and may co-occur</td></tr>
     <tr class="selrow">
-      <td class="selcell p-normal"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
+      <td class="selcell p-normal"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Select this request"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
       <td><span class="cell-driver">Neha P.</span><br><span class="cell-carrier">GGN Logistics</span></td>
       <td class="mono">D3 · Tue 4 Aug · 15:00–16:00</td>
       <td class="receipt">NORMAL · 0 min late · nearest dock · 0 min wait</td>
@@ -985,7 +1011,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">5 · stale — actioned elsewhere. Updates in place; it does not vanish and reappear.</td></tr>
     <tr>
-      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Suresh M.</span><br><span class="cell-carrier">Ajmer Freight</span></td>
       <td class="mono struck">D2 · Tue 4 Aug · 12:30–13:15</td>
       <td class="receipt struck">HIGH · 35 min late · exact dock · 0 min wait</td>
@@ -1007,7 +1033,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">5b · stale — winning transition unknown to the client (§3 error variant)</td></tr>
     <tr>
-      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Priya D.</span><br><span class="cell-carrier">Bharat Carriers</span></td>
       <td class="mono struck">D4 · Tue 4 Aug · 11:00–11:45</td>
       <td class="receipt struck">NORMAL · 5 min late · exact dock · 0 min wait</td>
@@ -1021,7 +1047,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">6 · displacement-flagged — the confirm was refused because a conflict appeared</td></tr>
     <tr>
-      <td class="selcell p-normal refused"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-normal refused"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Neha P.</span><br><span class="cell-carrier">GGN Logistics</span></td>
       <td class="mono">D3 · Tue 4 Aug · 15:00–16:00</td>
       <td class="receipt">NORMAL · 0 min late · nearest dock · 0 min wait</td>
@@ -1078,7 +1104,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">a · paused — the numeric value freezes and HIDES; it is not left sitting still</td></tr>
     <tr>
-      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier trunc" title="Rajasthan Roadlines Private Limited">Rajasthan Roadlines Priv…</span></td>
       <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
       <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
@@ -1101,7 +1127,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">b · resumed — the countdown reappears, recalculated from the new deadline, and the row flashes once</td></tr>
     <tr>
-      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier trunc" title="Rajasthan Roadlines Private Limited">Rajasthan Roadlines Priv…</span></td>
       <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
       <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
@@ -1148,7 +1174,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">ALREADY_ACTIONED — the winning transition is named. Announced assertively only if this row held focus.</td></tr>
     <tr class="focusrow">
-      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Suresh M.</span><br><span class="cell-carrier">Ajmer Freight</span></td>
       <td class="mono struck">D2 · Tue 4 Aug · 12:30–13:15</td>
       <td class="receipt struck">HIGH · 35 min late · exact dock · 0 min wait</td>
@@ -1170,7 +1196,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">SNAPSHOT_STALE — no real conflict, so the treatment is deliberately quieter. No automatic retry.</td></tr>
     <tr>
-      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Amit S.</span><br><span class="cell-carrier">Kota Transport</span></td>
       <td class="mono">D2 · Tue 4 Aug · 14:00–14:45</td>
       <td class="receipt">HIGH · 20 min late · exact dock · 5 min wait</td>
@@ -1193,7 +1219,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">DISPLACEMENT_DETECTED — the confirm is refused outright; the harm is a full sentence, never truncated</td></tr>
     <tr>
-      <td class="selcell p-normal refused"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-normal refused"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Neha P.</span><br><span class="cell-carrier">GGN Logistics</span></td>
       <td class="mono">D3 · Tue 4 Aug · 15:00–16:00</td>
       <td class="receipt">NORMAL · 0 min late · nearest dock · 0 min wait</td>
@@ -1216,7 +1242,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <tr><td colspan="9" class="varname">settled, for contrast — a row that finished its transition recedes rather than staying loud (motion.md U76)</td></tr>
     <tr class="settled">
-      <td class="selcell p-low"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+      <td class="selcell p-low"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
       <td><span class="cell-driver">Deepak V.</span><br><span class="cell-carrier">Sikar Carriers</span></td>
       <td class="mono">D4 · Tue 4 Aug · 16:30–17:15</td>
       <td class="receipt">LOW · 5 min late · nearest dock · 0 min wait</td>
@@ -1252,7 +1278,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host h620">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1261,11 +1287,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="toolbar">
         <button class="btn btn-constructive">Select all eligible (12)</button>
         <span>35 pending · 12 bulk-eligible</span>
@@ -1293,7 +1318,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
           <th scope="col">Displacement</th><th scope="col">ETA</th><th scope="col">Driver's limit</th><th scope="col">TTL</th><th scope="col">Actions</th>
         </tr>
         <tr class="selrow">
-          <td class="selcell p-critical"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
+          <td class="selcell p-critical"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Select this request"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
           <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier trunc" title="Rajasthan Roadlines Private Limited">Rajasthan Roadlines Priv…</span></td>
           <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
           <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
@@ -1314,7 +1339,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
           </td>
         </tr>
         <tr class="selrow">
-          <td class="selcell p-high"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
+          <td class="selcell p-high"><span class="cb on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Select this request"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span></td>
           <td><span class="cell-driver">Amit S.</span><br><span class="cell-carrier">Kota Transport</span></td>
           <td class="mono">D2 · Tue 4 Aug · 14:00–14:45</td>
           <td class="receipt">HIGH · 20 min late · exact dock · 5 min wait</td>
@@ -1337,7 +1362,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
         <!-- ineligible: stays visible IN PLACE, never hidden, never moved to a separate list -->
         <tr>
           <td class="selcell p-normal">
-            <span class="cb off-disabled" role="checkbox" aria-checked="false" aria-disabled="true" title="ETA confidence is LOW — needs individual review"></span>
+            <span class="cb off-disabled" role="checkbox" aria-checked="false" aria-disabled="true" title="ETA confidence is LOW — needs individual review" aria-label="Select this request"></span>
             <span class="tip" style="position:absolute;left:26px;top:26px;width:236px;">ETA confidence is LOW — needs individual review</span>
           </td>
           <td><span class="cell-driver">Neha P.</span><br><span class="cell-carrier">GGN Logistics</span></td>
@@ -1360,7 +1385,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
           </td>
         </tr>
         <tr>
-          <td class="selcell p-normal"><span class="cb off-disabled" role="checkbox" aria-checked="false" aria-disabled="true" title="Would displace SHP1009"></span></td>
+          <td class="selcell p-normal"><span class="cb off-disabled" role="checkbox" aria-checked="false" aria-disabled="true" title="Would displace SHP1009" aria-label="Select this request"></span></td>
           <td><span class="cell-driver">Priya D.</span><br><span class="cell-carrier">Bhilwara Movers</span></td>
           <td class="mono">D3 · Tue 4 Aug · 16:00–16:45</td>
           <td class="receipt">NORMAL · 15 min late · exact dock · 0 min wait</td>
@@ -1381,7 +1406,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
           </td>
         </tr>
         <tr class="settled">
-          <td class="selcell p-low"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+          <td class="selcell p-low"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
           <td><span class="cell-driver">Deepak V.</span><br><span class="cell-carrier">Sikar Carriers</span></td>
           <td class="mono">D4 · Tue 4 Aug · 16:30–17:15</td>
           <td class="receipt">LOW · 5 min late · nearest dock · 0 min wait</td>
@@ -1404,7 +1429,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </table>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>35 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>35 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>The button is the primary entry point, not manual multi-select</b> (<code>components.md</code> §6 U63, §19).
@@ -1530,8 +1555,11 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 .unplaceable .mono{ font-size:13px; }
 /* the picker's revalidating interval: the real interval held invisible so it keeps its exact
    dimensions, with a block over it at the lane's own muted token (components.md §13 U78) */
-.bar.revalidating{ background:var(--surface-hover); border:2px solid var(--border-default);
-  color:var(--text-secondary); }
+/* R20 (2026-08-29, E5.3): the revalidating block is the interval the planner just clicked
+   and is actively waiting on, and its border measured 1.36:1 against the track - no visible
+   boundary on the one element that has the user's attention. Same text-tertiary R18 proved. */
+.bar.revalidating{ background:var(--surface-hover); 
+  color:var(--text-secondary);  border:2px solid var(--text-tertiary); }
 </style>
 
 <!-- two more Lucide glyphs, same 2px stroke, for the dock-type combobox (stitch-prompts §10) -->
@@ -1545,7 +1573,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host h620">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1554,21 +1582,20 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" aria-hidden="true" inert>
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" aria-hidden="true" inert>
       <div class="toolbar"><span>24 pending · 6 bulk-eligible</span></div>
       <table class="q fixed" aria-label="Pending appointment requests">
         <colgroup><col style="width:36px"><col style="width:180px"><col style="width:220px"><col style="width:240px"><col><col style="width:80px"></colgroup>
         <tr><th scope="col"></th><th scope="col">Driver · carrier</th><th scope="col">Requested interval</th><th scope="col">Decision receipt</th><th scope="col">Displacement</th><th scope="col">TTL</th></tr>
-        <tr class="settled"><td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+        <tr class="settled"><td class="selcell p-critical"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
           <td><span class="cell-driver">Ravi K.</span><br><span class="cell-carrier">Rajasthan Roadlines</span></td>
           <td class="mono">D1 · Tue 4 Aug · 13:00–14:15</td>
           <td class="receipt">CRITICAL · 70 min late · exact dock · 0 min wait</td>
           <td class="displ-none">conflicts with none</td><td class="ttl t-crit">2:14</td></tr>
-        <tr class="settled"><td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0"></span></td>
+        <tr class="settled"><td class="selcell p-high"><span class="cb" role="checkbox" aria-checked="false" tabindex="0" aria-label="Select this request"></span></td>
           <td><span class="cell-driver">Amit S.</span><br><span class="cell-carrier">Kota Transport</span></td>
           <td class="mono">D2 · Tue 4 Aug · 14:00–14:45</td>
           <td class="receipt">HIGH · 20 min late · exact dock · 5 min wait</td>
@@ -1617,7 +1644,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Category → internal detail → preview → send, and the preview step is not optional</b> — the reason text is sent to
@@ -1803,7 +1830,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host h620">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -1812,11 +1839,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" aria-hidden="true" inert>
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" aria-hidden="true" inert>
       <div class="boardhead">
         <span class="t">Jaipur · Board</span><span class="d">Tue 4 Aug</span>
         <button class="btn btn-neutral" style="margin-left:auto;">Block a dock</button>
@@ -1824,14 +1850,16 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
       <div class="ganttwrap">
         <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-        <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-          <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-          <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D5</div><div class="track">
-          <div class="bar confirmed" style="left:30%;width:16%;"><span class="mono">SHP1005</span></div>
-          <div class="bar confirmed" style="left:60%;width:16%;"><span class="mono">SHP1013</span></div>
-        </div></div>
+        <div class="lanes">
+          <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+          <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+            <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D5</div><div class="track">
+            <div class="bar confirmed" style="left:30%;width:16%;"><span class="mono">SHP1005</span></div>
+            <div class="bar confirmed" style="left:60%;width:16%;"><span class="mono">SHP1013</span></div>
+          </div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1877,7 +1905,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>This is a form opened from a toolbar button — not a drag-to-select gesture on the board.</b> Nothing on this
@@ -2024,7 +2052,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host h700">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2033,11 +2061,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" aria-hidden="true" inert>
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" aria-hidden="true" inert>
       <div class="boardhead">
         <span class="t">Jaipur · Board</span><span class="d">Tue 4 Aug</span>
         <button class="btn btn-neutral" style="margin-left:auto;">Block a dock</button>
@@ -2045,8 +2072,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
       <div class="ganttwrap">
         <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-        <div class="dockrow"><div class="docklabel">D1</div><div class="track"><div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div></div></div>
-        <div class="dockrow"><div class="docklabel">D3</div><div class="track"><div class="bar confirmed" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div></div></div>
+        <div class="lanes">
+          <div class="dockrow"><div class="docklabel">D1</div><div class="track"><div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div></div></div>
+          <div class="dockrow"><div class="docklabel">D3</div><div class="track"><div class="bar confirmed" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div></div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2065,25 +2094,27 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 
     <div class="ganttwrap" style="padding-top:20px;">
       <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-      <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-        <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-        <div class="bar pending" style="left:46%;width:12%;"><span class="mono">SHP1014</span></div>
-        <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-      </div></div>
-      <div class="dockrow"><div class="docklabel">D3</div><div class="track">
-        <div class="bar confirmed current-dim" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div>
-        <div class="bar proposed confirmed" style="left:44%;width:14%;">
-          <span class="diffbadge">Moved</span>&nbsp;<span class="mono">SHP1008</span>
-        </div>
-      </div></div>
-      <div class="dockrow"><div class="docklabel">D4</div><div class="track">
-        <div class="bar proposed pending" style="left:16%;width:14%;">
-          <span class="diffbadge">New</span>&nbsp;<span class="mono">SHP1011</span>
-        </div>
-      </div></div>
-      <div class="dockrow"><div class="docklabel">D5</div><div class="track">
-        <div class="bar blocked" style="left:0%;width:100%;">blocked — DEVT002 outage</div>
-      </div></div>
+      <div class="lanes">
+        <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+        <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+          <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+          <div class="bar pending" style="left:46%;width:12%;"><span class="mono">SHP1014</span></div>
+        </div></div>
+        <div class="dockrow"><div class="docklabel">D3</div><div class="track">
+          <div class="bar confirmed current-dim" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div>
+          <div class="bar proposed confirmed" style="left:44%;width:14%;">
+            <span class="diffbadge">Moved</span>&nbsp;<span class="mono">SHP1008</span>
+          </div>
+        </div></div>
+        <div class="dockrow"><div class="docklabel">D4</div><div class="track">
+          <div class="bar proposed pending" style="left:16%;width:14%;">
+            <span class="diffbadge">New</span>&nbsp;<span class="mono">SHP1011</span>
+          </div>
+        </div></div>
+        <div class="dockrow"><div class="docklabel">D5</div><div class="track">
+          <div class="bar blocked" style="left:0%;width:100%;">blocked — DEVT002 outage</div>
+        </div></div>
+      </div>
     </div>
 
     <div class="summary">4 shipments: 1 unchanged · 2 moved · 1 newly placed · 0 unplaceable</div>
@@ -2095,7 +2126,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       <span><span style="display:inline-block;width:8px;height:8px;background:repeating-linear-gradient(45deg,var(--neutral-300),var(--neutral-300) 2px,var(--neutral-100) 2px,var(--neutral-100) 4px);border:1px solid var(--border-default);border-radius:2px;vertical-align:middle;"></span> Blocked (<code>dock_status_events</code>)</span>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>It proposes; a human applies</b> — and the proposal must <i>look</i> uncommitted. The delta renders as a
@@ -2118,13 +2149,15 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
   <div class="varname">unplaceable · listed below the board · a gap is a gap</div>
   <div class="ganttwrap" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:20px 12px 8px;">
     <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-    <div class="dockrow"><div class="docklabel">D3</div><div class="track">
-      <div class="bar confirmed current-dim" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div>
-      <div class="bar proposed confirmed" style="left:44%;width:14%;"><span class="diffbadge">Moved</span>&nbsp;<span class="mono">SHP1008</span></div>
-    </div></div>
-    <div class="dockrow"><div class="docklabel">D4</div><div class="track">
-      <!-- SHP1017 has NO bar anywhere. It is named in the list below instead. -->
-    </div></div>
+    <div class="lanes">
+      <div class="dockrow"><div class="docklabel">D3</div><div class="track">
+        <div class="bar confirmed current-dim" style="left:26%;width:14%;"><span class="mono">SHP1008</span></div>
+        <div class="bar proposed confirmed" style="left:44%;width:14%;"><span class="diffbadge">Moved</span>&nbsp;<span class="mono">SHP1008</span></div>
+      </div></div>
+      <div class="dockrow"><div class="docklabel">D4</div><div class="track">
+        <!-- SHP1017 has NO bar anywhere. It is named in the list below instead. -->
+      </div></div>
+    </div>
   </div>
   <div class="inline-msg warn" style="margin-top:8px;">
     <svg class="ic" aria-hidden="true"><use href="#i-calendar-x"/></svg>
@@ -2221,7 +2254,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2230,11 +2263,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="boardhead">
         <span class="t">Jaipur · Board</span><span class="d">Tue 4 Aug</span>
         <button class="btn btn-neutral" style="margin-left:auto;">Block a dock</button>
@@ -2242,19 +2274,21 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
       <div class="ganttwrap" style="padding-top:20px;">
         <div class="gantthead"><span>13:00</span><span>14:00</span><span>15:00</span><span>16:00</span><span>17:00</span></div>
-        <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-          <div class="now-line" style="left:4%;"></div><div class="now-label" style="left:0%;">now</div>
-        </div></div>
-        <div class="dockrow"><div class="docklabel">D2</div><div class="track"></div></div>
-        <div class="dockrow"><div class="docklabel">D3</div><div class="track"></div></div>
-        <div class="dockrow"><div class="docklabel">D5</div><div class="track"></div></div>
+        <div class="lanes">
+          <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:4%;"></div><div class="now-label" style="left:4%;">now</div></div>
+          <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+          </div></div>
+          <div class="dockrow"><div class="docklabel">D2</div><div class="track"></div></div>
+          <div class="dockrow"><div class="docklabel">D3</div><div class="track"></div></div>
+          <div class="dockrow"><div class="docklabel">D5</div><div class="track"></div></div>
+        </div>
       </div>
       <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--text-tertiary);">
         No appointments in the next four hours at Jaipur.
       </p>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>0 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>0 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>An empty board is not a blank panel.</b> The lanes stay drawn and labelled and the now-line stays computed, because
@@ -2272,7 +2306,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2281,11 +2315,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" style="display:flex;align-items:center;justify-content:center;">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" style="display:flex;align-items:center;justify-content:center;">
       <div class="emptyst" role="alert">
         <svg class="ic ic-xl" aria-hidden="true"><use href="#i-octagon-alert"/></svg>
         <h3>Couldn't load the dock board — usually a connection problem.</h3>
@@ -2294,7 +2327,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Separate error boundaries per tab</b> — a board failure must never take down a queue a planner is mid-decision on,
@@ -2313,18 +2346,20 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
   </div>
   <div class="ganttwrap" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:20px 12px 8px;">
     <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-    <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-      <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-      <div class="bar revalidating" style="left:64%;width:14%;" aria-busy="true"><span class="mono">13:30–14:45</span></div>
-      <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-    </div></div>
-    <div class="dockrow"><div class="docklabel">D2</div><div class="track">
-      <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
-      <button type="button" class="lane-open pick" style="left:44%;width:14%;">Pick 12:15–13:30</button>
-    </div></div>
-    <div class="dockrow dim"><div class="docklabel">D5</div><div class="track">
-      <span class="lane-reason">Heavy-load dock — not eligible for this shipment.</span>
-    </div></div>
+    <div class="lanes">
+      <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+      <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+        <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+        <div class="bar revalidating" style="left:64%;width:14%;" aria-busy="true"><span class="mono">13:30–14:45</span></div>
+      </div></div>
+      <div class="dockrow"><div class="docklabel">D2</div><div class="track">
+        <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
+        <button type="button" class="lane-open pick" style="left:44%;width:14%;">Pick 12:15–13:30</button>
+      </div></div>
+      <div class="dockrow dim"><div class="docklabel">D5</div><div class="track">
+        <span class="lane-reason">Heavy-load dock — not eligible for this shipment.</span>
+      </div></div>
+    </div>
   </div>
   <p class="helper" style="margin:8px 0 0;">
     The clicked interval is held at its <b>exact dimensions</b> with a neutral block over it — nothing reflows, and
@@ -2344,15 +2379,17 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
   </div>
   <div class="ganttwrap" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:20px 12px 8px;">
     <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-    <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-      <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-      <div class="bar confirmed" style="left:64%;width:14%;"><span class="mono">SHP1031</span></div>
-      <div class="now-line" style="left:52%;"></div><div class="now-label" style="left:44%;">now</div>
-    </div></div>
-    <div class="dockrow"><div class="docklabel">D2</div><div class="track">
-      <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
-      <div class="lane-open" style="left:44%;width:14%;">open</div>
-    </div></div>
+    <div class="lanes">
+      <div class="nowlayer" aria-hidden="true"><div class="now-line" style="left:52%;"></div><div class="now-label" style="left:52%;">now</div></div>
+      <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+        <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+        <div class="bar confirmed" style="left:64%;width:14%;"><span class="mono">SHP1031</span></div>
+      </div></div>
+      <div class="dockrow"><div class="docklabel">D2</div><div class="track">
+        <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
+        <div class="lane-open" style="left:44%;width:14%;">open</div>
+      </div></div>
+    </div>
   </div>
 </div>
 <p class="note">
@@ -2381,12 +2418,14 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
   </div>
   <div class="ganttwrap dim" style="border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:20px 12px 8px;" aria-hidden="true" inert>
     <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-    <div class="dockrow"><div class="docklabel">D1</div><div class="track">
-      <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
-    </div></div>
-    <div class="dockrow"><div class="docklabel">D2</div><div class="track">
-      <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
-    </div></div>
+    <div class="lanes">
+      <div class="dockrow"><div class="docklabel">D1</div><div class="track">
+        <div class="bar confirmed" style="left:5%;width:15%;"><span class="mono">SHP1002</span></div>
+      </div></div>
+      <div class="dockrow"><div class="docklabel">D2</div><div class="track">
+        <div class="bar confirmed" style="left:15%;width:14%;"><span class="mono">SHP1009</span></div>
+      </div></div>
+    </div>
   </div>
   <p class="helper" style="margin:8px 0 0;">
     The <b>banner updates in place</b> rather than letting the next click fail against a row that no longer exists.
@@ -2465,7 +2504,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2474,11 +2513,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" aria-busy="true" aria-live="polite">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" aria-busy="true" aria-live="polite">
       <div class="toolbar"><span>Loading requests for Jaipur…</span></div>
       <table class="q fixed" aria-label="Pending appointment requests">
         <colgroup>
@@ -2522,7 +2560,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </table>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · syncing…</span><span>Jaipur</span><span>— pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · syncing…</span><span>Jaipur</span><span>— pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Not a centred spinner.</b> The real rows are rendered with <code>visibility:hidden</code>, so they hold their true
@@ -2541,7 +2579,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab" href="#">Queue</a><a class="tab active" href="#" aria-current="page">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-board">Board</button></div>
     <button type="button" class="searchbar" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
     <div class="topbar-icons real">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
@@ -2550,33 +2588,34 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main" aria-busy="true" aria-live="polite">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console" aria-busy="true" aria-live="polite">
       <div class="boardhead">
         <span class="t">Jaipur · Board</span><span class="d">Tue 4 Aug</span>
         <span class="helper" style="margin-left:auto;">Loading occupancy…</span>
       </div>
       <div class="ganttwrap" style="padding-top:20px;">
         <div class="gantthead"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span><span>15:00</span></div>
-        <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
-          <span class="skelbar" style="left:5%;width:15%;"></span><span class="skelbar" style="left:45%;width:12%;"></span>
-        </div></div>
-        <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
-          <span class="skelbar" style="left:15%;width:14%;"></span><span class="skelbar" style="left:55%;width:14%;"></span>
-        </div></div>
-        <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
-          <span class="skelbar" style="left:30%;width:12%;"></span>
-        </div></div>
-        <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
-          <span class="skelbar" style="left:0%;width:100%;"></span>
-        </div></div>
+        <div class="lanes">
+          <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
+            <span class="skelbar" style="left:5%;width:15%;"></span><span class="skelbar" style="left:45%;width:12%;"></span>
+          </div></div>
+          <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
+            <span class="skelbar" style="left:15%;width:14%;"></span><span class="skelbar" style="left:55%;width:14%;"></span>
+          </div></div>
+          <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
+            <span class="skelbar" style="left:30%;width:12%;"></span>
+          </div></div>
+          <div class="dockrow"><div class="docklabel"><span class="skeldock"></span></div><div class="track">
+            <span class="skelbar" style="left:0%;width:100%;"></span>
+          </div></div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · syncing…</span><span>Jaipur</span><span>— pending</span><span>Policy v3</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · syncing…</span><span>Jaipur</span><span>— pending</span><span>Policy v3</span></div>
 </div>
 <p class="note">
   <b>Each destination gets a skeleton matching its own final layout</b> — never one generic loader for both tabs. The
@@ -2642,18 +2681,17 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
 <div class="frame host narrow">
   <div class="topbar">
     <button type="button" class="switcher" aria-haspopup="listbox" aria-expanded="false"><span class="swatch" aria-hidden="true"></span>Jaipur<svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
-    <div class="tabs"><a class="tab active" href="#" aria-current="page">Queue</a><a class="tab" href="#">Board</a></div>
+    <div class="tabs" role="tablist" aria-label="Console view"><button type="button" role="tab" class="tab active" aria-selected="true" tabindex="0" aria-controls="p-queue">Queue</button><button type="button" role="tab" class="tab" aria-selected="false" tabindex="-1" aria-controls="p-board">Board</button></div>
     <div class="topbar-icons real" style="margin-left:auto;">
       <button type="button" class="iconbtn" aria-label="Notifications"><svg class="ic ic-md" aria-hidden="true"><use href="#i-bell"/></svg></button>
       <span class="avatar" role="img" aria-label="Neha Bansal">NB</span>
     </div>
   </div>
   <div class="body">
-    <div class="rail accent">
+    <nav class="rail accent" aria-label="Surfaces">
       <a class="railitem active" href="#" aria-current="page" aria-label="Dock command"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-table"/></svg></a>
-      <a class="railitem" href="#" aria-label="Profile"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-circle-user"/></svg></a>
-    </div>
-    <div class="main">
+    </nav>
+    <div class="main" role="main" aria-label="Planner console">
       <div class="minwidth" role="status">
         <svg class="ic ic-xl" style="color:var(--text-tertiary);" aria-hidden="true"><use href="#i-monitor"/></svg>
         <h3>The planner console needs a screen at least 1024px wide.</h3>
@@ -2661,7 +2699,7 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
       </div>
     </div>
   </div>
-  <div class="statusbar"><span><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span></div>
+  <div class="statusbar"><span role="status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-wifi"/></svg> Online · synced just now</span><span>Jaipur</span><span>24 pending</span></div>
 </div>
 <p class="note">
   <b>There is no responsive fallback layout and no horizontal-scroll mini table</b>, because there is no honest small
@@ -2692,13 +2730,10 @@ tr.settled td .cell-driver{ color:var(--text-secondary); font-weight:400; }
   /* component-scoped tier, beside the existing --button-destructive-* pair */
   --button-destructive-hover-bg:var(--red-700);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --text-accent:var(--blue-400);
-    --button-destructive-hover-bg:var(--red-400);
-  }
-}
-:root[data-theme="dark"]{
+/* R1 (2026-08-29, E5.3): system-following dark removed. U69 says the user picks the theme,
+   never the OS. The :root[data-theme="dark"] block below is byte-identical (verified property
+   by property), so dark stays fully available; only the automatic switch is gone. Fourth
+   recurrence: E5.0 shared shell, E5.1 driver board, E5.2 ops board, here. */:root[data-theme="dark"]{
   --text-accent:var(--blue-400);
   --button-destructive-hover-bg:var(--red-400);
 }
@@ -2711,6 +2746,22 @@ button:disabled{ cursor:not-allowed; }
 a{ color:inherit; }
 a.tab,a.railitem,.railexp a{ text-decoration:none; }
 body{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+
+/* ---- R16 (2026-08-29, E5.3): target size. spacing-and-layout.md gives compact a 32px minimum -
+   the deliberate desktop-and-pointer exception to 44px. Measured before this block: 151 of 304
+   interactive elements under 32px, and 31 of them under WCAG 2.2 SC 2.5.8 24x24 Level AA legal
+   floor (.cb at 16x16, .radio at 17px tall, .lane-open.pick at 20px tall). Every fix here grows
+   the HIT AREA around an unchanged glyph, so no artboard moves a pixel. This is the throughput
+   surface: a planner hits these 20-35 times in 30 minutes, and section 7.3 30-second budget is
+   spent on reading, not on acquiring a 16px target. ---- */
+.ibtn,.iconbtn,.cb,.rdot{ position:relative; }
+.ibtn::after,.iconbtn::after,.cb::after,.rdot::after{ content:""; position:absolute;
+  left:50%; top:50%; width:32px; height:32px; transform:translate(-50%,-50%); }
+.radio{ min-height:32px; }
+.rail.accent > .railitem{ min-height:40px; }
+.pill-btn{ min-height:32px; }
+.btn{ min-height:32px; }
+.lane-open.pick{ min-height:32px; top:-6px; bottom:-6px; }
 
 /* top-bar icon buttons: 24px target (the same 24px as .ibtn in components.md
    §6), shrink-wrapped around the existing 20px icon-md glyph */

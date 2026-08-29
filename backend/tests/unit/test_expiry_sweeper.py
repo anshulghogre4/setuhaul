@@ -23,10 +23,21 @@ import pytest
 from app.core.clock import SYSTEM_CLOCK, FrozenClock, SystemClock, resolve_clock
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
-from app.scheduling import allocation, expiry
+from app.scheduling import allocation, expiry, holds
 
 # 2026-08-13 is D14's snapshot date; 12:00 IST is 06:30 UTC.
 SNAPSHOT = datetime(2026, 8, 13, 6, 30, tzinfo=timezone.utc)
+
+# The substring that identifies the D9 candidate scan among the sweeper's statements. Named once
+# rather than inlined because issue #64 changed the scan's ORDER BY, and four separate tests were
+# matching on the old `ORDER BY a.booked_at ASC` literal.
+#
+# It must be a string the *locking* SELECT does not also contain -- that statement reads
+# `FROM public.appointments a` too, so the obvious FROM-clause marker would misroute it and the
+# scripted session would hand the lock query the candidate list. This `COALESCE` appears only in
+# the scan, and pinning it here doubles as an assertion that #64's precedence rule ("a stored
+# `expires_at` overrides the derived `booked_at + ttl` deadline") is actually in the SQL.
+PENDING_SCAN_MARKER = "COALESCE(a.expires_at, a.booked_at)"
 
 
 def _ops_ctx() -> ExecutionContext:
@@ -85,20 +96,160 @@ def test_resolve_clock_defaults_to_the_system_clock():
 
 
 # --------------------------------------------------------------------------------------
-# D2 -- the HELD leg, reported as unsupported rather than silently zero
+# D2 -- the HELD leg (issue #53)
+#
+# The predecessor of this block was a deliberate forcing function: it asserted the leg reported
+# `supported: False` and named the two missing schema pieces, with the docstring "when the D2
+# columns land, this test fails and demands the real sweep". The columns landed
+# (20260829134929_d2_held_state_dock_occupancy.sql) and it did exactly that. These are the tests
+# it was demanding.
 # --------------------------------------------------------------------------------------
 
 
-def test_held_sweep_reports_unsupported_and_names_both_missing_schema_pieces():
-    """Forcing function: when the D2 columns land, this test fails and demands the real sweep."""
-    result = expiry.sweep_held_holds(ttl_seconds=90)
+def _held_session(expired_rows: list[dict]) -> AsyncMock:
+    session = AsyncMock()
+
+    async def _execute(statement, params=None):
+        result = MagicMock()
+        if "UPDATE public.dock_occupancy" in str(statement):
+            result.mappings.return_value.all.return_value = expired_rows
+        return result
+
+    session.execute.side_effect = _execute
+    return session
+
+
+@pytest.mark.asyncio
+async def test_held_sweep_reports_unsupported_when_the_two_phase_flag_is_off():
+    """A deploy without the migration must not query a column that does not exist there.
+
+    `supported` survives from the pre-#53 stub for exactly this: it is the honest answer for an
+    environment where `TWO_PHASE_HOLD_ENABLED` is false, and it keeps the
+    `/internal/jobs/expiry-sweep` response shape stable across both.
+    """
+    session = AsyncMock()
+    result = await holds.sweep_held_holds(
+        session, actor_user_id="USR-SYS", now=SNAPSHOT, ttl_seconds=90, enabled=False
+    )
 
     assert result.supported is False
     assert result.expired == 0
     assert result.ttl_seconds == 90
-    assert result.unsupported_reason is not None
-    assert "HELD status" in result.unsupported_reason
-    assert "expires_at" in result.unsupported_reason
+    assert "TWO_PHASE_HOLD_ENABLED" in (result.unsupported_reason or "")
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_held_sweep_claims_with_skip_locked_and_guards_on_the_held_state():
+    """This SQL *is* the confirm-vs-sweep race resolution -- see `holds.py`'s module docstring.
+
+    `state = 'HELD'` in the inner WHERE is what makes a driver's committed `confirm_held_slot`
+    win: under READ COMMITTED the predicate is re-evaluated against the committed version, which
+    now reads PENDING_CONFIRMATION, so the row is never claimed. Delete that predicate and the
+    sweeper would happily expire a hold somebody just converted into a real appointment, releasing
+    capacity out from under a booking.
+    """
+    session = _held_session(
+        [{"occupancy_id": 7, "dock_id": "DCK-J1", "shipment_id": "SHP1002"}]
+    )
+
+    result = await holds.sweep_held_holds(
+        session, actor_user_id="USR-SYS", now=SNAPSHOT, ttl_seconds=90, batch_limit=25
+    )
+
+    sql = next(
+        str(call.args[0])
+        for call in session.execute.await_args_list
+        if "UPDATE public.dock_occupancy" in str(call.args[0])
+    )
+    assert "state = 'HELD'" in sql
+    assert "FOR UPDATE SKIP LOCKED" in sql
+    assert "expires_at <= :now" in sql
+    # Flipped in place, not deleted: an EXPIRED row drops out of the partial exclusion predicate
+    # (so it stops blocking capacity) while staying readable as evidence the hold existed.
+    assert "SET state = 'EXPIRED'" in sql
+    assert "DELETE" not in sql
+
+    params = next(
+        call.args[1]
+        for call in session.execute.await_args_list
+        if "UPDATE public.dock_occupancy" in str(call.args[0])
+    )
+    # `expires_at` was stamped at hold time and is the authority; the sweep compares against `now`
+    # and never re-derives a deadline from ttl_seconds, so a config change cannot retroactively
+    # shorten a hold a driver was already promised.
+    assert params["now"] == SNAPSHOT
+    assert params["limit"] == 25
+    assert result.supported is True
+    assert result.expired == 1
+    assert result.holds[0].hold_id == "7"
+    assert result.holds[0].dock_id == "DCK-J1"
+
+
+@pytest.mark.asyncio
+async def test_held_sweep_audits_every_lapsed_hold_naming_the_sweeper():
+    """M14: every state change reconstructable, including the automated ones."""
+    session = _held_session(
+        [{"occupancy_id": 7, "dock_id": "DCK-J1", "shipment_id": "SHP1002"}]
+    )
+
+    await holds.sweep_held_holds(
+        session, actor_user_id="USR-SYS", now=SNAPSHOT, ttl_seconds=90
+    )
+
+    audit = next(
+        call.args[1]
+        for call in session.execute.await_args_list
+        if "INSERT INTO public.audit_logs" in str(call.args[0])
+    )
+    assert audit["user_id"] == "USR-SYS"
+    assert audit["entity_id"] == "7"
+    new_value = json.loads(audit["new_value_json"])
+    assert new_value["state"] == "EXPIRED"
+    assert new_value["actor"] == "EXPIRY_SWEEPER"
+    # `audit_logs.created_at` is still `text` (never converted by E1.1), so it takes the ISO
+    # string -- the same bind-type rule the D9 leg's test pins.
+    assert isinstance(audit["created_at"], str)
+
+
+@pytest.mark.asyncio
+async def test_held_sweep_raises_no_escalation_for_a_lapsed_hold():
+    """A hold lapsing is the designed outcome of a driver not choosing, not an incident.
+
+    The D9 leg raises PENDING_EXPIRED_UNACTIONED because a request nobody actioned needs a human.
+    A 90-second hold that nobody confirmed needs nobody. Raising one per lapsed hold would bury
+    the D9 escalations that do need attention.
+    """
+    session = _held_session(
+        [{"occupancy_id": 7, "dock_id": "DCK-J1", "shipment_id": "SHP1002"}]
+    )
+
+    await holds.sweep_held_holds(
+        session, actor_user_id="USR-SYS", now=SNAPSHOT, ttl_seconds=90
+    )
+
+    assert not [
+        call
+        for call in session.execute.await_args_list
+        if "escalation_queue" in str(call.args[0])
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sweep_cycle_leaves_the_held_leg_off_unless_explicitly_enabled():
+    """The default must be the safe one: the migration may not be applied on this deploy."""
+    session = _sweeper_session([], lock_returns=[])
+
+    result = await expiry.sweep_expired_appointments(
+        session, actor_user_id="USR-SYS", clock=FrozenClock(SNAPSHOT)
+    )
+
+    assert result.held.supported is False
+    assert not [
+        call
+        for call in session.execute.await_args_list
+        if "dock_occupancy" in str(call.args[0])
+    ]
 
 
 # --------------------------------------------------------------------------------------
@@ -122,7 +273,7 @@ def _sweeper_session(candidates: list[dict], *, lock_returns: list[object]) -> A
         if "FROM public.users" in sql:
             result.first.return_value = (1,)
             return result
-        if "ORDER BY a.booked_at ASC" in sql:
+        if PENDING_SCAN_MARKER in sql:
             result.mappings.return_value.all.return_value = candidates
             return result
         if "FOR UPDATE SKIP LOCKED" in sql:
@@ -151,7 +302,7 @@ async def test_sweep_derives_the_d9_deadline_from_the_injected_clock(monkeypatch
     scan = [
         call
         for call in session.execute.await_args_list
-        if "ORDER BY a.booked_at ASC" in str(call.args[0])
+        if PENDING_SCAN_MARKER in str(call.args[0])
     ]
     assert scan, "candidate scan never ran"
     assert scan[0].args[1]["deadline"] == SNAPSHOT - timedelta(minutes=15)
@@ -341,7 +492,7 @@ async def test_sweep_binds_a_datetime_to_timestamptz_and_a_string_to_text(monkey
     scan = next(
         call.args[1]
         for call in session.execute.await_args_list
-        if "ORDER BY a.booked_at ASC" in str(call.args[0])
+        if PENDING_SCAN_MARKER in str(call.args[0])
     )
     assert isinstance(scan["deadline"], datetime)
 
@@ -487,7 +638,7 @@ async def test_sweep_flags_a_full_batch_so_a_backlog_is_visible(monkeypatch):
     scan = next(
         call.args[1]
         for call in session.execute.await_args_list
-        if "ORDER BY a.booked_at ASC" in str(call.args[0])
+        if PENDING_SCAN_MARKER in str(call.args[0])
     )
     assert scan["limit"] == 2
 
@@ -564,8 +715,14 @@ async def test_confirm_loses_the_race_with_already_actioned(monkeypatch):
             session,
             _ops_ctx(),
             shipment_id="SHP1002",
+            # `snapshot_hash` became required in E5.3 / issue #61. It is deliberately never
+            # reached on this path: ALREADY_ACTIONED is raised from the status check *before* the
+            # snapshot guard runs, which is exactly the ordering section 7.5.1 wants -- a row
+            # somebody already actioned is decided, not stale.
             command=allocation.ConfirmAppointmentCommand(
-                appointment_id="APT-STALE", warehouse_confirmation_ref="WH-1"
+                appointment_id="APT-STALE",
+                snapshot_hash="whatever-the-planner-was-holding",
+                warehouse_confirmation_ref="WH-1",
             ),
             idempotency_key="idem-1",
         )

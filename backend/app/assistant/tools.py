@@ -18,6 +18,7 @@ from app.scheduling.allocation import (
     request_slot,
 )
 from app.scheduling.feasibility import explain_slot_eligibility, find_feasible_slots
+from app.scheduling.holds import confirm_held_slot
 from app.services import driver_reads
 from app.services.eta_service import EtaUpdateCommand, confirmation_preview, record_eta_update
 from app.services.escalation_service import (
@@ -29,10 +30,17 @@ from app.services.redis_memory import ConversationMemory
 
 # E3.1 (issue #25): SOLUTION_DESIGN.md section 7.5.4's 12-tool driver allowlist, enumerated
 # there because "Appendix A argues for shrinking the driver tool surface... that claim is only
-# actionable if the list is named." confirm_held_slot is deliberately not yet built -- it needs
-# the D2 HELD state on dock_occupancy (schema + a restructured request_slot), which this session
-# scoped as its own dedicated pass, not a tool-catalog line item (see issue #25's own comment
-# thread and #20's hand-off note). This module therefore binds 11 of the 12, not all 12.
+# actionable if the list is named."
+#
+# Issue #53 closed the last gap: `confirm_held_slot` is now bound, so this is 12 of 12. Section
+# 7.5.4's own note on why the list is 12 rather than 9 -- "`confirm_held_slot` and
+# `explain_slot_eligibility` are new and both are load-bearing" -- is now satisfied by both.
+#
+# The tool is bound unconditionally, not behind `TWO_PHASE_HOLD_ENABLED`. That is deliberate: with
+# the flag off no hold can exist, so every call returns HOLD_NOT_FOUND -- a truthful refusal the
+# model can narrate. Varying the *tool surface* by config would instead make the assistant's
+# schema differ between deploys, which is the thing Appendix A's token/selection-accuracy argument
+# is about keeping stable.
 DRIVER_ALLOWLIST = frozenset(
     {
         "get_driver_operational_context",
@@ -42,6 +50,7 @@ DRIVER_ALLOWLIST = frozenset(
         "report_delay_or_update_eta",
         "find_feasible_slots",
         "request_slot",
+        "confirm_held_slot",
         "get_appointment_request_status",
         "explain_slot_eligibility",
         "cancel_appointment",
@@ -103,6 +112,21 @@ class RequestSlotArgs(BaseModel):
     slot_id: str = Field(description="Exact slot_id selected from find_feasible_slots")
     displayed_policy_version: str | None = Field(default=None)
     displayed_recommendation_id: str | None = Field(default=None)
+    note: str | None = Field(default=None, description="Optional driver note for the request")
+
+
+class ConfirmHeldSlotArgs(BaseModel):
+    """Section 7.1: "takes the hold id, revalidates inside the transaction, and produces
+    PENDING_CONFIRMATION" (issue #53).
+
+    One argument, deliberately. Section 7.5's first principle is that scope is derived from the
+    authenticated identity and never from an argument (M15); `hold_id` selects *within* the
+    caller's scope and is validated against it server-side. Adding a `shipment_id` here "for
+    convenience" would reintroduce exactly the hole that principle exists to close.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+    hold_id: str = Field(description="hold_id returned by request_slot's HELD outcome")
     note: str | None = Field(default=None, description="Optional driver note for the request")
 
 
@@ -411,6 +435,32 @@ def build_driver_tools(
             code = getattr(exc, "code", "REQUEST_SLOT_FAILED")
             return _json({"code": code, "message": str(exc), "appointment_writes": 0})
 
+    async def confirm_held_slot_tool(args: ConfirmHeldSlotArgs | None = None, **kwargs: Any) -> str:
+        parsed_args = (
+            args if isinstance(args, ConfirmHeldSlotArgs) else ConfirmHeldSlotArgs.model_validate(kwargs)
+        )
+        try:
+            result = await confirm_held_slot(
+                session,
+                ctx,
+                # `hold_id` is the *only* identifier this tool accepts, and that is M15, not
+                # minimalism: shipment, slot, dock and facility are all read off the held row
+                # server-side. A `shipment_id` argument here would let a caller pair someone
+                # else's hold id with their own shipment id and pass the scope check.
+                hold_id=parsed_args.hold_id,
+                note=parsed_args.note,
+                idempotency_key=chat_mutation_idempotency_key(
+                    thread_id=thread_id,
+                    action="confirm-held-slot",
+                    parts=[parsed_args.hold_id],
+                    client_message_id=client_message_id,
+                ),
+            )
+            return _json(result.model_dump())
+        except Exception as exc:  # noqa: BLE001 - return stable tool error to the model
+            code = getattr(exc, "code", "CONFIRM_HELD_SLOT_FAILED")
+            return _json({"code": code, "message": str(exc), "appointment_writes": 0})
+
     async def explain_slot_eligibility_tool(args: SlotEligibilityArgs | None = None, **kwargs: Any) -> str:
         parsed_args = args if isinstance(args, SlotEligibilityArgs) else SlotEligibilityArgs.model_validate(kwargs)
         try:
@@ -542,10 +592,25 @@ def build_driver_tools(
             name="request_slot",
             description=(
                 "Request an exact selected slot for an in-scope shipment after the driver explicitly "
-                "chooses a slot_id. Revalidates transactionally and creates PENDING_CONFIRMATION only; "
-                "it never confirms the appointment."
+                "chooses a slot_id. Revalidates transactionally. Returns either SLOT_HELD with a "
+                "hold_id reserved for ~90 seconds (then call confirm_held_slot to commit it) or "
+                "SLOT_REQUESTED at PENDING_CONFIRMATION, depending on deployment. It never confirms "
+                "the appointment. A hold is NOT a booking -- never tell the driver a held slot is "
+                "booked or confirmed."
             ),
             args_schema=RequestSlotArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=confirm_held_slot_tool,
+            name="confirm_held_slot",
+            description=(
+                "Commit a slot the driver is already holding, using the hold_id returned by "
+                "request_slot. Revalidates transactionally and produces PENDING_CONFIRMATION; it "
+                "never confirms the appointment (a human does that). Refuses with HOLD_EXPIRED if "
+                "the 90-second reservation lapsed. Do not call this without a hold_id from this "
+                "conversation."
+            ),
+            args_schema=ConfirmHeldSlotArgs,
         ),
         StructuredTool.from_function(
             coroutine=get_appointment_request_status_tool,

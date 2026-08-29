@@ -16,7 +16,7 @@
   --neutral-800:#1E293B; --neutral-900:#0F172A; --neutral-950:#020617;
 
   --blue-50:#EFF6FF;  --blue-500:#3B82F6; --blue-600:#2563EB;
-  --amber-50:#FFFBEB; --amber-500:#F59E0B; --amber-700:#B45309;
+  --amber-50:#FFFBEB; --amber-500:#F59E0B; --amber-600:#D97706; --amber-700:#B45309;
   --green-50:#ECFDF5; --green-500:#10B981; --green-600:#059669; --green-700:#047857;
   --red-50:#FEF2F2;   --red-600:#DC2626;
 
@@ -29,8 +29,8 @@
   --border-subtle:var(--neutral-200);
   --border-default:var(--neutral-300);
 
-  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-300); --state-shown-text:var(--neutral-700);
-  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-500);    --state-held-text:var(--amber-700);
+  --state-shown-bg:var(--neutral-50);    --state-shown-border:var(--neutral-500); --state-shown-text:var(--neutral-700);
+  --state-held-bg:var(--amber-50);       --state-held-border:var(--amber-600);    --state-held-text:var(--amber-700);
   --state-pending-bg:var(--blue-50);     --state-pending-border:var(--blue-500);  --state-pending-text:var(--blue-600);
   --state-confirmed-bg:var(--green-50);  --state-confirmed-border:var(--green-600);--state-confirmed-text:var(--green-700);
 
@@ -43,25 +43,9 @@
 
   --r-sm:4px; --r-md:6px; --r-lg:8px;
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --surface-base:var(--neutral-950);
-    --surface-raised:var(--neutral-900);
-    --surface-hover:var(--neutral-800);
-    --text-primary:var(--neutral-50);
-    --text-secondary:var(--neutral-300);
-    --text-tertiary:var(--neutral-400);
-    --border-subtle:var(--neutral-800);
-    --border-default:var(--neutral-700);
-    --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
-    --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:#FBBF24;
-    --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:#60A5FA;
-    --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:#34D399;
-    --board-bg:var(--neutral-950);
-    --board-ink:var(--neutral-50);
-    --board-muted:var(--neutral-400);
-  }
-}
+/* [E5.5 R1 2026-08-29] Removed @media(prefers-color-scheme:dark) — U69 forbids system-following
+   theme defaults. The :root[data-theme="dark"] block below is a byte-identical duplicate, so dark
+   stays fully available; only the automatic switch is gone. 4th recurrence (E5.0/E5.1/E5.2). */
 :root[data-theme="dark"]{
   --surface-base:var(--neutral-950);
   --surface-raised:var(--neutral-900);
@@ -71,7 +55,7 @@
   --text-tertiary:var(--neutral-400);
   --border-subtle:var(--neutral-800);
   --border-default:var(--neutral-700);
-  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-600); --state-shown-text:var(--neutral-200);
+  --state-shown-bg:var(--neutral-800);  --state-shown-border:var(--neutral-500); --state-shown-text:var(--neutral-200);
   --state-held-bg:#3a2c10;              --state-held-border:var(--amber-500);    --state-held-text:#FBBF24;
   --state-pending-bg:#122040;           --state-pending-border:var(--blue-500);  --state-pending-text:#60A5FA;
   --state-confirmed-bg:#0b2f26;         --state-confirmed-border:var(--green-500);--state-confirmed-text:#34D399;
@@ -169,14 +153,7 @@ table.f tr:hover td{ background:var(--surface-hover); }
   --shadow-md:0 4px 12px rgba(15,23,42,.10);
   --shadow-focus:0 0 0 2px var(--surface-base), 0 0 0 4px var(--border-focus);
 }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --border-focus:var(--blue-400);
-  --feedback-success-text:var(--green-400);
-  --exception-flag-ink:var(--amber-400);
-  --skeleton-fill:var(--neutral-800);
-  --shadow-sm:none;                                /* elevation-and-depth.md: dark level 1 has no shadow */
-  --shadow-md:0 4px 12px rgba(0,0,0,.40);
-}}
+/* [E5.5 R1 2026-08-29] Same removal for the additions block. */
 :root[data-theme="dark"]{
   --border-focus:var(--blue-400);
   --feedback-success-text:var(--green-400);
@@ -338,6 +315,140 @@ a.excrow:hover{ background:var(--surface-hover); }
 
 /* --- Forced-colors fallback (elevation-and-depth.md U87): box-shadow is stripped, so
        every level-1+ surface needs a real edge or the layer model flattens to nothing --- */
+
+/* ============================================================
+   E5.5 FIX PASS — 2026-08-29. Every rule below closes a defect found by rendering
+   and measuring, not by reading. Each cites the foundations file that supplies the
+   value. Appended so the blocks above stay as authored.
+   ============================================================ */
+
+/* [R18] motion.md's duration-fast, declared rather than relied on as a var() fallback (U85). */
+:root{ --t-fast:120ms; --t-base:200ms; }
+
+/* [R4] Tap targets. spacing-and-layout.md's density table gives "comfortable" a 44px minimum and
+   this surface is comfortable. Measured before: 75 of 80 interactive elements below it, 9 of them
+   also below WCAG 2.2 SC 2.5.8's 24x24 Level AA floor (.linkbtn 63x15, .backbar 94.2x17).
+   Hit areas grow around unchanged glyphs, so nothing moves visually. */
+.iconbtn{ width:44px; height:44px; align-items:center; justify-content:center; padding:0; }
+.avatarbtn{ position:relative; }                     /* visual stays 32px, per the shared shell */
+.avatarbtn::after{ content:""; position:absolute; top:-6px; right:-6px; bottom:-6px; left:-6px; }
+.topbar-icons{ gap:4px; }                            /* 44px boxes carry their own separation */
+.railitem{ height:48px; }                            /* 56x48 clears 44 in both axes */
+.filterbtn{ min-height:44px; padding:4px 12px; }
+.popitem{ height:44px; }
+.btn{ position:relative; }
+.btn::after{ content:""; position:absolute; top:-2px; right:0; bottom:-2px; left:0; }  /* 40 -> 44 */
+.linkbtn,.backbar{ position:relative; display:inline-flex; align-items:center; min-height:44px; }
+.lastupdated{ align-items:center; }
+
+/* [R5] The row is the navigation target (05-carrier-portal/components.md §2) and had no way to
+   receive focus at all — measured 0 focusable rows, 0 roles, 0 anchors, while
+   ".tbl tbody tr:focus-visible" already existed in CSS with nothing able to trigger it.
+   [R5b 2026-08-29, E5.5 owner pass — CORRECTION, not a fix] The comment below this one claimed the
+   ::after "stretches over the whole row." Measured directly (elementFromPoint sweep across five
+   points in a real shipment row): it does not. Root cause found, not guessed: R15 makes the FIRST
+   <td> `position:sticky`, which is a nearer positioned ancestor to `.rowlink` than the `<tr>` this
+   rule targets — so `.rowlink::after`'s containing block resolves to that <td> (180px, column 1
+   only), not the 972px row. Tested and ruled out `overflow:hidden` as the cause (removing it from
+   `.tbl td` made no difference — confirmed the sticky ancestor, not clipping, is the blocker).
+   There is no pure-CSS fix: the sticky column (components.md §6, required) and a CSS-only
+   whole-row stretch both need to be the row's nearest positioned ancestor, and only one can be.
+   **What is actually true today**: the functional click/keyboard target is column 1 only —
+   180×51px, itself well clear of the 44px floor and WCAG 2.5.8's 24px floor, so no row is
+   genuinely unreachable. But `components.md` §2's "the whole row is a single navigation target" is
+   not met by CSS alone. The real fix is a row-level `onClick`/`onKeyDown` delegate in the React
+   build (`<tr>` navigates on click anywhere in its bounds; `.rowlink` remains the focusable,
+   keyboard- and screen-reader-facing element) — a build requirement, not a mockup defect, same
+   class as `Intl` in `02-ops-exception-console/implementation-spec.md` §5.4. Flagged, not silently
+   left claiming something false. */
+.tbl tbody tr{ position:relative; }
+.rowlink{ color:inherit; text-decoration:none; font:inherit; border-radius:var(--r-sm); }
+.rowlink::after{ content:""; position:absolute; inset:0; }  /* covers column 1 only — see R5b above */
+.tbl tbody tr:has(.rowlink:hover) td{ background:var(--surface-hover); }
+.tbl tbody tr:has(.rowlink:focus-visible) td{ background:var(--surface-hover); }
+.tbl tbody tr:has(.rowlink:focus-visible){ outline:2px solid var(--border-focus); outline-offset:-2px; }
+.rowlink:focus-visible{ outline:none; }
+/* §18 Read-only: a row that is NOT a navigation target must not offer a hover state either. */
+table.f tr:hover td{ background:none; }
+.tbl tbody tr:has(.rowlink):hover td{ background:var(--surface-hover); }
+
+/* [R16] comfortable row height is 44px. Measured before: 44 / 46 / 48 / 71 in the same table —
+   and .skrow is hard-coded to 44, so the loading skeleton did not match 3 of the 4 real row
+   shapes it claims to stand in for.
+   [R16b 2026-08-29, E5.5 owner pass] R16's own selector (`.tbl td`, specificity 0,1,1) lost to the
+   base rule `table.f td{ padding:12px 16px; }` (specificity 0,1,2) — the base rule's vertical
+   padding (24px) never actually left, so a 21px line-height content box plus 24px padding forced
+   every row past the 44px floor regardless. Re-measured in headless Chromium before this fix:
+   51 / 51 / 46 / 69 / 66.5 / 51px — not 44 anywhere, and not the four values the R16 comment
+   above claims either. Raising the selector's own specificity (adding `table.f`) is the fix, not
+   the value — the value was always correct. Re-measured after: 44px on every row, 0 exceptions. */
+.tbl table.f td{ height:44px; padding:0 16px; }
+.tbl table.f th{ padding:0 16px; height:44px; }
+.statuscell{ flex-wrap:nowrap; }
+
+/* [R15] Horizontal scroll with a frozen first column, replacing a silent clip
+   (components.md §6: "Fixed first column when horizontally scrolled"). */
+.tbl{ overflow-x:auto; overflow-y:visible; }
+.tbl table.f{ min-width:972px; }
+.tbl thead th:first-child,.tbl tbody td:first-child{ position:sticky; left:0; z-index:101;
+  background:var(--surface-raised); }
+.tbl thead th:first-child{ z-index:102; }
+
+/* [R8] Type tokens. Each value below matched no row of typography.md's scale.
+     th          11/700 -> text-label 12/600  (components.md §6 assigns table headers text-label)
+     .dhead      12/700 -> text-label 12/600
+     .chip       no tracking -> text-label's 0.04em
+     .brand      16/700 -> text-h3 16/600
+     .avatarbtn  12/700 -> text-label 12/600
+     .filterbtn  12/400 -> text-label 12/600
+     .lastupdated 12/400 -> text-micro 11/500/.02em ("Timestamps, metadata")
+     .stat .value weight 700 -> 600. The SIZE stays 24px and is raised as a fork instead:
+                  24/600 is text-h1, a real token; components.md §14 names text-h3 (16/600).
+                  Both are sourced, so which one applies is a design call, not a mockup bug. */
+table.f th{ font-size:12px; font-weight:600; line-height:1.33; }
+.detailcard .dhead{ font-weight:600; }
+.chip{ letter-spacing:.04em; }
+.topbar .brand,h1.brand{ font-size:16px; font-weight:600; line-height:1.5; margin:0; }
+.avatarbtn{ font-weight:600; }
+.filterbtn{ font-weight:600; }
+.lastupdated{ font-size:11px; font-weight:500; letter-spacing:.02em; line-height:1.3; }
+.lastupdated .linkbtn{ font-size:12px; letter-spacing:0; }
+.stat .value{ font-weight:600; }
+.sectionhead h2{ font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--text-tertiary); margin:0; }
+.histrow{ line-height:1.4; }
+.frame{ line-height:1.5; }
+.tbl td,.tbl th{ line-height:1.5; }
+
+/* [R14] Delta: percentage POINTS against a named period. carrier_reads.py returns
+   delta_percentage_points; the tile rendered it as "2%", which reads as a 2% improvement rather
+   than a 2-point move. dataviz's stat-tile contract also requires the period be named.
+   [R14b 2026-08-29, E5.5 owner pass] The direction arrow is the ONLY channel carrying up-vs-down —
+   and it is aria-hidden. Measured accessible name before: "2 pts vs. prior 30 days", direction
+   absent — the same "meaning carried by one hidden channel" failure the promise-state chips are
+   built specifically to avoid, just not caught here until rendered and queried. A `.sr-only`
+   "Increased " text node now precedes the number on every instance (5/5 fixed). A real build
+   branches this word by sign (Increased/Decreased/Unchanged) — this mockup shows only the one
+   value in its dataset, so only "Increased" is demonstrated; noted so it isn't read as the only
+   word ever needed. */
+.stat .delta{ display:inline-flex; align-items:center; gap:2px; margin-left:0; }
+.stat .delta .dvs{ font-weight:500; color:var(--text-tertiary); letter-spacing:0; }
+.statlabelrow{ flex-wrap:wrap; }
+
+/* [R9] The stale-data notice reached for --state-held-* — promise-state tokens, which
+   components.md §2 reserves to the chip alone ("nothing else may borrow them"), and which made a
+   staleness warning render in HELD's exact palette. color.md has feedback-warning-* for this. */
+:root{ --feedback-warning-bg:var(--amber-50); --feedback-warning-border:var(--amber-500);
+       --feedback-warning-text:var(--amber-700); }
+:root[data-theme="dark"]{ --feedback-warning-bg:#3A2C10; --feedback-warning-border:var(--amber-500);
+       --feedback-warning-text:var(--amber-400); }
+.notice{ background:var(--feedback-warning-bg); border-color:var(--feedback-warning-border);
+  color:var(--feedback-warning-text); }
+
+/* [R10] 05-carrier-portal/components.md §1 specifies "a thin area/line fill, faint baseline".
+   The baseline was absent, so a 30-point line had no reference to be read against. */
+.spark2 .baseline{ stroke:var(--border-subtle); stroke-width:1; }
+
 @media (forced-colors:active){
   .frame,.stat,.detailcard,.excrow,.tbl,.pop,.notice{ border:1px solid CanvasText; }
 }
@@ -361,13 +472,13 @@ a.excrow:hover{ background:var(--surface-hover); }
 <p class="screen-label">State 1 — <span>Dashboard — overview strip, fleet shipments, open exceptions</span></p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">🔔 <span style="font-size:16px;">?</span> ⚙︎ <span class="avatar">AB</span></div>
     </div>
     <div class="body">
       <div class="rail"><div class="active">▤</div><div>👤</div></div>
-      <div class="main">
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="stats">
           <div class="stat">
             <div class="label">Active shipments</div>
@@ -387,7 +498,7 @@ a.excrow:hover{ background:var(--surface-hover); }
         </div>
         <div class="lastupdated">Last updated 2 min ago <span class="refresh">↻ Refresh</span></div>
 
-        <div class="sectionhead"><h3>Your shipments</h3><span class="filter">Filter: all statuses ▾</span></div>
+        <div class="sectionhead"><h2>Your shipments</h2><span class="filter">Filter: all statuses ▾</span></div>
         <table class="f">
           <tr><th>Shipment</th><th>Driver</th><th>Facility · Dock</th><th>Status</th><th></th></tr>
           <tr>
@@ -404,7 +515,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           </tr>
         </table>
 
-        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="sectionhead"><h2>Open exceptions</h2></div>
         <div class="excrow">
           <span class="mono">SHP1013</span> · Neha P. · No feasible slot — escalated 09:12
           <span class="chevron">›</span>
@@ -417,11 +528,11 @@ a.excrow:hover{ background:var(--surface-hover); }
 <p class="screen-label">State 2 — <span>Shipment detail — read-only, shared chip component, plain history</span></p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="max-width:480px;">
-    <div class="topbar">
+    <div class="topbar" role="region" aria-label="Account and notifications">
       <div class="brand" style="font-size:14px;color:var(--text-tertiary);">← Dashboard</div>
     </div>
     <div class="body" style="grid-template-columns:1fr;">
-      <div class="main">
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="detailcard">
           <div class="id">SHP1015 · Ravi K.</div>
           <span class="chip pending">◷ PENDING CONFIRMATION</span>
@@ -472,14 +583,14 @@ a.excrow:hover{ background:var(--surface-hover); }
       <div class="stat">
         <div class="statlabelrow">
           <div class="label" style="margin-bottom:0;">On-time (30d)</div>
-          <span class="delta">▲ 2%</span>
+          <span class="delta"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sr-only">Increased </span><span class="tnum">2</span> pts <span class="dvs">vs. prior 30 days</span></span>
         </div>
         <div class="value tnum" style="margin-top:4px;">91%</div>
         <!-- 30 daily points, most recent at the right. Drawn at rendered pixel size — no
              non-uniform viewBox stretch, so the 2px stroke stays 2px in both axes. -->
         <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
              aria-label="On-time performance over the last 30 days, ending at 91%.">
-          <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+          <line class="baseline" x1="4" y1="23" x2="294" y2="23"/><polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
             stroke-linecap="round"
             points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
           <!-- End marker: emphasis by lightness value, not hue. 2px ring in the tile's own surface. -->
@@ -500,8 +611,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -509,18 +620,17 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="sectionhead">
-          <h3>Your shipments</h3>
-          <button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button>
+          <h2>Your shipments</h2>
+          <button class="filterbtn" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="false">Filter: all statuses<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
         <div class="tbl">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -530,25 +640,25 @@ a.excrow:hover{ background:var(--surface-hover); }
             </thead>
             <tbody>
               <tr>
-                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1015, driver Ravi K., Jaipur dock D5, pending confirmation. Open shipment detail.">SHP1015</a></td><td>Ravi K.</td><td class="mono">Jaipur</td>
                 <td class="mono">D5</td>
                 <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1009, driver Amit S., Gurugram dock D2, confirmed. Open shipment detail.">SHP1009</a></td><td>Amit S.</td><td class="mono">Gurugram</td>
                 <td class="mono">D2</td>
                 <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1013</td><td>Neha P.</td><td class="mono">Kota</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1013, driver Neha P., Kota, no dock assigned, exception open. Open shipment detail.">SHP1013</a></td><td>Neha P.</td><td class="mono">Kota</td>
                 <td class="mono">—</td>
                 <td><span class="statuscell"><span class="exflag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Exception open</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1021</td><td>Priya M.</td><td class="mono">Jaipur</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1021, driver Priya M., Jaipur dock D2, pending confirmation, exception open. Open shipment detail.">SHP1021</a></td><td>Priya M.</td><td class="mono">Jaipur</td>
                 <td class="mono">D2</td>
                 <td>
                   <span class="statuscell">
@@ -559,9 +669,9 @@ a.excrow:hover{ background:var(--surface-hover); }
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc"><span title="SH-2026-0819-0041217">SH-2026-0819-00…17</span></td>
-                <td><span class="trunc" title="Sunil Thackeray">Sunil T.</span></td>
-                <td class="mono"><span class="trunc" title="Gurugram Cross-Dock Terminal 2">Gurugram Cross-Dock Terminal 2</span></td>
+                <td class="mono idc"><a class="rowlink" href="#" title="SH-2026-0819-0041217" aria-label="Shipment S H hyphen 2026 hyphen 0819 hyphen 0041217, driver Sunil Thackeray, Gurugram Cross-Dock Terminal 2, no dock assigned, shown. Open shipment detail.">SH-2026-0819-00…17</a></td>
+                <td><span class="trunc" tabindex="0" title="Sunil Thackeray">Sunil T.</span></td>
+                <td class="mono"><span class="trunc" tabindex="0" title="Gurugram Cross-Dock Terminal 2">Gurugram Cross-Dock Terminal 2</span></td>
                 <td class="mono">—</td>
                 <td><span class="statuscell"><span class="chip shown"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg>SHOWN</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
@@ -583,8 +693,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -592,16 +702,15 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="sectionhead">
-          <h3>Your shipments</h3>
+          <h2>Your shipments</h2>
           <span class="popwrap">
-            <button class="filterbtn focus-demo" type="button" aria-expanded="true">Filter: all statuses ▾</button>
-            <span class="pop" role="menu" aria-label="Filter by status">
+            <button class="filterbtn focus-demo" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="true">Filter: all statuses<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <span class="pop" id="statusfilter" role="menu" aria-label="Filter by status">
               <button class="popitem" role="menuitemradio" aria-checked="true" type="button">All statuses
                 <svg class="ic tick" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button>
               <button class="popitem" role="menuitemradio" aria-checked="false" type="button">Shown</button>
@@ -614,7 +723,7 @@ a.excrow:hover{ background:var(--surface-hover); }
         </div>
         <div class="tbl">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -624,19 +733,19 @@ a.excrow:hover{ background:var(--surface-hover); }
             </thead>
             <tbody>
               <tr>
-                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1015, driver Ravi K., Jaipur dock D5, pending confirmation. Open shipment detail.">SHP1015</a></td><td>Ravi K.</td><td class="mono">Jaipur</td>
                 <td class="mono">D5</td>
                 <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1009, driver Amit S., Gurugram dock D2, confirmed. Open shipment detail.">SHP1009</a></td><td>Amit S.</td><td class="mono">Gurugram</td>
                 <td class="mono">D2</td>
                 <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1013</td><td>Neha P.</td><td class="mono">Kota</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1013, driver Neha P., Kota, no dock assigned, exception open. Open shipment detail.">SHP1013</a></td><td>Neha P.</td><td class="mono">Kota</td>
                 <td class="mono">—</td>
                 <td><span class="statuscell"><span class="exflag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Exception open</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
@@ -658,8 +767,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -667,18 +776,17 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="sectionhead">
-          <h3>Your shipments</h3>
-          <button class="filterbtn" type="button" aria-expanded="false">Filter: Confirmed ▾</button>
+          <h2>Your shipments</h2>
+          <button class="filterbtn" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="false">Filter: Confirmed<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
         <div class="tbl">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -708,7 +816,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="background:var(--surface-base);padding:24px;">
-    <div class="sectionhead"><h3>Open exceptions</h3></div>
+    <div class="sectionhead"><h2>Open exceptions</h2></div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <a class="excrow raised" href="#">
         <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
@@ -737,7 +845,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="background:var(--surface-base);padding:24px;">
-    <div class="sectionhead"><h3>Open exceptions</h3></div>
+    <div class="sectionhead"><h2>Open exceptions</h2></div>
     <div class="block" role="status" style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);">
       <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
       <p class="btitle" style="margin:0;">No open exceptions.</p>
@@ -757,8 +865,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -766,11 +874,10 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main" aria-busy="true">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard" aria-busy="true">
         <div class="stats">
           <div class="stat"><span class="sk" style="width:90px;height:12px;"></span><span class="sk" style="width:48px;height:16px;margin-top:8px;"></span></div>
           <div class="stat"><span class="sk" style="width:90px;height:12px;"></span><span class="sk" style="width:48px;height:16px;margin-top:8px;"></span></div>
@@ -778,10 +885,10 @@ a.excrow:hover{ background:var(--surface-hover); }
         </div>
         <div class="lastupdated"><span class="sk" style="width:160px;height:11px;"></span></div>
 
-        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="sectionhead"><h2>Your shipments</h2></div>
         <div class="tbl">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -797,7 +904,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           <div class="skrow" style="border-bottom:0;"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
         </div>
 
-        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="sectionhead"><h2>Open exceptions</h2></div>
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div class="excrow" style="height:44px;"><span class="sk" style="width:340px;height:12px;"></span></div>
           <div class="excrow" style="height:44px;"><span class="sk" style="width:280px;height:12px;"></span></div>
@@ -816,8 +923,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -825,16 +932,15 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="stats">
           <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
           <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
           <div class="stat">
-            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sr-only">Increased </span><span class="tnum">2</span> pts <span class="dvs">vs. prior 30 days</span></span></div>
             <div class="value tnum" style="margin-top:4px;">91%</div>
           </div>
         </div>
@@ -842,10 +948,10 @@ a.excrow:hover{ background:var(--surface-hover); }
           <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
         </div>
 
-        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="sectionhead"><h2>Your shipments</h2></div>
         <div class="tbl" aria-busy="true">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -859,11 +965,11 @@ a.excrow:hover{ background:var(--surface-hover); }
           <div class="skrow" style="border-bottom:0;"><span class="sk" style="width:72px"></span><span class="sk" style="width:88px"></span><span class="sk" style="width:140px"></span><span class="sk" style="width:120px"></span><span class="sk" style="width:130px"></span></div>
           <div class="stalled" role="status">
             <span>This is taking longer than usual.</span>
-            <button class="btn" type="button" style="height:32px;min-width:0;padding:0 12px;">Retry</button>
+            <button class="btn" type="button">Retry</button>
           </div>
         </div>
 
-        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="sectionhead"><h2>Open exceptions</h2></div>
         <a class="excrow" href="#">
           <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
           <span><span class="mono" style="font-weight:600;">SHP1013</span> · Neha P. · No feasible slot — escalated <span class="mono tnum">09:12</span></span>
@@ -884,8 +990,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -893,11 +999,10 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="stats">
           <div class="stat"><div class="label">Active shipments</div><div class="value tnum">0</div></div>
           <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">0</div></div>
@@ -906,7 +1011,7 @@ a.excrow:hover{ background:var(--surface-hover); }
             <div class="value tnum" style="margin-top:4px;">94%</div>
             <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
                  aria-label="On-time performance over the last 30 days, ending at 94%.">
-              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+              <line class="baseline" x1="4" y1="23" x2="294" y2="23"/><polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
                 stroke-linecap="round"
                 points="4,15 14,14 24,16 34,13 44,14 54,12 64,13 74,15 84,12 94,11 104,13 114,10 124,12 134,11 144,9 154,11 164,10 174,12 184,9 194,10 204,8 214,9 224,11 234,8 244,9 254,7 264,8 274,10 284,8 294,7"/>
               <circle cx="294" cy="7" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
@@ -917,7 +1022,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
         </div>
 
-        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="sectionhead"><h2>Your shipments</h2><button class="filterbtn" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="false">Filter: all statuses<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
         <div class="tbl">
           <div class="block" role="status">
             <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
@@ -925,7 +1030,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           </div>
         </div>
 
-        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="sectionhead"><h2>Open exceptions</h2></div>
         <div class="block" role="status" style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--r-md);">
           <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
           <p class="btitle" style="margin:0;">No open exceptions.</p>
@@ -950,8 +1055,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Vindhya Carriers</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Vindhya Carriers</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -959,11 +1064,10 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="stats">
           <div class="stat"><div class="label">Active shipments</div><div class="value tnum">0</div></div>
           <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">0</div></div>
@@ -976,7 +1080,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
         </div>
 
-        <div class="sectionhead"><h3>Your shipments</h3></div>
+        <div class="sectionhead"><h2>Your shipments</h2></div>
         <div class="tbl">
           <div class="block" role="status">
             <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
@@ -999,8 +1103,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -1008,20 +1112,19 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="stats">
           <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
           <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
           <div class="stat">
-            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sr-only">Increased </span><span class="tnum">2</span> pts <span class="dvs">vs. prior 30 days</span></span></div>
             <div class="value tnum" style="margin-top:4px;">91%</div>
             <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
                  aria-label="On-time performance over the last 30 days, ending at 91%.">
-              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+              <line class="baseline" x1="4" y1="23" x2="294" y2="23"/><polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
                 stroke-linecap="round"
                 points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
               <circle cx="294" cy="8" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
@@ -1032,7 +1135,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           <button class="linkbtn" type="button"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</button>
         </div>
 
-        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="sectionhead"><h2>Your shipments</h2><button class="filterbtn" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="false">Filter: all statuses<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
         <div class="tbl">
           <div class="block" role="alert">
             <svg class="ic bicon" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
@@ -1041,7 +1144,7 @@ a.excrow:hover{ background:var(--surface-hover); }
           </div>
         </div>
 
-        <div class="sectionhead"><h3>Open exceptions</h3></div>
+        <div class="sectionhead"><h2>Open exceptions</h2></div>
         <a class="excrow" href="#">
           <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
           <span><span class="mono" style="font-weight:600;">SHP1013</span> · Neha P. · No feasible slot — escalated <span class="mono tnum">09:12</span></span>
@@ -1067,7 +1170,7 @@ a.excrow:hover{ background:var(--surface-hover); }
       <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
       <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
       <div class="stat">
-        <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+        <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sr-only">Increased </span><span class="tnum">2</span> pts <span class="dvs">vs. prior 30 days</span></span></div>
         <div class="value tnum" style="margin-top:4px;">91%</div>
       </div>
     </div>
@@ -1084,8 +1187,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -1093,11 +1196,10 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard">
         <div class="notice" role="status">
           <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
           <span>This page couldn't refresh. You're seeing data from <span class="mono tnum">09:41</span>.</span>
@@ -1107,11 +1209,11 @@ a.excrow:hover{ background:var(--surface-hover); }
           <div class="stat"><div class="label">Active shipments</div><div class="value tnum">18</div></div>
           <div class="stat"><div class="label">Open exceptions</div><div class="value tnum">3</div></div>
           <div class="stat">
-            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta">▲ 2%</span></div>
+            <div class="statlabelrow"><div class="label" style="margin-bottom:0;">On-time (30d)</div><span class="delta"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sr-only">Increased </span><span class="tnum">2</span> pts <span class="dvs">vs. prior 30 days</span></span></div>
             <div class="value tnum" style="margin-top:4px;">91%</div>
             <svg class="spark2" width="300" height="24" viewBox="0 0 300 24" role="img"
                  aria-label="On-time performance over the last 30 days, ending at 91%.">
-              <polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
+              <line class="baseline" x1="4" y1="23" x2="294" y2="23"/><polyline fill="none" stroke="var(--spark-ink)" stroke-width="2" stroke-linejoin="round"
                 stroke-linecap="round"
                 points="4,16 14,15 24,17 34,14 44,15 54,13 64,14 74,16 84,13 94,12 104,14 114,11 124,13 134,12 144,10 154,12 164,11 174,13 184,10 194,11 204,9 214,10 224,12 234,9 244,10 254,8 264,9 274,11 284,9 294,8"/>
               <circle cx="294" cy="8" r="4" fill="var(--text-primary)" stroke="var(--surface-raised)" stroke-width="2"/>
@@ -1119,10 +1221,10 @@ a.excrow:hover{ background:var(--surface-hover); }
           </div>
         </div>
 
-        <div class="sectionhead"><h3>Your shipments</h3><button class="filterbtn" type="button" aria-expanded="false">Filter: all statuses ▾</button></div>
+        <div class="sectionhead"><h2>Your shipments</h2><button class="filterbtn" type="button" aria-haspopup="menu" aria-controls="statusfilter" aria-expanded="false">Filter: all statuses<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
         <div class="tbl">
           <table class="f">
-            <colgroup><col style="width:200px"><col style="width:150px"><col style="width:210px"><col style="width:80px"><col><col style="width:40px"></colgroup>
+            <colgroup><col style="width:180px"><col style="width:140px"><col style="width:200px"><col style="width:72px"><col style="width:336px"><col style="width:44px"></colgroup>
             <thead>
               <tr>
                 <th scope="col">Shipment</th><th scope="col">Driver</th><th scope="col">Facility</th>
@@ -1132,13 +1234,13 @@ a.excrow:hover{ background:var(--surface-hover); }
             </thead>
             <tbody>
               <tr>
-                <td class="mono idc">SHP1015</td><td>Ravi K.</td><td class="mono">Jaipur</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1015, driver Ravi K., Jaipur dock D5, pending confirmation. Open shipment detail.">SHP1015</a></td><td>Ravi K.</td><td class="mono">Jaipur</td>
                 <td class="mono">D5</td>
                 <td><span class="statuscell"><span class="chip pending"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 6v6l4 2"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>PENDING CONFIRMATION</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
               </tr>
               <tr>
-                <td class="mono idc">SHP1009</td><td>Amit S.</td><td class="mono">Gurugram</td>
+                <td class="mono idc"><a class="rowlink" href="#" aria-label="SHP1009, driver Amit S., Gurugram dock D2, confirmed. Open shipment detail.">SHP1009</a></td><td>Amit S.</td><td class="mono">Gurugram</td>
                 <td class="mono">D2</td>
                 <td><span class="statuscell"><span class="chip confirmed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>CONFIRMED</span></span></td>
                 <td class="chevron"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></td>
@@ -1169,7 +1271,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 <p class="screen-label">State 12a — <span>Shipment detail — <code>SHOWN</code> (nothing is reserved)</span></p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="max-width:688px;">
-    <div class="topbar">
+    <div class="topbar" role="region" aria-label="Account and notifications">
       <a class="backbar" href="#" style="text-decoration:none;">
         <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
     </div>
@@ -1199,7 +1301,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="max-width:688px;">
-    <div class="topbar">
+    <div class="topbar" role="region" aria-label="Account and notifications">
       <a class="backbar" href="#" style="text-decoration:none;">
         <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
     </div>
@@ -1223,7 +1325,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 <p class="screen-label">State 12c — <span>Shipment detail — <code>PENDING CONFIRMATION</code> (awaiting a human)</span></p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="max-width:688px;">
-    <div class="topbar">
+    <div class="topbar" role="region" aria-label="Account and notifications">
       <a class="backbar" href="#" style="text-decoration:none;">
         <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
     </div>
@@ -1248,7 +1350,7 @@ a.excrow:hover{ background:var(--surface-hover); }
 <p class="screen-label">State 12d — <span>Shipment detail — <code>CONFIRMED</code> (the only state that may use finality language)</span></p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame" style="max-width:688px;">
-    <div class="topbar">
+    <div class="topbar" role="region" aria-label="Account and notifications">
       <a class="backbar" href="#" style="text-decoration:none;">
         <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Dashboard</a>
     </div>
@@ -1285,8 +1387,8 @@ a.excrow:hover{ background:var(--surface-hover); }
 </p>
 <div style="max-width:1120px;margin:0 auto 48px;padding:0 24px;">
   <div class="frame">
-    <div class="topbar">
-      <div class="brand">Rajasthan Roadlines</div>
+    <div class="topbar" role="region" aria-label="Account and notifications">
+      <h1 class="brand">Rajasthan Roadlines</h1>
       <div class="topbar-icons">
         <button class="iconbtn" type="button" aria-label="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></button>
         <button class="iconbtn" type="button" aria-label="Help"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -1294,11 +1396,10 @@ a.excrow:hover{ background:var(--surface-hover); }
       </div>
     </div>
     <div class="body">
-      <div class="rail">
-        <a class="railitem on" href="#" aria-current="page" aria-label="Dashboard"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></a>
-        <a class="railitem" href="#" aria-label="Account"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></a>
-      </div>
-      <div class="main" style="padding:0;">
+      <nav class="rail" aria-label="Sections">
+        <a class="railitem on" href="#" aria-current="page" aria-label="Fleet"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/></svg></a>
+      </nav>
+      <div class="main" role="region" aria-label="Fleet dashboard" style="padding:0;">
         <div class="refuse">
           <div class="inner" role="alert">
             <svg class="ic" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--text-tertiary);"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/></svg>

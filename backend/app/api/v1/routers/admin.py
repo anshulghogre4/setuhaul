@@ -5,6 +5,13 @@ only -- section 7.5.7's persona table scopes this whole console to that one role
 `OPS_PORTAL_ROLES` superset other consoles share. Thin by the E2.2 rule: authorise, delegate,
 envelope; every real decision (scope validation, the Auth Admin API calls, the rule-type registry,
 the read-only simulate/publish split) lives in `admin_user_service.py`/`admin_governance_service.py`.
+
+Two **additions to that catalog**, both pure reads, both flagged rather than folded in silently
+(the discipline `routers/planner.py`'s `/docks/{dock_id}/block-impact` established):
+`GET /users/{user_id}/removal-impact` (A-G8, issue #76 -- `edge-cases.md` #1's confirmation copy
+needs its count *before* the write) and `GET /policy/active` (A-G7, issue #75 -- nothing could read
+the current policy version, so the new `based_on_version_id` baseline had no source and
+`screens.md` section 4's read-only current version had nothing to render).
 """
 
 from datetime import datetime
@@ -23,6 +30,7 @@ from app.core.settings import Settings
 from app.services.admin_governance_service import (
     create_facility_rule,
     export_audit_log,
+    get_active_policy_version,
     get_audit_log,
     list_facility_rules,
     publish_policy_version,
@@ -31,6 +39,7 @@ from app.services.admin_governance_service import (
 )
 from app.services.admin_user_service import (
     deactivate_user,
+    get_user_removal_impact,
     invite_user,
     list_users,
     reactivate_user,
@@ -54,18 +63,26 @@ def _require_idempotency_key(idempotency_key: str | None) -> str:
 
 
 class InviteUserBody(BaseModel):
+    """`scope` takes one id or a list (A-G4, issue #72).
+
+    Accepting both keeps every existing single-facility caller byte-identical while letting the
+    Users tab's facility multi-select (`flows-and-states.md` Flow 1 step 2) submit what it actually
+    collects. Which shape a given role may use, and whether each id exists, is decided in
+    `admin_user_service._validate_scope` -- not here; the router only names the wire type.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=3, max_length=254)
     role: str
-    scope: str | None = None
+    scope: str | list[str] | None = None
 
 
 class UpdateUserBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: str | None = None
-    scope: str | None = None
+    scope: str | list[str] | None = None
 
 
 class CreateFacilityRuleBody(BaseModel):
@@ -96,9 +113,14 @@ class SimulatePolicyBody(BaseModel):
 
 
 class PublishPolicyBody(BaseModel):
+    """`based_on_version_id` is `edge-cases.md` #3's optimistic-concurrency baseline (A-G7, issue
+    #75) -- optional on the wire only because the first-ever publish has no baseline to cite; the
+    service refuses with `BASE_VERSION_REQUIRED` whenever an active version does exist."""
+
     model_config = ConfigDict(extra="forbid")
 
     weights: dict[str, Any]
+    based_on_version_id: str | None = None
 
 
 @router.get("/users")
@@ -152,6 +174,20 @@ async def users_reactivate(user_id: str, request: Request, ctx: AdminCtx, sessio
     except Exception:
         await session.rollback()
         raise
+    return ok(result, get_request_id(request))
+
+
+@router.get("/users/{user_id}/removal-impact")
+async def users_removal_impact(
+    user_id: str, request: Request, ctx: AdminCtx, session: DbSession,
+) -> dict[str, Any]:
+    """Preview -- names how many active escalations this user owns before the admin confirms
+    (`edge-cases.md` #1, A-G8/issue #76).
+
+    Not in section 7.5.7's own catalog; flagged as an addition, not silently folded in, per the same
+    discipline `routers/planner.py`'s `/docks/{dock_id}/block-impact` already uses.
+    """
+    result = await get_user_removal_impact(session, ctx, user_id=user_id)
     return ok(result, get_request_id(request))
 
 
@@ -219,6 +255,17 @@ async def policy_simulate(
     return ok(result, get_request_id(request))
 
 
+@router.get("/policy/active")
+async def policy_active(request: Request, ctx: AdminCtx, session: DbSession) -> dict[str, Any]:
+    """The current version the Policy editor edits away from, and the baseline
+    `POST /policy/publish` requires (A-G7, issue #75).
+
+    Not in section 7.5.7's own catalog; flagged as an addition, not silently folded in.
+    """
+    result = await get_active_policy_version(session, ctx)
+    return ok(result, get_request_id(request))
+
+
 @router.post("/policy/publish")
 async def policy_publish(
     body: PublishPolicyBody, request: Request, ctx: AdminCtx, session: DbSession,
@@ -226,7 +273,10 @@ async def policy_publish(
 ) -> dict[str, Any]:
     key = _require_idempotency_key(idempotency_key)
     try:
-        result = await publish_policy_version(session, ctx, weights=body.weights, idempotency_key=key)
+        result = await publish_policy_version(
+            session, ctx, weights=body.weights, idempotency_key=key,
+            based_on_version_id=body.based_on_version_id,
+        )
     except Exception:
         await session.rollback()
         raise

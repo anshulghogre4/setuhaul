@@ -17,10 +17,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.repositories import chat_threads as chat_repo
 from app.repositories import facilities as facilities_repo
 from app.repositories import operations as operations_repo
-from app.repositories.scope import resolve_facility_scope
+from app.repositories.scope import assert_facility_visible, resolve_facility_scope
 
 # The operations REST surface reports a broken facility mapping as SCOPE_MISSING rather than
 # FORBIDDEN, distinguishing "your identity has no facility" from "that is not your facility".
@@ -107,5 +109,48 @@ async def get_facility_constraints(
         "scope": {"facility_id": scope_facility, "read_only": True},
         "facilities": await facilities_repo.list_facilities(session, scope_facility),
         "rules": await facilities_repo.list_facility_rules(session, scope_facility),
+        "freshness": "live",
+    }
+
+
+async def get_thread_messages(
+    session: AsyncSession, ctx: ExecutionContext, thread_id: str, *, limit: int = 200
+) -> dict[str, Any]:
+    """The durable transcript of one chat thread, for the ops console's detail pane (E5.2).
+
+    Found during E5.2's build: **no endpoint let ops read a thread's `chat_messages` at all.**
+    `chat.py`'s `/chat/history` is `require_roles(DRIVER)` and reads Redis, not this table, so a
+    coordinator deciding whether to take over a conversation had nothing to read it from -- and
+    after taking over, no way to see their own posted messages or the driver's replies.
+
+    This is the one read in the product that is `chat_messages`-backed rather than Redis-backed,
+    and that is correct for this caller: the console needs the durable, complete, attributable
+    record (including `sender_type = 'OPERATIONS'` rows and the takeover dividers), not the
+    driver's bounded 24h view.
+
+    Scope is derived from the thread's shipment, never from an argument (`M15`/`NFR-019`). A thread
+    with no shipment has no facility to check against and is refused for facility-bound roles
+    rather than served unscoped.
+    """
+    thread = await chat_repo.get_thread_context(session, thread_id)
+    if thread is None:
+        raise AppError(f"Thread '{thread_id}' not found.", code="NOT_FOUND", status_code=404)
+    facility_id = thread.get("facility_id")
+    if facility_id is None:
+        if not ctx.has_global_read_scope:
+            raise AppError("Thread not in scope.", code="FORBIDDEN", status_code=403)
+    else:
+        assert_facility_visible(ctx, str(facility_id))
+
+    messages = await chat_repo.list_thread_messages(session, thread_id, limit=limit)
+    return {
+        "as_of": _as_of(),
+        "source": "postgresql",
+        "thread_id": thread_id,
+        "thread_status": thread["thread_status"],
+        "shipment_id": thread["shipment_id"],
+        "driver_id": thread["driver_id"],
+        "facility_id": facility_id,
+        "messages": messages,
         "freshness": "live",
     }

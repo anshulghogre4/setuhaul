@@ -864,8 +864,9 @@ The four states, top to bottom, each captioned:
 Also render, below state 4, the retry message block that follows a failed write: background #FFFBEB, 1px
 border #F59E0B, text #B45309, radius 6px, padding 20px, containing the line "That didn't record — nothing
 has changed." and beneath it "Try again — this won't record it twice." The second sentence is required
-copy, not reassurance filler: every action on this surface carries an idempotency key, so retrying is
-genuinely safe and the officer is told so.
+copy, not reassurance filler: every action on this surface is retry-safe against a double-tap — one via a
+real idempotency key, the other four via their own state-machine guards (corrected 2026-08-29, M5/E5.4;
+see `components.md` §1) — so retrying is genuinely safe and the officer is told so.
 
 Focus state, shown once on the default button: two rings — inner 2px #F8FAFC, outer 2px #2563EB, 2px
 offset. Never a soft glow.

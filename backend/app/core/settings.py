@@ -104,6 +104,16 @@ class Settings(BaseSettings):
     pending_confirmation_ttl_minutes: int = 15  # D9
     held_slot_ttl_seconds: int = 90  # D2
     expiry_sweep_batch_limit: int = 50
+    # D2's four-state promise lifecycle (SOLUTION_DESIGN.md section 4 / section 7.1, issue #53).
+    # OFF by default, and that default is the point rather than timidity: the schema change this
+    # feature needs (20260829134929_d2_held_state_dock_occupancy.sql) can be applied to production
+    # with *zero* behaviour change while this stays false, because request_slot keeps committing
+    # straight to PENDING_CONFIRMATION exactly as it does today. Applying a migration and switching
+    # on a booking-path behaviour change are then two separately revertible decisions instead of
+    # one. Flip to true only after the migration is applied AND the driver-chat HELD screens
+    # (E5.1's 4 gated screens) are ready to render the intermediate state -- turning it on sooner
+    # would leave `request_slot` returning a `HELD` outcome no UI knows how to display.
+    two_phase_hold_enabled: bool = False
 
     # E4.4 (issue #34, M4): no timeout ceiling existed anywhere on the LLM path before this --
     # a slow provider response had nothing bounding it. `llm_call_timeout_seconds` bounds one

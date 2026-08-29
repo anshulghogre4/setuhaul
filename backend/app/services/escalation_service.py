@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import Settings
 from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
+from app.services.thread_message_service import SENDER_SYSTEM, deliver_to_driver_feed
 
 # E3.2 (issue #26, M3): escalation_status's stepper position (SS7.5.5 "stepper position" on
 # get_escalation_queue). RESOLVED/CANCELLED share position 3 -- both are terminal, and the design
@@ -226,6 +228,13 @@ async def get_exception_queue(
     (`STEPPER_POSITIONS`); `affected_shipments` is only populated for `CAPACITY_EVENT_CASCADE` rows,
     read out of the same `payload_json` `planner_service._open_capacity_cascade` already writes --
     no new column, no second query.
+
+    E5.2 (issues #55/#58): each row now also carries `thread_id`/`thread_status`, the shipment's
+    most recently opened chat thread. Both `take_over_thread` and `post_operations_message` need a
+    `chat_threads.thread_id` and **no read in the product returned one** -- so the console could
+    render a takeover button it had no argument to call. A `LEFT JOIN LATERAL` rather than a second
+    query per row, and `NULL` for an escalation whose shipment has no thread at all (a
+    `NOTIFICATION_FAILED` case may legitimately have none).
     """
     if owner not in {"mine", "unowned", "all"}:
         raise AppError(
@@ -255,9 +264,17 @@ async def get_exception_queue(
                 SELECT eq.escalation_id, eq.shipment_id, eq.facility_id, eq.driver_id,
                        eq.escalation_type, eq.escalation_status, eq.severity_code,
                        eq.policy_version, eq.recommendation_id, eq.payload_json, eq.created_at,
-                       eq.updated_at, eq.owner_user_id, u.full_name AS owner_name
+                       eq.updated_at, eq.owner_user_id, u.full_name AS owner_name,
+                       ct.thread_id, ct.thread_status
                 FROM public.escalation_queue eq
                 LEFT JOIN public.users u ON u.user_id = eq.owner_user_id
+                LEFT JOIN LATERAL (
+                  SELECT t.thread_id, t.thread_status
+                  FROM public.chat_threads t
+                  WHERE t.shipment_id = eq.shipment_id
+                  ORDER BY t.opened_at DESC
+                  LIMIT 1
+                ) ct ON TRUE
                 WHERE eq.escalation_status NOT IN ('RESOLVED', 'CANCELLED')
                   {facility_filter}
                   {owner_filter}
@@ -319,6 +336,127 @@ async def _escalation_facility_id(session: AsyncSession, escalation_id: str) -> 
         )
     ).mappings().first()
     return str(row["facility_id"]) if row is not None else None
+
+
+async def _escalation_queue_state(session: AsyncSession, escalation_id: str) -> dict[str, Any] | None:
+    """Facility, status and owner for one `escalation_queue` row, or `None` if the id is not one.
+
+    Deliberately separate from `_escalation_facility_id` rather than a widening of it: that helper
+    also resolves `driver_exceptions` ids, which have no `escalation_status`/`owner_user_id` at
+    all, so a single function returning "the status" for both id spaces would have to invent one.
+    Callers that need lifecycle state (E5.2's `IN_PROGRESS` work, issue #56) use this and fall back
+    to the other helper when it returns `None`.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT escalation_id, facility_id, escalation_status, owner_user_id
+                FROM public.escalation_queue WHERE escalation_id = :eid
+                """
+            ),
+            {"eid": escalation_id},
+        )
+    ).mappings().first()
+    return dict(row) if row is not None else None
+
+
+async def start_escalation_work(
+    session: AsyncSession, ctx: ExecutionContext, escalation_id: str, idempotency_key: str,
+) -> dict[str, Any]:
+    """E5.2 (issue #56): the write path that makes `escalation_status = 'IN_PROGRESS'` reachable.
+
+    Before this, `STEPPER_POSITIONS` mapped `IN_PROGRESS` to stepper position 2 and **nothing in
+    `backend/app/` ever wrote that value** -- the console's middle stepper dot was structurally
+    unreachable no matter what the UI did. §7.5.5's table has no tool for it; the ops console's
+    `implementation-spec.md` §5.1 G3 states the resolution as "§7.5.5 needs an eighth-and-a-half
+    tool or the stepper needs three positions". This is that tool.
+
+    `flows-and-states.md` Flow 1 step 4 is explicit about the trigger: *"Advancing to `IN_PROGRESS`
+    is a status the coordinator sets explicitly once real work has started, not an automatic side
+    effect of acknowledging."* Hence an explicit call, and hence the `ACKNOWLEDGED`-only guard --
+    an `OPEN` escalation has no owner, and "in progress by nobody" is not a state.
+
+    `take_over_thread` also advances `ACKNOWLEDGED → IN_PROGRESS`, which is not a contradiction of
+    the rule above: the rule forbids advancing on *acknowledge*, and taking over a driver's
+    conversation is unambiguously "real work has started". This tool is what a coordinator uses for
+    the reasons that never involve a takeover (`NOTIFICATION_FAILED`, `NOTIFICATION_UNROUTABLE`).
+    """
+    if not idempotency_key or not idempotency_key.strip():
+        raise AppError(
+            "Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400
+        )
+    if not (ctx.is_operator or ctx.is_admin):
+        raise AppError(
+            "Insufficient permissions to start work on escalations.", code="FORBIDDEN", status_code=403
+        )
+
+    route = f"POST /api/v1/operations/escalations/{escalation_id}/start"
+    req_hash = payload_hash({"escalation_id": escalation_id})
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        return {**replay["response"], "idempotent_replay": True}
+
+    state = await _escalation_queue_state(session, escalation_id)
+    if state is None:
+        raise AppError(f"Escalation '{escalation_id}' not found.", code="NOT_FOUND", status_code=404)
+    assert_facility_write_scope(ctx, str(state["facility_id"]))
+
+    status = str(state["escalation_status"])
+    if status == "IN_PROGRESS":
+        return {
+            "code": "ALREADY_IN_PROGRESS", "escalation_id": escalation_id,
+            "escalation_status": status, "owner_user_id": state["owner_user_id"],
+            "stepper_position": STEPPER_POSITIONS.get(status, 0),
+        }
+    if status != "ACKNOWLEDGED" or state["owner_user_id"] is None:
+        return {
+            "code": "NOT_ACKNOWLEDGED", "escalation_id": escalation_id,
+            "escalation_status": status, "owner_user_id": state["owner_user_id"],
+            "stepper_position": STEPPER_POSITIONS.get(status, 0),
+        }
+    # The owner check is not redundant with the facility check above: facility scope says "you may
+    # act in this building", ownership says "this case is yours". A second coordinator who wants it
+    # uses `reassign_escalation` first, which is the audited way to change hands.
+    if not ctx.is_admin and str(state["owner_user_id"]) != ctx.user_id:
+        return {
+            "code": "NOT_OWNER", "escalation_id": escalation_id, "escalation_status": status,
+            "owner_user_id": state["owner_user_id"],
+            "stepper_position": STEPPER_POSITIONS.get(status, 0),
+        }
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    row = (
+        await session.execute(
+            text(
+                """
+                UPDATE public.escalation_queue
+                SET escalation_status = 'IN_PROGRESS', updated_at = :now_iso
+                WHERE escalation_id = :eid AND escalation_status = 'ACKNOWLEDGED'
+                RETURNING escalation_id, shipment_id, escalation_status, owner_user_id
+                """
+            ),
+            {"now_iso": now_iso, "eid": escalation_id},
+        )
+    ).mappings().first()
+    if row is None:
+        # Lost the race to a concurrent start/resolve between the read above and this UPDATE --
+        # the same `WHERE <expected status>` pattern `acknowledge_escalation` uses, for the same
+        # reason: exactly one caller commits and the loser is told, not silently overwritten.
+        await session.commit()
+        return {"code": "ALREADY_ACTIONED", "escalation_id": escalation_id}
+
+    result = dict(row)
+    result["code"] = "IN_PROGRESS"
+    result["stepper_position"] = STEPPER_POSITIONS["IN_PROGRESS"]
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result,
+    )
+    await session.commit()
+    return result
 
 
 async def resolve_escalation(
@@ -650,7 +788,13 @@ async def reassign_escalation(
 
 
 async def take_over_thread(
-    session: AsyncSession, ctx: ExecutionContext, thread_id: str, escalation_id: str, idempotency_key: str,
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    thread_id: str,
+    escalation_id: str,
+    idempotency_key: str,
+    *,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     """SS7.5.5 `take_over_thread` -- `thread_id`, `escalation_id`, `Idempotency-Key`.
 
@@ -659,15 +803,31 @@ async def take_over_thread(
     read in; before this epic nothing in the turn path ever looked at `thread_status` at all) --
     the more consequential half of "take over," since it actually stops the LLM from answering.
 
-    Also inserts a `SYSTEM`-sender `chat_messages` row recording the join, per SS7.5.5's own
-    wording ("posts the driver-visible join notice"). **Known gap, not silently glossed over**:
-    the live driver chat surface renders its history from Redis (`ConversationMemory`), never from
-    `chat_messages` -- confirmed by grep, nothing in the turn path reads that table. `chat_messages`
-    is still the architecturally correct place for this (AGENTS.md: Redis is "bounded,
-    non-authoritative conversation/session state," not a transcript source of truth), and a durable
-    audit trail either way, but it will not appear inline in the driver's live feed until a future
-    pass reads it into the turn's history. The auto-reply suppression above works today regardless
-    of this gap; the notice's actual visibility does not.
+    **E5.2 changed three things here** (issues #56, #58):
+
+    1. *The join notice now actually reaches the driver.* It is still written to `chat_messages`
+       (Postgres remains the write of record), and is then projected into the driver's Redis feed
+       after commit via `thread_message_service.deliver_to_driver_feed`. The previous version of
+       this docstring documented the gap honestly and left it; `flows-and-states.md` Flow 2 step 3
+       requires the driver to see it "at the same moment", which is now true whenever the driver
+       has a live conversation in the 24h window. `delivered`/`delivery_reason` in the result say
+       so per call rather than being assumed.
+    2. *The linked escalation advances `ACKNOWLEDGED → IN_PROGRESS`* in the same transaction.
+       Taking over a driver's conversation is the clearest possible "real work has started", and
+       this is what makes `hand_back_thread`'s documented `IN_PROGRESS` precondition satisfiable
+       at all (issue #56).
+    3. *It refuses on an unacknowledged escalation* (`NOT_ACKNOWLEDGED`). This is the symmetric
+       counterpart of the refusal §7.5.5 already specifies for `hand_back_thread` -- "nobody has
+       taken responsibility for what happens if the driver replies immediately after" is at least
+       as true at takeover as at hand-back -- and it also closes a trap that (2) would otherwise
+       open: a thread taken over on an `OPEN` escalation could be escalated but never handed back,
+       leaving the assistant permanently suppressed on it. `flows-and-states.md` Flow 1 already
+       orders the console this way (step 3 acknowledge, step 4 "take over the thread for
+       AMBIGUOUS_SHIPMENT"), so this refuses only sequences the console does not perform.
+
+    A `driver_exceptions`-backed `escalation_id` (the other id space `_escalation_facility_id`
+    resolves) has no `escalation_status` column at all, so (2) and (3) do not apply to it and its
+    behaviour is unchanged.
     """
     if not idempotency_key or not idempotency_key.strip():
         raise AppError(
@@ -684,7 +844,18 @@ async def take_over_thread(
     if replay is not None:
         return {**replay["response"], "idempotent_replay": True}
 
-    escalation_facility_id = await _escalation_facility_id(session, escalation_id)
+    escalation = await _escalation_queue_state(session, escalation_id)
+    if escalation is not None:
+        escalation_facility_id: str | None = str(escalation["facility_id"])
+        status = str(escalation["escalation_status"])
+        if status not in {"ACKNOWLEDGED", "IN_PROGRESS"} or escalation["owner_user_id"] is None:
+            assert_facility_write_scope(ctx, str(escalation_facility_id))
+            return {
+                "code": "NOT_ACKNOWLEDGED", "thread_id": thread_id, "escalation_id": escalation_id,
+                "escalation_status": status, "owner_user_id": escalation["owner_user_id"],
+            }
+    else:
+        escalation_facility_id = await _escalation_facility_id(session, escalation_id)
     if escalation_facility_id is None:
         raise AppError(f"Escalation '{escalation_id}' not found.", code="NOT_FOUND", status_code=404)
     assert_facility_write_scope(ctx, escalation_facility_id)
@@ -707,10 +878,25 @@ async def take_over_thread(
         return result
 
     now_iso = datetime.now(timezone.utc).isoformat()
+    notice = f"{ctx.full_name} from Operations has joined this conversation."
+    message_id = new_id("MSG")
     await session.execute(
         text("UPDATE public.chat_threads SET thread_status = 'ESCALATED' WHERE thread_id = :tid"),
         {"tid": thread_id},
     )
+    escalation_status = "IN_PROGRESS" if escalation is not None else None
+    if escalation is not None:
+        # Guarded on ACKNOWLEDGED so a concurrent start_escalation_work is a no-op, not a rewrite.
+        await session.execute(
+            text(
+                """
+                UPDATE public.escalation_queue
+                SET escalation_status = 'IN_PROGRESS', updated_at = :now_iso
+                WHERE escalation_id = :eid AND escalation_status = 'ACKNOWLEDGED'
+                """
+            ),
+            {"now_iso": now_iso, "eid": escalation_id},
+        )
     await session.execute(
         text(
             """
@@ -720,23 +906,37 @@ async def take_over_thread(
             """
         ),
         {
-            "mid": new_id("MSG"), "tid": thread_id, "sender_ref": ctx.user_id,
-            "text": f"{ctx.full_name} from Operations has joined this conversation.", "ts": now_iso,
+            "mid": message_id, "tid": thread_id, "sender_ref": ctx.user_id,
+            "text": notice, "ts": now_iso,
         },
     )
     result = {
         "code": "TAKEN_OVER", "thread_id": thread_id, "escalation_id": escalation_id,
-        "thread_status": "ESCALATED",
+        "thread_status": "ESCALATED", "escalation_status": escalation_status,
+        "stepper_position": STEPPER_POSITIONS["IN_PROGRESS"] if escalation is not None else None,
+        "delivered": False, "delivery_reason": None,
     }
     await store_idempotency(
         session, key=idempotency_key, user_id=ctx.user_id, route=route,
         request_hash=req_hash, response=result,
     )
     await session.commit()
-    return result
+
+    delivery = await deliver_to_driver_feed(
+        session, settings=settings, thread_id=thread_id, content=notice,
+        sender=SENDER_SYSTEM, sender_name=ctx.full_name, message_id=message_id,
+        message_ts=now_iso,
+    )
+    return {**result, "delivered": delivery["delivered"], "delivery_reason": delivery["reason"]}
 
 
-async def hand_back_thread(session: AsyncSession, ctx: ExecutionContext, thread_id: str) -> dict[str, Any]:
+async def hand_back_thread(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    thread_id: str,
+    *,
+    settings: Settings | None = None,
+) -> dict[str, Any]:
     """SS7.5.5 `hand_back_thread` -- `thread_id` only.
 
     No `escalation_id` argument in the design's own table, unlike `take_over_thread` -- so this has
@@ -744,8 +944,22 @@ async def hand_back_thread(session: AsyncSession, ctx: ExecutionContext, thread_
     `chat_threads` to `escalation_queue` directly; the only column both tables share is
     `shipment_id`, so that is the join this uses (documented here since it is inferred, not an
     explicit schema relationship). `NOT_IN_PROGRESS` covers both "already handed back" (thread not
-    `ESCALATED`) and "no acknowledged escalation to hand back" (SS7.5.5's own wording: "refuses on
-    an unacknowledged escalation").
+    `ESCALATED`) and "no escalation in progress to hand back".
+
+    **Precondition tightened in E5.2 (issue #56): `IN_PROGRESS` only, no longer
+    `IN ('ACKNOWLEDGED','IN_PROGRESS')`.** The looser guard was a documented workaround for
+    `IN_PROGRESS` being unwritable anywhere in the codebase -- with nothing able to produce the
+    value, the strict guard would have refused every hand-back. Now that `start_escalation_work`
+    and `take_over_thread` both write it, the workaround's reason is gone and the enforced rule
+    matches the two design files that state it (`02-ops-exception-console/components.md` §5:
+    "`IN_PROGRESS` or later"; `flows-and-states.md` Flow 2 step 5). §7.5.5's own looser
+    parenthetical ("refuses on an unacknowledged escalation") stays true, since an unacknowledged
+    escalation can never be `IN_PROGRESS`.
+
+    *Pre-existing rows*: a thread taken over before this change sits on an `ACKNOWLEDGED`
+    escalation and would now refuse. That is a one-call recovery, not a stuck state -- call
+    `start_escalation_work` on the escalation, then hand back. Called out here rather than left for
+    someone to rediscover.
     """
     if not (ctx.is_operator or ctx.is_admin):
         raise AppError("Insufficient permissions to hand back a thread.", code="FORBIDDEN", status_code=403)
@@ -768,7 +982,7 @@ async def hand_back_thread(session: AsyncSession, ctx: ExecutionContext, thread_
                 """
                 SELECT escalation_id, facility_id, owner_user_id
                 FROM public.escalation_queue
-                WHERE shipment_id = :shipment_id AND escalation_status IN ('ACKNOWLEDGED', 'IN_PROGRESS')
+                WHERE shipment_id = :shipment_id AND escalation_status = 'IN_PROGRESS'
                 ORDER BY created_at DESC
                 LIMIT 1
                 """
@@ -781,6 +995,8 @@ async def hand_back_thread(session: AsyncSession, ctx: ExecutionContext, thread_
     assert_facility_write_scope(ctx, str(escalation["facility_id"]))
 
     now_iso = datetime.now(timezone.utc).isoformat()
+    notice = "Operations has handed this conversation back to the assistant."
+    message_id = new_id("MSG")
     await session.execute(
         text("UPDATE public.chat_threads SET thread_status = 'OPEN' WHERE thread_id = :tid"),
         {"tid": thread_id},
@@ -794,20 +1010,48 @@ async def hand_back_thread(session: AsyncSession, ctx: ExecutionContext, thread_
             """
         ),
         {
-            "mid": new_id("MSG"), "tid": thread_id, "sender_ref": ctx.user_id,
-            "text": "Operations has handed this conversation back to the assistant.", "ts": now_iso,
+            "mid": message_id, "tid": thread_id, "sender_ref": ctx.user_id,
+            "text": notice, "ts": now_iso,
         },
     )
     await session.commit()
+
+    # Symmetric with take_over_thread: post-commit projection into the driver's live feed, so the
+    # hand-back divider `flows-and-states.md` Flow 2 step 5 specifies is actually seen and the
+    # driver knows the assistant is answering again (issue #58).
+    delivery = await deliver_to_driver_feed(
+        session, settings=settings, thread_id=thread_id, content=notice,
+        sender=SENDER_SYSTEM, sender_name=ctx.full_name, message_id=message_id,
+        message_ts=now_iso,
+    )
     return {
         "code": "HANDED_BACK", "thread_id": thread_id, "escalation_id": str(escalation["escalation_id"]),
         "thread_status": "OPEN",
+        "delivered": delivery["delivered"], "delivery_reason": delivery["reason"],
     }
 
 
 async def get_pending_confirmations(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
+    """Pending-confirmation appointments for the ops console's queue read.
+
+    **`a.is_current = 1` added 2026-08-29** (reported by the concurrent #60 pass). Without it this
+    listed *superseded* pending rows -- an appointment that was rescheduled leaves the old row at
+    `PENDING_CONFIRMATION` with `is_current = 0`, and this read showed it as still awaiting a
+    decision. The D9 expiry sweeper's own candidate predicate is
+    `PENDING_CONFIRMATION AND a.is_current = 1` (`scheduling/expiry.py:203,250`), so before this
+    the console could show a coordinator a row the sweeper would never touch. Verified no caller
+    wanted the superseded rows: the sole caller is `GET /api/v1/operations/pending-confirmations`.
+
+    **`ORDER BY a.booked_at ASC` is pure FIFO, which §7.3 rejects by name** ("Queue ordering -- not
+    FIFO": order by composite urgency -- TTL remaining, priority code, and whether the driver is
+    physically waiting at the gate). Deliberately **not** changed here: that is a scheduling-policy
+    implementation needing `facility_checkins.queue_state` and the priority code, and the #60 pass
+    has just shipped exactly that ordering in `planner_service.get_planner_queue`. The correct fix
+    is for this read to adopt that one, not for a second implementation to appear in this file.
+    Left as its own issue with that assessment rather than half-done here.
+    """
     scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
     rows = (
         await session.execute(
@@ -820,6 +1064,7 @@ async def get_pending_confirmations(
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
                 JOIN public.shipments s ON s.shipment_id = a.shipment_id
                 WHERE a.appointment_status = 'PENDING_CONFIRMATION'
+                  AND a.is_current = 1
                   AND sl.facility_id = :facility_id
                 ORDER BY a.booked_at ASC
                 LIMIT 100

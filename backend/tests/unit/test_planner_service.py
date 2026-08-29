@@ -1,4 +1,13 @@
-"""E3.6 (issue #30) tests for the SS7.5.1 planner dock-blocking writes.
+"""Tests for the SS7.5.1 planner tools: the queue read (issue #60) and the dock-blocking writes.
+
+The `get_planner_queue` tests below patch the two repository functions rather than mocking SQL
+results in call order: that read is two flat queries whose *assembly* -- receipt terms, the
+displacement overlap, the TTL derivation, the composite ordering and the snapshot digest -- is the
+behaviour worth pinning, and all of it is pure Python over the rows. Time is a `FrozenClock`
+throughout (SS9.1): the TTL column is the point of this read, so a test that read the wall clock
+would be asserting against luck.
+
+E3.6 (issue #30) tests for the SS7.5.1 planner dock-blocking writes.
 
 `block_dock`/`end_dock_block`/`get_dock_block_impact` each run a short, fixed sequence of raw
 `session.execute` calls -- `_session_with(...)` below supplies mock results for that sequence in
@@ -16,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.core.clock import FrozenClock
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
 from app.services import planner_service
@@ -309,5 +319,407 @@ async def test_end_dock_block_refuses_a_facility_outside_the_callers_scope():
     with pytest.raises(AppError) as exc:
         await planner_service.end_dock_block(
             session, _planner_ctx(facility_id=FACILITY), dock_status_event_id="DEVT-1"
+        )
+    assert exc.value.code == "FORBIDDEN"
+
+
+# ---------------------------------------------------------------------------------------------
+# get_planner_queue -- FR-PLN-010, SS7.5.1, SS7.3's seven-field row (issue #60).
+# ---------------------------------------------------------------------------------------------
+
+NOW = datetime(2026, 8, 29, 12, 0, tzinfo=timezone.utc)
+CLOCK = FrozenClock(NOW)
+
+
+def _queue_row(
+    *,
+    appointment_id: str = "APT1",
+    shipment_id: str = "SHP1",
+    priority_code: str = "NORMAL",
+    booked_at: datetime | None = None,
+    dock_id: str = DOCK,
+    occupancy: bool = True,
+    interval_start: datetime | None = None,
+    unload_min: int = 60,
+    required_dock_type: str = "STANDARD",
+    dock_type: str = "STANDARD",
+    original_eta_ts: datetime | None = None,
+    effective_eta_ts: datetime | None = None,
+    eta_confidence: str = "HIGH",
+    queue_state: str | None = None,
+    latest_acceptable_ts: str | None = None,
+) -> dict:
+    start = interval_start or (NOW + timedelta(hours=1))
+    end = start + timedelta(minutes=unload_min + 15)
+    return {
+        "appointment_id": appointment_id,
+        "shipment_id": shipment_id,
+        "slot_id": f"SLOT-{appointment_id}",
+        "appointment_status": "PENDING_CONFIRMATION",
+        "booking_source": "DRIVER_CHAT",
+        "is_current": 1,
+        "booked_at": booked_at or (NOW - timedelta(minutes=5)),
+        "order_reference": f"ORD-{shipment_id}",
+        "driver_id": "DRV1",
+        "carrier_id": "CAR1",
+        "priority_code": priority_code,
+        "required_dock_type": required_dock_type,
+        "expected_unload_min": unload_min,
+        "original_eta_ts": original_eta_ts or start,
+        "driver_name": "Ravi K.",
+        "carrier_name": "Rajasthan Roadways",
+        "facility_id": FACILITY,
+        "slot_start_ts": start,
+        "slot_end_ts": end,
+        "dock_id": dock_id,
+        "dock_code": "D1",
+        "dock_type": dock_type,
+        "occupancy_start": start if occupancy else None,
+        "occupancy_end": end if occupancy else None,
+        "interval_start": start,
+        "interval_end": end,
+        "effective_eta_ts": effective_eta_ts or start,
+        "eta_confidence": eta_confidence,
+        "eta_source": "DRIVER_DECLARED",
+        "queue_state": queue_state,
+        "queue_position": 1 if queue_state else None,
+        "gate_in_ts": None,
+        "limit_exception_id": "EXC1" if latest_acceptable_ts else None,
+        "latest_acceptable_ts": latest_acceptable_ts,
+    }
+
+
+def _occupancy_row(
+    *, appointment_id: str, dock_id: str = DOCK, start: datetime, end: datetime
+) -> dict:
+    return {
+        "occupancy_id": 1,
+        "dock_id": dock_id,
+        "appointment_id": appointment_id,
+        "window_start": start,
+        "window_end": end,
+        "shipment_id": f"SHP-{appointment_id}",
+        "order_reference": f"ORD-{appointment_id}",
+        "appointment_status": "CONFIRMED",
+    }
+
+
+@pytest.fixture
+def queue_repo(monkeypatch):
+    """Patch the two repository reads `get_planner_queue` makes, and record their arguments."""
+    calls: dict[str, list] = {"rows": [], "occupancy": []}
+    state: dict[str, list] = {"rows": [], "occupancy": []}
+
+    async def _rows(session, **kwargs):
+        calls["rows"].append(kwargs)
+        return state["rows"]
+
+    async def _occupancy(session, **kwargs):
+        calls["occupancy"].append(kwargs)
+        return state["occupancy"]
+
+    monkeypatch.setattr(planner_service.operations_repo, "list_planner_queue_rows", _rows)
+    monkeypatch.setattr(planner_service.operations_repo, "list_live_dock_occupancy", _occupancy)
+    return {"calls": calls, "state": state}
+
+
+@pytest.mark.asyncio
+async def test_queue_row_carries_the_seven_fields_of_section_7_3(queue_repo):
+    start = NOW + timedelta(hours=1)
+    queue_repo["state"]["rows"] = [
+        _queue_row(
+            priority_code="CRITICAL",
+            interval_start=start,
+            original_eta_ts=start - timedelta(minutes=70),
+            effective_eta_ts=start,
+            eta_confidence="LOW",
+            latest_acceptable_ts="2026-08-29T19:00:00+05:30",
+        )
+    ]
+
+    queue = await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(), clock=CLOCK
+    )
+
+    row = queue.items[0]
+    # 1 -- condensed receipt, in SS7.3's own worked shape.
+    assert row.receipt.text == "CRITICAL · 70 min late · exact dock · 0 min wait"
+    # 2 -- displacement check.
+    assert row.displacement.status == "NONE"
+    # 3 -- ETA confidence.
+    assert row.eta.confidence == "LOW"
+    # 4 -- the driver's own limit.
+    assert row.latest_acceptable_ts == "2026-08-29T19:00:00+05:30"
+    assert row.latest_acceptable_breached is False
+    # 5 -- TTL remaining: booked 5 minutes ago against D9's 15-minute clock.
+    assert row.ttl.remaining_seconds == 10 * 60
+    assert row.ttl.expired is False
+    # 6 -- snapshot_hash (produced, not yet enforced -- issue #61).
+    assert len(row.snapshot_hash) == 64
+    assert queue.snapshot.enforced is False
+    # 7 -- the composite-urgency ordering is stated on the payload, not implied.
+    assert queue.ordering["rule"] == "composite_urgency"
+
+
+@pytest.mark.asyncio
+async def test_queue_prefers_dock_occupancy_over_the_slot_and_says_which_it_used(queue_repo):
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-CLAIMED", occupancy=True),
+        _queue_row(appointment_id="APT-UNCLAIMED", shipment_id="SHP2", occupancy=False),
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    sources = {item.appointment_id: item.interval_source for item in queue.items}
+    assert sources["APT-CLAIMED"] == "dock_occupancy"
+    # A pending appointment with no D1 claim is still listed -- dropping it would hide a row the
+    # expiry sweeper will nonetheless expire and escalate.
+    assert sources["APT-UNCLAIMED"] == "appointment_slot_derived"
+
+
+@pytest.mark.asyncio
+async def test_queue_flags_a_displacement_and_names_the_shipment_it_would_delay(queue_repo):
+    start = NOW + timedelta(hours=1)
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+    ]
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-OTHER",
+            start=start + timedelta(minutes=30),
+            end=start + timedelta(minutes=90),
+        )
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    row = queue.items[0]
+    assert row.displacement.status == "CONFLICT"
+    assert row.displacement.conflicts[0]["shipment_id"] == "SHP-APT-OTHER"
+
+
+@pytest.mark.asyncio
+async def test_queue_does_not_treat_an_abutting_interval_as_a_displacement(queue_repo):
+    """Half-open ranges: `[10:00,11:15)` and `[11:15,12:00)` share no instant, so `&&` is false."""
+    start = NOW + timedelta(hours=1)
+    row = _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+    queue_repo["state"]["rows"] = [row]
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-NEXT",
+            start=row["interval_end"],
+            end=row["interval_end"] + timedelta(hours=1),
+        )
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue.items[0].displacement.status == "NONE"
+
+
+@pytest.mark.asyncio
+async def test_queue_ignores_a_claim_on_another_dock(queue_repo):
+    start = NOW + timedelta(hours=1)
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+    ]
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-OTHER-DOCK",
+            dock_id="DOCK-JAI-D2",
+            start=start,
+            end=start + timedelta(hours=1),
+        )
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue.items[0].displacement.status == "NONE"
+
+
+@pytest.mark.asyncio
+async def test_queue_does_not_bury_a_critical_that_arrived_late(queue_repo):
+    """SS7.3's seeded SHP1014 case -- the reason the sort is neither FIFO nor pure TTL."""
+    queue_repo["state"]["rows"] = [
+        _queue_row(
+            appointment_id="APT-OLD-NORMAL",
+            priority_code="NORMAL",
+            booked_at=NOW - timedelta(minutes=13),
+        ),
+        _queue_row(
+            appointment_id="APT-NEW-CRITICAL",
+            shipment_id="SHP1014",
+            priority_code="CRITICAL",
+            booked_at=NOW - timedelta(minutes=1),
+        ),
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert [item.appointment_id for item in queue.items] == [
+        "APT-NEW-CRITICAL",
+        "APT-OLD-NORMAL",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_queue_ttl_pressure_lifts_a_row_by_at_most_one_priority_band(queue_repo):
+    """A NORMAL at its deadline ties a fresh HIGH; it can never outrank a fresh CRITICAL."""
+    queue_repo["state"]["rows"] = [
+        _queue_row(
+            appointment_id="APT-EXPIRING-NORMAL",
+            priority_code="NORMAL",
+            booked_at=NOW - timedelta(minutes=15),
+        ),
+        _queue_row(
+            appointment_id="APT-FRESH-CRITICAL", priority_code="CRITICAL", booked_at=NOW
+        ),
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    by_id = {item.appointment_id: item for item in queue.items}
+    assert by_id["APT-EXPIRING-NORMAL"].urgency.ttl_pressure == planner_service.TTL_PRESSURE_MAX
+    assert by_id["APT-EXPIRING-NORMAL"].urgency.score == 3000  # NORMAL 2000 + a full band
+    assert by_id["APT-FRESH-CRITICAL"].urgency.score == 4000
+    assert queue.items[0].appointment_id == "APT-FRESH-CRITICAL"
+
+
+@pytest.mark.asyncio
+async def test_queue_promotes_a_driver_physically_waiting_but_not_one_being_served(queue_repo):
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-WAITING", queue_state="WAITING_LATE", booked_at=NOW),
+        _queue_row(appointment_id="APT-IN-DOCK", queue_state="IN_DOCK", booked_at=NOW),
+        _queue_row(appointment_id="APT-TRANSIT", booked_at=NOW),
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    by_id = {item.appointment_id: item for item in queue.items}
+    assert by_id["APT-WAITING"].urgency.waiting_bonus == planner_service.WAITING_BONUS
+    assert by_id["APT-WAITING"].gate.physically_waiting is True
+    # CALLED_TO_DOCK / IN_DOCK are being served, not burning detention in the yard.
+    assert by_id["APT-IN-DOCK"].urgency.waiting_bonus == 0
+    assert by_id["APT-TRANSIT"].urgency.waiting_bonus == 0
+    assert queue.items[0].appointment_id == "APT-WAITING"
+
+
+@pytest.mark.asyncio
+async def test_queue_reports_an_overdue_row_rather_than_hiding_it(queue_repo):
+    """The sweeper runs on a cadence, so a row can be past its deadline and still PENDING."""
+    queue_repo["state"]["rows"] = [_queue_row(booked_at=NOW - timedelta(minutes=20))]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue.items[0].ttl.expired is True
+    assert queue.items[0].ttl.remaining_seconds == -5 * 60
+
+
+@pytest.mark.asyncio
+async def test_snapshot_hash_ignores_the_passing_of_time_but_not_a_new_conflict(queue_repo):
+    start = NOW + timedelta(hours=1)
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+    ]
+
+    first = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+    later = await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(), clock=CLOCK.shifted(timedelta(minutes=7))
+    )
+    assert first.items[0].snapshot_hash == later.items[0].snapshot_hash
+    assert first.items[0].ttl.remaining_seconds != later.items[0].ttl.remaining_seconds
+
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-OTHER", start=start, end=start + timedelta(hours=1)
+        )
+    ]
+    displaced = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+    assert displaced.items[0].snapshot_hash != first.items[0].snapshot_hash
+
+
+@pytest.mark.asyncio
+async def test_queue_marks_a_confirm_that_would_pass_the_drivers_own_limit(queue_repo):
+    start = NOW + timedelta(hours=4)
+    queue_repo["state"]["rows"] = [
+        _queue_row(interval_start=start, latest_acceptable_ts=(start - timedelta(hours=1)).isoformat()),
+        _queue_row(appointment_id="APT-UNPARSEABLE", latest_acceptable_ts="not a timestamp"),
+    ]
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    by_id = {item.appointment_id: item for item in queue.items}
+    assert by_id["APT1"].latest_acceptable_breached is True
+    # "we could not check" is not "we checked and it is fine".
+    assert by_id["APT-UNPARSEABLE"].latest_acceptable_breached is None
+
+
+@pytest.mark.asyncio
+async def test_empty_queue_costs_one_query_and_no_occupancy_scan(queue_repo):
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue.items == []
+    assert queue.count == 0
+    assert queue_repo["calls"]["occupancy"] == []
+
+
+@pytest.mark.asyncio
+async def test_queue_clamps_the_limit_and_reports_when_the_page_is_full(queue_repo):
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id=f"APT{n}", shipment_id=f"SHP{n}") for n in range(3)
+    ]
+
+    queue = await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(), limit=10_000, clock=CLOCK
+    )
+
+    assert queue.limit == planner_service.MAX_QUEUE_LIMIT
+    assert queue_repo["calls"]["rows"][0]["limit"] == planner_service.MAX_QUEUE_LIMIT
+    assert queue.limit_reached is False
+
+    full = await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(), limit=3, clock=CLOCK
+    )
+    assert full.limit_reached is True
+
+
+@pytest.mark.asyncio
+async def test_queue_horizon_is_translated_to_an_absolute_bound(queue_repo):
+    await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(), horizon_hours=8, clock=CLOCK
+    )
+    assert queue_repo["calls"]["rows"][0]["horizon_end"] == NOW + timedelta(hours=8)
+
+    await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+    assert queue_repo["calls"]["rows"][1]["horizon_end"] is None
+
+
+@pytest.mark.asyncio
+async def test_queue_derives_scope_from_the_token_and_refuses_another_facility(queue_repo):
+    """M15: the `facility_id` argument narrows within scope; it never decides it."""
+    await planner_service.get_planner_queue(
+        AsyncMock(), _planner_ctx(facility_id=FACILITY), facility_id=None, clock=CLOCK
+    )
+    assert queue_repo["calls"]["rows"][0]["facility_id"] == FACILITY
+
+    with pytest.raises(AppError) as exc:
+        await planner_service.get_planner_queue(
+            AsyncMock(),
+            _planner_ctx(facility_id=FACILITY),
+            facility_id=OTHER_FACILITY,
+            clock=CLOCK,
+        )
+    assert exc.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_queue_refuses_an_unscoped_global_read(queue_repo):
+    """This surface is deliberately single-facility, so an ADMIN must name one."""
+    with pytest.raises(AppError) as exc:
+        await planner_service.get_planner_queue(
+            AsyncMock(),
+            _planner_ctx(facility_id=None, role=RoleName.ADMIN),
+            facility_id=None,
+            clock=CLOCK,
         )
     assert exc.value.code == "FORBIDDEN"

@@ -14,7 +14,32 @@ from app.core.execution_context import ExecutionContext
 from app.core.settings import get_settings
 from app.repositories.scope import assert_shipment_visible
 from app.scheduling.constraints import load_scheduling_constraints
-from app.scheduling.feasibility import evaluate_candidate_slot, find_feasible_slots
+from app.scheduling.feasibility import (
+    active_facility_rules,
+    evaluate_candidate_slot,
+    explain_slot_eligibility,
+    find_feasible_slots,
+)
+
+# Underscore-prefixed on purpose in `feasibility`, imported here on purpose too: these are the
+# *single* definitions of "inside the facility's operating window" and "the facility-local time of
+# an instant" that Stage 1 uses when it ranks an option. `bulk_confirm`'s fourth safe-batch
+# predicate (section 7.3: "start inside operating hours and before LAST_NEW_START_TIME") has to mean
+# exactly what Stage 1 means by it, and a second copy here is precisely the drift that would let the
+# batch path confirm something the individual path would refuse. Borrowing a private helper is the
+# lesser evil; promoting them is a `feasibility.py` change and that file is not this pass's.
+from app.scheduling.feasibility import (  # noqa: E402  (grouped with its own explanation)
+    _facility_window_ok,
+    _parse_local_time,
+    _to_local,
+)
+from app.scheduling.snapshot import (
+    batch_snapshot_hash,
+    describe_snapshot_drift,
+    displacement_conflicts,
+    load_appointment_snapshot,
+    load_appointment_snapshots,
+)
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 from app.services.redis_memory import ConversationMemory
@@ -25,7 +50,58 @@ AUDIT_ACTION_CONFIRM_APPOINTMENT = "UPDATE"
 AUDIT_ACTION_RESCHEDULE_APPOINTMENT = "RESCHEDULE_APPOINTMENT"
 AUDIT_ACTION_REJECT_APPOINTMENT = "REJECT_APPOINTMENT"
 AUDIT_ACTION_EXPIRE_APPOINTMENT = "EXPIRE_APPOINTMENT"
+# E5.3 / issue #63: a counter-offer moves an appointment from one interval to another, which is
+# structurally a reschedule, so it reuses that action_type. There is no COUNTER_OFFER value to use:
+# `audit_logs_action_type_check` (migration 20260812010000, lines 46-52) admits a closed 13-value
+# set and adding to it needs a migration this pass deliberately does not write. The discriminator
+# lives in `new_value_json.transition` instead -- the same "generic action_type, specific payload"
+# shape `gate_yard_service._write_audit` already uses for exactly this reason, and what makes
+# section 7.3's "reject-with-counter-offer vs reject-flat" metric answerable today.
+AUDIT_ACTION_COUNTER_OFFER = AUDIT_ACTION_RESCHEDULE_APPOINTMENT
+AUDIT_TRANSITION_COUNTER_OFFERED = "COUNTER_OFFERED"
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+
+# section 7.5.1's controlled vocabulary for `reject_request`, verbatim: *"`reason_code` is an enum
+# precisely because it is rendered to the driver -- free prose here becomes an unreviewed
+# customer-facing message."* Issue #66. Enforced with a 422 naming the supported set, which is
+# exactly the shape `escalation_service.RESOLVE_REASON_CODES` / `CANCEL_REASON_CODES` already use --
+# this was an inconsistency between two sibling flows, not a product-wide posture, so it is fixed by
+# converging on the existing pattern rather than by inventing a third one.
+REJECTION_REASON_CODES = frozenset(
+    {"CAPACITY", "RULE_VIOLATION", "PRIORITY_CONFLICT", "SAFETY", "DATA_CONFLICT"}
+)
+
+# `Source: assumption, untested.` section 7.5.1 gives `counter_offer` a `reason_code` argument but
+# never names its vocabulary, and no seeded case grounds one. Reusing the reject set is the
+# defensible inference: a counter-offer's reason answers the same question a rejection's does ("why
+# not the interval you asked for"), it is rendered to the same driver, and a second vocabulary for
+# the same question would be two things to keep in sync. Stated here rather than silently assumed,
+# the same epistemic-honesty posture `escalation_service`'s SLA budgets use.
+COUNTER_OFFER_REASON_CODES = REJECTION_REASON_CODES
+
+# section 7.3's five safe-batch predicates, named so a `bulk_confirm` outcome can say which one an
+# id failed instead of only that it was skipped. section 7.5.1: the server re-evaluates all five
+# *at press time*, "rather than trusting the client's selection" -- that re-check is what keeps D6's
+# human authority real instead of ceremonial.
+PREDICATE_ZERO_DISPLACEMENT = "ZERO_DISPLACEMENT"
+PREDICATE_EXACT_DOCK_MATCH = "EXACT_DOCK_MATCH"
+PREDICATE_ETA_CONFIDENCE_NOT_LOW = "ETA_CONFIDENCE_NOT_LOW"
+PREDICATE_INSIDE_OPERATING_WINDOW = "INSIDE_HOURS_AND_BEFORE_LAST_NEW_START"
+PREDICATE_NO_OPEN_ESCALATION = "NO_OPEN_ESCALATION"
+SAFE_BATCH_PREDICATES = (
+    PREDICATE_ZERO_DISPLACEMENT,
+    PREDICATE_EXACT_DOCK_MATCH,
+    PREDICATE_ETA_CONFIDENCE_NOT_LOW,
+    PREDICATE_INSIDE_OPERATING_WINDOW,
+    PREDICATE_NO_OPEN_ESCALATION,
+)
+# `escalation_queue.escalation_status` values that mean the case is still live. Terminal states are
+# RESOLVED / CANCELLED (migration 20260823100000).
+OPEN_ESCALATION_STATUSES = ("OPEN", "ACKNOWLEDGED", "IN_PROGRESS")
+# `bulk_confirm` is a spike-clearing tool, not a bulk-mutation API. section 7.3's own load
+# arithmetic caps a disruption spike at 20-35 requests inside 30 minutes, so a cap a little above
+# that refuses an obviously-wrong call without ever refusing a real one.
+MAX_BULK_CONFIRM_IDS = 50
 ALLOCATION_UNIQUE_CONSTRAINTS = frozenset(
     {
         "ux_active_appointment_per_slot",
@@ -77,6 +153,13 @@ class RequestSlotResult(BaseModel):
     idempotency_key: str | None = None
     idempotent_replay: bool = False
     appointment_writes: int = 0
+    # D2's `HELD` outcome (SOLUTION_DESIGN.md section 7.1, issue #53). All three are None on the
+    # legacy single-phase path, so this stays a superset of the shape every existing caller,
+    # stored idempotency response and test already reads -- adding the two-phase contract does not
+    # invalidate a single replayed `SLOT_REQUESTED` row.
+    hold_id: str | None = None
+    hold_expires_at: str | None = None
+    hold_ttl_seconds: int | None = None
 
 
 class AppointmentRequestStatusResult(BaseModel):
@@ -104,10 +187,61 @@ class CancelAppointmentCommand(BaseModel):
 
 
 class ConfirmAppointmentCommand(BaseModel):
+    """section 7.5.1 `confirm_request` -- `appointment_id`, `snapshot_hash`, `Idempotency-Key`.
+
+    **`warehouse_confirmation_ref` is optional, and that is a deliberate reversal** (issue #62).
+    It shipped `required`, which would have blocked every confirm the planner console makes: the
+    field appears in no design document, has no UI in any of the 30 planner artboards, and is not
+    in section 7.5.1's three-argument list. It is a *warehouse's* external reference -- a WMS
+    confirmation number -- so an inbound-integration field, not a planner input, and the planner
+    console has no source for one. The column is nullable in the shipped schema
+    (`20260805201923_setuhaul_baseline.sql:183`), so this is a contract fix, not a migration.
+
+    Nothing is invented to fill the gap: when the argument is omitted the stored value is left
+    exactly as it was (`COALESCE` in the UPDATE below), rather than stamping a synthesised
+    reference that would read as a real warehouse acknowledgement. `AGENTS.md`: *"Never invent
+    shipment, ETA, dock, appointment, capacity, or operational data."*
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     appointment_id: str = Field(min_length=1, max_length=100)
-    warehouse_confirmation_ref: str = Field(min_length=1, max_length=200)
+    # section 7.5 principle 3 -- required, exactly as `Idempotency-Key` already is on this route.
+    # The router 400s without it; see `ConfirmAppointmentBody` in `routers/scheduling.py`.
+    snapshot_hash: str = Field(min_length=1, max_length=128)
+    warehouse_confirmation_ref: str | None = Field(default=None, min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class CounterOfferCommand(BaseModel):
+    """section 7.5.1 `counter_offer` -- issue #63, `FR-PLN-002`, `flows-and-states.md` Flow 2.
+
+    `dock_id` + `start_ts` rather than a `slot_id` because that is the catalog's own argument
+    shape, and because the Board tab's picker hands the planner a point on a dock/time grid, not a
+    slot row. The pair is resolved to an `appointment_slots` row server-side; an interval with no
+    slot behind it is `INTERVAL_UNAVAILABLE`, not an invented slot.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    dock_id: str = Field(min_length=1, max_length=100)
+    start_ts: datetime
+    reason_code: str = Field(min_length=1, max_length=40)
+    snapshot_hash: str = Field(min_length=1, max_length=128)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class BulkConfirmCommand(BaseModel):
+    """section 7.5.1 `bulk_confirm` -- issue #65, `FR-PLN-006`, `flows-and-states.md` Flow 6."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_ids: list[str] = Field(min_length=1, max_length=MAX_BULK_CONFIRM_IDS)
+    # The composite of the per-row hashes for exactly these ids -- see
+    # `scheduling/snapshot.py::batch_snapshot_hash`.
+    snapshot_hash: str = Field(min_length=1, max_length=128)
+    warehouse_confirmation_ref: str | None = Field(default=None, min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -123,10 +257,19 @@ class RescheduleAppointmentCommand(BaseModel):
 
 
 class RejectAppointmentCommand(BaseModel):
+    """section 7.5.1 `reject_request` -- `appointment_id`, `reason_code`, `note?` (issue #66).
+
+    The shipped field was `rejection_reason: str(min 1, max 500)` -- free prose, on a value that is
+    rendered to the driver. Renamed to `reason_code` (the catalog's own argument name) and
+    validated against `REJECTION_REASON_CODES` in the service, not here, so the refusal can name
+    the supported set the way ops's sibling enums already do. `note` stays free text: it is the
+    planner's internal annotation, not the customer-facing string.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     appointment_id: str = Field(min_length=1, max_length=100)
-    rejection_reason: str = Field(min_length=1, max_length=500)
+    reason_code: str = Field(min_length=1, max_length=40)
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -151,6 +294,71 @@ class AppointmentTransitionResult(BaseModel):
     idempotency_key: str
     idempotent_replay: bool = False
     appointment_writes: int = 1
+    # The token the caller should carry into its *next* write on this row. Present on success so a
+    # planner acting twice in a row (confirm, then something else) never has to re-read the queue
+    # just to obtain a fresh hash.
+    snapshot_hash: str | None = None
+
+
+class CounterOfferResult(BaseModel):
+    """Typed outcome for `counter_offer` (section 7.5 principle 2 -- never prose)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str
+    source: str = "postgresql"
+    freshness: str = "live"
+    code: str
+    shipment_id: str
+    appointment_id: str
+    reason_code: str
+    # section 7.5.1: "COUNTER_OFFERED + the new option set sent to the driver". A planner picks one
+    # interval on the board, so the offered set is that one interval -- returned as a list because
+    # the catalog says "set" and because a future multi-pick would not change the shape.
+    offered_options: list[dict[str, Any]] = Field(default_factory=list)
+    appointment: dict[str, Any] | None = None
+    idempotency_key: str
+    idempotent_replay: bool = False
+    appointment_writes: int = 0
+    snapshot_hash: str | None = None
+
+
+class BulkConfirmOutcome(BaseModel):
+    """One id's result inside a `bulk_confirm` -- section 7.5.1's "per-id outcome list"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str
+    shipment_id: str | None = None
+    code: str
+    detail: str | None = None
+    # Which of section 7.3's five predicates this id failed, empty when it passed all five. Named
+    # rather than counted so Flow 6 step 4's "SHP1013 no longer eligible" toast has something real
+    # to say.
+    failed_predicates: list[str] = Field(default_factory=list)
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    snapshot_hash: str | None = None
+
+
+class BulkConfirmResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str
+    source: str = "postgresql"
+    freshness: str = "live"
+    code: str = "BULK_CONFIRM_COMPLETED"
+    requested: int
+    confirmed: int
+    skipped: int
+    # False means the board moved between selection and press. It does not by itself refuse the
+    # batch -- see `bulk_confirm`'s docstring for why, and for the fork that decision leaves open.
+    snapshot_hash_matched: bool
+    expected_snapshot_hash: str
+    current_snapshot_hash: str
+    outcomes: list[BulkConfirmOutcome]
+    idempotency_key: str
+    idempotent_replay: bool = False
+    appointment_writes: int = 0
 
 
 # Bind types are not interchangeable, and getting one wrong is a hard runtime failure rather than a
@@ -263,6 +471,94 @@ def _already_actioned_error(
         code="ALREADY_ACTIONED",
         status_code=409,
     )
+
+
+def _assert_reason_code(reason_code: str, allowed: frozenset[str], *, tool: str) -> str:
+    """Enforce a controlled vocabulary, naming the supported set in the refusal.
+
+    Same shape as `escalation_service.resolve_escalation` / `cancel_escalation` -- 422,
+    `INVALID_REASON_CODE`, `detail` listing what is accepted. Deliberately not a pydantic `Literal`
+    on the command: FastAPI would return a generic `VALIDATION_ERROR` that does not enumerate the
+    vocabulary, and this project already answers this exact question one way on the ops surface
+    (issue #66 is about the two siblings disagreeing, so the fix is to converge, not to add a third
+    style).
+    """
+    normalised = reason_code.strip().upper()
+    if normalised not in allowed:
+        raise AppError(
+            f"Unsupported reason_code '{reason_code}' for {tool}.",
+            code="INVALID_REASON_CODE",
+            status_code=422,
+            detail=f"Supported: {', '.join(sorted(allowed))}.",
+        )
+    return normalised
+
+
+def _snapshot_stale_error(snapshot: dict[str, Any], *, expected_hash: str) -> AppError:
+    """section 7.5.1's `SNAPSHOT_STALE`, carrying what the row is *now*.
+
+    `flows-and-states.md` Flow 1 step 5: the row re-renders with current data and the planner
+    re-reads before deciding again -- *"never a silent retry with old context"*. A bare 409 would
+    make a silent retry the obvious client behaviour, which is precisely what that line forbids, so
+    the drift description travels in `detail`.
+    """
+    drift = describe_snapshot_drift(snapshot, expected_hash=expected_hash)
+    return AppError(
+        "The queue row changed since it was rendered; re-read it before deciding again.",
+        code="SNAPSHOT_STALE",
+        status_code=409,
+        detail=json.dumps(drift, default=str),
+    )
+
+
+def _displacement_error(conflicts: list[dict[str, Any]], *, attempted: str) -> AppError:
+    """section 7.5.1's `DISPLACEMENT_DETECTED` -- refuses, and names what appeared.
+
+    Checked *before* `SNAPSHOT_STALE` on every path that checks both. The displacement set is
+    inside the snapshot digest (see `scheduling/snapshot.py`), so a new conflict changes the hash
+    too; if staleness were tested first this code could never fire and section 7.3's single most
+    important field -- *"Confirming must never quietly hurt a third party"* -- would degrade into a
+    generic "something moved".
+    """
+    named = ", ".join(
+        str(conflict.get("appointment_id") or conflict.get("dock_event_id") or "?")
+        for conflict in conflicts
+    )
+    return AppError(
+        f"Cannot {attempted}: a conflict appeared on this dock interval since the row was "
+        f"rendered ({named}).",
+        code="DISPLACEMENT_DETECTED",
+        status_code=409,
+        detail=json.dumps({"reason_code": "DISPLACEMENT_DETECTED", "conflicts": conflicts}, default=str),
+    )
+
+
+async def _snapshot_guard(
+    session: AsyncSession,
+    *,
+    appointment_id: str,
+    expected_hash: str,
+    attempted: str,
+) -> dict[str, Any]:
+    """The section 7.5 principle-3 gate shared by `confirm_request` and `counter_offer`.
+
+    Must be called **after** `_locked_appointment` has taken the row `FOR UPDATE`, and inside the
+    same transaction: under READ COMMITTED that lock is what makes the values read here the
+    committed ones the write is about to act on (PostgreSQL "Transaction Isolation" 13.2.1). Called
+    before the lock it would be a race of its own.
+
+    Costs one round trip. Returns the recomputed snapshot so the caller can hand its fresh
+    `snapshot_hash` back in the success response.
+    """
+    snapshot = await load_appointment_snapshot(session, appointment_id)
+    if snapshot is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    conflicts = displacement_conflicts(snapshot)
+    if conflicts:
+        raise _displacement_error(conflicts, attempted=attempted)
+    if snapshot["snapshot_hash"] != expected_hash:
+        raise _snapshot_stale_error(snapshot, expected_hash=expected_hash)
+    return snapshot
 
 
 def allocation_unique_constraint_name(exc: IntegrityError) -> str | None:
@@ -845,6 +1141,83 @@ async def cancel_appointment(
     return result
 
 
+async def _apply_confirmation(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    appointment_id: str,
+    old_status: str,
+    now: datetime,
+    warehouse_confirmation_ref: str | None,
+    note: str | None,
+) -> None:
+    """The PENDING_CONFIRMATION -> CONFIRMED write plus its audit row, inside the caller's txn.
+
+    Extracted so `confirm_request` and `bulk_confirm` are literally the same write (issue #65). A
+    second copy for the batch path is how the two would eventually disagree about what confirming
+    means -- and the batch path is the one nobody watches row by row.
+
+    No `dock_occupancy` change: CONFIRMED is an *active* status, so the claim the appointment took
+    at PENDING_CONFIRMATION keeps standing exactly as it is. (Contrast `_ops_pending_transition`,
+    where REJECTED/EXPIRED must release it.)
+
+    `COALESCE(:warehouse_confirmation_ref, warehouse_confirmation_ref)`: the argument is optional
+    (see `ConfirmAppointmentCommand`), and omitting it must not blank a reference a warehouse
+    integration already wrote.
+    """
+    now_iso = now.isoformat()
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET appointment_status = 'CONFIRMED',
+                confirmed_at = :confirmed_at,
+                warehouse_confirmation_ref = COALESCE(
+                    :warehouse_confirmation_ref, warehouse_confirmation_ref
+                ),
+                updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {
+            "appointment_id": appointment_id,
+            "confirmed_at": now,
+            "warehouse_confirmation_ref": warehouse_confirmation_ref,
+            "updated_at": now,
+        },
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"),
+            "user_id": ctx.user_id,
+            "action_type": AUDIT_ACTION_CONFIRM_APPOINTMENT,
+            "entity_id": appointment_id,
+            "old_value_json": json.dumps({"status": old_status}, default=str),
+            "new_value_json": json.dumps(
+                {
+                    "status": "CONFIRMED",
+                    "warehouse_confirmation_ref": warehouse_confirmation_ref,
+                    "note": note,
+                },
+                default=str,
+            ),
+            # Deliberately still a string: audit_logs.created_at was never converted by E1.1.
+            "created_at": now_iso,
+        },
+    )
+
+
 async def confirm_appointment(
     session: AsyncSession,
     ctx: ExecutionContext,
@@ -886,57 +1259,32 @@ async def confirm_appointment(
     if old_status != "PENDING_CONFIRMATION":
         # The D9 sweeper (or another planner) got here first. section 7.5.1 requires this to be
         # distinguishable by code and to name the winner, not to read as a generic bad transition.
+        #
+        # Deliberately still the FIRST refusal, ahead of the two E5.3 added below: a row somebody
+        # already actioned is not "stale", it is decided, and section 7.5.1 names ALREADY_ACTIONED
+        # as the answer to that exact race. Reordering these would tell a planner who lost the race
+        # to the sweeper that their screen was out of date, which is true but not the point.
         raise _already_actioned_error(appointment, attempted="confirm")
+
+    # section 7.5 principle 3 / issue #61. Inside the lock, after the status check: displacement
+    # first, then staleness -- see `_displacement_error`.
+    snapshot = await _snapshot_guard(
+        session,
+        appointment_id=command.appointment_id,
+        expected_hash=command.snapshot_hash,
+        attempted="confirm",
+    )
 
     # One instant, two representations -- see the bind-type note above `_as_of`.
     now = datetime.now(timezone.utc)
-    now_iso = now.isoformat()
-    await session.execute(
-        text(
-            """
-            UPDATE public.appointments
-            SET appointment_status = 'CONFIRMED',
-                confirmed_at = :confirmed_at,
-                warehouse_confirmation_ref = :warehouse_confirmation_ref,
-                updated_at = :updated_at
-            WHERE appointment_id = :appointment_id
-            """
-        ),
-        {
-            "appointment_id": command.appointment_id,
-            "confirmed_at": now,
-            "warehouse_confirmation_ref": command.warehouse_confirmation_ref,
-            "updated_at": now,
-        },
-    )
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id,
-              old_value_json, new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
-              :old_value_json, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": new_id("AUD"),
-            "user_id": ctx.user_id,
-            "action_type": AUDIT_ACTION_CONFIRM_APPOINTMENT,
-            "entity_id": command.appointment_id,
-            "old_value_json": json.dumps({"status": old_status}, default=str),
-            "new_value_json": json.dumps(
-                {
-                    "status": "CONFIRMED",
-                    "warehouse_confirmation_ref": command.warehouse_confirmation_ref,
-                    "note": command.note,
-                },
-                default=str,
-            ),
-            "created_at": now_iso,
-        },
+    await _apply_confirmation(
+        session,
+        ctx,
+        appointment_id=command.appointment_id,
+        old_status=old_status,
+        now=now,
+        warehouse_confirmation_ref=command.warehouse_confirmation_ref,
+        note=command.note,
     )
     updated = await _reread_appointment(session, command.appointment_id)
     result = AppointmentTransitionResult(
@@ -947,6 +1295,7 @@ async def confirm_appointment(
         appointment_id=command.appointment_id,
         appointment=updated,
         idempotency_key=idempotency_key,
+        snapshot_hash=snapshot["snapshot_hash"],
     )
     await store_idempotency(
         session,
@@ -958,6 +1307,104 @@ async def confirm_appointment(
     )
     await session.commit()
     result.appointment = await _reread_appointment(session, command.appointment_id)
+    return result
+
+
+async def _request_slot_as_hold(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    slot_id: str,
+    policy_version: str,
+    now: datetime,
+    idempotency_key: str,
+    route: str,
+    req_hash: str,
+    persist: bool,
+) -> RequestSlotResult:
+    """Phase one of section 7.1's two-phase `request_slot`: take a D2 hold instead of booking.
+
+    Kept in this module rather than `holds.py` only because it is the *tail* of `request_slot` --
+    it reuses that function's already-computed eligibility verdict and its conflict/idempotency
+    helpers. The hold's own semantics (the interval expression, the audit row, the NULL
+    appointment_id) live in `holds.create_hold`; this is the adapter between the two.
+
+    `holds` is imported here rather than at module scope because `holds` imports *this* module (for
+    the shared scope helpers, the constraint-name translation and `_reread_appointment`) -- the same
+    one-directional-import-plus-local-import shape `expiry.py` already uses against this module.
+    """
+    from app.scheduling import holds  # local: breaks the allocation <-> holds import cycle
+
+    ttl_seconds = get_settings().held_slot_ttl_seconds
+    try:
+        hold = await holds.create_hold(
+            session,
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            policy_version=policy_version,
+            ttl_seconds=ttl_seconds,
+            now=now,
+            actor_user_id=ctx.user_id,
+        )
+    except IntegrityError as exc:
+        constraint_name = allocation_unique_constraint_name(exc)
+        if constraint_name is None:
+            raise
+        await session.rollback()
+        # The loser of a genuine D1 race, and the reason a hold is a `dock_occupancy` row at all:
+        # two drivers picking the same interval within seconds contend on the exclusion constraint
+        # here, at hold time, instead of both being shown an option that only one can book
+        # (section 4, "It absorbs the 'two drivers pick the same slot within seconds' case").
+        result = await _conflict_result(
+            session,
+            ctx,
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            policy_version=policy_version,
+            reason_code="POSTGRES_UNIQUE_ALLOCATION_CONFLICT",
+            message=(
+                "PostgreSQL rejected the hold because another active claim already holds this "
+                f"capacity (constraint {constraint_name})."
+            ),
+            idempotency_key=idempotency_key,
+        )
+        await _store_request_idempotency(
+            session, persist=persist, key=idempotency_key, user_id=ctx.user_id, route=route,
+            request_hash=req_hash, response=result.model_dump(), status_code=409,
+        )
+        return result
+
+    if hold is None:
+        raise AppError(
+            "Could not hold dock capacity for the selected slot.",
+            code="DOCK_OCCUPANCY_HOLD_FAILED",
+            status_code=500,
+        )
+
+    result = RequestSlotResult(
+        as_of=_as_of(),
+        status="HELD",
+        code="SLOT_HELD",
+        shipment_id=shipment_id,
+        slot_id=slot_id,
+        # No appointment exists yet, and saying so explicitly matters: section 4's "Held != booked"
+        # is exactly what the driver-facing wording must not blur.
+        appointment_id=None,
+        policy_version=policy_version,
+        hold_id=str(hold["occupancy_id"]),
+        hold_expires_at=hold["expires_at"].isoformat()
+        if isinstance(hold["expires_at"], datetime)
+        else str(hold["expires_at"]),
+        hold_ttl_seconds=ttl_seconds,
+        idempotency_key=idempotency_key,
+        appointment_writes=0,
+    )
+    await _store_request_idempotency(
+        session, persist=persist, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump(), status_code=200,
+    )
+    result.idempotent_replay = False
     return result
 
 
@@ -1153,6 +1600,27 @@ async def request_slot(
         )
         return result
 
+    # ---- D2's two-phase contract (SOLUTION_DESIGN.md section 7.1, issue #53) -------------------
+    # Section 7.1: "`request_slot` -- now a two-phase contract. Under D2 it ... returns one of three
+    # typed outcomes: `HELD` + `hold_expires_at` (90 s) ... `SLOT_CONFLICT_REFRESH_REQUIRED` ...
+    # `SLOT_OPTIONS_STALE`." Everything above this line -- scope, staleness, the active-appointment
+    # guard, Stage 1 feasibility -- is identical for both phases and is deliberately not duplicated
+    # in `holds.py`; only the *terminal write* differs. Below the flag, the legacy single-phase
+    # path continues to commit straight to PENDING_CONFIRMATION, byte for byte as before.
+    if get_settings().two_phase_hold_enabled:
+        return await _request_slot_as_hold(
+            session,
+            ctx,
+            shipment_id=shipment_id,
+            slot_id=slot_id,
+            policy_version=constraints.policy_version,
+            now=now,
+            idempotency_key=idempotency_key,
+            route=route,
+            req_hash=req_hash,
+            persist=persist,
+        )
+
     appointment_id = new_id("APT")
     audit_id = new_id("AUD")
     try:
@@ -1313,9 +1781,22 @@ async def _ops_pending_transition(
     reason: str,
     action_type: str,
     idempotency_key: str,
+    note: str | None = None,
 ) -> AppointmentTransitionResult:
     route = f"POST /api/v1/shipments/{shipment_id}/appointments/{appointment_id}/{target_status.lower()}"
-    req_hash = payload_hash({"shipment_id": shipment_id, "appointment_id": appointment_id, "reason": reason})
+    # `note` joined the hash in E5.3 (issue #66) and it is not cosmetic. `reason` used to be free
+    # prose, so it carried nearly all of a reject's entropy; now it is one of five enum values, and
+    # two rejects differing only in their note would hash identically. Reusing an Idempotency-Key
+    # with a changed payload must raise IDEMPOTENCY_PAYLOAD_MISMATCH, not silently replay the first
+    # call's response -- narrowing the vocabulary without this would have quietly weakened that.
+    req_hash = payload_hash(
+        {
+            "shipment_id": shipment_id,
+            "appointment_id": appointment_id,
+            "reason": reason,
+            "note": note,
+        }
+    )
     replay = await lookup_idempotency(
         session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
     )
@@ -1366,7 +1847,12 @@ async def _ops_pending_transition(
             "audit_id": new_id("AUD"), "user_id": ctx.user_id, "action_type": action_type,
             "entity_id": appointment_id,
             "old_value_json": json.dumps({"status": "PENDING_CONFIRMATION"}),
-            "new_value_json": json.dumps({"status": target_status, "reason": reason}),
+            # `reason` is the controlled code (issue #66); `note` is the planner's own free text and
+            # stays here in the audit trail only -- it never reaches `cancellation_reason`, which is
+            # the driver-facing field the enum exists to protect.
+            "new_value_json": json.dumps(
+                {"status": target_status, "reason": reason, "note": note}
+            ),
             "created_at": now_iso,
         },
     )
@@ -1388,10 +1874,25 @@ async def reject_appointment(
     session: AsyncSession, ctx: ExecutionContext, *, shipment_id: str,
     command: RejectAppointmentCommand, idempotency_key: str
 ) -> AppointmentTransitionResult:
+    """section 7.5.1 `reject_request` / `FR-PLN-003`. Issue #66.
+
+    The vocabulary check happens here, before anything is read or locked: an unsupported
+    `reason_code` is a client mistake, not a state conflict, so it must not consume a row lock or
+    burn the caller's `Idempotency-Key` on a stored 422.
+
+    What lands in `appointments.cancellation_reason` is the code itself, not prose. That column is
+    what `_already_actioned_error` reads back to tell the *next* actor why the row is gone, and
+    what a driver-facing renderer will resolve to copy -- section 7.5.1's whole reason for making
+    this an enum. The planner's free-text `note` is audit-only and deliberately never reaches it.
+    """
+    reason_code = _assert_reason_code(
+        command.reason_code, REJECTION_REASON_CODES, tool="reject_request"
+    )
     return await _ops_pending_transition(
         session, ctx, shipment_id=shipment_id, appointment_id=command.appointment_id,
-        target_status="REJECTED", reason=command.rejection_reason,
+        target_status="REJECTED", reason=reason_code,
         action_type=AUDIT_ACTION_REJECT_APPOINTMENT, idempotency_key=idempotency_key,
+        note=command.note,
     )
 
 
@@ -1568,4 +2069,668 @@ async def reschedule_appointment(
     )
     await session.commit()
     result.appointment = await _reread_appointment(session, str(result.appointment_id))
+    return result
+
+
+# =================================================================================================
+# counter_offer -- section 7.5.1 / FR-PLN-002 / flows-and-states.md Flow 2 (issue #63)
+# =================================================================================================
+
+
+async def _slot_at_dock_and_time(
+    session: AsyncSession, *, facility_id: str, dock_id: str, start_ts: datetime
+) -> dict[str, Any] | None:
+    """Resolve the Board tab's (dock, time) pick to an `appointment_slots` row.
+
+    section 7.5.1 gives `counter_offer` `dock_id` + `start_ts`, not a `slot_id`, because that is
+    what a dock/time grid hands the planner. The live schema is slot-based, so the pair has to
+    resolve to a real slot row -- and when it does not, the honest answer is
+    `INTERVAL_UNAVAILABLE`, never a slot conjured to fit the click.
+
+    `facility_id` is the *shipment's* destination facility, derived server-side, never a client
+    argument (M15) -- so a planner cannot counter-offer a dock at a facility the shipment is not
+    going to, however the board was rendered.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT sl.slot_id, sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
+                       sl.slot_status, d.dock_code, d.dock_type, d.dock_status
+                FROM public.appointment_slots sl
+                JOIN public.docks d ON d.dock_id = sl.dock_id
+                WHERE sl.facility_id = :facility_id
+                  AND sl.dock_id = :dock_id
+                  AND sl.slot_start_ts = :start_ts
+                LIMIT 1
+                """
+            ),
+            {"facility_id": facility_id, "dock_id": dock_id, "start_ts": start_ts},
+        )
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def _interval_unavailable_error(
+    *, dock_id: str, start_ts: datetime, failure_code: str, message: str
+) -> AppError:
+    """section 7.5.1's `INTERVAL_UNAVAILABLE`.
+
+    Flow 2: the board *"re-renders that interval occupied, banner stays, pick again"* -- so the
+    refusal has to name which interval and why, or the planner has nothing to re-render.
+    """
+    return AppError(
+        message,
+        code="INTERVAL_UNAVAILABLE",
+        status_code=409,
+        detail=json.dumps(
+            {
+                "reason_code": "INTERVAL_UNAVAILABLE",
+                "failure_code": failure_code,
+                "dock_id": dock_id,
+                "start_ts": start_ts.isoformat(),
+                "message": message,
+            },
+            default=str,
+        ),
+    )
+
+
+async def counter_offer(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    command: CounterOfferCommand,
+    idempotency_key: str,
+) -> CounterOfferResult:
+    """section 7.5.1 `counter_offer` -- the affordance that keeps the conversation alive.
+
+    section 7.3: *"Reject without an alternative is a dead end -- the driver is pushed back to a
+    phone call, which is the failure mode the product exists to remove."*
+
+    ## What this actually writes, and the honest limit of it
+
+    The appointment **moves to the counter-offered slot and stays `PENDING_CONFIRMATION`**, with
+    its `dock_occupancy` claim released from the old interval and re-taken on the new one inside
+    one transaction. Reserving is not optional: if the offered interval were merely *shown*, another
+    booking could take it before the driver replies and the planner's offer would have been a lie --
+    exactly the mis-promise this product exists to remove.
+
+    **What it cannot do yet, stated plainly.** `flows-and-states.md` Flow 2 wants the queue row to
+    show a distinct *"awaiting driver"* micro-state, and D2's four-state lifecycle
+    (`SHOWN -> HELD -> PENDING_CONFIRMATION -> CONFIRMED`) is where that would live. The live
+    `appointments_appointment_status_check` admits no such value (migration 20260812010000), and
+    issue #53's migration for it is written but **not applied**. So the micro-state is derivable
+    rather than stored: a `PENDING_CONFIRMATION` row whose most recent `audit_logs` entry carries
+    `new_value_json.transition = 'COUNTER_OFFERED'`. That is queryable today and needs no schema
+    change; it is not as good as a column, and it is flagged rather than papered over.
+
+    **The D9 clock is deliberately not reset.** `booked_at` is the anchor `expiry.py` measures the
+    15-minute TTL from, and rewriting it would both hand the planner an unbounded way to sit on
+    capacity and corrupt the request's own history -- the same reasoning `expiry.py:77-81` gives for
+    refusing to fake `hold_for_information`. A counter-offer therefore inherits whatever TTL
+    remains. **Owner fork:** if a counter-offer should buy the driver fresh time, that is
+    `appointments.expires_at` (issue #64's half of the same unapplied migration), not this tool.
+
+    ## Round trips, counted rather than assumed
+
+    Idempotency lookup, shipment read, locking read, snapshot recompute, slot resolve, Stage-1
+    revalidation (3), release, update, claim, audit, snapshot recompute, idempotency store. Thirteen
+    on the success path, for an action section 7.3's own load arithmetic puts at a handful per
+    coordinator per hour. Stage 1 is reused via `explain_slot_eligibility` rather than re-queried
+    inline precisely because a second copy of the eligibility guard is how a planner ends up able to
+    hand out by hand something the driver path would have refused.
+    """
+    reason_code = _assert_reason_code(
+        command.reason_code, COUNTER_OFFER_REASON_CODES, tool="counter_offer"
+    )
+    route = (
+        f"POST /api/v1/shipments/{shipment_id}/appointments/"
+        f"{command.appointment_id}/counter-offer"
+    )
+    req_hash = payload_hash({"shipment_id": shipment_id, **command.model_dump()})
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        return CounterOfferResult.model_validate({**replay["response"], "idempotent_replay": True})
+
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_ops_scope(ctx, shipment)
+    facility_id = str(shipment["destination_facility_id"])
+
+    appointment = await _locked_appointment(
+        session, shipment_id=shipment_id, appointment_id=command.appointment_id
+    )
+    if appointment is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    if str(appointment["appointment_status"]) != "PENDING_CONFIRMATION":
+        raise _already_actioned_error(appointment, attempted="counter-offer")
+
+    await _snapshot_guard(
+        session,
+        appointment_id=command.appointment_id,
+        expected_hash=command.snapshot_hash,
+        attempted="counter-offer",
+    )
+
+    start_ts = command.start_ts
+    if start_ts.tzinfo is None:
+        # A naive `start_ts` would be encoded by asyncpg as if it were in the session zone and
+        # silently match the wrong slot. Refuse instead of guessing which zone the board meant.
+        raise _interval_unavailable_error(
+            dock_id=command.dock_id,
+            start_ts=start_ts.replace(tzinfo=timezone.utc),
+            failure_code="START_TS_NOT_TIMEZONE_AWARE",
+            message="start_ts must carry a timezone offset.",
+        )
+
+    slot = await _slot_at_dock_and_time(
+        session, facility_id=facility_id, dock_id=command.dock_id, start_ts=start_ts
+    )
+    if slot is None:
+        raise _interval_unavailable_error(
+            dock_id=command.dock_id,
+            start_ts=start_ts,
+            failure_code="SLOT_NOT_FOUND",
+            message=(
+                "No slot exists on that dock at that start time for the shipment's destination "
+                "facility."
+            ),
+        )
+    new_slot_id = str(slot["slot_id"])
+    if new_slot_id == str(appointment["slot_id"]):
+        raise _interval_unavailable_error(
+            dock_id=command.dock_id,
+            start_ts=start_ts,
+            failure_code="SAME_INTERVAL",
+            message="The counter-offered interval is the one already requested.",
+        )
+
+    # section 7.5.1: "Revalidates the proposed interval through Stage 1 -- a planner may not hand
+    # out an infeasible slot by hand." This is the full Stage-1 guard, facility rules and the
+    # driver's own acceptable window included, not the reduced one `request_slot` runs.
+    eligibility = await explain_slot_eligibility(session, ctx, shipment_id, new_slot_id)
+    if not eligibility.eligible:
+        raise _interval_unavailable_error(
+            dock_id=command.dock_id,
+            start_ts=start_ts,
+            failure_code=eligibility.failure_code or "SLOT_NOT_FEASIBLE",
+            message=eligibility.message or "The proposed interval is not feasible.",
+        )
+
+    now = datetime.now(timezone.utc)
+    try:
+        # Release before claiming, for the reason `reschedule_appointment` gives: moving 11:00 to
+        # 11:30 on the same dock overlaps itself, so holding the old claim would make D1's
+        # exclusion constraint reject the planner's own counter-offer.
+        await _release_dock_occupancy(session, command.appointment_id)
+        await session.execute(
+            text(
+                """
+                UPDATE public.appointments
+                SET slot_id = :slot_id, updated_at = :updated_at
+                WHERE appointment_id = :appointment_id
+                """
+            ),
+            {
+                "slot_id": new_slot_id,
+                "updated_at": now,
+                "appointment_id": command.appointment_id,
+            },
+        )
+        claim = await _claim_dock_occupancy(
+            session,
+            appointment_id=command.appointment_id,
+            shipment_id=shipment_id,
+            slot_id=new_slot_id,
+        )
+        if claim is None:
+            raise AppError(
+                "Could not claim dock capacity for the counter-offered interval.",
+                code="DOCK_OCCUPANCY_CLAIM_FAILED",
+                status_code=500,
+            )
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.audit_logs (
+                  audit_id, user_id, action_type, entity_name, entity_id,
+                  old_value_json, new_value_json, ip_address, user_agent, created_at
+                ) VALUES (
+                  :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+                  :old_value_json, :new_value_json, NULL, NULL, :created_at
+                )
+                """
+            ),
+            {
+                "audit_id": new_id("AUD"),
+                "user_id": ctx.user_id,
+                "action_type": AUDIT_ACTION_COUNTER_OFFER,
+                "entity_id": command.appointment_id,
+                "old_value_json": json.dumps(
+                    {"slot_id": appointment["slot_id"], "status": "PENDING_CONFIRMATION"},
+                    default=str,
+                ),
+                "new_value_json": json.dumps(
+                    {
+                        # The discriminator that makes this row distinguishable from a driver's
+                        # reschedule -- see AUDIT_ACTION_COUNTER_OFFER for why action_type cannot
+                        # carry it.
+                        "transition": AUDIT_TRANSITION_COUNTER_OFFERED,
+                        "slot_id": new_slot_id,
+                        "dock_id": str(slot["dock_id"]),
+                        "reason_code": reason_code,
+                        "note": command.note,
+                        "occupancy_window": claim["window"],
+                    },
+                    default=str,
+                ),
+                "created_at": now.isoformat(),
+            },
+        )
+        await session.flush()
+    except IntegrityError as exc:
+        constraint_name = allocation_unique_constraint_name(exc)
+        if constraint_name is None:
+            raise
+        await session.rollback()
+        raise _interval_unavailable_error(
+            dock_id=command.dock_id,
+            start_ts=start_ts,
+            failure_code="POSTGRES_ALLOCATION_CONFLICT",
+            message=(
+                "PostgreSQL rejected the counter-offer because another active claim already holds "
+                f"this capacity (constraint {constraint_name})."
+            ),
+        ) from exc
+
+    refreshed = await load_appointment_snapshot(session, command.appointment_id)
+    result = CounterOfferResult(
+        as_of=_as_of(),
+        code="COUNTER_OFFERED",
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+        reason_code=reason_code,
+        offered_options=[
+            {
+                "slot_id": new_slot_id,
+                "facility_id": facility_id,
+                "dock_id": str(slot["dock_id"]),
+                "dock_code": str(slot["dock_code"]),
+                "dock_type": str(slot["dock_type"]),
+                "slot_start_ts": slot["slot_start_ts"],
+                "slot_end_ts": slot["slot_end_ts"],
+                "occupancy_window": claim["window"],
+                "checked_constraints": eligibility.checked_constraints,
+                "explanation": eligibility.explanation,
+            }
+        ],
+        appointment=await _reread_appointment(session, command.appointment_id),
+        idempotency_key=idempotency_key,
+        appointment_writes=1,
+        snapshot_hash=refreshed["snapshot_hash"] if refreshed else None,
+    )
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump(),
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, command.appointment_id)
+    return result
+
+
+# =================================================================================================
+# bulk_confirm -- section 7.5.1 / section 7.3 / D6 / FR-PLN-006 / Flow 6 (issue #65)
+# =================================================================================================
+
+
+async def _safe_batch_inputs(
+    session: AsyncSession, appointment_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """One round trip for every input section 7.3's five safe-batch predicates need.
+
+    Deliberately one statement for the whole batch rather than per id: this is the only part of
+    `bulk_confirm` that is a genuine N+1 risk, and unlike the row locks (which must be taken one at
+    a time in a fixed order) nothing here needs sequencing.
+
+    `LAST_NEW_START_TIME` rules come back as JSON rather than pre-filtered in SQL because
+    `facility_rules.effective_from/effective_to` are still TEXT with two live shapes (a bare date
+    from the seed, a full offset-bearing timestamp from the demo overlay) -- `active_facility_rules`
+    is the one function that reads both correctly, and re-deriving that comparison in SQL would be a
+    second answer to the same question.
+    """
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT a.appointment_id,
+                       a.shipment_id,
+                       a.appointment_status,
+                       a.is_current,
+                       s.destination_facility_id,
+                       s.required_dock_type,
+                       s.expected_unload_min,
+                       d.dock_type,
+                       sl.facility_id,
+                       f.timezone,
+                       f.open_time,
+                       f.close_time,
+                       le.eta_confidence,
+                       (SELECT count(*)
+                          FROM public.escalation_queue e
+                         WHERE e.shipment_id = a.shipment_id
+                           AND e.escalation_status = ANY(:open_escalation_statuses)
+                       ) AS open_escalation_count,
+                       (SELECT coalesce(json_agg(json_build_object(
+                                 'rule_id', fr.rule_id,
+                                 'rule_type', fr.rule_type,
+                                 'rule_value', fr.rule_value,
+                                 'effective_from', fr.effective_from,
+                                 'effective_to', fr.effective_to))::text, '[]')
+                          FROM public.facility_rules fr
+                         WHERE fr.facility_id = f.facility_id
+                           AND fr.active_flag = 1
+                           AND fr.rule_type = 'LAST_NEW_START_TIME'
+                       ) AS last_new_start_rules_json
+                  FROM public.appointments a
+                  JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                  JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                  JOIN public.docks d ON d.dock_id = sl.dock_id
+                  JOIN public.facilities f ON f.facility_id = sl.facility_id
+                  LEFT JOIN public.v_latest_eta le ON le.shipment_id = a.shipment_id
+                 WHERE a.appointment_id = ANY(:appointment_ids)
+                """
+            ),
+            {
+                "appointment_ids": list(appointment_ids),
+                "open_escalation_statuses": list(OPEN_ESCALATION_STATUSES),
+            },
+        )
+    ).mappings().all()
+    return {str(row["appointment_id"]): dict(row) for row in rows}
+
+
+def evaluate_safe_batch_predicates(
+    *,
+    inputs: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> list[str]:
+    """Return the names of section 7.3's five predicates this row **fails**. Empty means eligible.
+
+    Pure, and exported without an underscore, because this is the sentence D6 turns on: *"the rules
+    select the batch, a human presses the button, and the server re-checks the predicates at press
+    time rather than at render time."* A predicate function that cannot be unit-tested on its own is
+    a predicate nobody checks.
+
+    Predicate-by-predicate, with the two judgement calls stated:
+
+    1. **Zero displacement** -- no overlapping live claim and no dock block over the interval. Uses
+       the same `displacement_conflicts` set `confirm_request` refuses on, so bulk and individual
+       confirm cannot disagree about what a conflict is.
+    2. **Exact dock-type match** -- `required_dock_type == dock_type`, i.e. section 5 Stage 2's
+       `exact_dock_type_match`, the flag that decides whether `compatible_but_not_exact_dock_penalty`
+       applies. A shipment whose `required_dock_type` is `ANY` therefore never qualifies for the safe
+       batch: it is *compatible*, not *exact*, and section 7.3 asks for exact.
+    3. **ETA confidence is not LOW** -- and a **NULL confidence also fails**. Absent confidence is
+       not the same as high confidence, and section 7.3's own grounding case (SHP1013/MSG005, `LOW`)
+       is "do not confirm -- ask first". Failing open here would put exactly that row in the batch.
+    4. **Inside operating hours and before `LAST_NEW_START_TIME`** -- evaluated through Stage 1's own
+       helpers against the D1-authoritative interval, not the slot row.
+    5. **No open escalation on the shipment** -- `escalation_queue` in OPEN / ACKNOWLEDGED /
+       IN_PROGRESS.
+    """
+    failed: list[str] = []
+
+    if displacement_conflicts(snapshot):
+        failed.append(PREDICATE_ZERO_DISPLACEMENT)
+
+    if str(inputs.get("required_dock_type") or "") != str(inputs.get("dock_type") or ""):
+        failed.append(PREDICATE_EXACT_DOCK_MATCH)
+
+    confidence = str(inputs.get("eta_confidence") or "").upper()
+    if confidence in {"", "LOW"}:
+        failed.append(PREDICATE_ETA_CONFIDENCE_NOT_LOW)
+
+    tz_name = str(inputs["timezone"])
+    interval_start = snapshot["interval_start"]
+    interval_end = snapshot["interval_end"]
+    inside_window = _facility_window_ok(
+        interval_start,
+        interval_end,
+        tz_name=tz_name,
+        open_time=str(inputs["open_time"]),
+        close_time=str(inputs["close_time"]),
+    )
+    if inside_window:
+        rules = json.loads(str(inputs.get("last_new_start_rules_json") or "[]"))
+        local_start = _to_local(interval_start, tz_name)
+        for rule in active_facility_rules(rules, at=interval_start, tz_name=tz_name):
+            try:
+                cutoff = _parse_local_time(str(rule.get("rule_value") or ""))
+            except ValueError:
+                continue
+            # Strictly after, matching `check_facility_rules`: a start exactly at RULE005's cutoff
+            # is still permitted.
+            if local_start.time() > cutoff:
+                inside_window = False
+                break
+    if not inside_window:
+        failed.append(PREDICATE_INSIDE_OPERATING_WINDOW)
+
+    if int(inputs.get("open_escalation_count") or 0) > 0:
+        failed.append(PREDICATE_NO_OPEN_ESCALATION)
+
+    return failed
+
+
+async def bulk_confirm(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    command: BulkConfirmCommand,
+    idempotency_key: str,
+) -> BulkConfirmResult:
+    """section 7.5.1 `bulk_confirm` -- how throughput is recovered without breaking D6.
+
+    ## The one thing that makes this legitimate
+
+    section 7.5.1: *"A client-side-only predicate check would be auto-confirmation wearing a
+    button."* Every one of section 7.3's five predicates is therefore re-evaluated **here**, at
+    press time, from current rows -- `evaluate_safe_batch_predicates` -- and any id that fails one is
+    skipped with the failing predicate named. Nothing about the client's selection is trusted beyond
+    the list of ids.
+
+    ## Lock ordering, and why it is not incidental
+
+    Rows are locked one at a time in **sorted `appointment_id` order**. Two coordinators clearing an
+    overlapping spike would otherwise be able to take the same two rows in opposite orders and
+    deadlock; a fixed global order makes that impossible. It is a loop rather than one
+    `WHERE ... = ANY(...) ORDER BY ... FOR UPDATE` statement on purpose: the planner is free to
+    choose a bitmap heap scan for a small `ANY()` list, in which case rows are locked in *scan*
+    order and the ORDER BY provides no ordering guarantee at all. At section 7.3's own batch size
+    (20-35 in a spike, capped at `MAX_BULK_CONFIRM_IDS`) the extra round trips are the cheaper half
+    of that trade.
+
+    ## Partial success is the contract, not a compromise
+
+    Flow 6 step 4: *"never a silent partial success. A skipped row stays in the queue, visibly, for
+    individual review."* One transaction, one commit; skipped ids are simply never written.
+
+    ## The `snapshot_hash` reading, stated because it is a judgement call
+
+    section 7.5.1 gives this tool a **single** `snapshot_hash` for a **list** of ids, so it is
+    computed as the composite of the per-row hashes (`snapshot.batch_snapshot_hash`). A mismatch is
+    reported (`snapshot_hash_matched = False`) but **does not refuse the batch**, because Flow 6
+    step 3 explicitly wants per-id outcomes when eligibility changed between selection and click,
+    and because during a spike -- the only time this tool is used -- some row in a 30-row selection
+    has almost always moved. Refusing the whole batch on that would make the spike-clearing path
+    unusable in exactly the conditions it exists for. The authoritative gate is the five-predicate
+    re-check, which is strictly stronger than a hash compare: it refuses on what is true *now*, not
+    on whether anything changed. **Owner fork:** if the batch should hard-refuse on drift instead,
+    that is a one-line change here and a real UX decision, not an implementation detail.
+    """
+    route = "POST /api/v1/appointments/bulk-confirm"
+    req_hash = payload_hash(command.model_dump())
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        return BulkConfirmResult.model_validate({**replay["response"], "idempotent_replay": True})
+
+    requested_ids = sorted({str(appointment_id) for appointment_id in command.appointment_ids})
+
+    locked: dict[str, dict[str, Any]] = {}
+    for appointment_id in requested_ids:
+        row = (
+            await session.execute(
+                text(
+                    """
+                    SELECT appointment_id, shipment_id, slot_id, appointment_status,
+                           booking_source, is_current, booked_at, confirmed_at,
+                           cancelled_at, cancellation_reason, replaced_appointment_id,
+                           warehouse_confirmation_ref, updated_at
+                    FROM public.appointments
+                    WHERE appointment_id = :appointment_id
+                    FOR UPDATE
+                    """
+                ),
+                {"appointment_id": appointment_id},
+            )
+        ).mappings().first()
+        if row is not None:
+            locked[appointment_id] = dict(row)
+
+    found_ids = sorted(locked)
+    inputs = await _safe_batch_inputs(session, found_ids)
+    snapshots = await load_appointment_snapshots(session, found_ids)
+
+    current_batch_hash = batch_snapshot_hash(
+        {appointment_id: snapshot["snapshot_hash"] for appointment_id, snapshot in snapshots.items()}
+    )
+
+    now = datetime.now(timezone.utc)
+    outcomes: list[BulkConfirmOutcome] = []
+    confirmed = 0
+
+    for appointment_id in requested_ids:
+        appointment = locked.get(appointment_id)
+        if appointment is None:
+            outcomes.append(
+                BulkConfirmOutcome(
+                    appointment_id=appointment_id,
+                    code="NOT_FOUND",
+                    detail="No appointment with this id.",
+                )
+            )
+            continue
+
+        row_inputs = inputs.get(appointment_id)
+        snapshot = snapshots.get(appointment_id)
+        shipment_id = str(appointment["shipment_id"])
+        if row_inputs is None or snapshot is None:
+            # Unreachable while the two reads above cover the same ids; loud rather than tolerated,
+            # because silently skipping here would look identical to a legitimate skip.
+            outcomes.append(
+                BulkConfirmOutcome(
+                    appointment_id=appointment_id,
+                    shipment_id=shipment_id,
+                    code="NOT_FOUND",
+                    detail="Appointment context could not be resolved.",
+                )
+            )
+            continue
+
+        # Scope from the verified identity, per id, never from the request (M15). A planner's own
+        # queue can only ever surface their own facility, so a foreign id here means a bad client --
+        # it is refused for that id rather than failing the whole batch.
+        try:
+            _assert_ops_scope(
+                ctx,
+                {"destination_facility_id": row_inputs["destination_facility_id"]},
+            )
+        except AppError:
+            outcomes.append(
+                BulkConfirmOutcome(
+                    appointment_id=appointment_id,
+                    shipment_id=shipment_id,
+                    code="OUT_OF_SCOPE",
+                    detail="Appointment is outside the caller's facility scope.",
+                )
+            )
+            continue
+
+        status = str(appointment["appointment_status"])
+        if status != "PENDING_CONFIRMATION":
+            outcomes.append(
+                BulkConfirmOutcome(
+                    appointment_id=appointment_id,
+                    shipment_id=shipment_id,
+                    code="ALREADY_ACTIONED",
+                    detail=f"Already {status}.",
+                    snapshot_hash=snapshot["snapshot_hash"],
+                )
+            )
+            continue
+
+        conflicts = displacement_conflicts(snapshot)
+        failed = evaluate_safe_batch_predicates(inputs=row_inputs, snapshot=snapshot)
+        if failed:
+            # DISPLACEMENT_DETECTED is reported as its own code when displacement is the *reason*,
+            # so the batch summary and the individual-confirm refusal use the same vocabulary for
+            # the same event (section 7.5.1 lists it as a distinct outcome, not as a predicate
+            # failure).
+            code = "DISPLACEMENT_DETECTED" if PREDICATE_ZERO_DISPLACEMENT in failed else "NOT_ELIGIBLE"
+            outcomes.append(
+                BulkConfirmOutcome(
+                    appointment_id=appointment_id,
+                    shipment_id=shipment_id,
+                    code=code,
+                    detail=f"Failed safe-batch predicates: {', '.join(failed)}.",
+                    failed_predicates=failed,
+                    conflicts=conflicts,
+                    snapshot_hash=snapshot["snapshot_hash"],
+                )
+            )
+            continue
+
+        await _apply_confirmation(
+            session,
+            ctx,
+            appointment_id=appointment_id,
+            old_status=status,
+            now=now,
+            warehouse_confirmation_ref=command.warehouse_confirmation_ref,
+            note=command.note,
+        )
+        confirmed += 1
+        outcomes.append(
+            BulkConfirmOutcome(
+                appointment_id=appointment_id,
+                shipment_id=shipment_id,
+                code="CONFIRMED",
+                snapshot_hash=snapshot["snapshot_hash"],
+            )
+        )
+
+    result = BulkConfirmResult(
+        as_of=_as_of(),
+        requested=len(requested_ids),
+        confirmed=confirmed,
+        skipped=len(requested_ids) - confirmed,
+        snapshot_hash_matched=current_batch_hash == command.snapshot_hash,
+        expected_snapshot_hash=command.snapshot_hash,
+        current_snapshot_hash=current_batch_hash,
+        outcomes=outcomes,
+        idempotency_key=idempotency_key,
+        appointment_writes=confirmed,
+    )
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump(),
+    )
+    await session.commit()
     return result

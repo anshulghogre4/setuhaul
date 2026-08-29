@@ -2,12 +2,14 @@ import { Suspense, lazy, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 
 import { AppShell, type ShellChrome } from '@/components/shell/app-shell'
-import type { Density } from '@/core/auth/identity'
+import type { Density, Identity } from '@/core/auth/identity'
 import { NotFound } from '@/components/states/region-states'
 import { PasswordReset } from '@/features/auth/password-reset'
 import { SignIn } from '@/features/auth/sign-in'
 import {
+  CARRIER,
   NOTIFICATIONS,
+  OPS_MANAGER,
   PLANNER_MULTI_ROLE,
   RECENT_SEARCHES,
   SEARCH_RESULTS,
@@ -17,8 +19,11 @@ import { DriverShell } from '@/features/driver/driver-shell'
 import { DriverConversation } from '@/features/driver/screens/conversation'
 import { DriverProfile } from '@/features/driver/screens/profile'
 import { DriverThreadList } from '@/features/driver/screens/thread-list'
-import { EmptyState } from '@/shared/ui/empty-state'
-import { ChartGantt } from 'lucide-react'
+import { OpsConsole } from '@/features/ops/ops-console'
+import { PlannerConsole } from '@/features/planner/planner-console'
+import { ADMIN_IDENTITY, AdminConsole } from '@/features/admin'
+import { CarrierPortal } from '@/features/carrier/carrier-portal'
+import { GateRoute } from '@/features/gate/gate-route'
 
 /**
  * The two verification galleries are **lazy**, and this is a measured decision rather than a
@@ -48,6 +53,27 @@ const StatesGallery = lazy(() =>
 const DriverStatesGallery = lazy(() =>
   import('@/features/driver/gallery/driver-gallery').then((m) => ({
     default: m.DriverStatesGallery,
+  })),
+)
+const OpsStatesGallery = lazy(() =>
+  import('@/features/ops/gallery/ops-gallery').then((m) => ({ default: m.OpsStatesGallery })),
+)
+const PlannerStatesGallery = lazy(() =>
+  import('@/features/planner/gallery/planner-gallery').then((m) => ({
+    default: m.PlannerStatesGallery,
+  })),
+)
+const GateStatesGallery = lazy(() =>
+  import('@/features/gate/gallery/gate-gallery').then((m) => ({ default: m.GateStatesGallery })),
+)
+const CarrierStatesGallery = lazy(() =>
+  import('@/features/carrier/gallery/carrier-gallery').then((m) => ({
+    default: m.CarrierStatesGallery,
+  })),
+)
+const AdminStatesGallery = lazy(() =>
+  import('@/features/admin/gallery/admin-gallery').then((m) => ({
+    default: m.AdminStatesGallery,
   })),
 )
 
@@ -94,6 +120,11 @@ export default function App() {
 
       <Route path="/_states" element={<Lazy><StatesGallery /></Lazy>} />
       <Route path="/driver/_states" element={<Lazy><DriverStatesGallery /></Lazy>} />
+      <Route path="/ops/_states" element={<Lazy><OpsStatesGallery /></Lazy>} />
+      <Route path="/planner/_states" element={<Lazy><PlannerStatesGallery /></Lazy>} />
+      <Route path="/gate/_states" element={<Lazy><GateStatesGallery /></Lazy>} />
+      <Route path="/carrier/_states" element={<Lazy><CarrierStatesGallery /></Lazy>} />
+      <Route path="/admin/_states" element={<Lazy><AdminStatesGallery /></Lazy>} />
 
       {/*
         E5.1 (#36) — driver chat. **Deliberately NOT inside `<ShellRoute>`.**
@@ -115,11 +146,53 @@ export default function App() {
 
       {/* Settings is `comfortable` for every role (prompt 8), not the viewer's surface density. */}
       <Route path="/settings" element={<ShellRoute density="comfortable"><SettingsRoute /></ShellRoute>} />
-      <Route path="/planner" element={<ShellRoute><SurfacePlaceholder name="Dock Command" /></ShellRoute>} />
-      <Route path="/ops" element={<ShellRoute><SurfacePlaceholder name="Exceptions" /></ShellRoute>} />
-      <Route path="/gate" element={<ShellRoute><SurfacePlaceholder name="Yard" /></ShellRoute>} />
-      <Route path="/carrier" element={<ShellRoute><SurfacePlaceholder name="Fleet" /></ShellRoute>} />
-      <Route path="/admin" element={<ShellRoute><SurfacePlaceholder name="Admin" /></ShellRoute>} />
+      {/*
+        E5.3 (#38) -- planner dock board. 10 of 30 designed screens ship unconditionally, 17 are
+        honestly stubbed pending issues #60-66/#53/#49/#59 -- see `features/planner/lib/flags.ts`
+        and `planner-console.tsx`'s own header comment. Only the block-dock group (states 16-18)
+        has real backend wiring, since `get_planner_queue` (issue #60) -- the entry point for
+        every other write on this surface -- does not exist yet.
+      */}
+      <Route path="/planner" element={<PlannerRoute />} />
+      {/*
+        E5.2 (#37) -- ops exception console. 9 of 16 designed screens ship unconditionally; 3 are
+        behind `sequencerProposalEnabled` (issue #54) and the rest are honestly stubbed pending
+        #55/#56/#57/#58/#59 -- see `features/ops/lib/flags.ts` and `ops-console.tsx`'s own header
+        comment. Uses `OPS_MANAGER` (not `PLANNER_MULTI_ROLE`) so the rail/status-bar render for
+        the actual OPERATIONS_MANAGER role this surface is built for -- same FIXTURE SEAM
+        (TODO #52) as every other route here, just a different fixture identity.
+      */}
+      <Route path="/ops" element={<OpsRoute />} />
+      {/*
+        E5.4 (#39) -- gate/yard kiosk. **Deliberately NOT inside `<ShellRoute>`**, like `/driver`.
+        `stitch-prompts.md` and `mockup.html` both specify no icon rail, no top bar, no status bar,
+        no facility switcher and no idle timeout on this surface. `GateRoute` sets its own
+        `data-density="spacious"` root. Wrapping it would put a rail and a facility switcher on a
+        mounted gate booth and override the density with the viewer's role default.
+
+        Built against the facility-role model, not `GATE_OFFICER` -- nothing under `features/gate/`
+        imports `core/auth/identity` or references `RoleName`, so issue #79 resolves either way
+        without touching this route.
+      */}
+      <Route path="/gate" element={<GateRoute />} />
+
+      {/*
+        E5.5 (#40) -- carrier portal, entirely read-only. All 9 screens ship; the SHOWN/HELD chip
+        variants and the Shown/Held filter options are gated behind `carrierShownHeldEnabled`
+        (#53) -- see `features/carrier/lib/flags.ts`, which records why flipping that flag alone is
+        not sufficient even once #53's schema lands (both carrier reads derive `promise_state` from
+        `appointments.appointment_status`, which that migration deliberately does not extend).
+        `/carrier/*` splat because this surface has two screens: dashboard and shipment detail.
+      */}
+      <Route path="/carrier/*" element={<CarrierRoute />} />
+
+      {/*
+        E5.6 (#41) -- admin console. 7 of 12 screens ship (5 clean, 2 reduced); 5 are honestly
+        stubbed pending #69-#76 -- see `features/admin/lib/flags.ts`. The Policy tab was a stronger
+        block than the readiness spec's own table until `GET /admin/policy/active` landed with #75;
+        `adminPolicyEditorEnabled` can now be revisited (#77).
+      */}
+      <Route path="/admin" element={<AdminRoute />} />
 
       <Route path="*" element={<ShellRoute><NotFound backHref="/planner" /></ShellRoute>} />
     </Routes>
@@ -155,7 +228,18 @@ const DEMO_CHROME: ShellChrome = {
   recentSearches: RECENT_SEARCHES,
 }
 
-function ShellRoute({ children, density }: { children: React.ReactNode; density?: Density }) {
+function ShellRoute({
+  children,
+  density,
+  identity = PLANNER_MULTI_ROLE,
+}: {
+  children: React.ReactNode
+  density?: Density
+  /** FIXTURE SEAM — TODO(#52). Defaults to the multi-role planner fixture every other
+   *  still-placeholder route uses; `OpsRoute` below passes `OPS_MANAGER` instead so E5.2's real
+   *  console renders the rail/status-bar for the role it is actually built for. */
+  identity?: Identity
+}) {
   const navigate = useNavigate()
   // FIXTURE SEAM — TODO(#52): stands in for the debounced `search_records` call the surface
   // epics will wire here.  Deliberately a state hand-off rather than filtering inside
@@ -165,8 +249,7 @@ function ShellRoute({ children, density }: { children: React.ReactNode; density?
 
   return (
     <AppShell
-      // FIXTURE SEAM — TODO(#52): replace with the identity fetched from /auth/me.
-      identity={PLANNER_MULTI_ROLE}
+      identity={identity}
       density={density}
       chrome={{ ...DEMO_CHROME, searchResults: results }}
       onFacilityChange={() => {}}
@@ -194,14 +277,60 @@ function SettingsRoute() {
   return <SettingsPage identity={PLANNER_MULTI_ROLE} />
 }
 
-/** Placeholder for a surface owned by a later epic.  Not an empty state pretending to be
- *  one: it says plainly that the surface is not built, rather than implying no data. */
-function SurfacePlaceholder({ name }: { name: string }) {
+/**
+ * E5.2 (#37). `OPS_MANAGER` rather than `PLANNER_MULTI_ROLE` so `railDestinationFor` /
+ * `densityFor` resolve for `OPERATIONS_MANAGER` (rail = "Exceptions", density = compact) instead
+ * of `WAREHOUSE_PLANNER`. `activeFacilityId: null` matches U91's "All facilities" default for the
+ * one role that can select it (`canSelectAllFacilities: true` on this fixture already).
+ */
+const OPS_IDENTITY: Identity = { ...OPS_MANAGER, activeFacilityId: null }
+
+function OpsRoute() {
   return (
-    <EmptyState
-      icon={ChartGantt}
-      title={`${name} is not built yet.`}
-      body="E5.0 delivers the shell this surface will mount inside. The surface itself is a later epic."
-    />
+    <ShellRoute identity={OPS_IDENTITY}>
+      <OpsConsole />
+    </ShellRoute>
+  )
+}
+
+/**
+ * E5.3 (#38). Uses the default `PLANNER_MULTI_ROLE` fixture (`ShellRoute`'s own default identity
+ * prop) rather than a dedicated constant -- unlike ops, this surface's rail/density/facility-scope
+ * derivation already resolves correctly for `WAREHOUSE_PLANNER` from that fixture as-is
+ * (`screens.md` section 1: single-facility, not "All facilities" -- `PLANNER_MULTI_ROLE.
+ * canSelectAllFacilities` is already `false`). Same FIXTURE SEAM (TODO #52) as every other route.
+ */
+function PlannerRoute() {
+  return (
+    <ShellRoute>
+      <PlannerConsole facilityId={PLANNER_MULTI_ROLE.activeFacilityId ?? ''} />
+    </ShellRoute>
+  )
+}
+
+/**
+ * E5.5 (#40). `CARRIER` rather than `PLANNER_MULTI_ROLE`: this fixture is the only one with
+ * `facilities: []`, `activeFacilityId: null` and a real `carrierId`, so `hasFacilityScope`
+ * resolves false and the facility switcher and status-bar facility/policy fields are absent from
+ * the DOM rather than disabled (U83). Same FIXTURE SEAM (TODO #52) as every other route.
+ */
+function CarrierRoute() {
+  return (
+    <ShellRoute identity={CARRIER}>
+      <CarrierPortal identity={CARRIER} />
+    </ShellRoute>
+  )
+}
+
+/**
+ * E5.6 (#41). `ADMIN_IDENTITY` lives in `features/admin/admin-identity.ts` rather than
+ * `features/gallery/fixtures.ts` because that shared file was being read by two concurrent
+ * surface builds when this was written. Same FIXTURE SEAM (TODO #52) as every other route.
+ */
+function AdminRoute() {
+  return (
+    <ShellRoute identity={ADMIN_IDENTITY}>
+      <AdminConsole currentUserId={ADMIN_IDENTITY.userId} />
+    </ShellRoute>
   )
 }

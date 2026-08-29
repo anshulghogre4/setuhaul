@@ -55,7 +55,16 @@
 
   /* --- feedback (color.md "Feedback colors", light column) --- */
   --feedback-success-bg:var(--green-50); --feedback-success-text:var(--green-700); --feedback-success-border:var(--green-600);
-  --feedback-warning-bg:var(--amber-50); --feedback-warning-text:var(--amber-700); --feedback-warning-border:var(--amber-500);
+  /* E5.4 fix 2026-08-29 (R1): feedback-warning-border was amber-500 per color.md's
+     Feedback-colors table. Rendered and measured at 2.05:1 (on surface-base) and
+     2.07:1 (on surface-raised) -- fails WCAG 1.4.11's 3:1 for non-text. These are
+     the SAME hex and the SAME ratio color.md already corrected for
+     `state-held-border` on 2026-08-29 (amber-500 -> amber-600, 2.05 -> 3.04). That
+     correction was applied to the promise-state table only and never swept across
+     the Feedback-colors table one section down. Raised one ramp step here to match;
+     color.md itself still carries the failing value -- Fork A in
+     implementation-spec.md. */
+  --feedback-warning-bg:var(--amber-50); --feedback-warning-text:var(--amber-700); --feedback-warning-border:var(--amber-600);
   --feedback-danger-bg:var(--red-50);    --feedback-danger-text:var(--red-700);    --feedback-danger-border:var(--red-600);
   --feedback-info-bg:var(--blue-50);     --feedback-info-text:var(--blue-700);     --feedback-info-border:var(--blue-500);
 
@@ -104,10 +113,28 @@
 }
 
 *{box-sizing:border-box;}
-html{font-size:16px;}
+/* E5.4 fix 2026-08-29 (R7): `color-scheme` was absent. This file has zero
+   `prefers-color-scheme` rules (U69 holds -- it never regressed here the way it did
+   on the driver and ops boards), but without this declaration a dark-OS browser
+   still paints native form-control internals dark inside a light page. Declared
+   `light` rather than `light dark` for the same reason the board is light-only:
+   color.md requires dark to carry a "hard to read outdoors" warning on this surface. */
+html{font-size:16px; color-scheme:light;}
 body{
   margin:0; background:var(--board-bg); color:var(--board-ink);
   font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+}
+
+/* E5.4 fix 2026-08-29 (R6): the two touch rules from the Web Interface Guidelines'
+   Touch & Interaction section, both absent (0 occurrences) before this pass. This is
+   the most touch-dependent surface in the product -- every interaction is a single
+   gloved tap -- so the 300ms double-tap-zoom delay `touch-action: manipulation`
+   removes is felt on the one dominant button of every screen, and the default blue
+   tap flash is a distraction under glare rather than the deliberate press feedback
+   `.is-pressed` already provides. */
+.btn,.row,.link-ctl,.field{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
 }
 .mono{ font-family:var(--font-data); font-variant-numeric:tabular-nums; }
 
@@ -216,7 +243,7 @@ body{
 .card.w720{ width:720px; margin:0 auto; }
 .card.full{ width:100%; }
 
-.title{ font-size:24px; line-height:1.33; font-weight:600; letter-spacing:-.01em; margin:0; }
+.title{ font-size:24px; line-height:1.33; font-weight:600; letter-spacing:-.01em; margin:0; text-wrap:balance; }
 .helper{ font-size:16px; line-height:1.5; font-weight:400; margin:0; }
 .product-line{ font-size:20px; line-height:1.4; font-weight:600; letter-spacing:-.01em; margin:0; }
 
@@ -240,6 +267,22 @@ body{
 
 /* ============================================================
    FORM CONTROLS — labels always visible, never placeholder-as-label.
+
+   E5.4 fix 2026-08-29 (R6): all ten inputs carried `type="text"` and nothing else —
+   no `name`, no `autocomplete`, no `spellcheck`. Added per the Web Interface
+   Guidelines' Forms section, and each one earns its place on this specific surface:
+   `autocomplete="off"` (an autofill dropdown over a 56px field is a gloved-mis-tap
+   hazard, and neither field is an auth field), `spellcheck="false"` (SHP1015 and
+   RJ14 GH 2211 are codes; red squiggles under them are noise outdoors),
+   `autocapitalize="characters"` + `autocorrect="off"` on the lookup field (both
+   values are uppercase codes and autocorrect actively corrupts them), and
+   `enterkeyhint` so the on-screen keyboard's action key says what it does.
+
+   NOT resolved here — `inputmode`. components.md section 2 specifies a
+   "numeric-friendly keyboard by default", but both real inputs are alphanumeric
+   (SHP1015, RJ14 GH 2211) and `inputmode="numeric"` would lock the letters out.
+   There is no inputmode value for "alphanumeric code." Fork D in
+   implementation-spec.md rather than a silent pick.
    ============================================================ */
 .field-group{ display:flex; flex-direction:column; gap:var(--space-2); }
 .field-label{ font-size:16px; line-height:1.5; font-weight:600; color:var(--text-primary); }
@@ -306,7 +349,11 @@ body{
   display:flex; flex-direction:column; gap:var(--stack-gap);
 }
 .block.center{ align-items:center; text-align:center; }
-.block .headline{ font-size:20px; line-height:1.4; font-weight:700; margin:0; }
+/* E5.4 fix 2026-08-29 (R8): `text-wrap` was absent file-wide. Outcome headlines are
+   centred multi-word strings ("Unload ended · 22 min over expected", "D2 is
+   occupied") that wrap ragged at these widths; `balance` is the Web Interface
+   Guidelines' own heading rule and costs nothing. */
+.block .headline{ font-size:20px; line-height:1.4; font-weight:700; margin:0; text-wrap:balance; }
 .block .fact{ font-size:16px; line-height:1.5; font-weight:400; margin:0; }
 .block.success{ background:var(--feedback-success-bg); border-color:var(--feedback-success-border); }
 .block.success .headline, .block.success .ic{ color:var(--feedback-success-text); }
@@ -463,7 +510,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s1a">Officer name</label>
-            <input class="field ui" id="s1a" type="text" value="" readonly>
+            <input class="field ui" id="s1a" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="" readonly>
             <p class="helper" id="s1a-hint">Enter your name to start</p>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
@@ -482,7 +529,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s1b">Officer name</label>
-            <input class="field ui" id="s1b" type="text" value="Ramesh K." readonly>
+            <input class="field ui" id="s1b" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="Ramesh K." readonly>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
           <button class="btn" type="button">Start shift</button>
@@ -500,7 +547,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s1c">Officer name</label>
-            <input class="field ui is-focus" id="s1c" type="text" value="Ramesh" readonly>
+            <input class="field ui is-focus" id="s1c" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="Ramesh" readonly>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
           <button class="btn" type="button">Start shift</button>
@@ -532,7 +579,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s2a">Officer name</label>
-            <input class="field ui" id="s2a" type="text" value="" readonly>
+            <input class="field ui" id="s2a" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="" readonly>
             <p class="helper" id="s2a-hint">Enter your name to start</p>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
@@ -551,7 +598,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s2b">Officer name</label>
-            <input class="field ui" id="s2b" type="text" value="Priya S." readonly>
+            <input class="field ui" id="s2b" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="Priya S." readonly>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
           <button class="btn" type="button">Start shift</button>
@@ -569,7 +616,7 @@ body{
           <h3 class="title">Start shift</h3>
           <div class="field-group">
             <label class="field-label" for="s2c">Officer name</label>
-            <input class="field ui is-focus" id="s2c" type="text" value="Priya" readonly>
+            <input class="field ui is-focus" id="s2c" name="officer_name" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="Priya" readonly>
           </div>
           <p class="helper">Facility: Jaipur (fixed)</p>
           <button class="btn" type="button">Start shift</button>
@@ -608,7 +655,7 @@ body{
             <h3 class="title">Search</h3>
             <div class="field-group">
               <label class="field-label" for="s3a">Shipment ID or plate number</label>
-              <input class="field" id="s3a" type="text" value="" readonly>
+              <input class="field" id="s3a" name="truck_lookup" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters" autocorrect="off" enterkeyhint="search" value="" readonly>
             </div>
             <button class="btn" type="button">Search</button>
           </div>
@@ -630,7 +677,7 @@ body{
             <h3 class="title">Search</h3>
             <div class="field-group">
               <label class="field-label" for="s3b">Shipment ID or plate number</label>
-              <input class="field is-focus" id="s3b" type="text" value="SHP1015" readonly>
+              <input class="field is-focus" id="s3b" name="truck_lookup" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters" autocorrect="off" enterkeyhint="search" value="SHP1015" readonly>
             </div>
             <button class="btn" type="button">Search</button>
           </div>
@@ -652,7 +699,7 @@ body{
             <h3 class="title">Search</h3>
             <div class="field-group">
               <label class="field-label" for="s3c">Shipment ID or plate number</label>
-              <input class="field" id="s3c" type="text" value="SHP1015" readonly>
+              <input class="field" id="s3c" name="truck_lookup" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters" autocorrect="off" enterkeyhint="search" value="SHP1015" readonly>
             </div>
             <button class="btn is-submitting" type="button" aria-busy="true">
               <svg class="ic ic-20" aria-hidden="true"><use href="#i-loader-circle"/></svg>
@@ -696,7 +743,7 @@ body{
           <h3 class="title">Search</h3>
           <div class="field-group">
             <label class="field-label" for="s4">Shipment ID or plate number</label>
-            <input class="field" id="s4" type="text" value="SHP1O15" readonly>
+            <input class="field" id="s4" name="truck_lookup" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters" autocorrect="off" enterkeyhint="search" value="SHP1O15" readonly>
           </div>
           <div class="block danger inline-msg" role="alert">
             <svg class="ic ic-20" aria-hidden="true" style="margin-top:2px"><use href="#i-triangle-alert"/></svg>
@@ -725,6 +772,15 @@ body{
   buttons plus a Continue step: the row itself is the action. Times use an en dash, 24-hour clock, and always
   carry both the dock and the weekday date — a bare time here is a wrong-day booking.
 </p>
+<p class="note">
+  <strong>E5.4 fix 2026-08-29 (R3).</strong> Measured across all 22 yard-tablet artboards, this was the one
+  screen anchored to the <em>top</em> of the frame — card top at <strong>129px</strong> against a
+  <strong>490–759px</strong> norm everywhere else, a 361–630px discrepancy. It was also the only yard screen
+  with more than one tap target, and the one where a mis-tap has the worst outcome on the surface: recording
+  a gate event against the wrong truck. The thumb-arc placement the rest of the file argues for was the one
+  thing this screen did not do. Corrected to the same spacer-then-card-then-thumb-pad structure screens 7–10
+  already use. Found only by rendering — the markup was indistinguishable from every other screen.
+</p>
 <div class="gallery">
 
   <div class="artboard">
@@ -735,6 +791,7 @@ body{
           <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
           <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
         </div>
+        <div class="spacer"></div>
         <div class="card full">
           <h3 class="title">2 trucks match RJ14 GH 2211</h3>
           <p class="helper">Pick the right one.</p>
@@ -759,7 +816,7 @@ body{
             </li>
           </ul>
         </div>
-        <div class="spacer"></div>
+        <div class="thumb-pad"></div>
       </div>
     </div>
   </div>
@@ -772,6 +829,7 @@ body{
           <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
           <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
         </div>
+        <div class="spacer"></div>
         <div class="card full">
           <h3 class="title">2 trucks match RJ14 GH 2211</h3>
           <p class="helper">Pick the right one.</p>
@@ -796,7 +854,7 @@ body{
             </li>
           </ul>
         </div>
-        <div class="spacer"></div>
+        <div class="thumb-pad"></div>
       </div>
     </div>
   </div>
@@ -809,6 +867,7 @@ body{
           <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
           <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
         </div>
+        <div class="spacer"></div>
         <div class="card full">
           <h3 class="title">2 trucks match RJ14 GH 2211</h3>
           <p class="helper">Pick the right one.</p>
@@ -833,7 +892,7 @@ body{
             </li>
           </ul>
         </div>
-        <div class="spacer"></div>
+        <div class="thumb-pad"></div>
       </div>
     </div>
   </div>
@@ -1272,7 +1331,14 @@ body{
             <div class="block success center" role="status">
               <svg class="ic ic-32" aria-hidden="true"><use href="#i-check"/></svg>
               <p class="headline">Gate-in recorded</p>
-              <p class="fact mono" translate="no">SHP1015 · 18:04 · ON_TIME</p>
+              <!-- E5.4 fix 2026-08-29 (R5): rendered `ON_TIME`, the raw
+                   arrival_state enum. voice-and-tone.md: "Sentence case everywhere
+                   except text-label state chips, which are uppercase by design."
+                   This is a 16px/400 mono fact line, not a text-label chip, so
+                   sentence case applies and the underscore has no business on
+                   screen. The enum value is unchanged in the payload; only its
+                   rendering is. -->
+              <p class="fact"><span class="mono" translate="no">SHP1015</span> · <span class="mono" translate="no">18:04</span> · On time</p>
             </div>
             <button class="btn" type="button">Search next truck</button>
           </div>
@@ -1577,11 +1643,22 @@ body{
         </div>
         <div class="spacer"></div>
         <div class="card full">
-          <div class="block warning center" role="status">
+          <!-- E5.4 fix 2026-08-29 (R2 + R4). Two corrections at this one site:
+               R2 - role was `status` (implicitly polite). DOCK_OCCUPIED is an
+               unsuccessful action, which accessibility-behaviour.md's politeness
+               matrix puts at `assertive` without qualification.
+               R4 - the copy said "Nothing was recorded," which is false against the
+               shipped backend. gate_yard_service.py:638-663 UPDATEs
+               facility_checkins.queue_state to WAITING_DOCK_UNAVAILABLE, writes a
+               DOCK_IN_REFUSED audit row, and commits. The truck's state genuinely
+               changes, and the design depends on it: screens.md's state table only
+               offers "Call to dock" again because the truck is now in a WAITING_*
+               state. Copy corrected to state what actually happened. -->
+          <div class="block warning center" role="alert">
             <svg class="ic ic-32" aria-hidden="true"><use href="#i-door-closed"/></svg>
             <p class="headline"><span class="mono" translate="no">D2</span> is occupied</p>
             <p class="fact"><span class="mono" translate="no">SHP1009</span> · Amit S.</p>
-            <p class="fact">Nothing was recorded. Keep this truck in the yard and call it again when D2 clears.</p>
+            <p class="fact">Dock-in was not recorded. This truck is back in the yard queue — call it again when D2 clears.</p>
           </div>
           <button class="btn" type="button">Back to search</button>
         </div>
@@ -1617,15 +1694,29 @@ body{
           <span class="shift-meta">Yard tablet · Jaipur · Shift: Priya S.</span>
           <span class="shift-right"><button class="link-ctl" type="button">End shift</button></span>
         </div>
+        <!-- E5.4 fix 2026-08-29 (R3b): this frame used the standard
+             spacer-then-card-then-thumb-pad structure, which put its card top at
+             831px down a 1280px frame with 734px of empty space above it. That
+             structure exists to drop a *tap target* into the one-handed thumb arc,
+             and this screen deliberately has no button at all — it resolves on its
+             own. Bottom-anchoring a buttonless screen buys nothing and reads as a
+             rendering failure. Centred instead, matching screen 12, the other
+             buttonless artboard. Render-only defect. -->
         <div class="spacer"></div>
         <div class="card full">
-          <div class="block info center" role="status">
+          <!-- E5.4 fix 2026-08-29 (R2): role was `status` (implicitly polite).
+               INVALID_TRANSITION is an unsuccessful action — accessibility-behaviour.md's
+               matrix gives those `assertive`, and this screen is about to re-render the
+               card underneath the officer, which is exactly the interrupt case. The
+               informational *tone* (no red, no X, nobody blamed) is unchanged and
+               correct; politeness and tone are separate channels. -->
+          <div class="block info center" role="alert">
             <svg class="ic ic-32" aria-hidden="true"><use href="#i-refresh-cw"/></svg>
             <p class="headline">This truck’s status changed — refreshing</p>
             <p class="fact">Nothing was recorded.</p>
           </div>
         </div>
-        <div class="thumb-pad"></div>
+        <div class="spacer"></div>
       </div>
     </div>
   </div>
