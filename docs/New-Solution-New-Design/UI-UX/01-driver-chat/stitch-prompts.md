@@ -163,7 +163,19 @@ Resolved — "Jodhpur load → HomeCraft" · ORD-260803-011 · CONFIRMED chip ·
 - Default — as above.
 - Pressed — card background moves to `#F1F5F9` / `#1E293B`. **No scale, no lift.**
 - Unread activity — a 2px `#2563EB` inset on the left and the descriptor at weight 700. ⚑F6
-- Resolved — 60% opacity, no marker, no countdown.
+- Resolved — card ground drops to `#F1F5F9` / `#020617` (surface-sunken) and every text node moves to
+  the secondary token `#475569` / `#CBD5E1`; border stays `border-subtle`; no marker, no countdown.
+  **No opacity.**
+
+> **Corrected 2026-09-01 — issue #90.** This line read "60% opacity". Measured on the real render
+> (Playwright 1.62.1, Chromium), 60% opacity put the card's timestamp at **2.29:1**, its order
+> reference at **2.86:1** and its chip label at **2.53:1** in light theme — group opacity fades the
+> card's own background toward the page along with its text, so the *painted* contrast collapses
+> even though each token is fine in isolation. The card is an active, navigable `<Link>`, so WCAG
+> 1.4.3's inactive-component exception does not apply. After: **6.92 / 6.92 / 5.21:1** light,
+> **13.59 / 13.59 / 7.54:1** dark. The Motion note directly below already asked for exactly this —
+> "settled cards recede in **contrast**" is a colour instruction, and opacity was never the way to
+> honour it. Shipped as `theme.css`'s `muted-region` utility + `bg-sunken`.
 
 **Motion**: countdowns tick once per second with no animation on the digit. Only a card that is actually
 changing gets any motion; settled cards recede in contrast rather than staying visually loud.

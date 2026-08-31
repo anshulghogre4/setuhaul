@@ -29,15 +29,15 @@
  * the mockup's five-item list is illustrative, not a closed set.
  */
 
-/** What kind of scope id a role takes — mirrors `_validate_scope` (`admin_user_service.py:121`). */
+/** What kind of scope id a role takes — mirrors `_scope_type_for` in `admin_user_service.py`. */
 export type ScopeKind =
-  /** `GLOBAL_ROLES` (line 46): no scope id accepted or required. */
+  /** `GLOBAL_ROLES`: no scope id accepted or required. */
   | 'none'
-  /** `FACILITY_SCOPED_ROLES` (lines 40-45): exactly one `facility_id`, validated to exist. */
+  /** `FACILITY_SCOPED_ROLES`: one or more `facility_id`s, each validated to exist. */
   | 'facility'
-  /** `RoleName.CARRIER` (lines 143-146): a `carrier_id`, required but NOT existence-checked. */
+  /** `RoleName.CARRIER`: a `carrier_id`, required but NOT existence-checked. */
   | 'carrier'
-  /** `RoleName.DRIVER` (lines 126-133): a `driver_id`, validated to exist. */
+  /** `RoleName.DRIVER`: a `driver_id`, validated to exist. */
   | 'driver'
 
 export type RoleOption = {
@@ -46,28 +46,48 @@ export type RoleOption = {
   /** Display label. Where the mockup names one, its wording is used verbatim. */
   label: string
   scope: ScopeKind
+  /**
+   * Whether this role may hold MORE THAN ONE scope id — the arity half of `_validate_scope`, which
+   * `scope` alone cannot express. Mirrors two distinct server refusals, both 422:
+   *
+   *  - `SCOPE_NOT_MULTI_VALUED` for `driver` / `carrier` — a driver user *is* one driver.
+   *  - `GATE_OFFICER_SINGLE_FACILITY` for the kiosk role — facility-scoped, yet capped at one,
+   *    because the gate session's facility belongs to the *device*, not the person
+   *    (`auth-and-scoping.md:66-68`; owner-decided 2026-09-01).
+   *
+   * **Required, not optional, deliberately.** A new facility role added here has to state its
+   * arity rather than inherit multi-select by default — the same reason this file mirrors the
+   * backend's role set at all: a form must not offer input the server will refuse on submit.
+   */
+  multiScope: boolean
 }
 
 export const ROLE_OPTIONS: RoleOption[] = [
   // "Ops coordinator" in mockup.html §3.2 — the facility-scoped ops role.
-  { value: 'OPERATIONS_EXECUTIVE', label: 'Ops coordinator', scope: 'facility' },
-  { value: 'OPERATIONS_MANAGER', label: 'Operations manager', scope: 'facility' },
+  { value: 'OPERATIONS_EXECUTIVE', label: 'Ops coordinator', scope: 'facility', multiScope: true },
+  { value: 'OPERATIONS_MANAGER', label: 'Operations manager', scope: 'facility', multiScope: true },
   // "Planner" in mockup.html §3.1.
-  { value: 'WAREHOUSE_PLANNER', label: 'Planner', scope: 'facility' },
-  { value: 'FACILITY_MANAGER', label: 'Facility manager', scope: 'facility' },
+  { value: 'WAREHOUSE_PLANNER', label: 'Planner', scope: 'facility', multiScope: true },
+  { value: 'FACILITY_MANAGER', label: 'Facility manager', scope: 'facility', multiScope: true },
   // "Gate–Yard officer" in mockup.html §3.1. Facility-scoped per
   // `admin_user_service.FACILITY_SCOPED_ROLES`; deliberately NOT in `OPS_PORTAL_ROLES` or any
   // wider tier, since the kiosk is a device-bound shared session with its own write guard.
-  { value: 'GATE_OFFICER', label: 'Gate–Yard officer', scope: 'facility' },
+  //
+  // **The one facility-scoped role with `multiScope: false`** (owner-decided 2026-09-01). Same
+  // device-bound reasoning as the tier exclusion above, applied to arity: `auth-and-scoping.md`
+  // lines 66-68 put the facility on the *device*, so a gate officer never picks one at sign-in and
+  // a second grant would be authority the kiosk can never exercise. The server refuses it with
+  // `GATE_OFFICER_SINGLE_FACILITY` (422); this flag is what stops the form offering the mistake.
+  { value: 'GATE_OFFICER', label: 'Gate–Yard officer', scope: 'facility', multiScope: false },
   // "Carrier manager" in mockup.html §3.3 — scoped by carrier_id, not by facility.
-  { value: 'CARRIER', label: 'Carrier manager', scope: 'carrier' },
-  { value: 'TRANSPORT_MANAGER', label: 'Transport manager', scope: 'none' },
-  { value: 'REGIONAL_OPERATIONS_HEAD', label: 'Regional operations head', scope: 'none' },
+  { value: 'CARRIER', label: 'Carrier manager', scope: 'carrier', multiScope: false },
+  { value: 'TRANSPORT_MANAGER', label: 'Transport manager', scope: 'none', multiScope: false },
+  { value: 'REGIONAL_OPERATIONS_HEAD', label: 'Regional operations head', scope: 'none', multiScope: false },
   // "Administrator" in mockup.html §3.5 — renders NO scope field at all, per screens.md §2:
   // "admin roles need no scope at all … doesn't apply to the role that assigns scope to
   // everyone else."
-  { value: 'ADMIN', label: 'Administrator', scope: 'none' },
-  { value: 'DRIVER', label: 'Driver', scope: 'driver' },
+  { value: 'ADMIN', label: 'Administrator', scope: 'none', multiScope: false },
+  { value: 'DRIVER', label: 'Driver', scope: 'driver', multiScope: false },
 ]
 
 const BY_VALUE = new Map(ROLE_OPTIONS.map((r) => [r.value, r]))

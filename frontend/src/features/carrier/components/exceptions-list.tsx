@@ -43,7 +43,10 @@ export function ExceptionsList({
 }) {
   return (
     <div
-      className={cn('flex flex-col gap-3', dimmed && 'opacity-60')}
+      // ⚠ `muted-region`, not `opacity-60` (issue #90, 2026-09-01) -- see the note in
+      // `overview-strip.tsx`. Every row here is a real <Link>, so dimming it was dimming an
+      // active navigable target below 4.5:1.
+      className={cn('flex flex-col gap-3', dimmed && 'muted-region cursor-progress')}
       aria-busy={dimmed || undefined}
     >
       {items.map((item) => {

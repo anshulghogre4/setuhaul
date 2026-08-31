@@ -25,6 +25,15 @@ const buttonVariants = cva(
     'rounded-md border border-transparent text-body font-medium',
     // min-width 80px so short labels ("OK") do not produce tiny targets (section 1)
     'min-w-20',
+    // Issue #91, 2026-09-01.  `relative tap-floor` gives EVERY size an invisible ::after that
+    // expands the pointer target to the surface's own `--tap` (32/44/56 by density) while the
+    // visible box stays exactly as the size variants below draw it.  This is what resolves
+    // spacing-and-layout.md's own 40px-button-vs-44px-floor contradiction: comfortable buttons
+    // stay 40px tall and their TARGET is 44px, which is what WCAG 2.5.5 actually measures --
+    // "region of the display that will accept a pointer action", not the rendering.
+    // `max(100%, --tap)` in the utility means this can only ever grow a control, so the 56px
+    // gate kiosk and the deliberately-32px compact consoles are both left alone.
+    'relative tap-floor',
     // No lift, no scale on hover -- motion.md.  Only colour transitions.
     'transition-colors duration-(--d-fast) ease-(--e-out)',
     'outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
@@ -46,6 +55,16 @@ const buttonVariants = cva(
         /** Tertiary, in-row -- expand, overflow menu. */
         ghost: 'bg-transparent text-muted-foreground hover:bg-hover hover:text-foreground min-w-0',
       },
+      /**
+       * ⚠ `sm` / `icon` / `icon-lg` are deliberately still density-BLIND after issue #91, and
+       * that is a reported limitation rather than an oversight.  #91 asked for them to follow
+       * density "if achievable without a visual change"; it is not.  Binding `sm` to `--btn-h`
+       * would shrink it from 40px to 32px on the compact planner/ops consoles and grow it to
+       * 56px on the gate kiosk -- both real relayouts of shipped screens, which is exactly what
+       * this change was scoped not to do.  What they DO get is the hit-region floor from the
+       * base classes above, which is the part that was actually failing an audit: `icon` renders
+       * 32x32 and now accepts a pointer across 44x44 on a comfortable surface.
+       */
       size: {
         /** Height follows density: --btn-h is 32 / 40 / 44 / 56 by data-density. */
         default: 'h-(--btn-h) px-4',

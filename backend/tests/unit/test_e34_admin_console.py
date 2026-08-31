@@ -325,6 +325,133 @@ async def test_invite_user_refuses_multiple_scopes_for_a_single_valued_role():
     session.execute.assert_not_awaited()
 
 
+# ---------------------------------------------------------------------------------------------
+# GATE_OFFICER is facility-scoped but single-facility (owner-decided 2026-09-01).
+#
+# The combination that produced this: #79 put GATE_OFFICER into FACILITY_SCOPED_ROLES, and #72 had
+# already made every FACILITY scope multi-valued -- so a device-bound kiosk role became
+# multi-facility-capable without anyone deciding it should be. These tests pin the cap AND pin that
+# it is a carve-out for one role, not a re-narrowing of #72.
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_invite_user_accepts_a_single_facility_gate_officer(monkeypatch):
+    """The whole path, not just the validator: users.facility_id (what get_execution_context
+    actually resolves the kiosk's scope from) and exactly one FACILITY user_scopes row."""
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(
+        [FACILITY],  # facility existence check
+        {"role_id": "ROL009"},  # _resolve_role_id
+        None,  # INSERT users
+        None,  # DELETE user_scopes
+        None,  # INSERT user_scopes
+        None,  # INSERT audit_logs
+    )
+
+    result = await admin_user_service.invite_user(
+        session, _admin_ctx(), _settings(), email="gate.jai@setuhaul.com",
+        role="GATE_OFFICER", scope=FACILITY,
+    )
+
+    assert result["code"] == "INVITED"
+    assert result["scope_values"] == [FACILITY]
+
+    users_insert = session.execute.call_args_list[2]
+    assert "INSERT INTO public.users" in str(users_insert.args[0])
+    assert users_insert.args[1]["facility_id"] == FACILITY
+    assert users_insert.args[1]["driver_id"] is None
+
+    scopes_insert = session.execute.call_args_list[4]
+    assert "INSERT INTO public.user_scopes" in str(scopes_insert.args[0])
+    assert scopes_insert.args[1]["stype"] == "FACILITY"
+    assert scopes_insert.args[1]["scope_values"] == [FACILITY]
+
+    # ...and the audit row records the granted scope, not just the role (FR-ADM-009).
+    audit_insert = session.execute.call_args_list[5]
+    assert json.loads(audit_insert.args[1]["new_value_json"])["scope"] == [FACILITY]
+
+
+@pytest.mark.asyncio
+async def test_invite_user_refuses_a_multi_facility_gate_officer():
+    """auth-and-scoping.md:66-68 -- the gate session's facility is the DEVICE's. Two facilities on
+    one kiosk account is authority the surface can never exercise, so it is refused by name."""
+    session = AsyncMock()
+    session.execute = AsyncMock()
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.invite_user(
+            session, _admin_ctx(), _settings(), email="gate@setuhaul.com",
+            role="GATE_OFFICER", scope=[FACILITY, "FAC-GGN-01"],
+        )
+    assert exc.value.code == "GATE_OFFICER_SINGLE_FACILITY"
+    assert exc.value.status_code == 422
+    # Refused before any round trip, like SCOPE_NOT_MULTI_VALUED -- and before the Supabase Auth
+    # call, so no orphaned auth identity is created for a request that was never going to land.
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_user_refuses_a_multi_facility_gate_officer():
+    """The cap has to hold on the edit path too: a gate officer invited with one facility must not
+    be widened to two afterwards, which is a scope-only edit away."""
+    session = _session_with({"user_id": "USR1", "role_name": "GATE_OFFICER"})
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.update_user(
+            session, _admin_ctx(), user_id="USR1", scope=[FACILITY, "FAC-GGN-01"],
+        )
+    assert exc.value.code == "GATE_OFFICER_SINGLE_FACILITY"
+    # Only the role re-read happened; no UPDATE and no scope rewrite.
+    assert len(session.execute.call_args_list) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_user_accepts_a_single_facility_gate_officer():
+    session = _session_with(
+        {"user_id": "USR1", "role_name": "GATE_OFFICER"},
+        [FACILITY],  # facility existence check
+        None,  # UPDATE users
+        None,  # DELETE user_scopes
+        None,  # INSERT user_scopes
+    )
+    result = await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", scope=FACILITY)
+    assert result["scope_values"] == [FACILITY]
+    assert session.execute.call_args_list[2].args[1]["facility_id"] == FACILITY
+    assert session.execute.call_args_list[4].args[1]["scope_values"] == [FACILITY]
+
+
+@pytest.mark.parametrize(
+    "role",
+    sorted(admin_user_service.FACILITY_SCOPED_ROLES - {RoleName.GATE_OFFICER}, key=lambda r: r.value),
+)
+@pytest.mark.asyncio
+async def test_every_other_facility_role_stays_multi_valued(role):
+    """The guard against over-correcting #72. Written over the live set rather than a hardcoded
+    list, so a facility role added later is covered by this test the day it is added -- and so a
+    future edit that caps the whole set instead of the one role fails here."""
+    session = _session_with([FACILITY, "FAC-GGN-01"])
+    await admin_user_service._validate_scope(session, role, [FACILITY, "FAC-GGN-01"])
+
+
+@pytest.mark.asyncio
+async def test_list_users_renders_a_single_facility_gate_officer():
+    """The rendering half: a capped role still flows through list_users like any facility role --
+    one entry in the Scope column's array, not a special case the frontend has to know about."""
+    rows = [
+        {
+            "user_id": "USR-GATE-1", "full_name": "Gate Kiosk (Jaipur)",
+            "email": "gate.jai@setuhaul.com", "role_name": "GATE_OFFICER",
+            "facility_id": FACILITY, "driver_id": None, "is_active": 1, "last_login_ts": None,
+            "invited_at": None, "invite_accepted_at": None, "removed_at": None,
+            "scoped_facility_ids": [FACILITY],
+        },
+    ]
+    session = _session_with(rows)
+    result = await admin_user_service.list_users(session, _admin_ctx())
+    assert result["items"][0]["scoped_facility_ids"] == [FACILITY]
+    assert result["items"][0]["lifecycle_state"] == admin_user_service.LIFECYCLE_ACTIVE
+
+
 @pytest.mark.asyncio
 async def test_invite_user_writes_a_driver_scope_row(monkeypatch):
     """Pre-#72 only CARRIER got a user_scopes row, so a driver invited through this console was

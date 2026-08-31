@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { Button } from '@/shared/ui/button'
 import {
@@ -32,6 +32,13 @@ export function OwnerControl({
   busy?: boolean
 }) {
   const [explain, setExplain] = useState(false)
+  // Issue #91: this was the literal string "reassign-explain", which collides the moment two
+  // OwnerControls render on one page -- the states gallery renders six, so six elements shared
+  // one id and every `aria-describedby` pointed at the first. `useId` is per-instance.
+  // React 19.2.8 emits `_r_<n>_` (verified in the installed react-dom, and live in the rendered
+  // DOM as `radix-_r_0_`) -- underscores, not the 19.0 `:r0:` colons and not 19.1's `«r0»`, so
+  // these ids are valid CSS selectors and safe for querySelector/getElementById.
+  const explainId = useId()
 
   if (ownerName === null) {
     return (
@@ -47,7 +54,7 @@ export function OwnerControl({
         <DropdownMenuTrigger asChild>
           <Button
             variant="neutral"
-            aria-describedby="reassign-explain"
+            aria-describedby={explainId}
             onClick={() => setExplain(true)}
           >
             Reassign
@@ -61,7 +68,7 @@ export function OwnerControl({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <span id="reassign-explain" className="sr-only">
+      <span id={explainId} className="sr-only">
         Reassign is not available: no coordinator list endpoint exists yet.
       </span>
     </div>

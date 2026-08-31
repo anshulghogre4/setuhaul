@@ -184,7 +184,10 @@ never changes the sort.
 **Sort**: fixed composite urgency computed server-side (TTL · priority · physically waiting at the gate) —
 **column headers are not sortable and show no sort arrows.** The header displays the pin state when sort
 is frozen. When a row has keyboard focus, the order is pinned and new arrivals accumulate behind a
-"3 new · press R to re-sort" affordance in the header; nothing above the focused row ever moves.
+"3 new · press S to re-sort" affordance in the header; nothing above the focused row ever moves.
+<!-- Corrected 2026-09-01 (owner-ratified, #59 fork): re-sort is bound to S, not R. accessibility.md's
+     keyboard table already binds R to Reject on this same tab, and the AT matrix is this surface's
+     own authority on keys; the shipped product implements S (shared/lib/live-poll.ts::RESORT_KEY). -->
 
 **Motion**: only the row that just changed animates — a single 200ms `cubic-bezier(0.16, 1, 0.3, 1)`
 arrival flash. **Settled rows recede in contrast rather than staying visually loud**; they do not

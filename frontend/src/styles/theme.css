@@ -650,6 +650,95 @@
 }
 
 /* ============================================================================
+   SETTLED / STALE REGIONS -- the token-based replacement for opacity dimming.
+
+   ⚠ ISSUE #90, 2026-09-01.  `opacity` was the shipped "settled / stale / re-fetching"
+   treatment in three places, and it is the wrong tool for the job, because opacity applies
+   to an element as a GROUP: the region's own background is composited toward the page
+   underneath it at the same time as its text, so the text's contrast against what is
+   actually painted collapses.  Measured in Chromium 1.62.1 before this change:
+
+     driver resolved thread card   opacity-60   timestamp   2.29:1   (16px descriptor 4.67:1)
+     carrier re-fetch dim          opacity-60   12px labels 2.29:1
+     admin stale simulation panel  opacity-70   the "re-run before publishing" WARNING
+                                                at 2.90:1 -- the least readable node on a
+                                                plate whose body copy sat at 6.55:1
+
+   All three are active, navigable regions, so WCAG 1.4.3's exception for text that "is part
+   of an inactive user interface component" does not apply
+   (https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).  A settled card a
+   driver taps to read last Tuesday's dock is not inactive; neither is a table being
+   re-fetched; and a warning is the one thing on a plate that must never be the hardest to
+   read.
+
+   The replacement keeps every text node at its own token's full, uncomposited contrast and
+   moves the "this is settled" signal into the two channels that carry meaning without
+   destroying legibility: a muted FOREGROUND token, plus a background/border change owned by
+   the call site.  01-driver-chat/stitch-prompts.md's own motion note already says the right
+   thing -- "settled cards recede in CONTRAST rather than staying visually loud" -- which is a
+   colour instruction, not an alpha one.
+
+   Why remapping the variables rather than rewriting every className: `text-foreground` and
+   `text-subtle-foreground` compile to `color: var(--color-foreground)` /
+   `var(--color-subtle-foreground)`, so redefining those two on an ancestor retones an entire
+   subtree in one declaration and stays correct in both themes automatically -- the muted
+   value IS `--color-muted-foreground`, which is already themed (neutral-600 / neutral-300).
+
+   `--color-subtle-foreground` is included, not just `--color-foreground`, because these
+   regions also change surface: neutral-500 measures 4.76:1 on `--color-card` but only
+   4.34:1 on `--color-sunken`, which is under the bar.  Collapsing tertiary text into
+   secondary is the deliberate consequence -- a settled region recedes as a whole, and weight
+   still carries what is left of the hierarchy.
+
+   Nesting is idempotent: `--color-muted-foreground` is never itself remapped.
+   ============================================================================ */
+@utility muted-region {
+  --color-foreground: var(--color-muted-foreground);
+  --color-subtle-foreground: var(--color-muted-foreground);
+}
+
+/* ============================================================================
+   TAP FLOOR -- an invisible hit region, never a visual size change.
+
+   ⚠ ISSUE #91, 2026-09-01.  `spacing-and-layout.md`'s density table sets `comfortable`'s
+   button height to 40px and `comfortable`'s minimum tap target to 44px in the same table.
+   A 40px button cannot satisfy a 44px floor, and the code faithfully implemented both
+   numbers, which is why the same "x40" miss kept appearing in every audit.
+
+   The contradiction is resolved by mechanism rather than by moving either number: WCAG 2.2
+   defines a target as the "region of the display that will accept a pointer action"
+   (https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html), NOT the visible
+   rendering.  So a transparent `::after` centred on the control makes the region meet the
+   floor while the visible box stays exactly as designed.  Same pattern already proven on the
+   settings switch (`features/settings/settings-page.tsx`), which expands a 36x20 track.
+
+   `var(--tap)` and not a literal 44px: `--tap` is 32 / 44 / 56 by density, so this is
+   automatically the SURFACE's own floor -- 32px on the compact planner/ops consoles (the
+   deliberate desktop-pointer exception recorded in spacing-and-layout.md's footnote 1), 44
+   on carrier/admin/driver, 56 on the gate kiosk.  `max(100%, ...)` guarantees the region can
+   only ever grow, never crop a control that is already larger than its floor.
+
+   `::after`, not `::before`: `icon-rail.tsx` already spends `::before` on the active-marker
+   accent bar, and a second pseudo-element on the same rule would silently delete it.
+
+   NOTE it does not set `position: relative` itself -- call sites add `relative` explicitly,
+   so a call site that needs `absolute` is not fighting a utility it cannot see.  This is
+   invisible to `getBoundingClientRect`; verify it with `elementFromPoint` plus a real click
+   landing outside the visible box, the way the switch's fix was verified.
+   ============================================================================ */
+@utility tap-floor {
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--tap, 44px));
+    height: max(100%, var(--tap, 44px));
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ============================================================================
    ELEVATION UTILITIES -- hand-written, going through var(), because the
    --shadow-* theme namespace inlines its values at build time and therefore
    cannot be re-themed by .dark.  See the note beside the tokens in :root.

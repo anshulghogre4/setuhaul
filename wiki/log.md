@@ -1076,3 +1076,12 @@ last_updated: 2026-08-29
 - End state: backend 815 passed / 8 skipped / 0 failed (from 423); tsc/oxlint/vite clean; Playwright installed, 75 renders 0 page errors, all ten builder claims held, zero WCAG 24px legal breaches product-wide.
 - Not verified: one live-backend HELD turn end to end (write-smoke classifier-blocked; owner command recorded in CHANGELOG). Deployed stacks still run pre-M5 code.
 - Updated [[current-state]], [[handoff]], root CHANGELOG, master-plan Living status. Nothing committed beyond 7d1031c; commit message handed to owner.
+
+## 2026-09-01 02:20 IST | implementation | decision-queue sweep: nine owner decisions executed, live smoke green, #90/#91 fixed
+
+- Live HELD lifecycle smoke run against production with explicit owner authorization: 3 passed, cleanup verified (0 holds, 613 rows). The last unverified M5 claim is now verified.
+- Ratified and recorded: re-sort=S (5 doc sites corrected), SHOWN dropped from carrier (2 sites), revoke one-click, both unsourced bounds, bulk_confirm report-only.
+- #90: muted-region token treatment replaces opacity dimming (driver/carrier/admin + 3 design files); admin's own warning went from least-readable-on-plate (2.90) to 4.84.
+- #91: density-derived tap-floor hit regions (proven by off-box clicks, compact true-negative held); ops duplicate ids 5->0; spacing doc resolves its own contradiction by mechanism, both numbers kept.
+- GATE_OFFICER single-facility: named 422 before DB/Auth round trips; the multi-grant was invisible authority anyway (deps.py reads only the facility_id mirror).
+- End: 824/8/0, tsc/lint/build clean, 75 renders 0 page errors. Uncommitted on ab37b30; commit message handed to owner. Updated [[handoff]], [[current-state]], root CHANGELOG.

@@ -31,12 +31,47 @@ and row height only** — never type size, never border width, never icon size.
 | **Card padding** | 12px | 16px | 24px |
 | **Stack gap** | 8px | 12px | 16px |
 | **Min tap target** | 32px¹ | 44px | 56px |
-| **Button height** | 32px | 40px | 56px |
+| **Button height** | 32px | 40px² | 56px |
 
 ¹ **The one exception to the 44px rule, and it is deliberate.** `compact` is desktop-and-pointer only,
 where 32px is comfortable for a mouse. It is never used on a touch surface. Every touch context —
 driver, gate, and any tablet use of the consoles — runs `comfortable` or `spacious`, where the 44×44px
 target holds without exception.
+
+² **The 40px button and the 44px floor are both correct, and they are not in conflict — resolved
+2026-09-01, issue #91.** This table used to assert `comfortable` button height 40px and `comfortable`
+minimum tap target 44px with no explanation of how a 40px button meets a 44px floor. It could not,
+and the code faithfully implemented both numbers, which is why every audit of admin, carrier and
+driver kept reporting the same "×40" miss. Neither number moves. **The floor is met by an invisible
+hit region, not by a taller button.**
+
+WCAG defines a target as the "**region of the display that will accept a pointer action**, such as
+the interactive area of a user interface component"
+([Understanding SC 2.5.5](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)) —
+the pointer-reachable region, not the visible rendering. So a transparent `::after` centred on a
+control, sized `max(100%, var(--tap))`, makes the *target* meet the density's own floor while the
+drawn box stays exactly as this table specifies. That is the shipped mechanism: the `tap-floor`
+utility in `frontend/src/styles/theme.css`, applied to `shared/ui/button.tsx` (all four size
+variants), the shell's top-bar and rail controls, and the ops console's `text-micro` text buttons.
+It follows `--tap` rather than a literal 44, so it is 32px on the compact consoles (footnote 1's
+deliberate exception is preserved, not overridden), 44 on comfortable, 56 on the kiosk; and
+`max(100%, …)` means it can only grow a control, never crop one that already exceeds its floor.
+
+The pattern was already proven here before it was generalised: the settings Appearance switch
+(`features/settings/settings-page.tsx`) expands a 36×20 visible track to a 44×60 region the same
+way. **Verify it with `elementFromPoint` and a real click landing outside the visible box** —
+`getBoundingClientRect` returns the drawn rectangle and structurally cannot see this. Measured
+2026-09-01 (Playwright 1.62.1, Chromium): comfortable `Button` 103.8×40 drawn → **103.8×45** target;
+rail item 40×40 → **46×45**; top-bar help 32×32 → **45×45**; global search 420×40 → **421×45**; ops
+`text-micro` buttons 42.6×**14.3** → 43.6×**33.3** against their compact 32px floor. Each was
+confirmed by a real mouse click landing below the visible bottom edge and activating the control,
+and the compact rail item — already 40px against a 32px floor — correctly did **not** expand.
+
+One honest limit: the top bar's notification bell sits 4px from the help control, so their expanded
+regions overlap and the later one wins the shared band. The bell's own reachable region is therefore
+**39×45**, not 44×45. Both still own their own centres, both are far above SC 2.5.8's 24×24 AA floor,
+and both are larger than the 32×32 they were. Closing that last 5px would mean widening the gap,
+i.e. a visual change, which this fix was scoped to avoid.
 
 **Be precise about what the standard actually requires.** WCAG 2.2 **SC 2.5.8 Target Size (Minimum) is
 24×24px and is Level AA**. The **44×44px** figure used here is **SC 2.5.5 Target Size (Enhanced), which is

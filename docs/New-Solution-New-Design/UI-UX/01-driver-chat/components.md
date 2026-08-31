@@ -17,7 +17,7 @@ The thread list's row. Anatomy in `screens.md` §1.
 | Default | `surface-raised`, `border-subtle`, `radius-lg` |
 | Pressed | `surface-hover`, no scale or lift (`../00-foundations/motion.md`) |
 | **Active with running TTL** | Promise-state chip shows `filled` variant + live countdown |
-| **Resolved** | 60% opacity, priority marker removed, chip shows terminal state, no countdown |
+| **Resolved** | `surface-sunken` ground + every text token demoted to `text-secondary` (the shipped `muted-region` utility), `border-subtle` kept, priority marker removed, chip shows terminal state, no countdown |
 | **Unread activity** | 2px `border-focus` left inset + the descriptor at weight 700 |
 | Offline (cached) | Renders normally; the countdown holds at last-known with an "updated Xm ago" marker (U68) |
 
@@ -28,6 +28,32 @@ The thread list's row. Anatomy in `screens.md` §1.
 - Resolved cards keep their state chip. A driver checking "what dock did I agree to last Tuesday" is a
   real need, and the card is the record.
 - Whole card is the tap target — minimum 88px tall, well past the 44×44 floor.
+
+> **Corrected 2026-09-01 — issue #90. This row said "60% opacity" and that was a spec defect.**
+>
+> Opacity applies to an element as a *group*: the card's own `surface-raised` ground is composited
+> toward the page at the same 60% as its text, so the text's contrast against what is actually
+> painted collapses. Measured in Chromium (Playwright 1.62.1) on the real `/driver/_states` plate,
+> light theme, **before**: descriptor 4.67:1, order reference **2.86:1**, timestamp **2.29:1**,
+> state chip label **2.53:1**. Dark was no better where it counts: timestamp **3.37:1**.
+>
+> This card is a real `<Link>` — active and navigable — so WCAG 1.4.3's exception for text that
+> "is part of an inactive user interface component" does **not** cover it
+> ([Understanding SC 1.4.3](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)).
+> A driver reads this card in sunlight on a surface whose own `accessibility.md` forbids
+> overriding the light theme for exactly that reason, and three of its four text nodes were under
+> half the required ratio.
+>
+> **After**, same probe: descriptor **16.30:1**, order reference **6.92:1**, timestamp **6.92:1**,
+> chip label **5.21:1** (light); **19.28 / 13.59 / 13.59 / 7.54:1** (dark). Nothing is dimmed; the
+> card *recedes* instead — which is what this surface's own `stitch-prompts.md` motion note already
+> asked for ("settled cards recede in **contrast** rather than staying visually loud"), a colour
+> instruction rather than an alpha one.
+>
+> Shipped as `frontend/src/styles/theme.css`'s `muted-region` utility (remaps `--color-foreground`
+> and `--color-subtle-foreground` to `--color-muted-foreground` for a subtree, so it is correct in
+> both themes by construction) plus `bg-sunken` at the call site
+> (`features/driver/components/thread-card.tsx`).
 
 ---
 

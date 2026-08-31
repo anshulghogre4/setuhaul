@@ -61,6 +61,18 @@ import { Label } from '@/shared/ui/label'
  * space that is not scarce. **Flagged as a deliberate divergence from the artboard, not an
  * oversight.**
  *
+ * **`GATE_OFFICER` gets the single `<select>` instead, not the checkbox group** (owner-decided
+ * 2026-09-01). It is facility-scoped like the other four but capped at one facility, because the
+ * gate session belongs to a device rather than a person (`auth-and-scoping.md:66-68`), and the
+ * server refuses a second with `GATE_OFFICER_SINGLE_FACILITY` (422). The arity is read from
+ * `lib/roles.ts`'s `multiScope`, so the control follows the role's own contract rather than a
+ * special case spelled out here. One consequence, traced rather than assumed: opening Edit on a
+ * gate officer who somehow already holds two facilities (only creatable in the 2026-08-29 to
+ * 2026-09-01 window) shows the first in the `<select>` while `scope` state still holds both, so an
+ * untouched Save is refused by name and picking a facility collapses it to one. A refusal that
+ * names the problem, not a silent narrowing — which is the right way round for a row that is now
+ * invalid.
+ *
  * Focus lands on the first field, never a submit button; Cancel is first in DOM order (U79).
  */
 export function InviteUserDialog({
@@ -120,6 +132,19 @@ export function InviteUserDialog({
 
   const selectedRole = roleOption(role)
   const scopeKind = selectedRole?.scope ?? null
+
+  /**
+   * Whether the facility control is a multi-select at all.
+   *
+   * Two independent reasons it may not be, and they need different copy below because they are
+   * different facts: the flag is "not yet", the role cap is "never".
+   *  - `adminMultiFacilityScopeEnabled` off — the whole A-G4 / #72 capability is gated.
+   *  - `multiScope: false` on the role — `GATE_OFFICER` is facility-scoped but device-bound, so
+   *    `_validate_scope` refuses a second facility with `GATE_OFFICER_SINGLE_FACILITY` (422).
+   *    Offering checkboxes here would be a form that fails only on submit, which is the exact
+   *    failure `lib/roles.ts` exists to prevent.
+   */
+  const multiFacility = adminMultiFacilityScopeEnabled && (selectedRole?.multiScope ?? false)
 
   /**
    * The options this form may offer.
@@ -253,7 +278,7 @@ export function InviteUserDialog({
                     : 'No facility exists to scope this role to. Create a facility first; a typed id is deliberately not offered, because the server existence-checks it.'}
                 </InactiveNote>
               </>
-            ) : adminMultiFacilityScopeEnabled ? (
+            ) : multiFacility ? (
               /*
                 The multi-select (A-G4 / #72). A native checkbox group rather than the mockup's chip
                 row — see this component's header for the reasoning and the flagged divergence.
@@ -333,7 +358,18 @@ export function InviteUserDialog({
                   ))}
                 </select>
                 <InactiveNote>
-                  One facility only, while <code>adminMultiFacilityScopeEnabled</code> is off.
+                  {selectedRole?.multiScope === false ? (
+                    <>
+                      One facility only. The gate session is bound to a <strong>device</strong>, not
+                      to a person, so the kiosk’s facility is the one it stands at — an officer
+                      covering two gates uses a device session at each. A second facility would be
+                      access nothing in the kiosk can reach.
+                    </>
+                  ) : (
+                    <>
+                      One facility only, while <code>adminMultiFacilityScopeEnabled</code> is off.
+                    </>
+                  )}
                 </InactiveNote>
               </>
             )}

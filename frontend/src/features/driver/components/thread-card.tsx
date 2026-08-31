@@ -50,13 +50,24 @@ export function ThreadCard({ thread }: { thread: DriverThread }) {
         to={`/driver/t/${thread.threadId}`}
         className={cn(
           'relative flex min-h-22 flex-col gap-2 overflow-hidden rounded-lg border p-4',
-          'border-border bg-card',
+          'border-border',
           'active:bg-hover',
           'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
           // Resolved cards keep their state chip -- a driver checking "what dock did I agree to
           // last Tuesday" is a real need and the card is the record. They lose the priority
-          // marker and the countdown, and drop to 60%.
-          thread.resolved && 'opacity-60',
+          // marker and the countdown, and RECEDE: `surface-sunken` instead of `surface-raised`,
+          // and every text token demoted one tier by `muted-region`.
+          //
+          // ⚠ NOT `opacity-60` any more (issue #90, 2026-09-01). The design specified 60%
+          // opacity in three files, and 60% opacity on THIS card put its timestamp at 2.29:1
+          // and its order reference at 2.86:1 -- measured, both under the 4.5:1 floor, on the
+          // one surface whose own accessibility.md forbids overriding the light theme because
+          // it is read in sunlight. The card is a real <Link>, so WCAG 1.4.3's inactive-
+          // component exception does not cover it. `bg-sunken` + `muted-region` carries the
+          // same "settled" meaning through surface and colour instead of through alpha, and
+          // measures 6.92:1 / 13.59:1 (light / dark). The three design files were corrected
+          // to match rather than the code left deviating from them.
+          thread.resolved ? 'muted-region bg-sunken' : 'bg-card',
         )}
       >
         {/* Priority marker: 3px, left edge, active threads only. */}

@@ -2,6 +2,25 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 02:20 IST - Decision-queue sweep: all nine owner decisions executed, the live HELD smoke run against production, #90/#91 fixed
+
+**Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5) plus direct edits; per-decision records posted to #59/#65/#67/#68/#73/#87/#90/#91.
+
+**The live smoke is no longer an open item.** With the owner's explicit authorization, `test_live_held_slot_lifecycle.py` ran against production: **3 passed, 1 skipped, 4.04s** -- the full HELD lifecycle (create, exclusion enforcement, confirm/expire) against the real database, with cleanup verified after (0 live holds, exactly 613 dock_occupancy rows). The four-state promise lifecycle is no longer a claim.
+
+**Nine decisions, all executed:**
+1. **Re-sort is `S`, ratified** -- five design sites corrected with dated notes (planner stitch-prompts + both mockup pin lines, ops stitch-prompts + screens.md). R stays Reject per the AT matrix.
+2. **`SHOWN` dropped from the carrier vocabulary** -- filter list corrected 6->5, mockup State 4a's chip replaced by the null-promise treatment; if it ever returns it needs a persisted representation (a SOLUTION_DESIGN section 4 change), recorded at the removal site.
+3. **Revoke-invite stays one-click** (Moderate tier; distinct audit event; only exists on never-used accounts).
+4. **`RECENT_GATE_OUT_HOURS = 12` and `OFFICER_NAME_MAX_LEN = 120` ratified** -- no longer implementer assumptions, now owner policy, recorded on #67/#68.
+5. **`bulk_confirm` stays report-only** on a batch hash mismatch -- safety rests on the per-row predicate re-check at press time, which is strictly stronger.
+6. **#90 fixed:** opacity dimming replaced by a `muted-region` token utility + per-site surface changes across driver/carrier/admin. Worst offenders: driver timestamp 2.29->6.92, carrier 12px labels 2.29->7.58, and admin's "re-run before publishing" warning -- previously the least readable node on its own plate -- 2.90->4.84. Carrier-gallery contrast failures 7->0 both themes. The three design files that specified the 60% are corrected; notably stitch-prompts' own Motion note already said "settled cards recede in **contrast**" -- opacity was never the way to honour a contrast instruction.
+7. **#91 fixed by mechanism, neither number moved:** WCAG's target is the region accepting a pointer action, not the visible box, so a density-derived `tap-floor` utility (transparent ::after at max(100%, var(--tap)) -- 32 compact / 44 comfortable / 56 kiosk) landed on Button, the shell controls and ops' micro-buttons. Proven by real clicks landing outside getBoundingClientRect (4/4 activated; the compact rail item correctly did NOT expand). Ops' 5 duplicate ids -> 0 via useId() (React 19.2.8's `_r_N_` format verified in the installed react-dom source AND the live DOM). One honest limit recorded: the notification bell reaches 39x45, not 44 -- two 44px regions centred 36px apart cannot both fit.
+8. **`GATE_OFFICER` constrained to a single facility** -- `GATE_OFFICER_SINGLE_FACILITY` (422) refused before any DB round trip and before the Supabase Auth call, so a doomed invite cannot orphan an auth identity. A direct role test, not a frozenset a second role could join and make the code lie. Deeper finding: `get_execution_context` resolves scope from the single `users.facility_id` mirror, so a second grant was invisible authority -- power that misled and did nothing. Frontend: `RoleOption.multiScope` (required field) so the form cannot offer a multi-select the server refuses.
+9. Fork follow-ups left open by design: the `aria-disabled` + `opacity-50` pattern (admin's "Publish new version" at 1.54:1, exempt under 1.4.3 but visually indistinguishable from enabled) flagged on #90 as the strongest next candidate.
+
+**Verified, end state:** backend **824 passed / 8 skipped / 0 failed**; `tsc -b --force` exit 0; oxlint 8 pre-existing / 0 new; `vite build` clean; Playwright matched before/after builds, 75 renders, 0 page errors, ARIA/type-floor signatures byte-identical except intended changes. Nothing committed; #90/#91 left OPEN for review.
+
 ## 2026-09-01 00:45 IST - M5 CLOSED to its ceiling: the four-state promise lifecycle is live end to end, 17 of 23 flags on, both migrations applied to production
 
 **Agent/surface:** Claude Fable 5 (Claude Code) coordinating ~14 `fullstack-engineer` subagent tracks across this phase (mixed Opus 5 / Sonnet 5 per track — each issue comment names its own); this entry is the coordinator's atomic writeback for all of it, per AGENTS.md's one-operation rule. Detailed per-issue evidence lives on the issues themselves (#53-#91), each carrying its implementer's full report.

@@ -79,6 +79,9 @@ PASSWORD_HASH_SENTINEL = "MANAGED_BY_SUPABASE_AUTH"
 # It is deliberately NOT added to `is_operator`, `is_admin`, `has_global_read_scope` or
 # `OPS_PORTAL_ROLES`: the kiosk is a device-bound, no-idle-timeout, shared-device session, so it
 # keeps its own `assert_gate_write_scope` rather than joining a wider tier.
+#
+# Membership here means "takes a FACILITY scope id", NOT "may hold several". `GATE_OFFICER` is
+# capped at exactly one by `_validate_scope` -- see `GATE_OFFICER_SINGLE_FACILITY` there.
 FACILITY_SCOPED_ROLES = frozenset(
     {
         RoleName.OPERATIONS_EXECUTIVE, RoleName.WAREHOUSE_PLANNER,
@@ -305,9 +308,16 @@ def _scope_type_for(role: RoleName) -> str | None:
 async def _validate_scope(session: AsyncSession, role: RoleName, scopes: list[str]) -> None:
     """Raises if `scopes` don't match what `role` requires, or don't point at real rows.
 
-    Only FACILITY roles are multi-valued: a DRIVER user *is* one driver and a CARRIER user belongs
-    to one carrier, so more than one id there is a caller error, not a wider grant -- refused by
-    name (`SCOPE_NOT_MULTI_VALUED`) rather than silently truncated to the first entry.
+    Two different single-valued refusals live here, and they are separate on purpose because their
+    *reasons* are different -- one is about what the id denotes, the other about what the session is:
+
+    * `SCOPE_NOT_MULTI_VALUED` -- a DRIVER user *is* one driver and a CARRIER user belongs to one
+      carrier, so more than one id there is a caller error, not a wider grant. Refused by name
+      rather than silently truncated to the first entry.
+    * `GATE_OFFICER_SINGLE_FACILITY` -- a facility-scoped role that is nonetheless capped at one.
+      See the check itself for the decision behind it.
+
+    Every other FACILITY role stays genuinely multi-valued (A-G4, issue #72).
     """
     scope_type = _scope_type_for(role)
     if scope_type is None:
@@ -321,6 +331,28 @@ async def _validate_scope(session: AsyncSession, role: RoleName, scopes: list[st
         raise AppError(
             f"{role.value} role takes exactly one {scope_type.lower()} scope, not {len(scopes)}.",
             code="SCOPE_NOT_MULTI_VALUED", status_code=422,
+        )
+    # Owner-decided 2026-09-01: GATE_OFFICER is facility-scoped but NOT multi-facility, unlike the
+    # other four members of FACILITY_SCOPED_ROLES. #79's resolution made this role facility-scoped,
+    # and #72 had already made every facility scope multi-valued -- the combination silently made a
+    # kiosk role multi-facility-capable, which nothing decided.
+    #
+    # The reason it cannot be: the gate session is bound to a DEVICE, not to a person.
+    # `UI-UX/00-foundations/auth-and-scoping.md:66-68` -- "the facility is the *device's*, not the
+    # user's ... a gate officer does not pick a facility at sign-in". So there is no moment in the
+    # kiosk flow at which a second facility could be chosen or disambiguated: with two scope rows,
+    # `get_execution_context` would resolve whichever the `users.facility_id` mirror happens to hold
+    # (`scopes[0]`), and the other grant would be invisible authority nothing in the surface can
+    # exercise. An officer covering two gates uses two device sessions, one per gate.
+    #
+    # Checked BEFORE the existence round trip below, like SCOPE_NOT_MULTI_VALUED: an arity error is
+    # answerable without touching the database.
+    if role == RoleName.GATE_OFFICER and len(scopes) > 1:
+        raise AppError(
+            "GATE_OFFICER is a device-bound kiosk role and takes exactly one facility, not "
+            f"{len(scopes)} -- the gate session's facility belongs to the device, not the person. "
+            "An officer covering two gates needs a device session at each gate.",
+            code="GATE_OFFICER_SINGLE_FACILITY", status_code=422,
         )
     if scope_type == "DRIVER":
         exists = (

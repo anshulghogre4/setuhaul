@@ -308,17 +308,23 @@ function PendingRow({
       ) : (
         <div role="alert" className="flex items-center gap-2">
           <span className="text-micro font-medium text-destructive">Not sent.</span>
+          {/* `relative tap-floor` (issue #91): both of these draw at `text-micro`'s 11px/1.3,
+              i.e. 14.3px tall, against this surface's 32px --tap. They stay 14.3px tall --
+              growing them would push the failed-send row into the transcript's rhythm -- and
+              gain an invisible 32x32 pointer region instead. Retry and Discard sit 8px apart,
+              so their expanded regions overlap slightly in the middle but neither covers the
+              other's centre; verified by elementFromPoint, not by geometry. */}
           <button
             type="button"
             onClick={onRetry}
-            className="text-micro text-link underline focus-visible:outline-2 focus-visible:outline-ring"
+            className="relative tap-floor text-micro text-link underline focus-visible:outline-2 focus-visible:outline-ring"
           >
             Retry
           </button>
           <button
             type="button"
             onClick={onDiscard}
-            className="text-micro text-muted-foreground underline focus-visible:outline-2 focus-visible:outline-ring"
+            className="relative tap-floor text-micro text-muted-foreground underline focus-visible:outline-2 focus-visible:outline-ring"
           >
             Discard
           </button>

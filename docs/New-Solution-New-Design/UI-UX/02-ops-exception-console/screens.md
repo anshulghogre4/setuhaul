@@ -110,7 +110,8 @@ count for pane persistence. Sign-in, role landing and session expiry are specifi
 ```
 
 - **Sort**: time-to-SLA-breach ascending; unowned rows pinned above owned ones regardless of individual
-  breach time (U95). Frozen while a row has focus (U19) — arrivals accumulate behind "N new · press R"
+  breach time (U95). Frozen while a row has focus (U19) — arrivals accumulate behind "N new · press S"
+  (S not R — owner-ratified 2026-09-01, #59 fork: R is Reject on the planner tab and both surfaces share one RESORT_KEY)
   exactly as the shared queue spec (`components.md` §19) already states.
 - **Facility identity is plain text**, not an accent dot (U91) — "Jaipur", "Gurugram" read directly in the
   row. When the switcher is scoped to one facility, this line is redundant and the row omits it.

@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react'
+import { useId, useState, type RefObject } from 'react'
 import { Ban, Info, MailWarning, MailX } from 'lucide-react'
 
 import { Button } from '@/shared/ui/button'
@@ -61,6 +61,7 @@ export function DetailPane({
   onDismissTakeoverNotice = () => {},
   composerRef,
   stepperRef,
+  headingId: headingIdProp,
 }: {
   item: EscalationQueueItem | null
   /** `edge-cases.md` sections 2 and 9 -- what a poll observed changing on THIS escalation since the
@@ -89,9 +90,17 @@ export function DetailPane({
   onDismissTakeoverNotice?: () => void
   composerRef?: RefObject<HTMLTextAreaElement | null>
   stepperRef?: RefObject<HTMLDivElement | null>
+  /** Issue #91. The heading's id used to be the literal "ops-detail-heading", and the states
+   *  gallery renders NINE detail panes, so nine `<h2>`s shared it and any focus/aria reference
+   *  resolved to the first one. The console owns the id (it is the thing that focuses the
+   *  heading after a row selection, by `getElementById`), and passes it down; a standalone
+   *  render falls back to its own `useId`. */
+  headingId?: string
 }) {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const fallbackHeadingId = useId()
+  const headingId = headingIdProp ?? fallbackHeadingId
 
   if (!item) {
     return (
@@ -110,8 +119,8 @@ export function DetailPane({
       <header className="flex flex-col gap-2">
         {/* `id` + `tabIndex=-1`: accessibility.md "selecting a queue row -> focus goes to the
             detail pane's primary heading". `ops-console.tsx` focuses this element by id rather
-            than the pane's outer wrapper. */}
-        <h2 id="ops-detail-heading" tabIndex={-1} className="font-data text-h3 tabular-nums outline-none">
+            than the pane's outer wrapper, and supplies the id (see the `headingId` prop). */}
+        <h2 id={headingId} tabIndex={-1} className="font-data text-h3 tabular-nums outline-none">
           {item.escalation_id} · {reason.label}
         </h2>
         {/* Focus target after a hand-back completes: accessibility.md's focus table sends focus

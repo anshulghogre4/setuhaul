@@ -112,9 +112,27 @@ export function SimulationResult({
 
   return (
     <div
+      // ⚠ NOT `opacity-70` any more (issue #90, 2026-09-01). Measured on the real plate, 70%
+      // opacity made the "re-run before publishing" WARNING the least readable node on the
+      // panel -- 2.90:1, against body copy at 6.55:1 -- which is exactly backwards for the one
+      // element that exists to stop an admin publishing an out-of-date simulation. The warning
+      // banner paints its own opaque `bg-warning-bg`, so the group opacity was compositing it
+      // toward the page while leaving the numbers it qualifies comparatively loud.
+      //
+      // The replacement puts the staleness in the surface and the edge instead of the alpha:
+      // the panel recedes to `surface-sunken` and takes the same amber border its own warning
+      // uses, so the panel and its warning read as one stale object; `muted-region` demotes the
+      // panel's text tokens (the flip count included -- a stale number SHOULD be quieter than a
+      // live one) while leaving the warning's `text-warning-fg` untouched.
+      //
+      // Measured after: warning 2.90 -> 4.84:1 light, 5.25 -> 8.13:1 dark; body copy 3.54 ->
+      // 6.92:1 / 6.60 -> 13.59:1. Stated precisely rather than flatteringly -- the warning is
+      // still the LOWEST-contrast readable element here, because a coloured warning token on its
+      // own tint can never out-measure neutral body text on a neutral surface. What changed is
+      // that it is no longer BELOW the 4.5:1 floor while everything it qualifies sat above it.
       className={
         stale
-          ? 'mt-6 rounded-md border border-border bg-card p-4 opacity-70'
+          ? 'muted-region mt-6 rounded-md border border-warning-border bg-sunken p-4'
           : 'mt-6 rounded-md border border-border bg-card p-4'
       }
     >

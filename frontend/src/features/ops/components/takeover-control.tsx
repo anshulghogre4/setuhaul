@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Info, TriangleAlert } from 'lucide-react'
 
 import { Button } from '@/shared/ui/button'
@@ -69,6 +70,9 @@ export function TakeoverControl({
   onTakeOver: () => void
   onHandBack: () => void
 }) {
+  // Issue #91: was the literal "takeover-prereq"; the states gallery renders three of these
+  // side by side, so three elements shared one id. See the note in `owner-control.tsx`.
+  const prereqId = useId()
   const underTakeover = item.thread_status === 'ESCALATED'
   const acknowledged =
     item.owner_user_id !== null &&
@@ -98,7 +102,7 @@ export function TakeoverControl({
           <Button
             variant="cautionary"
             aria-disabled="true"
-            aria-describedby="takeover-prereq"
+            aria-describedby={prereqId}
             title="Acknowledge this escalation first — taking over a driver's conversation needs a named owner."
             // aria-disabled, not `disabled`: keeps the control focusable so the reason is
             // reachable by keyboard. The click is a no-op rather than a request the server would
@@ -112,7 +116,7 @@ export function TakeoverControl({
       </div>
 
       {item.thread_id !== null && !underTakeover && !acknowledged ? (
-        <p id="takeover-prereq" className="text-supporting text-muted-foreground">
+        <p id={prereqId} className="text-supporting text-muted-foreground">
           Acknowledge first. Taking over disables the assistant on this thread, so the conversation
           needs a named owner before a person steps into it.
         </p>
@@ -153,10 +157,12 @@ export function TakeoverNoticeBanner({
       <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <div className="flex flex-1 flex-col gap-2">
         {content}
+        {/* `relative tap-floor` (issue #91): 11px/1.3 = 14.3px tall against a 32px --tap.
+            Invisible ::after region only -- the banner's copy rhythm is unchanged. */}
         <button
           type="button"
           onClick={onDismiss}
-          className="self-start text-micro underline focus-visible:outline-2 focus-visible:outline-ring"
+          className="relative tap-floor self-start text-micro underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           Dismiss
         </button>

@@ -71,7 +71,13 @@ Exact scale:
 **Status chips — four states, and they must never be confusable.** Each carries four redundant channels
 (hue, icon, border style, uppercase label). Never abbreviate a label; if it does not fit, the container is
 too small. 12px / 600 / 0.04em / UPPERCASE, 2px 4px padding, 4px radius, 14px Lucide icon:
-- `SHOWN` — icon `list`, **1px solid** `#CBD5E1`, bg `#F8FAFC`, text `#334155` (dark: border `#475569`, bg `#1E293B`, text `#E2E8F0`). Deliberately uncoloured — nothing is reserved.
+<!-- `SHOWN` REMOVED from the carrier vocabulary — owner-ratified 2026-09-01 (#87's finding).
+     SHOWN has no persisted counterpart anywhere in the product: it is what find_feasible_slots
+     returned to one caller, reserving nothing and writing no row, so no carrier read can answer
+     it honestly in any flag state. A carrier shipment with no appointment and no hold renders the
+     null-promise-state treatment ("No appointment yet." / an explicit em dash), never a SHOWN
+     chip. If SHOWN ever belongs here, it first needs a persisted representation — a
+     SOLUTION_DESIGN.md section 4 change, not a query change. -->
 - `HELD` — icon `timer`, **2px dashed** `#F59E0B`, bg `#FFFBEB`, text `#B45309` (dark: bg `#78350F` at 25% opacity, text `#FBBF24`). Dashed = temporary.
 - `PENDING CONFIRMATION` — icon `clock-fade`, **2px solid** `#3B82F6`, bg `#EFF6FF`, text `#2563EB` (dark: bg `#1E3A8A` at 25%, text `#60A5FA`)
 - `CONFIRMED` — icon `circle-check`, **2px solid** `#059669`, bg `#ECFDF5`, text `#047857` (dark: border `#10B981`, bg `#064E3B` at 25%, text `#34D399`)
@@ -294,7 +300,8 @@ text, 1px `#CBD5E1` border, 4px radius, 4px/12px padding.
 
 **State (b) — filter open**: a popover beneath the control, `#FFFFFF` / `#1E293B`, 1px `#E2E8F0` border,
 6px radius, `0 4px 12px rgba(15,23,42,0.10)` shadow, 6 single-select options at 40px each:
-`All statuses` · `Shown` · `Held` · `Pending confirmation` · `Confirmed` · `Has open exception`.
+`All statuses` · `Held` · `Pending confirmation` · `Confirmed` · `Has open exception`.
+(Five options, not six — `Shown` removed 2026-09-01, owner-ratified; see the SHOWN note in the chip section above.)
 Selecting one filters the table only — **the three stat tiles above do not change**, because they describe
 the whole fleet regardless of what the list is currently filtered to. Focus stays on the filter control
 after selection; it does not jump into the results.

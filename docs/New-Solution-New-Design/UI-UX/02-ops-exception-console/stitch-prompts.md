@@ -290,7 +290,9 @@ behind an affordance in the queue header.
 **The affordance**: in the queue pane header, right-aligned beside "ESCALATIONS (9)", a compact pill:
 
 ```
-[ 2 new · press R ]
+[ 2 new · press S ]
+<!-- Corrected 2026-09-01 (owner-ratified, #59 fork): re-sort/refresh is bound to S product-wide;
+     R is Reject on the planner tab and the two surfaces share one RESORT_KEY constant. -->
 ```
 
 `feedback-info-bg` `#EFF6FF` light / `#1E3A8A` at 25% dark, 1px `#3B82F6` border, 4px radius, 4px/8px

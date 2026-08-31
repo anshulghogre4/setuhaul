@@ -140,6 +140,12 @@ function RailItem({
       className={({ isActive }) =>
         cn(
           'relative grid place-items-center rounded-md text-muted-foreground',
+          // `tap-floor` (issue #91): the collapsed rail item draws 40x40, which is under the
+          // 44px --tap of every `comfortable` surface. The invisible ::after brings the target
+          // to the floor without touching the 56px rail's geometry or the item's own box.
+          // ::after and not ::before ON PURPOSE -- ::before below is the active-marker accent
+          // bar, and a second ::before rule here would silently delete it.
+          'tap-floor',
           'transition-colors duration-(--d-fast) ease-(--e-out) hover:bg-hover hover:text-foreground',
           'outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2',
           expanded ? 'h-10 w-full justify-start gap-3 px-3 text-body' : 'size-10',

@@ -10,6 +10,9 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 02:20 IST: decision-queue sweep complete.** All nine deferred owner decisions executed (records on #59/#65/#67/#68/#73/#87/#90/#91); the live HELD smoke ran against production with owner authorization -- **3 passed**, cleanup verified. #90 (opacity->muted tokens) and #91 (tap-floor hit regions, 5 dup ids->0) fixed and measured; `GATE_OFFICER` constrained to one facility. End state: backend **824/8/0**, tsc/lint/build clean, 75 renders 0 page errors. Uncommitted on top of `ab37b30` -- ready for the owner's commit. **Nothing is left in M5's queue**; next work is backend deploy (prod frontend currently ahead of deployed backend), the issue-closure review sweep, then M6/M8.
+
+
 - **2026-09-01 00:45 IST: M5 CLOSED to its ceiling.** The four-state promise lifecycle is live end to end (both migrations applied to production, `TWO_PHASE_HOLD_ENABLED` on, all reads + three frontends hold-aware); **17 of 23 flags on**. Full narrative in the CHANGELOG entry of the same timestamp; per-issue evidence on #53-#91. **NEXT SESSION:** (1) the owner may want the one unrun check — a live-backend HELD write-smoke (`SETUHAUL_RUN_LIVE_DB_TESTS=1 SETUHAUL_TWO_PHASE_HOLD_ENABLED=1 pytest tests/integration/test_live_held_slot_lifecycle.py`, self-cleaning, classifier-blocked for agents); (2) deploying the backend picks up everything — both migrations already applied so there is no ordering constraint, but remember the AgentCore codezip wrapper rule; (3) the owner-decision queue is recorded at the bottom of the CHANGELOG entry (R-key copy, SHOWN's fate, revoke confirmation, two unsourced bounds, bulk_confirm posture, #90/#91 design debt, GATE_OFFICER scope arity); (4) remaining flags are M8/design work, not M5. The follow-up migration asserting `shipment_id NOT NULL` should be written once the fixed `_claim_dock_occupancy` is deployed.
 
 

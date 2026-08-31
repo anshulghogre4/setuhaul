@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react'
+import { forwardRef, useId, useState } from 'react'
 import { Send } from 'lucide-react'
 
 import { Button } from '@/shared/ui/button'
@@ -54,6 +54,12 @@ export type ThreadComposerProps = {
 export const ThreadComposer = forwardRef<HTMLTextAreaElement, ThreadComposerProps>(
   function ThreadComposer({ active, busy, onSend }, ref) {
     const [value, setValue] = useState('')
+    // Issue #91: these were the literals "ops-composer" / "ops-composer-hint". Seven composers
+    // render in the states gallery, so seven <label for> pointed at one textarea and seven
+    // `aria-describedby` at one hint -- a real AT defect, not just a duplicate-id warning.
+    // See the React-19 id-format note in `owner-control.tsx`.
+    const composerId = useId()
+    const hintId = useId()
 
     const trimmed = value.trim()
     const tooLong = value.length > MAX_MESSAGE_LENGTH
@@ -70,13 +76,13 @@ export const ThreadComposer = forwardRef<HTMLTextAreaElement, ThreadComposerProp
         className="flex flex-col gap-1.5"
         aria-label={active ? 'Reply to the driver' : 'Thread composer, read-only'}
       >
-        <label htmlFor="ops-composer" className="text-label tracking-wide text-muted-foreground uppercase">
+        <label htmlFor={composerId} className="text-label tracking-wide text-muted-foreground uppercase">
           {active ? 'Reply as Operations' : 'Composer — read-only until you take over'}
         </label>
 
         <div className="flex items-end gap-2">
           <textarea
-            id="ops-composer"
+            id={composerId}
             ref={ref}
             rows={2}
             value={active ? value : ''}
@@ -86,7 +92,7 @@ export const ThreadComposer = forwardRef<HTMLTextAreaElement, ThreadComposerProp
             // transcript and the terminal actions is exactly the dead stop that rule exists to
             // prevent.
             tabIndex={active ? 0 : -1}
-            aria-describedby="ops-composer-hint"
+            aria-describedby={hintId}
             placeholder={
               active
                 ? 'Write to the driver. They see this in their own conversation.'
@@ -137,7 +143,7 @@ export const ThreadComposer = forwardRef<HTMLTextAreaElement, ThreadComposerProp
           ) : null}
         </div>
 
-        <p id="ops-composer-hint" className="flex items-center justify-between gap-2 text-micro text-muted-foreground">
+        <p id={hintId} className="flex items-center justify-between gap-2 text-micro text-muted-foreground">
           <span>
             {active
               ? 'Enter sends · Shift+Enter for a new line · Escape leaves the composer'

@@ -64,7 +64,9 @@ export function TopBar({
         type="button"
         onClick={onOpenSearch}
         aria-label="Search shipments, appointments, drivers, carriers, facilities"
-        className="mx-auto flex h-10 min-w-0 max-w-105 flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-body text-subtle-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:border-input focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+        // `relative tap-floor` (issue #91): 40px tall on a surface whose own --tap is 44.
+        // Invisible ::after only -- the bar's drawn height is unchanged.
+        className="relative tap-floor mx-auto flex h-10 min-w-0 max-w-105 flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-body text-subtle-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:border-input focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
       >
         <Search className="size-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">
@@ -87,7 +89,10 @@ export function TopBar({
                 unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications, no unread'
               }
               aria-expanded={bellOpen}
-              className="relative grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              // `tap-floor` (issue #91): the bell draws 32x32 and accepted a 32x32 pointer
+              // target on surfaces whose own --tap is 44. The ::after expands the target only;
+              // the badge below keeps using this element's existing `relative` for its anchor.
+              className="relative tap-floor grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             >
               <Bell className="size-6" aria-hidden="true" />
               {unreadCount > 0 ? (
@@ -117,7 +122,8 @@ export function TopBar({
             <a
               href={supportHref}
               aria-label="Contact support"
-              className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              // `relative tap-floor` (issue #91) -- same 32-vs-44 gap as the bell above.
+              className="relative tap-floor grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-(--d-fast) ease-(--e-out) hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             >
               <CircleHelp className="size-6" aria-hidden="true" />
             </a>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { formatUserFriendlyError } from '@/core/http/api'
@@ -100,6 +100,10 @@ export function OpsConsole() {
   const copilotRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const stepperRef = useRef<HTMLDivElement | null>(null)
+
+  /** Issue #91. Owned here rather than in `DetailPane`, because this component is the one that
+   *  looks the heading up to move focus after a row selection -- see `handleSelect`. */
+  const detailHeadingId = useId()
 
   const idempotencyKeys = useRef<Map<string, string>>(new Map())
   const keyFor = useCallback((action: string) => {
@@ -281,8 +285,14 @@ export function OpsConsole() {
     setSelectedId(item.escalation_id)
     setAlreadyActioned(null)
     // accessibility.md's "Focus management": selecting a row focuses the detail pane's own
-    // primary heading, not the pane's outer wrapper (see detail-pane.tsx's `#ops-detail-heading`).
-    requestAnimationFrame(() => document.getElementById('ops-detail-heading')?.focus())
+    // primary heading, not the pane's outer wrapper.
+    //
+    // Issue #91: the id used to be the hardcoded string "ops-detail-heading", which the states
+    // gallery duplicated nine times. The console now MINTS the id (`useId`, below) and hands it
+    // to its one DetailPane, so this lookup is unambiguous by construction rather than by
+    // nobody having rendered a second console yet. React 19.2.8's `_r_<n>_` ids are valid CSS
+    // selectors, so `getElementById` (and `querySelector`) are both safe with them.
+    requestAnimationFrame(() => document.getElementById(detailHeadingId)?.focus())
   }
 
   async function handleAcknowledge() {
@@ -618,6 +628,7 @@ export function OpsConsole() {
         className="min-h-0 overflow-auto border-r border-border outline-none"
       >
         <DetailPane
+          headingId={detailHeadingId}
           item={selected}
           liveChange={liveChange}
           onDismissLiveChange={() => {

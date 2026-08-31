@@ -110,9 +110,17 @@ export function OverviewStrip({
 
   return (
     <div
-      className={cn('grid grid-cols-3 gap-4', dimmed && 'opacity-60')}
-      // Held at 0.6 during a manual re-fetch rather than skeleton-flashed over an already-
-      // rendered tile (`stitch-prompts.md` §2's motion rule). aria-busy tells AT the same thing.
+      className={cn('grid grid-cols-3 gap-4', dimmed && 'muted-region cursor-progress')}
+      // Retoned, not skeleton-flashed over an already-rendered tile (`stitch-prompts.md` §2's
+      // motion rule). aria-busy tells AT the same thing.
+      //
+      // ⚠ NOT `opacity-60` any more (issue #90, 2026-09-01). 60% opacity put these tiles'
+      // 12px labels at 2.29:1 -- measured, and the smallest type on the surface was the part
+      // it hurt most. `muted-region` demotes the token instead of compositing the pixels, so
+      // the values land at 7.58:1 (light) / 12.02:1 (dark) while still visibly receding.
+      // `cursor-progress` carries the transient "busy" half of the old signal; there is no
+      // container surface or border here to change (the tiles own theirs), so the pointer
+      // affordance plus aria-busy is the honest substitute rather than an invented box.
       aria-busy={dimmed || undefined}
     >
       <Tile label={<TileLabel>Active shipments</TileLabel>}>

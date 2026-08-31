@@ -164,8 +164,16 @@ export function ShipmentsTable({
         // R15: horizontal scroll with a frozen first column, replacing a silent clip. This is a
         // real requirement here, not an imported habit -- `spacing-and-layout.md` gives this
         // surface a 768px floor and the table's own minimum is 972px.
-        'overflow-x-auto overflow-y-visible rounded-md border border-border bg-card shadow-raised',
-        dimmed && 'opacity-60',
+        'overflow-x-auto overflow-y-visible rounded-md bg-card shadow-raised',
+        // ⚠ `muted-region`, not `opacity-60` (issue #90, 2026-09-01) -- see the note in
+        // `overview-strip.tsx`. Rows here are navigable, so this was an active target dimmed
+        // to 2.29:1. Unlike the other two carrier sites this container HAS a border, so the
+        // stale signal also gets the border/surface half: `border-input` is one ramp step
+        // firmer than the resting `border-border`, which reads as "held" without touching a
+        // single text colour. The surface itself deliberately stays `bg-card` -- the sticky
+        // first column and the sticky header both paint `bg-card` of their own, and moving
+        // only the outer box to `bg-sunken` would leave two white strips floating on it.
+        dimmed ? 'border border-input muted-region cursor-progress' : 'border border-border',
       )}
       aria-busy={dimmed || undefined}
     >

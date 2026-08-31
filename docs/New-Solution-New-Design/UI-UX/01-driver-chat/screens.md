@@ -65,7 +65,7 @@ typing, rather than the assistant guessing from context and asking a clarifying 
 │  ─── Resolved ───────────────────  │
 │                                    │
 │ ┌────────────────────────────────┐ │
-│ │  Jodhpur load → HomeCraft      │ │  ← 60% opacity, no priority marker
+│ │  Jodhpur load → HomeCraft      │ │  ← sunken ground + muted text, no priority marker
 │ │  ✓ CONFIRMED · Mon 3 Aug       │ │
 │ └────────────────────────────────┘ │
 │                                    │
@@ -84,6 +84,15 @@ typing, rather than the assistant guessing from context and asking a clarifying 
 | **Operational line** | Dock · dated range, always together, never a bare time (`../00-foundations/voice-and-tone.md`). |
 | **Last message preview** | One line, truncated. `text-sm`, `text-secondary`. |
 | **Timestamp** | `text-micro`, relative under 1h ("9m ago"), absolute above ("09:41"). |
+
+> **Corrected 2026-09-01 — issue #90.** The ASCII plate above called the resolved card "60% opacity".
+> It is now `surface-sunken` plus the `muted-region` token remap, and no opacity at all. The 60%
+> version measured **2.29–2.86:1** on three of the card's four text nodes in light theme (timestamp
+> 2.29, order reference 2.86, chip label 2.53) against a 4.5:1 floor, because group opacity fades
+> the card's own background toward the page along with its text. The card is an active `<Link>`, so
+> WCAG 1.4.3's inactive-component exception does not apply. After the change, the same probe reads
+> **6.92 / 6.92 / 5.21:1** (light) and **13.59 / 13.59 / 7.54:1** (dark). Full rationale and the
+> shipped mechanism are in `components.md` §1. Measured with Playwright 1.62.1 in Chromium.
 
 ### Ordering
 
