@@ -8,6 +8,17 @@
 > **One prompt per block, in `screens.md`'s own order.** Each block is deliberately self-contained
 > (tokens repeated in full) because Stitch sessions do not share context — paste one block, get one screen.
 >
+> ⚠️ **Stale `rule_type` names, knowingly left in place (A-G2, issue #70, 2026-08-29).** Every Facility
+> Rules prompt below names `EARLY_LIMIT` / `DOCK_PIN` / `WEIGHT_LIMIT` / `NEW_START_CUTOFF`. **None of
+> those four exists.** The live registry is `LAST_NEW_START_TIME`, `HEAVY_DOCK_REQUIRED_KG`,
+> `REEFER_DOCK_REQUIRED`, `CHECKIN_EARLY_LIMIT_MIN`, `NO_SHOW_GRACE_MIN` — see `screens.md` §3 for the
+> full correction. They are **not** find-and-replaced here on purpose: these prompts are the reproducible
+> record of how `mockup.html` was generated, and `mockup.html` still renders the stale names, so silently
+> editing the prompts would break that correspondence and leave two artefacts disagreeing with no note
+> saying why. Anything **re-generated** from this file must substitute the live names first. A real
+> re-design is needed regardless, not a substitution: `DOCK_PIN` is the only two-field type and has no
+> live analog, so the type-driven-field-set prompts have no equivalent to render.
+>
 > Surface facts that apply to every block: desktop, **`comfortable` density**
 > (`spacing-and-layout.md`'s density table lists "Carrier, admin, driver chat" together — confirmed),
 > supported range **1024px+, primary target 1440×900**, light theme default with dark at full parity (U69).

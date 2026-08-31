@@ -5,9 +5,11 @@ import { getSession } from '@/core/auth/supabase'
 import { streamChat } from '@/core/http/sse'
 import { useCountdownClock } from '@/shared/lib/countdown'
 import { copy } from './copy'
+import { heldStateEnabled } from './flags'
 import { haptic } from './haptics'
-import { toEligibilityAnswer, toOptionSet } from './mappers'
+import { toEligibilityAnswer, toHoldFromRequestSlot, toOptionSet } from './mappers'
 import {
+  holdsByThreadAtom,
   messagesByThreadAtom,
   onlineAtom,
   quickRepliesAtom,
@@ -16,8 +18,10 @@ import {
 } from './store'
 import type {
   DriverEventCode,
+  DriverHold,
   DriverMessage,
   DriverPart,
+  OptionCardState,
   SystemNoticeVariant,
   UxState,
 } from './types'
@@ -61,6 +65,19 @@ const apiBase =
  *  own prose already narrates it (section 7.2b — the assistant narrates the receipt). */
 const RENDERABLE_TOOLS = new Set(['find_feasible_slots', 'explain_slot_eligibility'])
 
+/**
+ * The three tools that change which promise this thread holds. **Not in `RENDERABLE_TOOLS`**, and
+ * the distinction is the point: these produce no card of their own. `request_slot`'s HELD outcome
+ * *mutates the card the driver already tapped* (U50 — "cards mutate in place rather than being
+ * replaced by a new message", so the driver sees *which* thing changed), and the state it grants is
+ * rendered by the persistent state line and the thread card, both of which already exist.
+ *
+ * Appending a fourth card here would be the mistake §7.2b warns about from the other direction: the
+ * assistant's own prose already narrates the hold, and a card repeating it would make one hold read
+ * as two events.
+ */
+const PROMISE_TOOLS = new Set(['request_slot', 'confirm_held_slot'])
+
 type RawToolCall = {
   name?: string
   args?: Record<string, unknown>
@@ -89,6 +106,7 @@ export function useDriverTurn(threadId: string) {
   const setUxState = useSetAtom(uxStateAtom)
   const setQuickReplies = useSetAtom(quickRepliesAtom)
   const [online, setOnline] = useAtom(onlineAtom)
+  const [holds, setHolds] = useAtom(holdsByThreadAtom)
   const { setLive, setServerTime } = useCountdownClock()
   const abort = useRef<AbortController | null>(null)
 
@@ -136,6 +154,54 @@ export function useDriverTurn(threadId: string) {
     [setMessages, threadId],
   )
 
+  /**
+   * **U50's mutate-in-place, implemented literally.** Sets one card's state inside the option-set
+   * part it already lives in, on the message that already carries it — no new message, no
+   * replacement part.
+   *
+   * Two properties this deliberately has:
+   *
+   *  - It writes `perOption[slotId]` and **nothing else**, so the siblings stay `default`.
+   *    `components.md` §2's *"Sibling of a held card"* row is explicit that a hold does not dim its
+   *    siblings, and the mockup got that wrong precisely because the change was applied set-wide.
+   *  - It patches only the **most recent** set containing the slot. An older, superseded set can
+   *    contain the same `slot_id`, and mutating it would put a live HELD countdown on a card the
+   *    driver can no longer act on.
+   */
+  const setOptionState = useCallback(
+    (slotId: string, state: OptionCardState) => {
+      setMessages((prev) => {
+        const list = prev[threadId] ?? []
+        const index = findLastOptionSetIndex(list, slotId)
+        if (index < 0) return prev
+        const next = list.slice()
+        next[index] = {
+          ...next[index],
+          parts: next[index].parts.map((part) =>
+            part.kind === 'optionSet' && part.optionSet.options.some((o) => o.slotId === slotId)
+              ? {
+                  ...part,
+                  optionSet: {
+                    ...part.optionSet,
+                    perOption: { ...part.optionSet.perOption, [slotId]: state },
+                  },
+                }
+              : part,
+          ),
+        }
+        return { ...prev, [threadId]: next }
+      })
+    },
+    [setMessages, threadId],
+  )
+
+  const setHold = useCallback(
+    (hold: DriverHold | null) => {
+      setHolds((prev) => ({ ...prev, [threadId]: hold }))
+    },
+    [setHolds, threadId],
+  )
+
   /** Text and tool parts committed together, in ONE paint. */
   const commitDone = useCallback(
     (data: DoneData, bufferedText: string) => {
@@ -158,12 +224,65 @@ export function useDriverTurn(threadId: string) {
         })
       }
 
+      /**
+       * The D2 promise transitions, applied after the parts are committed so the card being
+       * mutated already exists in the transcript.
+       *
+       * The whole block is behind `heldStateEnabled`. With the flag off the server may still return
+       * a HELD outcome (its own `TWO_PHASE_HOLD_ENABLED` is independent of this constant), and the
+       * correct client behaviour then is to render nothing HELD-shaped rather than a chip the rest
+       * of the surface is not wired for — the same fail-closed choice `option-card.tsx` makes.
+       */
+      let grantedHold: DriverHold | null = null
+      let confirmedHold = false
+      if (heldStateEnabled) {
+        for (const call of data.tool_calls ?? []) {
+          if (!call.name || !PROMISE_TOOLS.has(call.name)) continue
+          if (call.name === 'request_slot') {
+            const hold = toHoldFromRequestSlot(call.result)
+            if (hold) grantedHold = hold
+          } else if (call.name === 'confirm_held_slot') {
+            // Only a real PENDING_CONFIRMATION consumes the hold. A `CONFLICTED` result
+            // (`HOLD_EXPIRED` / `HOLD_ALREADY_ACTIONED` / `SLOT_CONFLICT_REFRESH_REQUIRED`) means
+            // the hold is already gone server-side, which the countdown's own lapse handles --
+            // clearing it here too would be harmless but would pre-empt screen 15's notice.
+            const result = call.result as { status?: unknown } | undefined
+            if (result?.status === 'PENDING_CONFIRMATION') confirmedHold = true
+          }
+        }
+      }
+
+      if (grantedHold) {
+        setHold(grantedHold)
+        // The tapped card takes the HELD treatment IN PLACE (U50, screen 5). `slot_id` comes off
+        // the server's own result, never off the message the driver sent -- the tap goes through
+        // the assistant as prose, so the server's answer is the only thing that knows which slot
+        // was actually held.
+        if (grantedHold.slotId) setOptionState(grantedHold.slotId, 'held')
+        haptic('holdGranted')
+      }
+      if (confirmedHold) setHold(null)
+
       const ux = (UX_STATES.has(data.ux_state ?? '') ? data.ux_state : 'chat') as UxState
       setUxState(ux)
-      // The only client-supplied quick replies, and only on the one branch where the two
-      // readings are closed and generic. See copy.ts's note on the missing server contract.
+      /**
+       * Quick replies.
+       *
+       * Screen 5's own pair — "Request this slot" / "Choose a different one" — is F7's specified
+       * row and it takes precedence over the generic confirm/decline pair while a hold is live.
+       * Both are literal driver messages (`components.md` §3: *"what they send: the literal text on
+       * the chip, as a normal driver message"*), so the assistant receives an ordinary sentence and
+       * decides for itself whether that means `confirm_held_slot`. Nothing here calls a tool.
+       *
+       * **No ordinal and no slot id in either string** — the second one names no option at all,
+       * which is what keeps §7.2b's ordinal trap unreachable through this path too.
+       */
       setQuickReplies(
-        ux === 'confirmation_required' ? [copy.quickReplyConfirm, copy.quickReplyDecline] : [],
+        grantedHold
+          ? [copy.heldRequestAction, copy.heldChooseAnother]
+          : ux === 'confirmation_required'
+            ? [copy.quickReplyConfirm, copy.quickReplyDecline]
+            : [],
       )
       if (ux === 'persisted_success') haptic('confirmed')
 
@@ -173,7 +292,37 @@ export function useDriverTurn(threadId: string) {
       const asOf = firstAsOf(data.tool_calls)
       if (asOf) setServerTime(asOf)
     },
-    [append, setQuickReplies, setServerTime, setUxState],
+    [append, setHold, setOptionState, setQuickReplies, setServerTime, setUxState],
+  )
+
+  /**
+   * Screen 15 (`HOLD_LAPSED`). Called once, by the countdown, when the hold's server deadline
+   * passes with no confirm.
+   *
+   * Everything §15 specifies happens here and nothing else does: the card is **replaced in place**
+   * (never removed), the notice is a centred system row beneath it, the state line clears because
+   * the hold atom goes null, and a single "Find options again" quick reply is offered as part of
+   * the notice rather than left for the driver to think of. The 400ms haptic fires from
+   * `usePromiseCountdown`'s own lapse branch, so it is not duplicated here.
+   *
+   * It takes the hold as an argument rather than reading the atom, because the caller is a
+   * countdown effect that already holds the exact value that expired — reading the atom would
+   * reintroduce the race where a hold granted moments later gets lapsed by the previous one's timer.
+   */
+  const lapseHold = useCallback(
+    (hold: DriverHold) => {
+      setHolds((prev) => {
+        // The guard that makes this idempotent AND race-safe: if the atom no longer holds *this*
+        // hold, it was already confirmed or replaced, and lapsing it would erase a live promise.
+        if (prev[threadId]?.holdId !== hold.holdId) return prev
+        return { ...prev, [threadId]: null }
+      })
+      if (hold.slotId) setOptionState(hold.slotId, 'lapsed')
+      const line = holdLine(hold)
+      append(systemNotice('HOLD_LAPSED', copy.holdLapsed(line), 'event'))
+      setQuickReplies([copy.findOptionsAgainAction])
+    },
+    [append, setHolds, setOptionState, setQuickReplies, threadId],
   )
 
   const send = useCallback(
@@ -263,7 +412,55 @@ export function useDriverTurn(threadId: string) {
     [send],
   )
 
-  return { messages: messages[threadId] ?? [], send, retry }
+  return {
+    messages: messages[threadId] ?? [],
+    send,
+    retry,
+    /** The live hold on THIS thread, or null. Server-stamped `expiresAt` guaranteed. */
+    hold: holds[threadId] ?? null,
+    setHold,
+    lapseHold,
+  }
+}
+
+/**
+ * Index of the most recent message carrying an option set that contains `slotId`, or `-1`.
+ *
+ * Backwards, and that is the whole behaviour: an older set can legitimately contain the same slot,
+ * and mutating it would put a live HELD countdown on a card the driver can no longer act on
+ * (`components.md` §2's Superseded row).
+ */
+function findLastOptionSetIndex(list: DriverMessage[], slotId: string): number {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const hit = list[i].parts.some(
+      (p) => p.kind === 'optionSet' && p.optionSet.options.some((o) => o.slotId === slotId),
+    )
+    if (hit) return i
+  }
+  return -1
+}
+
+/**
+ * The operational line a lapse notice names — "Dock D1 · 13:00–14:15".
+ *
+ * `copy.holdLapsed` interpolates it into *"That hold has lapsed — {line} is available to other
+ * drivers again"*, so it has to be a phrase that reads as a subject. When the hold carries no
+ * window (the `request_slot` receipt does not include one), the fallback is deliberately generic
+ * rather than a fabricated dock or time: `voice-and-tone.md` forbids a bare time, and inventing an
+ * interval in a sentence about capacity someone else can now take is the worst place to guess.
+ */
+function holdLine(hold: DriverHold): string {
+  const dock = hold.dockCode ? `Dock ${hold.dockCode}` : null
+  if (dock && hold.windowStart && hold.windowEnd) {
+    const t = (iso: string) =>
+      new Intl.DateTimeFormat('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(iso))
+    return `${dock} · ${t(hold.windowStart)}–${t(hold.windowEnd)}`
+  }
+  return dock ?? 'that slot'
 }
 
 /** `find_feasible_slots` / `explain_slot_eligibility` -> a typed part. Never text parsing. */

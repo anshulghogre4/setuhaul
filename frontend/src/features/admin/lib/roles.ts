@@ -6,13 +6,22 @@
  * (`app/core/execution_context.py:6-18`) with a 422 before it ever reaches the Auth API. Offering
  * a role the backend cannot accept would produce a form that fails only on submit.
  *
- * ⚠ **`GATE_OFFICER` is deliberately absent, and this is a real cross-surface finding, not an
- * omission.** `mockup.html` §3.1's role list offers "Gate–Yard officer", `frontend/src/core/auth/
- * identity.ts:18` has `GATE_OFFICER` as a `RoleName`, and E5.4 is building a whole gate/yard
- * surface for it — but the **backend `RoleName` enum has no `GATE_OFFICER` member at all**
- * (checked directly, 2026-08-29). `invite_user(role='GATE_OFFICER')` raises `INVALID_ROLE` at
- * `admin_user_service.py:200-202` before any scope validation runs. Reported to the owner rather
- * than worked around here.
+ * **`GATE_OFFICER` was absent here until 2026-08-31, and is now offered — issue #79 landed.** The
+ * previous comment recorded a real cross-surface finding: `mockup.html` §3.1's role list offers
+ * "Gate–Yard officer", `core/auth/identity.ts` has `GATE_OFFICER`, and E5.4 built a whole gate/yard
+ * surface for it, but the backend `RoleName` enum had no such member, so
+ * `invite_user(role='GATE_OFFICER')` raised `INVALID_ROLE` before scope validation ran.
+ *
+ * **Both halves are now verified present, by reading the source rather than the issue** — and they
+ * genuinely are two halves, either of which alone would still fail an invite:
+ *  1. `RoleName.GATE_OFFICER` exists (`app/core/execution_context.py`), so the role passes
+ *     `invite_user`'s enum check.
+ *  2. `GATE_OFFICER` is in `admin_user_service.FACILITY_SCOPED_ROLES`, so `_validate_scope` maps
+ *     it to a `FACILITY` scope and `users.facility_id` is actually written — which is what
+ *     `get_execution_context` later resolves the kiosk's scope from. Without this entry the invite
+ *     is refused outright.
+ * That is why its `scope` below is `'facility'` and not `'none'`: it mirrors the set the backend
+ * validates against, not a guess about what a kiosk role "feels like".
  *
  * A second, narrower version of the same class: `RoleName.CARRIER` and
  * `RoleName.REGIONAL_OPERATIONS_HEAD` / `RoleName.FACILITY_MANAGER` are all real backend roles
@@ -46,6 +55,10 @@ export const ROLE_OPTIONS: RoleOption[] = [
   // "Planner" in mockup.html §3.1.
   { value: 'WAREHOUSE_PLANNER', label: 'Planner', scope: 'facility' },
   { value: 'FACILITY_MANAGER', label: 'Facility manager', scope: 'facility' },
+  // "Gate–Yard officer" in mockup.html §3.1. Facility-scoped per
+  // `admin_user_service.FACILITY_SCOPED_ROLES`; deliberately NOT in `OPS_PORTAL_ROLES` or any
+  // wider tier, since the kiosk is a device-bound shared session with its own write guard.
+  { value: 'GATE_OFFICER', label: 'Gate–Yard officer', scope: 'facility' },
   // "Carrier manager" in mockup.html §3.3 — scoped by carrier_id, not by facility.
   { value: 'CARRIER', label: 'Carrier manager', scope: 'carrier' },
   { value: 'TRANSPORT_MANAGER', label: 'Transport manager', scope: 'none' },

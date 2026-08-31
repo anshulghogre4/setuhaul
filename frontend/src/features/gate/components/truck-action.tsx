@@ -49,9 +49,24 @@ import type { GateEventResult, GateTruckMatch } from '../lib/types'
  */
 export function TruckAction({
   truck,
+  officerName,
   onOutcome,
 }: {
   truck: GateTruckMatch
+  /**
+   * U111's shift label (issue #68), passed down rather than read from `lib/session.ts` here, so
+   * this component keeps taking everything it writes from its props and stays renderable from the
+   * `_states` gallery's fixtures.
+   *
+   * **`null` is a real, allowed value, not a bug to guard against.** The kiosk mid-shift-change
+   * still writes -- an arrival is never withheld because nobody is named. The server records "no
+   * officer" honestly rather than substituting the device account. So there is deliberately no
+   * `if (!officerName) return` anywhere below.
+   *
+   * It is a *label*, not a credential: nothing about which action is offered, permitted or accepted
+   * depends on it. Authorisation is the device's own token, checked server-side.
+   */
+  officerName: string | null
   /**
    * Called with the tool's own typed result. The parent routes it to `OutcomeScreen` -- and owns
    * the `INVALID_TRANSITION` re-fetch, because `edge-cases.md` #3's resolution is to re-render
@@ -93,7 +108,7 @@ export function TruckAction({
     setSubmitting(true)
     setFailed(false)
     try {
-      const result = await dispatch(action, truck, idempotencyKey)
+      const result = await dispatch(action, truck, idempotencyKey, officerName)
       // Recorded vs rejected, per the mockup's own non-visual notes. DOCK_MISMATCH counts as
       // recorded -- a deviation was written -- which is exactly why screen 17's note says the
       // rejection pattern does not fire there.
@@ -165,17 +180,22 @@ const REJECTED_CODES = new Set<string>([
 /**
  * `GateAction` -> the live endpoint. Exhaustive over the union, so a new action added to
  * `screens.md` section 3's table fails the build here rather than silently doing nothing.
+ *
+ * `officerName` is threaded to all five for the same reason: `lib/api.ts` makes the argument
+ * required, so a sixth tool added without U111's stamp is a type error here, not a silent
+ * regression to the state issue #68 described.
  */
 async function dispatch(
   action: GateAction,
   truck: GateTruckMatch,
   idempotencyKey: string,
+  officerName: string | null,
 ): Promise<GateEventResult> {
   switch (action.tool) {
     case 'gate_in':
-      return recordGateIn(truck.shipment_id, idempotencyKey)
+      return recordGateIn(truck.shipment_id, idempotencyKey, officerName)
     case 'queue_state':
-      return updateQueueState(truck.shipment_id, action.target)
+      return updateQueueState(truck.shipment_id, action.target, officerName)
     case 'dock_in': {
       // flows-and-states.md Flow 5: the dock submitted is the truck's CONFIRMED APPOINTMENT'S dock,
       // read off the card the officer is looking at. There is no dock selector, no bay grid and no
@@ -187,11 +207,11 @@ async function dispatch(
         // a real arrival against the wrong bay.
         throw new Error('No confirmed dock on this appointment.')
       }
-      return recordDockIn(truck.shipment_id, dockId)
+      return recordDockIn(truck.shipment_id, dockId, officerName)
     }
     case 'unload':
-      return recordUnloadStartEnd(truck.shipment_id, action.phase)
+      return recordUnloadStartEnd(truck.shipment_id, action.phase, officerName)
     case 'gate_out':
-      return recordGateOut(truck.shipment_id)
+      return recordGateOut(truck.shipment_id, officerName)
   }
 }

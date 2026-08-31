@@ -32,27 +32,49 @@ from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.repositories import carrier as carrier_repo
 from app.repositories.scope import assert_shipment_in_carrier_fleet, resolve_carrier_scope
+from app.scheduling import holds
 
 # `list_fleet_shipments(status_filter?)`'s accepted values, split by why they are or are not here.
 #
 # `UI-UX/05-carrier-portal/flows-and-states.md` Flow 2 names four promise states plus "has open
-# exception". Two of those four -- SHOWN and HELD -- have no representation in the live schema at
-# all: `appointments.appointment_status` allows PENDING_CONFIRMATION/CONFIRMED/IN_PROGRESS/
-# COMPLETED/CANCELLED/NO_SHOW/REJECTED/EXPIRED and nothing else (verified against the live
-# constraint 2026-08-23), and `scheduling/expiry.py:89-99` already records the same gap for D2's
-# HELD TTL sweep. They are therefore *refused with a stated reason* rather than accepted into a
-# query that would return a silently empty list -- an empty result would tell a carrier "you have
-# no held shipments", which is not what the system actually knows.
+# exception". Two of those four -- SHOWN and HELD -- are not `appointments.appointment_status`
+# values and never will be: that check constraint allows PENDING_CONFIRMATION/CONFIRMED/
+# IN_PROGRESS/COMPLETED/CANCELLED/NO_SHOW/REJECTED/EXPIRED and nothing else (verified against the
+# live constraint 2026-08-23), and #53's migration deliberately declines to add 'HELD' to it
+# because §4 is explicit that *"Held is not booked: no `appointments` row exists yet"*.
+#
+# Issue #87 separated the two, because they were never the same problem:
+#
+#   * **HELD is answerable** once the D2 hold path is on. A hold is a `dock_occupancy` row, #85
+#     taught both fleet reads to derive it, and the filter now runs on that derived
+#     `promise_state` rather than on the raw column -- which is the only place HELD can be
+#     expressed. With the flag off it is still refused, because no hold can exist and the
+#     underlying columns may not even be readable.
+#   * **SHOWN is not answerable, at all, in any flag state.** It is a UI-only concept: §0.8/§4
+#     define it as what `find_feasible_slots` returned to a caller, and that call reserves nothing
+#     and writes no row anywhere in the product. There is no table to select from, so it stays
+#     refused rather than being given an invented mapping.
+#
+# Both refusals are 400s with a stated reason rather than a silently empty list -- an empty result
+# would tell a carrier "you have no held shipments", which is not what the system actually knows.
 _APPOINTMENT_STATUS_FILTERS = frozenset(
     {"PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REJECTED", "EXPIRED", "NO_SHOW"}
 )
 _EXCEPTION_FILTER = "HAS_OPEN_EXCEPTION"
-_SCHEMA_UNSUPPORTED_FILTERS = frozenset({"SHOWN", "HELD"})
-_SCHEMA_UNSUPPORTED_REASON = (
-    "The live schema has no representation for SHOWN/HELD promise states: "
-    "appointments.appointment_status has no such value, so this filter cannot be answered without "
-    "returning a misleading empty list. Tracked with the same gap as D2's HELD TTL sweep "
-    "(scheduling/expiry.py)."
+_HOLD_FILTER = holds.HOLD_PROMISE_STATE  # "HELD" -- the same constant the reads project.
+_SHOWN_FILTER = "SHOWN"
+_SHOWN_UNSUPPORTED_REASON = (
+    "SHOWN is a presentation-only promise state with no persisted counterpart anywhere in the "
+    "product: it is what find_feasible_slots returned to one caller, and that read reserves "
+    "nothing and writes no row (SOLUTION_DESIGN.md §0.8, §4). There is nothing to select on, so "
+    "this filter is refused rather than answered with a misleading empty list."
+)
+_HOLD_FILTER_DISABLED_REASON = (
+    "HELD is only answerable while the D2 two-phase hold path is enabled. A hold is a "
+    "dock_occupancy row rather than an appointment status (SOLUTION_DESIGN.md §4: 'Held is not "
+    "booked: no appointments row exists yet'), and with TWO_PHASE_HOLD_ENABLED off no hold can "
+    "exist and the hold columns may not be readable at all. Refused rather than answered with an "
+    "empty list that would read as 'you have none'."
 )
 
 # §7.5.6 gives `get_carrier_on_time_performance` a `window` argument with a `30d` default, and
@@ -113,33 +135,55 @@ def _validate_window(window: str | None) -> str:
     return resolved
 
 
-def _validate_status_filter(status_filter: str | None) -> tuple[str | None, bool]:
-    """Return (`appointment_status`, `only_with_open_exception`) for a validated filter.
+def _supported_filters(holds_enabled: bool) -> frozenset[str]:
+    """The filter vocabulary this call can honestly answer, for the "unknown filter" message.
+
+    Flag-dependent on purpose: telling a carrier that HELD is simply unknown while the D2 path is
+    off would be a different (and wrong) statement from telling them it is currently unanswerable.
+    Those are two distinct refusals below and the enumeration has to agree with them.
+    """
+    supported = _APPOINTMENT_STATUS_FILTERS | {_EXCEPTION_FILTER}
+    return frozenset(supported | {_HOLD_FILTER}) if holds_enabled else frozenset(supported)
+
+
+def _validate_status_filter(
+    status_filter: str | None, *, holds_enabled: bool
+) -> tuple[str | None, bool]:
+    """Return (`promise_state`, `only_with_open_exception`) for a validated filter.
 
     Filtering is membership-only (Flow 2: "never re-fetches the on-time/exception-count tiles"),
     which is why this returns query inputs rather than anything the overview call also consumes.
+
+    The first element is a **promise state**, not an appointment status (issue #87). For the eight
+    `appointment_status` values the two coincide; `HELD` is the one that does not, and the
+    repository is what resolves the difference -- with holds on it filters the derived
+    `promise_state`, with holds off it filters the raw column exactly as it always has.
     """
     if not status_filter:
         return None, False
     value = status_filter.strip().upper()
     if value == _EXCEPTION_FILTER:
         return None, True
-    if value in _SCHEMA_UNSUPPORTED_FILTERS:
+    if value == _SHOWN_FILTER:
         raise AppError(
             f"Filter '{value}' is not supported against the live schema.",
             code="FILTER_UNSUPPORTED",
             status_code=400,
-            detail=_SCHEMA_UNSUPPORTED_REASON,
+            detail=_SHOWN_UNSUPPORTED_REASON,
         )
-    if value not in _APPOINTMENT_STATUS_FILTERS:
+    if value == _HOLD_FILTER and not holds_enabled:
+        raise AppError(
+            f"Filter '{value}' is not available right now.",
+            code="FILTER_UNSUPPORTED",
+            status_code=400,
+            detail=_HOLD_FILTER_DISABLED_REASON,
+        )
+    if value not in _supported_filters(holds_enabled):
         raise AppError(
             f"Unknown status filter '{value}'.",
             code="FILTER_UNSUPPORTED",
             status_code=400,
-            detail=(
-                "Supported filters: "
-                f"{', '.join(sorted(_APPOINTMENT_STATUS_FILTERS | {_EXCEPTION_FILTER}))}."
-            ),
+            detail=f"Supported filters: {', '.join(sorted(_supported_filters(holds_enabled)))}.",
         )
     return value, False
 
@@ -207,14 +251,24 @@ async def list_fleet_shipments(
     actually empty and unfiltered, so the common path stays at one round trip.
     """
     carrier_id = resolve_carrier_scope(ctx)
-    appointment_status, only_with_open_exception = _validate_status_filter(status_filter)
-    filtered = appointment_status is not None or only_with_open_exception
+    # Resolved once and passed to both the validator and the repository, so the filter cannot be
+    # accepted under one reading of the flag and then executed under another (issue #87).
+    holds_enabled = holds.hold_reads_enabled()
+    promise_state, only_with_open_exception = _validate_status_filter(
+        status_filter, holds_enabled=holds_enabled
+    )
+    filtered = promise_state is not None or only_with_open_exception
 
     items = await carrier_repo.list_fleet_shipments(
         session,
         carrier_id,
-        appointment_status=appointment_status,
+        promise_state=promise_state,
         only_with_open_exception=only_with_open_exception,
+        # Issue #85: with the D2 flag on, `promise_state` is composed from `dock_occupancy` as well
+        # as `appointments`, so a held shipment reads HELD instead of silently reading as though it
+        # had no promise at all. Off, the statement is the one that shipped -- which it must be,
+        # since the columns do not exist until the D2 migration is applied.
+        include_holds=holds_enabled,
     )
 
     empty_reason: str | None = None
@@ -229,7 +283,7 @@ async def list_fleet_shipments(
         "as_of": _as_of(),
         "source": "postgresql",
         "scope": _scope_block(carrier_id),
-        "status_filter": (appointment_status or (_EXCEPTION_FILTER if only_with_open_exception else None)),
+        "status_filter": (promise_state or (_EXCEPTION_FILTER if only_with_open_exception else None)),
         "items": items,
         "empty_reason": empty_reason,
         "freshness": "live",
@@ -252,7 +306,9 @@ async def get_shipment_detail(
     row, and the carrier that row must belong to still comes from the verified identity.
     """
     carrier_id = resolve_carrier_scope(ctx)
-    shipment = await carrier_repo.get_fleet_shipment(session, carrier_id, shipment_id)
+    shipment = await carrier_repo.get_fleet_shipment(
+        session, carrier_id, shipment_id, include_holds=holds.hold_reads_enabled()
+    )
     # `shipment` is None for both "no such shipment" and "another carrier's shipment", and this
     # single call refuses both identically. Do not add a NOT_FOUND branch above it.
     assert_shipment_in_carrier_fleet(

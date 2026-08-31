@@ -65,6 +65,13 @@ async def test_get_execution_context_releases_the_transaction_after_identity_res
         "user_id": "USR001", "email": "d@setuhaul.com", "full_name": "Driver",
         "role_id": "ROL001", "role_name": "DRIVER", "driver_id": "DRV001",
         "facility_id": "FAC-JAI-01", "is_active": 1, "auth_user_id": "auth-uuid-1",
+        # Issue #73: the identity SELECT now also carries the two invite-lifecycle stamps, so
+        # get_execution_context can write the accept stamp without a second read. Both NULL here
+        # -- a seeded driver, never invited through the admin console -- which is also the case
+        # that must NOT trigger the extra UPDATE, keeping this test's single-statement premise
+        # (and `session.commit.assert_awaited_once()`) intact. See
+        # tests/unit/test_invite_acceptance_stamp.py for the stamping paths themselves.
+        "invited_at": None, "invite_accepted_at": None,
     }
     result = MagicMock()
     result.mappings.return_value.first.return_value = user_row

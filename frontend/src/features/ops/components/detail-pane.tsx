@@ -1,36 +1,94 @@
-import { useState } from 'react'
-import { Ban, Mail, MailWarning, MailX } from 'lucide-react'
+import { useState, type RefObject } from 'react'
+import { Ban, Info, MailWarning, MailX } from 'lucide-react'
 
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { facilityDisplayName } from '../lib/facility-names'
 import { REASON_META } from '../lib/reasons'
 import { sendAsOperationsEnabled } from '../lib/flags'
-import type { CancelReasonCode, EscalationQueueItem, ResolveReasonCode } from '../lib/types'
+import type { EscalationChange } from '../lib/live-queue'
+import type { CancelReasonCode, EscalationQueueItem, ResolveReasonCode, ThreadMessage } from '../lib/types'
 import { EscalationStepper } from './escalation-stepper'
 import { OwnerControl } from './owner-control'
 import { CancelDialog, ResolveDialog } from './reason-picker-dialog'
+import { ThreadComposer } from './thread-composer'
+import { ThreadTranscript, type PendingMessage } from './thread-transcript'
+import { TakeoverControl, TakeoverNoticeBanner, type TakeoverNotice } from './takeover-control'
 
 /**
  * `screens.md` sections 3/3b, `edge-cases.md`. The flexible centre pane -- empty state when no
- * row is selected, otherwise the escalation's full detail.
+ * row is selected, otherwise the escalation's full detail, its thread, and the composer.
+ *
+ * ## Action order in this pane, and an unresolved contradiction it exposes
+ *
+ * `accessibility.md`'s "Safer-action-first DOM order" paragraph says two things that cannot both
+ * hold: its **instruction** is that "Resolve/Cancel/Reassign precede any takeover-adjacent action
+ * in tab order", while its **stated reason** is "destructive-adjacent controls should not be the
+ * first stop for a keyboard user tabbing through quickly" -- which argues the opposite, since
+ * Resolve and Cancel are the two terminal, irreversible actions here and Send is not.
+ *
+ * This build follows the stated *reason* and prompt 8's own layout: transcript, then composer and
+ * Send, then the Resolve/Cancel group last, with DOM order matching visual order throughout. The
+ * alternative -- CSS-reordering the group to satisfy the instruction's letter -- was checked
+ * against WCAG 2.2's Understanding document for 2.4.3 Focus Order, which permits a mismatch but
+ * treats it as a hazard and recommends that "the focus order reinforces the reading order implied
+ * by the visual layout". Introducing that hazard to satisfy half of a self-contradicting sentence
+ * is the wrong trade. **Flagged for the owner rather than silently decided.**
  */
 export function DetailPane({
   item,
+  liveChange = null,
+  onDismissLiveChange = () => {},
   onAcknowledge,
   onResolve,
   onCancel,
   busy,
   alreadyActioned,
+  // --- thread + takeover (E5.2 gap closure, issues #55/#56/#58) ---
+  threadState = 'none',
+  messages = [],
+  pending = [],
+  undelivered = {},
+  currentUserId = null,
+  takeoverNotice = null,
+  onReloadThread = () => {},
+  onSendMessage = () => {},
+  onRetryPending = () => {},
+  onDiscardPending = () => {},
+  onTakeOver = () => {},
+  onHandBack = () => {},
+  onRecoverHandBack = () => {},
+  onDismissTakeoverNotice = () => {},
+  composerRef,
+  stepperRef,
 }: {
   item: EscalationQueueItem | null
+  /** `edge-cases.md` sections 2 and 9 -- what a poll observed changing on THIS escalation since the
+   *  coordinator opened it (issue #59). */
+  liveChange?: EscalationChange | null
+  onDismissLiveChange?: () => void
   onAcknowledge: () => void
   onResolve: (reasonCode: ResolveReasonCode) => void
   onCancel: (reasonCode: CancelReasonCode) => void
   busy?: boolean
   /** edge-cases.md section 2 -- this exact row was acted on elsewhere while focused. */
   alreadyActioned?: { winningOwnerName: string | null } | null
+  threadState?: 'loading' | 'error' | 'ready' | 'none'
+  messages?: ThreadMessage[]
+  pending?: PendingMessage[]
+  undelivered?: Record<string, string | null>
+  currentUserId?: string | null
+  takeoverNotice?: TakeoverNotice | null
+  onReloadThread?: () => void
+  onSendMessage?: (text: string) => void
+  onRetryPending?: (key: string) => void
+  onDiscardPending?: (key: string) => void
+  onTakeOver?: () => void
+  onHandBack?: () => void
+  onRecoverHandBack?: () => void
+  onDismissTakeoverNotice?: () => void
+  composerRef?: RefObject<HTMLTextAreaElement | null>
+  stepperRef?: RefObject<HTMLDivElement | null>
 }) {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -45,6 +103,7 @@ export function DetailPane({
 
   const reason = REASON_META[item.escalation_type]
   const terminal = item.escalation_status === 'RESOLVED' || item.escalation_status === 'CANCELLED'
+  const underTakeover = item.thread_status === 'ESCALATED'
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-4">
@@ -55,14 +114,19 @@ export function DetailPane({
         <h2 id="ops-detail-heading" tabIndex={-1} className="font-data text-h3 tabular-nums outline-none">
           {item.escalation_id} · {reason.label}
         </h2>
-        <EscalationStepper
-          status={item.escalation_status}
-          position={item.stepper_position}
-          severityCode={item.severity_code}
-          slaRemainingMin={item.sla_remaining_min}
-          owner={item.owner_name}
-          variant="full"
-        />
+        {/* Focus target after a hand-back completes: accessibility.md's focus table sends focus
+            to "the detail pane's stepper/status area -- not the composer, since it just became
+            non-interactive again". */}
+        <div ref={stepperRef} tabIndex={-1} className="outline-none">
+          <EscalationStepper
+            status={item.escalation_status}
+            position={item.stepper_position}
+            severityCode={item.severity_code}
+            slaRemainingMin={item.sla_remaining_min}
+            owner={item.owner_name}
+            variant="full"
+          />
+        </div>
       </header>
 
       {alreadyActioned ? (
@@ -73,14 +137,36 @@ export function DetailPane({
         </p>
       ) : null}
 
+      {liveChange && liveChange.escalationId === item.escalation_id ? (
+        <LiveChangeNotice change={liveChange} onDismiss={onDismissLiveChange} />
+      ) : null}
+
       {!terminal ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <OwnerControl
-            ownerName={item.owner_name}
-            onAcknowledge={onAcknowledge}
-            busy={busy}
-          />
-          <TakeOverControl />
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <OwnerControl ownerName={item.owner_name} onAcknowledge={onAcknowledge} busy={busy} />
+            {sendAsOperationsEnabled ? (
+              <TakeoverControl
+                item={item}
+                busy={busy}
+                onTakeOver={onTakeOver}
+                onHandBack={onHandBack}
+              />
+            ) : (
+              <UnwiredTakeoverNote />
+            )}
+          </div>
+          {/* Full width, below the row -- several lines of copy plus, for the recoverable
+              hand-back refusal, its own action button. Inside the flex row above it would be
+              squeezed to the Take-over button's width. */}
+          {sendAsOperationsEnabled && takeoverNotice ? (
+            <TakeoverNoticeBanner
+              notice={takeoverNotice}
+              busy={busy}
+              onRecover={onRecoverHandBack}
+              onDismiss={onDismissTakeoverNotice}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -96,23 +182,40 @@ export function DetailPane({
         </p>
       </section>
 
-      <section className="flex flex-col gap-1">
-        <h3 className="text-label tracking-wide text-muted-foreground uppercase">Thread</h3>
-        {/* G7 -- found during this build, not in the spec's G1-G6 list: no endpoint anywhere
-            lets an ops-scoped caller read a thread's chat_messages. `GET /api/v1/chat/history`
-            is `require_roles(RoleName.DRIVER)`-only (backend/app/api/v1/routers/chat.py:30), and
-            no other router exposes thread content. Rendering a transcript here would mean
-            inventing driver messages, which AGENTS.md forbids outright. Named honestly instead
-            of silently omitted. */}
-        <p className="rounded-md border border-dashed border-border p-3 text-body text-muted-foreground">
-          Thread preview isn't available yet — there is no backend read for operations to view a
-          driver conversation (found during this build; no tracked issue number yet, related to
-          #55/#58).
-        </p>
+      <section className="flex flex-col gap-2">
+        <h3 className="text-label tracking-wide text-muted-foreground uppercase">
+          {underTakeover ? 'Thread' : 'Thread (read-only until takeover)'}
+        </h3>
+        <ThreadTranscript
+          state={threadState}
+          messages={messages}
+          pending={pending}
+          undelivered={undelivered}
+          currentUserId={currentUserId}
+          onRetry={onReloadThread}
+          onRetryPending={onRetryPending}
+          onDiscardPending={onDiscardPending}
+        />
       </section>
 
+      {/* The composer only renders where there is a thread to write into. `sendAsOperationsEnabled`
+          still gates it, so the flag remains a single switch over the whole reply path. */}
+      {!terminal && sendAsOperationsEnabled && item.thread_id !== null ? (
+        <ThreadComposer
+          ref={composerRef}
+          active={underTakeover}
+          busy={busy}
+          onSend={onSendMessage}
+        />
+      ) : null}
+
       {!terminal ? (
-        <div className="mt-2 flex gap-3">
+        // Prompt 8: Resolve/Cancel "in a group separated from Send by at least 16px and visually
+        // grouped apart from it". `mt-4` is 16px. Two different terminal states with two
+        // different driver-facing consequences (Flow 6), never interchangeable "done" buttons --
+        // and `destructive` is never adjacent to `constructive` (components.md section 1), which
+        // the composer's Send sitting in its own group above also satisfies.
+        <div className="mt-4 flex gap-3 border-t border-border pt-4">
           <Button variant="constructive" onClick={() => setResolveOpen(true)} disabled={busy}>
             Resolve
           </Button>
@@ -147,6 +250,18 @@ export function DetailPane({
         busy={busy}
       />
     </div>
+  )
+}
+
+/**
+ * The pre-flag fallback. Kept so flipping `sendAsOperationsEnabled` back to `false` is a genuine
+ * one-line revert rather than a rebuild -- the rollback path for this change.
+ */
+function UnwiredTakeoverNote() {
+  return (
+    <p className="text-supporting text-muted-foreground">
+      Thread takeover is switched off in this build.
+    </p>
   )
 }
 
@@ -202,33 +317,62 @@ function ReasonSection({ item }: { item: EscalationQueueItem }) {
 }
 
 /**
- * `components.md` (this folder) section 5, U94. Take-over is real end to end in the backend
- * (`take_over_thread` in `escalation_service.py`) -- but wiring it needs `chat_threads.thread_id`,
- * which nothing in `GET /operations/escalation-queue`'s response (or any other read this build
- * found) ever returns. `hand_back_thread` has the same requirement. This is a second, related
- * gap found during this build (compounds #55/G2 and #58/G5, since a takeover with no way to send
- * or reach the driver would not be useful even if it could be wired) -- Inactive, not Disabled,
- * per components.md foundations section 18: fully focusable, explains itself.
+ * `edge-cases.md` section 9 -- "the detail pane surfaces the new fact inline ... as soon as it's
+ * known", and section 2's race when the same fact is somebody else claiming this escalation.
+ *
+ * **Inline and non-blocking, never a modal.** Section 9's whole point is that the escalation does
+ * *not* auto-resolve and the coordinator is "left to Resolve or Cancel deliberately, with the new
+ * fact as visible context for that decision". A modal would take the decision; a toast would
+ * disappear before they made it.
+ *
+ * **`role="alert"` (assertive) when the change is a race**, per section 2 and
+ * `accessibility-behaviour.md`'s row for it -- the coordinator has this escalation open in front of
+ * them, which is precisely "about to act on a row that just changed underneath them". A change that
+ * is not a race (a hand-back, a status advancing to IN_PROGRESS) uses `role="status"`, which is
+ * polite: it is context, not an interruption.
+ *
+ * **The two politeness levels are deliberately NOT unified.** `accessibility-behaviour.md` has a
+ * polite, count-only row for a queue arrival and an assertive row for this; the ops queue pill uses
+ * the first and this notice uses the second, and collapsing them to one level would break whichever
+ * behaviour lost.
+ *
+ * **What this cannot say**, and it is a real gap rather than a rendering choice: section 9's own
+ * example sentence names a *shipment* fact ("SHP1015 was confirmed by another planner at 09:58").
+ * `get_exception_queue` returns no shipment or appointment status, so the escalation-level facts
+ * below are what the read actually supports. See `lib/live-queue.ts`.
  */
-function TakeOverControl() {
-  // Take-over has no ownership precondition server-side (escalation_service.py::take_over_thread
-  // checks only facility scope + role + thread status, never owner_user_id) -- unlike Hand-back,
-  // which requires IN_PROGRESS/ACKNOWLEDGED. Available from read-only-thread mode regardless of
-  // who (if anyone) has acknowledged, matching Flow 2 step 1.
-  if (sendAsOperationsEnabled) {
-    return <Button variant="cautionary">Take over thread</Button>
-  }
+function LiveChangeNotice({
+  change,
+  onDismiss,
+}: {
+  change: EscalationChange
+  onDismiss: () => void
+}) {
+  const at = new Date(change.atIso)
+  const time = Number.isNaN(at.getTime())
+    ? null
+    : at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="neutral">Take over thread</Button>
-      </PopoverTrigger>
-      <PopoverContent role="dialog" aria-label="Why this isn't available">
-        <Mail className="mb-2 size-4 text-muted-foreground" aria-hidden="true" />
-        Not wired yet: no tool posts a message as OPERATIONS (issue #55), and this pane has no
-        way to look up the thread id a takeover needs (found during this build). Acknowledge,
-        Resolve and Cancel work today regardless.
-      </PopoverContent>
-    </Popover>
+    <div
+      role={change.race ? 'alert' : 'status'}
+      className="flex items-start gap-2 rounded-md border border-info-border bg-info-bg px-3 py-2 text-body text-info-fg"
+    >
+      <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {change.facts.map((fact) => (
+          <p key={fact}>
+            {fact}
+            {time ? ` (${time})` : ''}
+          </p>
+        ))}
+        <p className="text-supporting">
+          Nothing has been closed for you — Resolve or Cancel is still yours to choose.
+        </p>
+      </div>
+      <Button variant="ghost" size="sm" onClick={onDismiss}>
+        Dismiss
+      </Button>
+    </div>
   )
 }

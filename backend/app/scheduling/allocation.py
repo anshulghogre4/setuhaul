@@ -175,6 +175,12 @@ class AppointmentRequestStatusResult(BaseModel):
     history: list[dict[str, Any]]
     requires_human_confirmation: bool = False
     options_are_reserved: bool = False
+    # Issue #83: a D2 hold has no `appointments` row (SS4), so it cannot be reported through
+    # `appointment` and needs its own field. None whenever no live hold exists, which is always
+    # true while TWO_PHASE_HOLD_ENABLED is off.
+    hold: dict[str, Any] | None = None
+    promise_state: str | None = None
+    promise_state_source: str | None = None
     appointment_writes: int = 0
 
 
@@ -444,6 +450,30 @@ def appointment_request_status_code(status: str | None) -> tuple[str, bool]:
     if normalized == "NO_SHOW":
         return "APPOINTMENT_NO_SHOW", False
     return "APPOINTMENT_STATUS_UNKNOWN", False
+
+
+def _resolve_promise_state(
+    status: Any, hold: dict[str, Any] | None
+) -> tuple[str | None, str | None]:
+    """Promise-state precedence for a status read (issue #83).
+
+    Same three rules, and the same reasons, as
+    `services/driver_reads.resolve_promise_state`: an active appointment outranks a live hold
+    (reachable -- `confirm_held_slot` has an IntegrityError branch for exactly that overlap), a live
+    hold outranks any non-active appointment, and otherwise the appointment answers. Duplicated
+    rather than imported because `services/` sits *above* `scheduling/` in this codebase's layering
+    and importing upward would invert it; the two are kept honest by
+    `tests/unit/test_held_slot_lifecycle.py`, which asserts they agree case for case.
+    """
+    from app.scheduling import holds  # local: breaks the allocation <-> holds import cycle
+
+    if status is not None and str(status) in ACTIVE_APPOINTMENT_STATUSES:
+        return str(status), holds.PROMISE_STATE_SOURCE_APPOINTMENT
+    if hold is not None:
+        return holds.HOLD_PROMISE_STATE, holds.PROMISE_STATE_SOURCE_HOLD
+    if status is not None:
+        return str(status), holds.PROMISE_STATE_SOURCE_APPOINTMENT
+    return None, None
 
 
 def _already_actioned_error(
@@ -823,15 +853,27 @@ async def _claim_dock_occupancy(
     both still reach the exclusion constraint. It exists so the reschedule restore path can
     re-claim without having to know whether its own release was already rolled back.
 
+    `shipment_id` is written into the row, not merely used to join (added 2026-08-29). D2's
+    migration (20260829134929) adds that column because a HELD claim has no appointment yet, so
+    `appointment_id` alone can no longer identify what a row is holding capacity for. Omitting it
+    here was proven -- against a throwaway cluster replaying this repo's own chain -- to break
+    `request_slot` (the legacy path, reached only when two_phase_hold_enabled is False),
+    `reschedule_appointment` and `counter_offer` the moment that migration commits, and to do so
+    as a raw 500: `allocation_unique_constraint_name` matches on the names in
+    ALLOCATION_CONFLICT_CONSTRAINTS, and a NOT NULL violation message contains none of them, so
+    the IntegrityError re-raises untranslated. The column ships nullable precisely so this code
+    can land first; a follow-up migration asserts NOT NULL once it has.
+
     Returns the claimed row, or None when this appointment already holds a claim.
     """
     row = (
         await session.execute(
             text(
                 """
-                INSERT INTO public.dock_occupancy (dock_id, appointment_id, "window")
+                INSERT INTO public.dock_occupancy (dock_id, appointment_id, shipment_id, "window")
                 SELECT sl.dock_id,
                        :appointment_id,
+                       :shipment_id,
                        tstzrange(
                            sl.slot_start_ts,
                            sl.slot_start_ts
@@ -1002,8 +1044,32 @@ async def get_appointment_request_status(
         appointment_id=appointment_id,
     )
     history = await _appointment_request_history(session, shipment_id)
+
+    # Issue #83. `_appointment_request_status_row` starts `FROM public.appointments`, so for a
+    # shipment whose only promise is a hold it returns nothing at all and this tool answered
+    # `NO_APPOINTMENT_REQUEST` -- "you have not asked for a slot" -- to a driver the system had just
+    # told a slot was reserved for them. The hold cannot be LEFT JOINed into that query for the same
+    # reason: there is no appointments row to hang the join off. It is a second read, skipped
+    # entirely (no query at all) while the D2 flag is off.
+    from app.scheduling import holds  # local: breaks the allocation <-> holds import cycle
+
+    hold = await holds.live_hold_for_shipment(
+        session, shipment_id=shipment_id, now=datetime.now(timezone.utc)
+    )
     status = appointment["appointment_status"] if appointment else None
-    code, requires_confirmation = appointment_request_status_code(str(status) if status else None)
+    promise_state, promise_state_source = _resolve_promise_state(status, hold)
+
+    if promise_state_source == holds.PROMISE_STATE_SOURCE_HOLD:
+        # `SLOT_HELD` rather than a new code: it is exactly what `holds.HoldResult.code` already
+        # returns when the hold is taken, so the status read and the write that created it name the
+        # same state. `requires_human_confirmation` is False because a hold is waiting on the
+        # *driver* to confirm within its TTL, not on a planner -- D6's human gate is a property of
+        # PENDING_CONFIRMATION and must not be claimed here.
+        code, requires_confirmation = "SLOT_HELD", False
+    else:
+        code, requires_confirmation = appointment_request_status_code(
+            str(status) if status else None
+        )
 
     return AppointmentRequestStatusResult(
         as_of=_as_of(),
@@ -1013,6 +1079,9 @@ async def get_appointment_request_status(
         appointment=appointment,
         history=history,
         requires_human_confirmation=requires_confirmation,
+        hold=hold,
+        promise_state=promise_state,
+        promise_state_source=promise_state_source,
     )
 
 

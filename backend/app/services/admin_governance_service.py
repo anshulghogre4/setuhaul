@@ -23,6 +23,16 @@ and proposed weights, and calls it a "flip" when the top-ranked slot differs. Th
 state proxy for "would this outcome have gone differently," not a reconstruction of the exact
 candidate set that existed at the real booking moment (which cannot be recovered without a stored
 snapshot). Flagged here and in the tool's own response, not silently presented as more than it is.
+
+**Weight keys are validated against the live engine's own key set, not against a hand-written
+list** (A-G1, issue #69, 2026-08-29). Before this change `weights` was an untyped `dict[str, Any]`
+all the way down, so `simulate_policy_weights` accepted `w_fairness`/`P_churn`/a typo and silently
+dropped it -- an admin could believe they had simulated a fairness-aware policy and get a real
+`flip_count` back that the field contributed nothing to. That is strictly worse than a refusal,
+because the result *looks* authoritative. `_validate_weight_keys` now rejects anything the ranking
+engine does not read, deriving the allowlist from `constraints.json`'s own `score_weights` so the
+two can never drift apart. `publish_policy_version` validates too: writing an unread key into an
+immutable `policy_versions` row is the same lie, made durable.
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ import io
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +50,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.scheduling.constraints import load_scheduling_constraints
+from app.scheduling.feasibility import (
+    WEIGHT_FAIRNESS,
+    active_facility_rules,
+    check_facility_rules,
+    parse_rule_boundary,
+)
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 
@@ -50,6 +67,65 @@ RULE_TYPES = frozenset(
 
 DEFAULT_PRIORITY_SCORES = {"CRITICAL": 4000, "HIGH": 3000, "NORMAL": 2000, "LOW": 1000, "UNKNOWN": 500}
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+
+# The subset of RULE_TYPES `scheduling/feasibility.py::check_facility_rules` actually evaluates
+# mechanically. Kept in sync with that function's own FACILITY_RULE_* constants -- it names the
+# other two (CHECKIN_EARLY_LIMIT_MIN is a gate-arrival rule, NO_SHOW_GRACE_MIN needs an injected
+# clock) as deliberately unenforced, so an impact preview for either has nothing to evaluate and
+# must say so rather than returning a confident zero (A-G6, issue #74).
+ENGINE_EVALUATED_RULE_TYPES = frozenset(
+    {"LAST_NEW_START_TIME", "HEAVY_DOCK_REQUIRED_KG", "REEFER_DOCK_REQUIRED"}
+)
+
+# A rule-impact scan is a preview, not a report: bounded so a facility with a large forward book
+# cannot turn a confirmation dialog into an unbounded read. Truncation is reported, never hidden.
+RULE_IMPACT_SCAN_LIMIT = 500
+
+# `weights` keys the ranking engine genuinely reads. `priority_scores` is not a score_weights
+# entry but IS read by simulate_policy_weights, so it joins the allowlist explicitly.
+NON_WEIGHT_POLICY_KEYS = frozenset({"priority_scores"})
+
+# Named separately from the generic "unknown key" path because this one has a real, documented
+# reason and a tracking issue: P_churn counts promises the SEQUENCER moved (SOLUTION_DESIGN.md
+# section 5, "Pricing churn"), and the sequencer (section 7.5.3, issue #49) is entirely unbuilt.
+# It is not a typo and telling the admin so is more useful than "unknown key".
+BLOCKED_WEIGHT_KEYS = {
+    "P_churn": (
+        "P_churn counts promises the facility sequencer moved. The sequencer is not built "
+        "(issue #49), so there is nothing to count and the term cannot affect a simulation. "
+        "Rejected rather than accepted-and-ignored."
+    ),
+}
+
+
+def allowed_weight_keys() -> set[str]:
+    """The live engine's own key set, read from `constraints.json` rather than restated here.
+
+    Deriving the allowlist from the file `feasibility.py::_rank_slot` actually reads is what makes
+    this validation impossible to drift: adding a coefficient to the engine automatically makes it
+    accepted here, and removing one automatically makes it refused.
+    """
+    return set(load_scheduling_constraints().ranking_policy.score_weights) | set(NON_WEIGHT_POLICY_KEYS)
+
+
+def _validate_weight_keys(weights: dict[str, Any]) -> None:
+    """Refuse any weight key the ranking engine does not read (A-G1, issue #69).
+
+    Silent acceptance is the specific defect this closes: `SimulatePolicyBody.weights` is an
+    untyped `dict[str, Any]`, so before this an admin could send `w_fairness` (or a typo, or
+    `P_churn`) and receive a real-looking `flip_count` the field contributed nothing to.
+    """
+    unknown = sorted(set(weights) - allowed_weight_keys())
+    if not unknown:
+        return
+    reasons = [BLOCKED_WEIGHT_KEYS[key] for key in unknown if key in BLOCKED_WEIGHT_KEYS]
+    detail = " ".join(reasons) if reasons else ""
+    supported = ", ".join(sorted(allowed_weight_keys()))
+    raise AppError(
+        f"Unsupported policy weight key(s): {', '.join(unknown)}.",
+        code="UNKNOWN_WEIGHT_KEYS", status_code=422,
+        detail=(f"{detail} " if detail else "") + f"Supported keys: {supported}.",
+    )
 
 
 def _as_of() -> str:
@@ -167,6 +243,219 @@ async def update_facility_rule(
     return result
 
 
+def _rule_shape(rule_value: Any, effective_from: Any, effective_to: Any) -> dict[str, Any]:
+    return {
+        "rule_value": None if rule_value is None else str(rule_value),
+        "effective_from": effective_from,
+        "effective_to": effective_to,
+    }
+
+
+async def get_facility_rule_impact(
+    session: AsyncSession, ctx: ExecutionContext, *, rule_id: str,
+    rule_value: str | None = None, effective_from: str | None = None, effective_to: str | None = None,
+) -> dict[str, Any]:
+    """The read behind `edge-cases.md` #4's High-tier confirmation (A-G6, issue #74).
+
+    That edge case is explicit about the ordering: "`components.md` section 2's High-tier
+    confirmation names the count of affected appointments **before** the edit commits, giving the
+    admin the choice to proceed or not, but the edit itself does not reach into `appointments` and
+    mutate or escalate them." So this is a **pure read** and `update_facility_rule` is unchanged --
+    a rule edit still governs future feasibility checks only and never un-commits a promise.
+
+    **Not in section 7.5.7's own catalog**: flagged as an addition rather than silently folded in,
+    the same discipline `planner_service.get_dock_block_impact` and `get_user_removal_impact`
+    already use. Shaped deliberately like `get_dock_block_impact` -- the identical "confirmation
+    dialog needs a count before the write" problem, solved once in this codebase, so it is solved
+    the same way here rather than a second way.
+
+    **Why it evaluates through `feasibility.py` rather than re-implementing the rule semantics.**
+    `active_facility_rules` decides *when* a rule is in force and `check_facility_rules` decides
+    *what* it forbids. Calling both is what guarantees the preview and the enforcing engine
+    disagree about nothing: a locally-rewritten "is 20:30 after 20:00" check would be right until
+    the day someone changed the engine's strict-vs-inclusive boundary and not this copy. It also
+    inherits the engine's own honest limits for free -- see `ENGINE_EVALUATED_RULE_TYPES`.
+
+    **Arguments mirror `update_facility_rule`'s exactly, `None` meaning unchanged**, so the
+    preview is computed against precisely what the update's `COALESCE` would apply. Passing no
+    proposal at all is legal and answers "who does this rule already exclude today", which is
+    `affected_count = 0` plus a non-zero `already_non_compliant_count`.
+
+    **No wall-clock "future only" filter, deliberately.** The scan is bounded by the *proposed
+    rule's own effectivity window*, not by `now()`. `check_facility_rules`' own docstring already
+    records that this engine has no injected clock (section 9.1's "Deterministic clock" is not
+    built), and a `now()` filter would silently return zero against any dataset whose snapshot
+    clock differs from the wall clock -- a confirmation dialog that always says "0 affected" is
+    worse than one that says nothing. Terminal appointments are excluded by status instead, which
+    is a fact about the data rather than about the clock.
+    """
+    if not ctx.is_admin:
+        raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+
+    rule = (
+        await session.execute(
+            text(
+                """
+                SELECT fr.rule_id, fr.facility_id, fr.rule_type, fr.rule_value, fr.description,
+                       fr.effective_from, fr.effective_to, fr.active_flag, f.timezone
+                FROM public.facility_rules fr
+                JOIN public.facilities f ON f.facility_id = fr.facility_id
+                WHERE fr.rule_id = :rule_id
+                """
+            ),
+            {"rule_id": rule_id},
+        )
+    ).mappings().first()
+    if rule is None:
+        raise AppError(f"Rule '{rule_id}' not found.", code="NOT_FOUND", status_code=404)
+
+    rule_type = str(rule["rule_type"])
+    tz_name = str(rule["timezone"])
+    current = _rule_shape(rule["rule_value"], rule["effective_from"], rule["effective_to"])
+    proposed = _rule_shape(
+        rule_value if rule_value is not None else rule["rule_value"],
+        effective_from if effective_from is not None else rule["effective_from"],
+        effective_to if effective_to is not None else rule["effective_to"],
+    )
+    current_rule = {"rule_id": rule_id, "rule_type": rule_type, **current}
+    proposed_rule = {"rule_id": rule_id, "rule_type": rule_type, **proposed}
+
+    envelope: dict[str, Any] = {
+        "as_of": _as_of(), "source": "postgresql", "rule_id": rule_id,
+        "facility_id": str(rule["facility_id"]), "rule_type": rule_type,
+        "active_flag": int(rule["active_flag"] or 0),
+        "current": current, "proposed": proposed,
+        "evaluable": rule_type in ENGINE_EVALUATED_RULE_TYPES,
+        "affected_count": 0, "affected_appointments": [],
+        "already_non_compliant_count": 0, "scanned_count": 0, "truncated": False,
+    }
+
+    if not envelope["evaluable"]:
+        # A confident "0 affected" for a rule type the engine never evaluates would be a lie of
+        # omission -- the honest answer is that this edit cannot make any appointment
+        # retroactively non-compliant because nothing checks it at offer time in the first place.
+        envelope["note"] = (
+            f"'{rule_type}' is not evaluated by the feasibility engine "
+            f"(only {', '.join(sorted(ENGINE_EVALUATED_RULE_TYPES))} are), so no appointment can "
+            "be made retroactively non-compliant by editing it. This is a real answer, not a "
+            "count of zero."
+        )
+        return envelope
+    if not envelope["active_flag"]:
+        envelope["note"] = (
+            "This rule is inactive (active_flag = 0). The feasibility engine only loads active "
+            "rules, so editing it affects nothing until it is reactivated."
+        )
+        return envelope
+
+    scan_from = parse_rule_boundary(proposed["effective_from"], tz_name)
+    scan_to = parse_rule_boundary(proposed["effective_to"], tz_name)
+    # Built conditionally rather than with `:param IS NULL` guards: an untyped NULL bind against a
+    # timestamptz comparison is what asyncpg cannot infer a type for.
+    window_clauses, params = "", {
+        "facility_id": str(rule["facility_id"]),
+        "active_statuses": list(ACTIVE_APPOINTMENT_STATUSES),
+        "scan_limit": RULE_IMPACT_SCAN_LIMIT,
+    }
+    if scan_from is not None:
+        window_clauses += " AND sl.slot_start_ts >= :scan_from"
+        params["scan_from"] = scan_from
+    if scan_to is not None:
+        window_clauses += " AND sl.slot_start_ts < :scan_to"
+        params["scan_to"] = scan_to
+
+    rows = (
+        await session.execute(
+            text(
+                f"""
+                SELECT a.appointment_id, a.shipment_id, a.appointment_status,
+                       sl.slot_id, sl.slot_start_ts, sl.slot_end_ts,
+                       d.dock_id, d.dock_code, d.dock_type, d.supports_refrigerated,
+                       s.load_weight_kg, s.temperature_control_required, s.carrier_id
+                FROM public.appointments a
+                JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                JOIN public.docks d ON d.dock_id = sl.dock_id
+                JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                WHERE a.is_current = 1
+                  AND a.appointment_status = ANY(:active_statuses)
+                  AND sl.facility_id = :facility_id
+                  {window_clauses}
+                ORDER BY sl.slot_start_ts, a.appointment_id
+                LIMIT :scan_limit
+                """
+            ),
+            params,
+        )
+    ).mappings().all()
+
+    affected: list[dict[str, Any]] = []
+    already = 0
+    for row in rows:
+        start = _to_dt(row["slot_start_ts"])
+        shipment = {
+            "load_weight_kg": int(row["load_weight_kg"] or 0),
+            "temperature_control_required": int(row["temperature_control_required"] or 0),
+        }
+        candidate = {
+            "dock_type": str(row["dock_type"]),
+            "supports_refrigerated": int(row["supports_refrigerated"] or 0),
+        }
+        # A promised appointment's real unload start is its slot start -- there is no live ETA to
+        # take a max() against once the interval is committed.
+        proposed_hit = _rule_violation(proposed_rule, shipment, candidate, start, tz_name)
+        current_hit = _rule_violation(current_rule, shipment, candidate, start, tz_name)
+        if current_hit is not None:
+            already += 1
+            continue
+        if proposed_hit is not None:
+            affected.append(
+                {
+                    "appointment_id": row["appointment_id"], "shipment_id": row["shipment_id"],
+                    "appointment_status": row["appointment_status"], "slot_id": row["slot_id"],
+                    "dock_code": row["dock_code"], "carrier_id": row["carrier_id"],
+                    "slot_start_ts": row["slot_start_ts"], "slot_end_ts": row["slot_end_ts"],
+                    "reason": proposed_hit,
+                }
+            )
+
+    envelope.update(
+        {
+            "affected_count": len(affected), "affected_appointments": affected,
+            "already_non_compliant_count": already, "scanned_count": len(rows),
+            "truncated": len(rows) >= RULE_IMPACT_SCAN_LIMIT,
+            "note": (
+                "affected_count counts appointments this edit would newly make non-compliant: "
+                "they satisfy the rule as stored and violate it as proposed. Appointments the "
+                "current rule already forbids are reported separately as "
+                "already_non_compliant_count, because this edit did not cause those. Nothing is "
+                "cancelled or escalated by reading this -- facility rules govern future "
+                "feasibility checks only (edge-cases.md #4)."
+            ),
+        }
+    )
+    return envelope
+
+
+def _rule_violation(
+    rule: dict[str, Any], shipment: dict[str, Any], candidate: dict[str, Any],
+    start: datetime, tz_name: str,
+) -> str | None:
+    """The engine's own verdict for one rule against one committed interval, or None.
+
+    Two calls, in the engine's own order: `active_facility_rules` first (is the rule even in force
+    at this instant), then `check_facility_rules` (does it forbid this interval). Skipping the
+    first would count appointments outside the rule's effective window, which is exactly the
+    mistake a hand-rolled preview makes.
+    """
+    in_force = active_facility_rules([rule], at=start, tz_name=tz_name)
+    if not in_force:
+        return None
+    hit = check_facility_rules(
+        shipment=shipment, candidate=candidate, rules=in_force, feasible_start=start, tz_name=tz_name
+    )
+    return None if hit is None else hit[1]
+
+
 # --------------------------------------------------------------------------------------
 # Policy simulate/publish
 # --------------------------------------------------------------------------------------
@@ -175,9 +464,15 @@ async def update_facility_rule(
 def _score(
     *, priority_code: str, lateness_minutes: int, wait_after_eta_minutes: int, fit_slack_minutes: int,
     exact_dock_type_match: bool, weights: dict[str, Any], priority_scores: dict[str, int],
+    carrier_concentration: int = 0,
 ) -> int:
     """A direct copy of `feasibility.py::_rank_slot`'s formula -- see module docstring for why
-    this is duplicated rather than imported."""
+    this is duplicated rather than imported.
+
+    `carrier_concentration` mirrors `_rank_slot`'s own parameter of the same name (issue #69) and
+    defaults to 0 for the same reason: the formula-parity test calls both with the default, and at
+    the shipped `w_fairness = 0` the term is arithmetically absent either way.
+    """
     lateness_cap = weights.get("lateness_cap_minutes", 720)
     fit_slack_cap = weights.get("fit_slack_cap_minutes", 120)
     return int(
@@ -186,6 +481,7 @@ def _score(
         + wait_after_eta_minutes * weights.get("wait_after_eta_per_minute", -6)
         + min(fit_slack_minutes, fit_slack_cap) * weights.get("fit_slack_per_minute", 1)
         + (0 if exact_dock_type_match else weights.get("compatible_but_not_exact_dock_penalty", -25))
+        + weights.get(WEIGHT_FAIRNESS, 0) * carrier_concentration
     )
 
 
@@ -197,12 +493,15 @@ async def _replayable_candidates(
             text(
                 """
                 SELECT s.shipment_id, s.priority_code, s.original_eta_ts, s.latest_eta_ts,
-                       s.required_dock_type, s.expected_unload_min, sl.slot_id, sl.dock_id,
-                       sl.slot_start_ts, sl.slot_end_ts, sl.facility_id, d.dock_type
+                       s.required_dock_type, s.expected_unload_min, s.carrier_id,
+                       sl.slot_id, sl.dock_id,
+                       sl.slot_start_ts, sl.slot_end_ts, sl.facility_id, d.dock_type,
+                       f.timezone
                 FROM public.appointments a
                 JOIN public.shipments s ON s.shipment_id = a.shipment_id
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
                 JOIN public.docks d ON d.dock_id = sl.dock_id
+                JOIN public.facilities f ON f.facility_id = sl.facility_id
                 WHERE a.is_current = 1
                   AND a.appointment_status = ANY(:active_statuses)
                   AND sl.slot_start_ts >= :window_start AND sl.slot_start_ts < :window_end
@@ -239,14 +538,67 @@ async def _alternative_slots(session: AsyncSession, *, facility_id: str, near: d
     return [dict(r) for r in rows]
 
 
+async def _carrier_concentration_map(
+    session: AsyncSession, *, window_start: datetime, window_end: datetime,
+) -> dict[tuple[str, str, str], int]:
+    """D7's fairness input for the simulator, keyed `(carrier_id, facility_id, local_date)`.
+
+    Deliberately ONE grouped read for the whole window rather than a per-candidate query: the
+    simulator already loops up to 100 candidates x 6 pool slots, and a per-slot round trip would
+    turn a preview into a scan. Only called when `w_fairness` is actually non-zero on one side of
+    the comparison (issue #69).
+
+    `AT TIME ZONE <name>` on a timestamptz gives the facility-local wall clock, so this counts a
+    local calendar day -- the same definition `feasibility.py` uses, so the simulator and the live
+    engine measure the same quantity rather than two similar-sounding ones.
+    """
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT other.carrier_id AS carrier_id, sl.facility_id AS facility_id,
+                       to_char(sl.slot_start_ts AT TIME ZONE f.timezone, 'YYYY-MM-DD') AS local_date,
+                       CAST(count(*) AS integer) AS held_count
+                FROM public.appointments a
+                JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                JOIN public.shipments other ON other.shipment_id = a.shipment_id
+                JOIN public.facilities f ON f.facility_id = sl.facility_id
+                WHERE a.is_current = 1
+                  AND a.appointment_status = ANY(:active_statuses)
+                  AND sl.slot_start_ts >= :window_start AND sl.slot_start_ts < :window_end
+                GROUP BY 1, 2, 3
+                """
+            ),
+            {
+                "active_statuses": list(ACTIVE_APPOINTMENT_STATUSES),
+                "window_start": window_start, "window_end": window_end,
+            },
+        )
+    ).mappings().all()
+    return {
+        (str(r["carrier_id"]), str(r["facility_id"]), str(r["local_date"])): int(r["held_count"])
+        for r in rows
+    }
+
+
+def _local_date(moment: datetime, tz_name: str) -> str:
+    return moment.astimezone(ZoneInfo(tz_name)).date().isoformat()
+
+
 async def simulate_policy_weights(
     session: AsyncSession, ctx: ExecutionContext,
     *, weights: dict[str, Any], window_start: datetime, window_end: datetime,
 ) -> dict[str, Any]:
     """SS7.5.7 `simulate_policy_weights` -- `weights`, `window`. **Read-only**: never writes a
-    `policy_versions` row. See module docstring for the approximation this makes."""
+    `policy_versions` row. See module docstring for the approximation this makes.
+
+    Unknown keys are refused up front (issue #69). A simulation whose headline number was produced
+    by quietly discarding half the admin's input is worse than no simulation at all, because it
+    reads as evidence.
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    _validate_weight_keys(weights)
 
     live = load_scheduling_constraints().ranking_policy
     live_weights = live.score_weights
@@ -254,6 +606,14 @@ async def simulate_policy_weights(
     proposed_priority = weights.get("priority_scores") or live_priority
 
     candidates = await _replayable_candidates(session, window_start=window_start, window_end=window_end)
+    # Fetched only when one side of the comparison actually enables the term -- a simulation of
+    # four routine coefficients must not pay for a fairness read it will multiply by zero.
+    fairness_active = bool(live_weights.get(WEIGHT_FAIRNESS, 0)) or bool(weights.get(WEIGHT_FAIRNESS, 0))
+    concentration = (
+        await _carrier_concentration_map(session, window_start=window_start, window_end=window_end)
+        if fairness_active
+        else {}
+    )
     flips: list[dict[str, Any]] = []
     for row in candidates:
         if not row.get("latest_eta_ts"):
@@ -270,6 +630,22 @@ async def simulate_policy_weights(
             {**alt, "required_dock_type": row["required_dock_type"]} for alt in alternatives
         ]
 
+        facility_id = str(row["facility_id"])
+        carrier_id = str(row["carrier_id"])
+        tz_name = str(row["timezone"])
+        # This shipment's own appointment is inside the grouped count, so it is subtracted back
+        # out on its own local date -- the live engine excludes the shipment being ranked
+        # (`other.shipment_id <> :shipment_id`), and a simulator that did not would report a
+        # concentration one higher on exactly the date that matters most.
+        own_local_date = _local_date(row["slot_start_ts"], tz_name) if fairness_active else ""
+
+        def _concentration(cand: dict[str, Any]) -> int:
+            if not fairness_active:
+                return 0
+            cand_local_date = _local_date(cand["slot_start_ts"], tz_name)
+            held = concentration.get((carrier_id, facility_id, cand_local_date), 0)
+            return max(0, held - (1 if cand_local_date == own_local_date else 0))
+
         def _rank(pool: list[dict[str, Any]], w: dict[str, Any], pri: dict[str, int]) -> str:
             best_slot, best_score = None, None
             for cand in pool:
@@ -281,6 +657,7 @@ async def simulate_policy_weights(
                     priority_code=str(row["priority_code"]), lateness_minutes=lateness_minutes,
                     wait_after_eta_minutes=wait_after_eta, fit_slack_minutes=fit_slack,
                     exact_dock_type_match=exact, weights=w, priority_scores=pri,
+                    carrier_concentration=_concentration(cand),
                 )
                 if best_score is None or score > best_score:
                     best_score, best_slot = score, str(cand["slot_id"])
@@ -294,6 +671,12 @@ async def simulate_policy_weights(
     return {
         "as_of": _as_of(), "code": "SIMULATED", "candidates_evaluated": len(candidates),
         "flip_count": len(flips), "example_flips": flips[:10],
+        # States outright whether D7's fairness term participated in this run, so the Danger Zone
+        # never has to infer it from a flip count (issue #69). False here is a real answer: both
+        # sides ran at w_fairness = 0, so the term was arithmetically absent, not skipped.
+        "fairness_term_evaluated": fairness_active,
+        "live_w_fairness": live_weights.get(WEIGHT_FAIRNESS, 0),
+        "proposed_w_fairness": weights.get(WEIGHT_FAIRNESS, live_weights.get(WEIGHT_FAIRNESS, 0)),
         "note": (
             "Approximation, not a literal replay: no historical decision log exists, so this "
             "re-scores each shipment's current appointment against other slots open today at the "
@@ -394,6 +777,9 @@ async def publish_policy_version(
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    # Before the idempotency lookup: a request that can never be honoured should not be able to
+    # occupy a key, and a rejected publish must not be replayable as a success (issue #69).
+    _validate_weight_keys(weights)
     key = (idempotency_key or "").strip()
     if not key:
         raise AppError("Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400)

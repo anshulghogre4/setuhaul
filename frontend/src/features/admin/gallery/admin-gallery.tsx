@@ -1,9 +1,31 @@
 import { useState, type ReactNode } from 'react'
 
-import { ACTOR_NAMES, AUDIT_FIXTURE, RULES_FIXTURE, USERS_FIXTURE } from './fixtures'
+import {
+  ACTOR_NAMES,
+  AUDIT_FIXTURE,
+  FACILITIES_FIXTURE,
+  POLICY_ACTIVE_FIXTURE,
+  POLICY_DIVERGED_FIXTURE,
+  POLICY_DRAFTS_FIXTURE,
+  POLICY_NEVER_PUBLISHED_FIXTURE,
+  PUBLISH_CONFLICT_FIXTURE,
+  PUBLISH_RESULT_FIXTURE,
+  RULES_FIXTURE,
+  SIMULATION_FIXTURE,
+  SIMULATION_VACUOUS_FIXTURE,
+  USERS_FIXTURE,
+  USERS_NO_INVITES_FIXTURE,
+} from './fixtures'
 import { AuditTable } from '../components/audit-table'
 import { InviteUserDialog } from '../components/invite-user-dialog'
-import { PolicyTab } from '../components/policy-tab'
+import {
+  PublishConflict,
+  SimulationPublished,
+  SimulationResult,
+  SimulationRunning,
+} from '../components/policy-simulation-panel'
+import { PolicyVersionHeader } from '../components/policy-version-header'
+import { PolicyWeightEditor } from '../components/policy-weight-editor'
 import {
   InactiveNote,
   LoadFailed,
@@ -18,6 +40,7 @@ import { RemoveUserDialog } from '../components/remove-user-dialog'
 import { RulesTable } from '../components/rules-table'
 import { FilterSelect, SearchField, Toolbar, ToolbarSpacer } from '../components/toolbar'
 import { UsersTable } from '../components/users-table'
+import { facilityNameFrom } from '../lib/facilities'
 import { ROLE_OPTIONS } from '../lib/roles'
 import { Button } from '@/shared/ui/button'
 
@@ -40,28 +63,33 @@ export function AdminStatesGallery() {
   const [edit, setEdit] = useState(false)
   const [remove, setRemove] = useState(false)
 
-  const facilities = [
-    { id: 'FAC-JAI-01', name: 'Jaipur' },
-    { id: 'FAC-GGN-01', name: 'Gurugram' },
-  ]
+  // The same shape `useFacilities()` hands the live tab, minus the fetch: `assignable` for the
+  // dialog (open facilities only) and `nameOf` for the two tables.
+  const assignable = FACILITIES_FIXTURE.filter((f) => f.active_flag === 1).map((f) => ({
+    id: f.facility_id,
+    name: f.facility_name,
+  }))
+  const facilityName = (id: string) => facilityNameFrom(FACILITIES_FIXTURE, id)
 
   return (
     <div className="min-h-dvh bg-background p-6 text-foreground" data-density="comfortable">
       <header className="mb-8">
         <p className="text-label text-primary uppercase">SetuHaul · admin console (E5.6)</p>
         <h1 className="mt-2 text-display text-balance">
-          4 screens ship clean, 3 ship reduced, 5 are honestly stubbed
+          6 screens ship clean, 3 ship reduced, 3 are honestly stubbed
         </h1>
         <p className="mt-2 max-w-[80ch] text-body text-muted-foreground">
-          Screens 1, 4, 11 and 12 build clean. Screens 2, 3 and 5 ship in reduced form (issues #72,
-          #73, #70). Screens 6, 7, 8, 9 and 10 render stubs — the Policy tab is a stronger block
-          than the readiness spec's own table, because no endpoint reads the active policy version
-          or the live score weights.
+          Screens 1, 4, 11 and 12 build clean, joined 2026-08-31 by <strong>8 and 10</strong> — the
+          Policy tab, unblocked by <code>GET /admin/policy/active</code> and by{' '}
+          <code>publish_policy_version</code>&rsquo;s new <code>based_on_version_id</code> guard.
+          Screens 2, 3 and 5 ship in reduced form (issues #72, #73, #70). Screens 6, 7 and 9 render
+          stubs: 6 and 7 wait on <em>design</em> for three live rule types (their backend gaps are
+          closed), 9 waits on #69&rsquo;s Danger-Zone flow.
         </p>
       </header>
 
       <div className="flex flex-col gap-10">
-        <Plate n="2.1" title="Users tab — list, Active and Inactive rows, overflow menu">
+        <Plate n="2.1" title="Users tab — all four lifecycle states, including the pending-invite row">
           <Toolbar>
             <FilterSelect
               label="Role"
@@ -75,7 +103,12 @@ export function AdminStatesGallery() {
               value={null}
               onChange={() => {}}
               allLabel="All facilities"
-              options={facilities.map((f) => ({ value: f.id, label: f.name }))}
+              /* EVERY facility, closed ones included — the filter must be able to name a facility
+                 users are still scoped to. The invite dialog below takes `assignable` instead. */
+              options={FACILITIES_FIXTURE.map((f) => ({
+                value: f.facility_id,
+                label: f.facility_name,
+              }))}
             />
             <SearchField label="Search users" value="" onChange={() => {}} />
             <ToolbarSpacer />
@@ -85,14 +118,44 @@ export function AdminStatesGallery() {
             users={USERS_FIXTURE}
             /* USR-001 is "self" here so the Hidden-Remove rule (Flow 4.3) is visible on row 1. */
             currentUserId="USR-001"
+            facilityName={facilityName}
             onEdit={() => {}}
             onToggleActive={() => {}}
             onRemove={() => {}}
+            onResendInvite={() => {}}
+            onRevokeInvite={() => {}}
           />
           <p className="mt-3 text-supporting text-muted-foreground">
-            Row 4 has no name (em dash, “not yet known”) and a null <code>last_login_ts</code> — it
-            still renders Active, not “Invited”, because the backend has no pending state (#73).
-            Row 1’s overflow menu has no Remove item: it is the signed-in admin’s own account.
+            Row 1 is scoped to <strong>two</strong> facilities (<code>scoped_facility_ids</code>,
+            #72) and its overflow menu has no Remove item — it is the signed-in admin’s own account.
+            Row 4 is the pending invitation: no name (em dash, “not yet known”), the badge, and{' '}
+            <strong>Resend / Revoke in place of the overflow menu</strong>. The badge is driven by{' '}
+            <code>lifecycle_state === &lsquo;INVITED&rsquo;</code> and never by{' '}
+            <code>last_login_ts</code> — row 2 has a login stamp and row 4 has none, and neither
+            fact touches its badge.
+          </p>
+        </Plate>
+
+        <Plate
+          n="2.2"
+          title="Users tab — what production actually renders today: zero invited users"
+        >
+          <UsersTable
+            users={USERS_NO_INVITES_FIXTURE}
+            currentUserId="USR-000"
+            facilityName={facilityName}
+            onEdit={() => {}}
+            onToggleActive={() => {}}
+            onRemove={() => {}}
+            onResendInvite={() => {}}
+            onRevokeInvite={() => {}}
+          />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            #73&rsquo;s migration is applied and <strong>deliberately unbackfilled</strong>, so every
+            live row has <code>invited_at IS NULL</code> and derives as <code>ACTIVE</code>. This is
+            the default state the flag flip actually produces: no badge anywhere, the overflow menu
+            on every row. It is the correct rendering of “nobody has been invited yet”, not a failed
+            read — which is why it gets its own plate rather than being assumed.
           </p>
         </Plate>
 
@@ -102,13 +165,18 @@ export function AdminStatesGallery() {
               Open invite
             </Button>
             <Button variant="neutral" onClick={() => setEdit(true)}>
-              Open edit (pre-filled)
+              Open edit (pre-filled, two facilities)
             </Button>
           </div>
           <p className="mt-3 text-supporting text-muted-foreground">
-            Select each role in turn: facility roles get a single-facility select plus the #72
-            note, Carrier manager and Driver render Inactive with the reason, and Administrator
-            renders no scope field at all.
+            Select each role in turn: facility roles get the <strong>facility multi-select</strong>{' '}
+            (#72, a native checkbox group rather than the artboard&rsquo;s chip row — reasoning in
+            the component header), Carrier manager and Driver render Inactive with the reason, and
+            Administrator renders no scope field at all. The options are the two{' '}
+            <strong>open</strong> facilities; the closed Indore depot is offered by the filter above
+            and withheld here, which is why <code>list_facilities</code> returns{' '}
+            <code>active_flag</code> instead of filtering server-side. Edit opens with both of Neha
+            B.&rsquo;s facilities already ticked.
           </p>
         </Plate>
 
@@ -125,7 +193,7 @@ export function AdminStatesGallery() {
         </Plate>
 
         <Plate n="5" title="Facility Rules tab — live five-value registry">
-          <RulesTable rules={RULES_FIXTURE} />
+          <RulesTable rules={RULES_FIXTURE} facilityName={facilityName} />
           <p className="mt-3 text-supporting text-muted-foreground">
             These are the five <code>rule_type</code> values the live <code>CHECK</code> constraint
             accepts, not the design docs’ four (#70). Row 4 shows a real absolute effective range;
@@ -147,8 +215,124 @@ export function AdminStatesGallery() {
           </div>
         </Plate>
 
-        <Plate n="8 / 9 / 10" title="Policy tab — weight editor, Danger Zone, simulation">
-          <PolicyTab />
+        {/*
+          Screens 8 and 10, built 2026-08-31. The PRESENTATIONAL components are rendered against
+          fixtures rather than `<PolicyTab />` itself: the live tab fetches
+          `GET /admin/policy/active` on mount and would render nothing but its load-failed state
+          here, which is correct behaviour and a useless plate. That split is also the property
+          worth showing — the tab cannot display a coefficient it has not been served.
+        */}
+        <Plate n="8.1" title="Policy tab — weight editor, engine and version in agreement">
+          <PolicyVersionHeader policy={POLICY_ACTIVE_FIXTURE} publisherNames={ACTOR_NAMES} />
+          <div className="mt-6">
+            <PolicyWeightEditor
+              live={POLICY_ACTIVE_FIXTURE.live_weights}
+              priorityScores={POLICY_ACTIVE_FIXTURE.live_priority_scores}
+              drafts={POLICY_DRAFTS_FIXTURE}
+              invalidKeys={new Set()}
+              onChange={() => {}}
+              onSimulate={() => {}}
+              simulating={false}
+              windowLabel="the last 30 days"
+            />
+          </div>
+          <p className="mt-3 text-supporting text-muted-foreground">
+            Every number here — the four coefficients, both caps, the priority tiers,{' '}
+            <code>w_fairness</code> — comes from the server. The Danger Zone is Inactive with its
+            reason (#69, another agent&rsquo;s flag); <code>P_churn</code> is absent entirely
+            because the API refuses the key with a 422.
+          </p>
+        </Plate>
+
+        <Plate
+          n="8.2"
+          title="Version header — the engine is NOT running the active version"
+        >
+          <PolicyVersionHeader policy={POLICY_DIVERGED_FIXTURE} publisherNames={ACTOR_NAMES} />
+          <div className="mt-4 border-t border-border pt-4">
+            <PolicyVersionHeader
+              policy={POLICY_NEVER_PUBLISHED_FIXTURE}
+              publisherNames={ACTOR_NAMES}
+            />
+          </div>
+          <p className="mt-3 text-supporting text-muted-foreground">
+            Top: <code>engine_matches_active_version: false</code> — the divergence is named key by
+            key from the two dicts the server sent, because publishing writes a{' '}
+            <code>policy_versions</code> row and deliberately does not rewrite{' '}
+            <code>constraints.json</code>. Bottom: nothing published yet, the one case that
+            legitimately publishes without a <code>based_on_version_id</code>.
+          </p>
+        </Plate>
+
+        <Plate n="10.A" title="Simulation — running">
+          <SimulationRunning />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            Skeleton matched to the final layout, not a spinner. The status line changes to
+            &ldquo;Still working&rdquo; at ten seconds.
+          </p>
+        </Plate>
+
+        <Plate n="10.B / 10.C" title="Simulation — result, then the same result gone stale">
+          <SimulationResult
+            simulation={SIMULATION_FIXTURE}
+            stale={false}
+            publishing={false}
+            onDiscard={() => {}}
+            onPublish={() => {}}
+          />
+          <SimulationResult
+            simulation={SIMULATION_FIXTURE}
+            stale
+            publishing={false}
+            onDiscard={() => {}}
+            onPublish={() => {}}
+          />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            A case is one shipment and two slots — what the tool actually returns — not the
+            mockup&rsquo;s &ldquo;SHP1014 vs SHP1009&rdquo; head-to-head, which it does not compute.
+            Stale: Publish is <code>aria-disabled</code> and still focusable, with the reason
+            announced.
+          </p>
+        </Plate>
+
+        <Plate n="10.B (vacuous)" title="Simulation — 0 of 0, which is not evidence">
+          <SimulationResult
+            simulation={SIMULATION_VACUOUS_FIXTURE}
+            stale={false}
+            publishing={false}
+            onDiscard={() => {}}
+            onPublish={() => {}}
+          />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            Publish is refused. A window that matched no appointments says nothing about the change,
+            and letting it satisfy the simulate-before-publish gate would make that gate vacuous.
+          </p>
+        </Plate>
+
+        <Plate n="10.D" title="Published — and the conflict the mockup had no copy for">
+          <SimulationPublished result={PUBLISH_RESULT_FIXTURE} />
+          <PublishConflict
+            message={PUBLISH_CONFLICT_FIXTURE.message}
+            detail={PUBLISH_CONFLICT_FIXTURE.detail}
+            onDismiss={() => {}}
+          />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            The success banner does <strong>not</strong> say &ldquo;every decision from now on is
+            scored against this version&rdquo; — that would be false, because publishing does not
+            rewrite the file the engine reads. The conflict names the winning version id and its
+            publisher, from the server&rsquo;s own two strings (<code>edge-cases.md</code> #3).
+          </p>
+        </Plate>
+
+        <Plate n="9" title="Fairness Danger Zone — 🔴 still gated on #69">
+          <InactiveNote>
+            Screen 9&rsquo;s typed-confirmation flow is not built. The term itself is now real —{' '}
+            <code>w_fairness</code> is a live <code>score_weights</code> key and the ranking formula
+            multiplies it by a per-carrier concentration count — so the old objection (&ldquo;the
+            gate would be confirming something fictional&rdquo;) no longer holds. It stays gated
+            because a concurrent agent owns <code>adminFairnessTermEnabled</code> and the work
+            behind it. The value round-trips unchanged; this console does not edit it.
+          </InactiveNote>
         </Plate>
 
         <Plate n="11" title="Audit tab — filtered log, (system) actor, derived event labels">
@@ -226,8 +410,18 @@ export function AdminStatesGallery() {
         </Plate>
 
         <Plate n="12.F" title="Write failed — the table beneath is still valid">
-          <WriteFailedBanner detail="SetuHaul server is temporarily busy." onRetry={() => {}} />
-          <RulesTable rules={RULES_FIXTURE.slice(0, 2)} />
+          <WriteFailedBanner
+            detail="Too many invitation emails have gone out recently, so this one was not sent. Wait a minute, then press Resend again."
+            onRetry={() => {}}
+          />
+          <RulesTable rules={RULES_FIXTURE.slice(0, 2)} facilityName={facilityName} />
+          <p className="mt-3 text-supporting text-muted-foreground">
+            The detail line is the copy <code>describeWriteFailure</code> renders for a{' '}
+            <strong>429 <code>AUTH_EMAIL_RATE_LIMITED</code></strong> — the realistic failure of a
+            Resend button, matched on the server&rsquo;s error <em>code</em> via{' '}
+            <code>hasApiErrorCode</code>, never on a message string. The server&rsquo;s own sentence
+            names Supabase Auth, which an admin cannot act on; this one names what they can do.
+          </p>
         </Plate>
       </div>
 
@@ -236,7 +430,7 @@ export function AdminStatesGallery() {
         user={null}
         open={invite}
         onOpenChange={setInvite}
-        facilities={facilities}
+        facilities={assignable}
         onSubmit={() => setInvite(false)}
       />
       <InviteUserDialog
@@ -244,7 +438,7 @@ export function AdminStatesGallery() {
         user={USERS_FIXTURE[0]}
         open={edit}
         onOpenChange={setEdit}
-        facilities={facilities}
+        facilities={assignable}
         onSubmit={() => setEdit(false)}
       />
       <RemoveUserDialog

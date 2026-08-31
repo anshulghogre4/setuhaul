@@ -3,7 +3,6 @@ import type {
   FleetOverview,
   FleetShipment,
   FleetShipmentList,
-  LivePromiseState,
   OnTimePerformance,
   ShipmentDetail,
 } from '../lib/types'
@@ -22,6 +21,22 @@ import type { FleetDashboardState } from '../lib/use-fleet-dashboard'
  */
 
 const AS_OF = '2026-08-20T04:11:00+00:00' // 09:41 IST — the mockup's own stale-notice timestamp
+
+/**
+ * A D2 hold's server-side deadline, **44 seconds from now** — the same construction
+ * `features/driver/gallery/fixtures.ts` uses, and for the same reason.
+ *
+ * It was briefly a fixed ISO string, on the argument that a stable value makes a screenshot diff
+ * meaningful. **Measuring the render disproved that** (2026-09-01): a fixed 2026-08-20 deadline is
+ * permanently in the past, so `PromiseChip` correctly took its `expired` branch and every plate that
+ * claims to show `HELD` rendered the expired treatment reading `0:00`. A plate that certifies a
+ * state it never shows is worse than no plate — the exact failure the `/…/_states` galleries exist
+ * to catch, caught here on the gallery itself.
+ *
+ * 44 seconds puts it past the 50% band and before the 20% one, so the chip renders its ordinary
+ * mid-hold appearance rather than the pulse or the expiry.
+ */
+const HOLD_EXPIRES_AT = new Date(Date.now() + 44_000).toISOString()
 
 function scope() {
   return { carrier_id: 'CAR001', read_only: true }
@@ -128,6 +143,9 @@ function shipment(partial: Partial<FleetShipment> & { shipment_id: string }): Fl
     facility_name: 'Jaipur',
     facility_city: 'Jaipur',
     promise_state: null,
+    promise_state_source: null,
+    hold_id: null,
+    hold_expires_at: null,
     slot_start_ts: null,
     slot_end_ts: null,
     dock_code: null,
@@ -156,6 +174,18 @@ export const SHIPMENTS: FleetShipment[] = [
     driver_name: 'Neha P.',
     facility_name: 'Kota',
     has_open_exception: true,
+  }),
+  // A live D2 hold. Real now (#85/#87): `promise_state` is composed over `dock_occupancy`, and
+  // `hold_expires_at` is the server's own deadline -- the chip's countdown has no other source.
+  shipment({
+    shipment_id: 'SHP1031',
+    driver_name: 'Kiran D.',
+    facility_name: 'Jaipur',
+    dock_code: 'D3',
+    promise_state: 'HELD',
+    promise_state_source: 'dock_occupancy_hold',
+    hold_id: '4821',
+    hold_expires_at: HOLD_EXPIRES_AT,
   }),
   // A chip and an exception marker co-occurring — normal, not a bug (`edge-cases.md` #3).
   shipment({
@@ -271,6 +301,9 @@ function detail(
       facility_city: 'Jaipur',
       appointment_id: null,
       promise_state: null,
+      promise_state_source: null,
+      hold_id: null,
+      hold_expires_at: null,
       slot_start_ts: null,
       slot_end_ts: null,
       dock_code: null,
@@ -302,19 +335,10 @@ const HISTORY: ShipmentDetail['history'] = [
   },
 ]
 
-export const DETAIL_SHOWN = detail(
-  {
-    shipment_id: 'SHP1044',
-    driver_name: 'Kiran D.',
-    dock_code: 'D3',
-    slot_start_ts: SLOT_START,
-    slot_end_ts: SLOT_END,
-    // Not a live value -- `LivePromiseState` deliberately has no SHOWN/HELD (#53). Cast so the
-    // gallery can show the flag-gated variants; nothing in the app can construct this.
-    promise_state: 'SHOWN' as unknown as LivePromiseState,
-  },
-  HISTORY,
-)
+// `DETAIL_SHOWN` is GONE (2026-08-31). It existed to preview a chip the wire could not produce,
+// and #87 settled that it never will: SHOWN has no persisted counterpart anywhere in the product,
+// so a fixture for it would be the gallery illustrating a state the live surface cannot reach --
+// the exact thing the null-promise-state row above was added to stop doing.
 
 export const DETAIL_HELD = detail(
   {
@@ -322,7 +346,12 @@ export const DETAIL_HELD = detail(
     dock_code: 'D5',
     slot_start_ts: SLOT_START,
     slot_end_ts: SLOT_END,
-    promise_state: 'HELD' as unknown as LivePromiseState,
+    // A real wire value since #85: `promise_state` is composed from `dock_occupancy`, not read off
+    // `appointment_status`, so no cast is needed any more.
+    promise_state: 'HELD',
+    promise_state_source: 'dock_occupancy_hold',
+    hold_id: '4821',
+    hold_expires_at: HOLD_EXPIRES_AT,
   },
   HISTORY,
 )

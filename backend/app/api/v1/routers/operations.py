@@ -31,6 +31,7 @@ from app.services.escalation_service import (
     start_escalation_work,
     take_over_thread,
 )
+from app.services.ops_copilot import get_resolution_suggestion
 from app.services.thread_message_service import post_operations_message
 
 router = APIRouter(prefix="/api/v1", tags=["operations"])
@@ -188,6 +189,30 @@ async def start_escalation_work_endpoint(
         await session.rollback()
         raise
     return ok(result, get_request_id(request))
+
+
+@router.get("/operations/escalations/{escalation_id}/suggestion")
+async def escalation_suggestion(
+    escalation_id: str,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Issue #57: the co-pilot's resolution-action suggestion.
+
+    A `GET`, and that is the whole safety story rather than a REST nicety: this path writes
+    nothing, calls no tool, and composes no driver-facing text -- it returns the name of a tool the
+    coordinator may choose to press, plus the facts that point at it. `AGENTS.md`'s "the LLM
+    orchestrates typed tools and never directly mutates business tables" is satisfied structurally
+    here, not by convention.
+
+    No `Idempotency-Key` header, deliberately (§7.5 principle 3 attaches keys to capacity-consuming
+    writes); no `facility_id` query parameter, deliberately (the facility is derived from the
+    escalation's own row -- M15/NFR-019). See `services/ops_copilot.py`.
+    """
+    return ok(
+        await get_resolution_suggestion(session, ctx, escalation_id), get_request_id(request)
+    )
 
 
 @router.post("/operations/threads/{thread_id}/take-over")

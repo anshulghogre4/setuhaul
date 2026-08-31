@@ -60,21 +60,21 @@ export function CarrierStatesGallery() {
       </Plate>
 
       <Plate id="4a" title="Your shipments — default">
-        <ShipmentsTable rows={F.SHIPMENTS} shownHeldEnabled={false} />
+        <ShipmentsTable rows={F.SHIPMENTS} heldEnabled />
       </Plate>
 
       <Plate
         id="4b"
-        title="Your shipments — status filter (opens on click; Shown/Held omitted while #53 is open)"
+        title="Your shipments — status filter, Held gated off (four options; Shown is removed outright, not gated)"
       >
         <div className="flex justify-end">
-          <StatusFilter value={null} onChange={noop} shownHeldEnabled={false} />
+          <StatusFilter value={null} onChange={noop} heldEnabled={false} />
         </div>
       </Plate>
 
-      <Plate id="4b′" title="Status filter — with the #53 flag forced on, all six options">
+      <Plate id="4b′" title="Status filter — Held on, the five options that ship (the design's sixth, Shown, has no backend and never will)">
         <div className="flex justify-end">
-          <StatusFilter value={null} onChange={noop} shownHeldEnabled />
+          <StatusFilter value={null} onChange={noop} heldEnabled />
         </div>
       </Plate>
 
@@ -184,12 +184,17 @@ export function CarrierStatesGallery() {
         </div>
       </Plate>
 
-      <Plate id="12a" title="Shipment detail — SHOWN (flag forced on; unreachable live, #53)">
-        <CarrierDetailCard payload={F.DETAIL_SHOWN} shownHeldEnabled />
+      {/* 12a used to be the SHOWN variant. It is gone rather than re-pointed: SHOWN has no
+          persisted counterpart anywhere in the product (#87), so a plate for it would illustrate a
+          state the live surface cannot reach. What replaces it is the honest pair -- the same held
+          shipment with the flag off, which is what a deploy with `TWO_PHASE_HOLD_ENABLED` off
+          actually renders. */}
+      <Plate id="12a" title="Shipment detail — a held shipment with carrierHeldEnabled off (the null-promise-state fallback)">
+        <CarrierDetailCard payload={F.DETAIL_HELD} heldEnabled={false} />
       </Plate>
 
-      <Plate id="12b" title="Shipment detail — HELD (flag forced on; unreachable live, #53)">
-        <CarrierDetailCard payload={F.DETAIL_HELD} shownHeldEnabled />
+      <Plate id="12b" title="Shipment detail — HELD, live (countdown from the server's hold_expires_at)">
+        <CarrierDetailCard payload={F.DETAIL_HELD} heldEnabled />
       </Plate>
 
       <Plate id="12c" title="Shipment detail — PENDING CONFIRMATION">

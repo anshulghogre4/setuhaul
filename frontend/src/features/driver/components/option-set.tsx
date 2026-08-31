@@ -37,6 +37,16 @@ export type OptionSetPartProps = {
   /** The specific blocking reason, from the server's own `rejected_reasons` — never
    *  "no availability" (`edge-cases.md` sections 5 and 6). */
   blockingReason?: string
+  /**
+   * The live hold's server-stamped `expires_at`, when one of this set's cards is the held one.
+   *
+   * Threaded down rather than read from a store here on purpose: this component is also rendered by
+   * the states gallery from fixtures, and a component that reached into live state could not be
+   * plated. The card's own countdown then goes through `usePromiseCountdown` -- the same single
+   * reading the chip and the state line use, which is what makes R4 (two renderings of one hold
+   * showing different urgency at the same instant) unable to recur.
+   */
+  heldUntil?: string
   onSelect?: (option: DriverOption) => void
   onEscalate?: () => void
 }
@@ -45,6 +55,7 @@ export function OptionSetPart({
   set,
   facilityName,
   blockingReason,
+  heldUntil,
   onSelect,
   onEscalate,
 }: OptionSetPartProps) {
@@ -98,6 +109,9 @@ export function OptionSetPart({
             key={option.slotId}
             option={option}
             state={superseded ? 'superseded' : (set.perOption?.[option.slotId] ?? 'default')}
+            // Only the held card gets the deadline; a sibling passing one would draw a countdown
+            // on a card that holds nothing.
+            heldUntil={set.perOption?.[option.slotId] === 'held' ? heldUntil : undefined}
             onSelect={onSelect}
           />
         ))}

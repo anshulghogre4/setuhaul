@@ -136,8 +136,10 @@
       "fit_slack_per_minute": 1,
       "compatible_but_not_exact_dock_penalty": -25,
       "lateness_cap_minutes": 720,
-      "fit_slack_cap_minutes": 120
+      "fit_slack_cap_minutes": 120,
+      "w_fairness": 0
     },
+    "w_fairness_note": "D7's per-carrier displacement penalty, present and defaulted OFF (0) so the shipped policy is exactly the specified formula. Multiplies carrier_concentration -- the number of other active appointments this shipment's carrier already holds at the destination facility on the candidate interval's facility-local date. Expected NEGATIVE when enabled, matching the sign convention of the other penalties. Enabling it is a policy decision with an audit trail, not a code change (issue #69, 2026-08-29).",
     "explainability_required": true,
     "randomness_allowed": false
   },

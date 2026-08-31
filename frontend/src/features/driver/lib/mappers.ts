@@ -8,12 +8,110 @@
  */
 
 import type {
+  DriverHold,
   DriverOption,
   EligibilityAnswer,
   EligibilityRow,
   OptionSet,
   SlotOutcome,
 } from './types'
+
+/* ------------------------------------------------------------------------------------------
+   D2 holds — three producers, one shape
+   ------------------------------------------------------------------------------------------ */
+
+/**
+ * `holds.live_hold_for_shipment`'s row, as it appears on `/driver/context`'s `current_hold` and on
+ * `get_appointment_request_status`'s `hold`. Field names copied from that function's return dict.
+ */
+type RawHold = {
+  hold_id?: unknown
+  shipment_id?: unknown
+  slot_id?: unknown
+  dock_code?: unknown
+  expires_at?: unknown
+  expires_in_seconds?: unknown
+  window_start?: unknown
+  window_end?: unknown
+}
+
+/**
+ * `request_slot`'s HELD outcome. A **different shape from the read** — `RequestSlotResult` carries
+ * `hold_expires_at` / `hold_ttl_seconds` flattened onto the result rather than a nested hold
+ * object, because it is the *write*'s receipt (`allocation._request_slot_as_hold`). Mapped here
+ * rather than at the call site so the two shapes converge on one `DriverHold` and nothing
+ * downstream has to know which produced it.
+ */
+type RawSlotHoldOutcome = {
+  status?: unknown
+  code?: unknown
+  shipment_id?: unknown
+  slot_id?: unknown
+  hold_id?: unknown
+  hold_expires_at?: unknown
+  hold_ttl_seconds?: unknown
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+
+/**
+ * A read's hold row -> `DriverHold`, or `null`.
+ *
+ * `null` whenever `hold_id` or `expires_at` is missing, and that is a refusal rather than a
+ * tolerance: a hold with no server deadline cannot be rendered honestly, because the one thing the
+ * HELD screens exist to show is how long is left. Falling back to a client-derived deadline is
+ * precisely the mis-promise D2 exists to remove.
+ */
+export function toHold(raw: unknown): DriverHold | null {
+  if (!raw || typeof raw !== 'object') return null
+  const h = raw as RawHold
+  const holdId = str(h.hold_id)
+  const expiresAt = str(h.expires_at)
+  if (!holdId || !expiresAt) return null
+  return {
+    holdId,
+    shipmentId: str(h.shipment_id) ?? '',
+    slotId: str(h.slot_id),
+    dockCode: str(h.dock_code),
+    expiresAt,
+    expiresInSeconds:
+      typeof h.expires_in_seconds === 'number' ? h.expires_in_seconds : null,
+    windowStart: str(h.window_start),
+    windowEnd: str(h.window_end),
+  }
+}
+
+/**
+ * `request_slot`'s result -> `DriverHold`, or `null` when the result is not a HELD outcome.
+ *
+ * Branches on `status === 'HELD'` (equivalently `code === 'SLOT_HELD'`) rather than on the presence
+ * of `hold_id`, because `RequestSlotResult` is a **superset** shape: the legacy single-phase path
+ * returns the same model with all three hold fields null, and every stored idempotency replay of an
+ * older `SLOT_REQUESTED` still deserialises through it. Keying on the status is what makes this
+ * safe against both.
+ */
+export function toHoldFromRequestSlot(raw: unknown): DriverHold | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as RawSlotHoldOutcome
+  if (r.status !== 'HELD' && r.code !== 'SLOT_HELD') return null
+  const holdId = str(r.hold_id)
+  const expiresAt = str(r.hold_expires_at)
+  if (!holdId || !expiresAt) return null
+  return {
+    holdId,
+    shipmentId: str(r.shipment_id) ?? '',
+    slotId: str(r.slot_id),
+    // The write's receipt names no dock; the option card the driver tapped already shows it, and
+    // inventing one here would be a second, possibly disagreeing, source for the same fact.
+    dockCode: null,
+    expiresAt,
+    // Deliberately not `hold_ttl_seconds`: the TTL is the hold's total length (90), not what is
+    // left of it. Treating one as the other would restart the countdown at full on every re-read.
+    expiresInSeconds: null,
+    windowStart: null,
+    windowEnd: null,
+  }
+}
 
 /* ------------------------------------------------------------------------------------------
    find_feasible_slots

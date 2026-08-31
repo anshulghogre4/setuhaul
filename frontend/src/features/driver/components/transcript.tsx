@@ -58,6 +58,8 @@ import type { DriverMessage, DriverOption } from '../lib/types'
 export type TranscriptProps = {
   messages: DriverMessage[]
   facilityName?: string
+  /** The live hold's server-stamped deadline, for the one card in the `held` state. */
+  heldUntil?: string
   onSelectOption?: (option: DriverOption) => void
   onEscalate?: () => void
   onRetry?: (message: DriverMessage) => void
@@ -71,6 +73,7 @@ const GROUP_WINDOW_MS = 120_000
 export function Transcript({
   messages,
   facilityName,
+  heldUntil,
   onSelectOption,
   onEscalate,
   onRetry,
@@ -154,6 +157,7 @@ export function Transcript({
               <MessageParts
                 message={message}
                 facilityName={facilityName}
+                heldUntil={heldUntil}
                 onSelectOption={onSelectOption}
                 onEscalate={onEscalate}
               />

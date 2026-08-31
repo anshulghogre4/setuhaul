@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Render/measurement pass outputs (scripts/render-audit.mjs, scripts/verify-claims*.mjs).
+# The scripts are checked in; their generated evidence is not -- it is per-run and large.
+audit-report.json
+audit-screenshots/

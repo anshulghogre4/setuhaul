@@ -88,8 +88,8 @@ function shipmentHref(shipmentId: string) {
 
 /** The row's accessible name — every fact the row shows, in one sentence, because a link whose
  *  text is only the shipment id would announce as an id and nothing else. */
-function rowLabel(row: FleetShipment, shownHeldEnabled: boolean): string {
-  const cell = promiseCell(row.promise_state, shownHeldEnabled)
+function rowLabel(row: FleetShipment, heldEnabled: boolean): string {
+  const cell = promiseCell(row.promise_state, heldEnabled, row.hold_expires_at)
   const state =
     cell.kind === 'chip'
       ? PROMISE_SPOKEN[cell.state]
@@ -129,7 +129,7 @@ function Cell({
 
 export function ShipmentsTable({
   rows,
-  shownHeldEnabled,
+  heldEnabled,
   dimmed = false,
   /** Set on return from a detail screen so focus can be restored to the row that was open
    *  (`05-carrier-portal/accessibility.md`'s focus-management table: "the shipment row that was
@@ -137,7 +137,7 @@ export function ShipmentsTable({
   rowIdPrefix = 'carrier-row',
 }: {
   rows: FleetShipment[]
-  shownHeldEnabled: boolean
+  heldEnabled: boolean
   dimmed?: boolean
   rowIdPrefix?: string
 }) {
@@ -220,7 +220,7 @@ export function ShipmentsTable({
                 <Link
                   id={`${rowIdPrefix}-${row.shipment_id}`}
                   to={shipmentHref(row.shipment_id)}
-                  aria-label={rowLabel(row, shownHeldEnabled)}
+                  aria-label={rowLabel(row, heldEnabled)}
                   title={row.shipment_id}
                   // Fills the cell rather than sitting as a 74x20 inline box inside it. Measured
                   // in headless Chromium: as an inline anchor it was 74x20, under WCAG 2.5.8's
@@ -262,7 +262,8 @@ export function ShipmentsTable({
                 <StatusCell
                   promiseState={row.promise_state}
                   hasOpenException={row.has_open_exception}
-                  shownHeldEnabled={shownHeldEnabled}
+                  heldEnabled={heldEnabled}
+                  holdExpiresAt={row.hold_expires_at}
                 />
               </Cell>
 

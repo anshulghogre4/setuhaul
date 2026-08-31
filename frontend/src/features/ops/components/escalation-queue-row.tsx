@@ -31,12 +31,25 @@ export function EscalationQueueRow({
   item,
   selected,
   stale,
+  gone = false,
   onSelect,
 }: {
   item: EscalationQueueItem
   selected: boolean
-  /** `edge-cases.md` section 2 -- another coordinator acted on this row while it was in view. */
-  stale?: { winningOwnerName: string | null } | null
+  /**
+   * `edge-cases.md` section 2 -- another coordinator acted on this row while it was in view.
+   *
+   * `announce` is the politeness decision and it is the CALLER's, because it turns on whether the
+   * coordinator is focused on this exact row: `accessibility-behaviour.md` makes that case
+   * `assertive` by name ("a user about to act on a row that just changed underneath them must be
+   * interrupted, not politely queued") and every other case silent. Rendering `role="alert"`
+   * unconditionally -- which this component used to do -- would interrupt a coordinator over a row
+   * they are not even looking at, which is the opposite of what the matrix asks for.
+   */
+  stale?: { winningOwnerName: string | null; announce?: boolean } | null
+  /** The server has stopped returning this escalation but it is still on screen (it is the one the
+   *  coordinator has open, or the sort is frozen). Marked in place; removed on the next re-sort. */
+  gone?: boolean
   onSelect: () => void
 }) {
   const reason = REASON_META[item.escalation_type]
@@ -94,8 +107,20 @@ export function EscalationQueueRow({
       </div>
 
       {stale ? (
-        <p role="alert" className="mt-1 rounded-md bg-warning-bg px-2 py-1 text-supporting text-warning-fg">
+        <p
+          role={stale.announce ? 'alert' : undefined}
+          className="mt-1 rounded-md bg-warning-bg px-2 py-1 text-supporting text-warning-fg"
+        >
           Already actioned{stale.winningOwnerName ? ` by ${stale.winningOwnerName}` : ''}.
+        </p>
+      ) : null}
+
+      {gone && !stale ? (
+        // Silent by construction: no live region. A row leaving the open queue while the
+        // coordinator is looking elsewhere is the matrix's "row a user is not focused on
+        // disappears" case, and it stays visible only so nothing moves under them.
+        <p className="mt-1 rounded-md bg-warning-bg px-2 py-1 text-supporting text-warning-fg">
+          No longer in the open queue. It clears when you re-sort.
         </p>
       ) : null}
     </div>

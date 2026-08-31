@@ -101,26 +101,57 @@ Sign in ──▶ Console (four tabs, no default preference stated — first tab
 ## 3 · Facility Rules tab
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│ [ Filter: facility ▾ ]                                    [ + Add rule ]           │
-│ ┌──────────────┬─────────────────┬────────────┬─────────────────────────────────┐ │
-│ │Facility      │Rule type        │Value        │Effective                        │ │
-│ ├──────────────┼─────────────────┼────────────┼─────────────────────────────────┤ │
-│ │Jaipur        │EARLY_LIMIT      │60 min       │Always                            │ │
-│ │Jaipur        │DOCK_PIN         │Reefer → D5  │Always                            │ │
-│ │Jaipur        │NEW_START_CUTOFF │21:00        │Weekdays only, 18:00–23:59         │ │
-│ └──────────────┴─────────────────┴────────────┴─────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ [ Filter: facility ▾ ]                                            [ + Add rule ] │
+│ ┌──────────────┬─────────────────────────┬──────────┬──────────────────────────┐ │
+│ │Facility      │Rule type                │Value     │Effective                 │ │
+│ ├──────────────┼─────────────────────────┼──────────┼──────────────────────────┤ │
+│ │Jaipur        │CHECKIN_EARLY_LIMIT_MIN  │60 min    │Always                    │ │
+│ │Jaipur        │REEFER_DOCK_REQUIRED     │Yes       │Always                    │ │
+│ │Jaipur        │LAST_NEW_START_TIME      │21:00     │Until 2026-08-10 18:00    │ │
+│ └──────────────┴─────────────────────────┴──────────┴──────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Rules
 - **`rule_type` is a dropdown from the registry enum, never free text** (§0.9 issue 10's resolution,
   §7.5.7) — this is the concrete UI consequence of the spec's own decision to stop string-matching rule
-  text. Each `rule_type` shows only its own relevant value fields (a `DOCK_PIN` rule asks for a dock and a
-  cargo type; a `NEW_START_CUTOFF` rule asks for a time; an `EARLY_LIMIT` rule asks for a minute count).
-- **`effective_from`/`effective_to` genuinely support intraday effectivity** — a rule can be scoped to
-  specific hours on specific days ("Weekdays only, 18:00–23:59"), not just a bare date range, closing the
-  exact gap the spec named as unimplementable in the shipped schema.
+  text. Each `rule_type` shows only its own relevant value fields (a `LAST_NEW_START_TIME` rule asks for a
+  time; a `CHECKIN_EARLY_LIMIT_MIN` or `NO_SHOW_GRACE_MIN` rule asks for a minute count; a
+  `HEAVY_DOCK_REQUIRED_KG` rule asks for a kg threshold; a `REEFER_DOCK_REQUIRED` rule is a boolean).
+
+  > **Registry corrected 2026-08-29 (A-G2, issue #70).** This file previously named `EARLY_LIMIT`,
+  > `DOCK_PIN`, `WEIGHT_LIMIT`, `NEW_START_CUTOFF`, inherited from `SOLUTION_DESIGN.md` §7.5.7's own
+  > illustrative list. **None of those four was ever built.** The live `CHECK` constraint
+  > (`20260825213000_e34_policy_versions_and_rule_registry.sql:19-24`) enforces the five above, and E5.6's
+  > frontend already builds against them. Two things this correction does **not** fix, stated rather than
+  > glossed:
+  >
+  > 1. **`DOCK_PIN` has no live analog.** It is this surface's flagship editor pattern — the only registry
+  >    entry needing *two* value fields (dock + cargo type), which is what the type-driven field mechanism
+  >    exists to demonstrate. `REEFER_DOCK_REQUIRED` carries RULE003's intent in a narrower boolean form,
+  >    but it is not the same control. Restoring the pattern needs a new registry value and a migration —
+  >    a design decision, not a rename.
+  > 2. **`NO_SHOW_GRACE_MIN` and `REEFER_DOCK_REQUIRED` appear in no artboard**, so the editor has no
+  >    designed field set for either. The rule **list** (this screen) renders all five correctly today;
+  >    the rule **editor** (Screen 6) stays blocked, and it is blocked on missing design, not on backend.
+- **`effective_from`/`effective_to` support an absolute window, hour-precise — not a recurring one.**
+  A rule genuinely can be scoped to part of a specific day (`2026-08-10T18:00:00+05:30` is a real 18:00
+  boundary, and the engine enforces it). It **cannot** be scoped to "Weekdays only, 18:00–23:59".
+
+  > **Corrected 2026-08-29 (A-G3, issue #71).** This bullet previously claimed the surface "genuinely
+  > supports intraday effectivity … closing the exact gap the spec named as unimplementable."
+  > `feasibility.py::active_facility_rules` has no day-of-week or weekly-recurrence concept at all, and
+  > the `TEXT` column can store such a string but nothing parses it. **The feature is unbuilt** — not
+  > partially built, not built-but-unpolished. A recurring pattern saved today would be stored and never
+  > enforced as written; worse, because an unparseable boundary means *no bound on that side*, the rule
+  > would apply **always** rather than only in its intended window (pinned by test in
+  > `test_scheduling_feasibility.py`). Building it properly needs real `days_of_week` /
+  > `start_time_local` / `end_time_local` columns — a migration — plus a parser on the D1 booking hot
+  > path, which `active_facility_rules` sits on (called once per candidate interval, up to 500 per
+  > search). That was judged out of proportion to one mockup cell at this scale; the claim was corrected
+  > instead. **Owner fork: if recurring windows are actually wanted, they are a scoped schema change, not
+  > a doc fix.**
 - **No simulate-before-publish here** — unlike Policy (§4), a facility rule change takes effect
   immediately on save. This asymmetry is deliberate: policy weights affect *every* ranking decision system-
   wide and are expensive to get wrong at scale (U27's whole reason for existing); a single facility rule
@@ -198,7 +229,7 @@ Sign in ──▶ Console (four tabs, no default preference stated — first tab
 │ ├──────────────┼──────────────┼─────────────────┼──────────────────────────────┤ │
 │ │14:02 today   │Anshul G.     │Policy published  │policy_versions v4             │ │
 │ │13:40 today   │Neha B.       │User removed      │priya@... (Gate/Yard, Jaipur)  │ │
-│ │11:15 today   │(system)      │Rule updated      │Jaipur · NEW_START_CUTOFF      │ │
+│ │11:15 today   │(system)      │Rule updated      │Jaipur · LAST_NEW_START_TIME   │ │
 │ └──────────────┴──────────────┴─────────────────┴──────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```

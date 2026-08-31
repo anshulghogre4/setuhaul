@@ -14,6 +14,7 @@ from app.scheduling.feasibility import (
     derive_outcome,
     evaluate_candidate_slot,
     explain_slot_eligibility,
+    parse_rule_boundary,
     recommendation_id_for,
 )
 
@@ -312,6 +313,68 @@ def test_active_facility_rules_reads_a_bare_date_as_facility_local_midnight():
 
     assert before == []
     assert len(on_the_day) == 1
+
+
+# --- A-G3 / issue #71: what "time-bounded effectivity" actually covers, pinned ---
+#
+# `06-admin-console/screens.md` section 3 claimed this surface "genuinely supports intraday
+# effectivity ... ('Weekdays only, 18:00-23:59')". Half of that is true and half is not, and the
+# difference was never written down anywhere -- so these three tests state it in executable form
+# and the doc was corrected to match them (2026-08-29), rather than the engine being extended to
+# parse a recurrence pattern out of an unstructured TEXT column.
+
+
+def test_an_absolute_intraday_window_really_is_enforced_to_the_hour():
+    """SUPPORTED. An offset-bearing timestamp gives a real hour boundary, so a rule genuinely can
+    apply to part of one day -- this half of the screens.md claim was always true."""
+    rules = [
+        _rule(
+            "R1", "LAST_NEW_START_TIME", "21:00",
+            effective_from="2026-08-10T18:00:00+05:30", effective_to="2026-08-10T23:59:00+05:30",
+        )
+    ]
+    assert active_facility_rules(
+        rules, at=datetime.fromisoformat("2026-08-10T17:59:00+05:30"), tz_name="Asia/Kolkata"
+    ) == []
+    assert len(active_facility_rules(
+        rules, at=datetime.fromisoformat("2026-08-10T18:00:00+05:30"), tz_name="Asia/Kolkata"
+    )) == 1
+
+
+def test_there_is_no_recurring_weekly_window_concept():
+    """NOT SUPPORTED. The same window one week later is out of force, because effective_from/to
+    are a single absolute range and nothing repeats them. "Weekdays only" cannot be expressed."""
+    rules = [
+        _rule(
+            "R1", "LAST_NEW_START_TIME", "21:00",
+            effective_from="2026-08-10T18:00:00+05:30", effective_to="2026-08-10T23:59:00+05:30",
+        )
+    ]
+    next_monday_same_hour = datetime.fromisoformat("2026-08-17T19:00:00+05:30")
+    assert active_facility_rules(rules, at=next_monday_same_hour, tz_name="Asia/Kolkata") == []
+
+
+def test_an_unparseable_effective_boundary_leaves_the_rule_unbounded_on_that_side():
+    """The consequence of the column being unstructured TEXT, pinned rather than left to be
+    rediscovered: a recurrence string an admin console might serialise does NOT make the rule
+    inert, it makes it apply always. That is the safer of the two directions for this product (a
+    rule that over-applies rejects an interval; one that under-applies lets the system promise an
+    interval the facility forbids), but it is not obvious, so it is asserted."""
+    rules = [_rule("R1", "LAST_NEW_START_TIME", "21:00", effective_from="MON-FRI 18:00-23:59")]
+    long_before = datetime.fromisoformat("2020-01-01T00:00:00+05:30")
+    assert len(active_facility_rules(rules, at=long_before, tz_name="Asia/Kolkata")) == 1
+
+
+def test_parse_rule_boundary_reads_both_shapes_the_live_data_actually_carries():
+    """Extracted for issue #74's impact preview to share; both live shapes must survive it."""
+    bare = parse_rule_boundary("2026-08-05", "Asia/Kolkata")
+    offset_bearing = parse_rule_boundary("2026-08-10T00:00:00+05:30", "Asia/Kolkata")
+
+    assert bare is not None and bare.isoformat() == "2026-08-05T00:00:00+05:30"
+    assert offset_bearing is not None and offset_bearing.isoformat() == "2026-08-10T00:00:00+05:30"
+    assert parse_rule_boundary(None, "Asia/Kolkata") is None
+    assert parse_rule_boundary("", "Asia/Kolkata") is None
+    assert parse_rule_boundary("MON-FRI 18:00-23:59", "Asia/Kolkata") is None
 
 
 # --- SOLUTION_DESIGN.md section 5 Stage 1: the driver's own constraints, both ends ---

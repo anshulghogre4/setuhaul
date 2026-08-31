@@ -1,5 +1,5 @@
 import { CircleAlert } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { InactiveNote } from './primitives'
 import { adminMultiFacilityScopeEnabled } from '../lib/flags'
@@ -24,26 +24,42 @@ import { Label } from '@/shared/ui/label'
  * module docstring repeats — "a user briefly existing with a role but no scope is a real
  * authorization gap, not a UX nicety" — and `invite_user` genuinely implements it.
  *
- * Four honest reductions against the artboards, each with its cause:
+ * **Two of the four reductions this dialog shipped with are gone as of 2026-08-31.**
  *
- *  1. **Single facility, not the chip multi-select.** A-G4 / issue #72:
- *     `invite_user`/`update_user` take `scope: str | None`, a bare single value, and
- *     `_validate_scope` requires exactly one. The "+ Add facility" affordance has nowhere to send
- *     a second value, so it is behind `adminMultiFacilityScopeEnabled`.
- *  2. **Facility options come from facilities already present in the loaded rows**, because there
- *     is no facilities-list endpoint anywhere in the API (see `lib/facility-names.ts`'s header).
- *     When that set is empty the field is Inactive with the reason stated, not a free-text box —
- *     the server existence-checks the id (`_validate_scope`, lines 137-141), so a typed guess
- *     would fail on submit rather than at the point of the mistake.
+ *  1. **Multi-facility scope is real** (A-G4 / issue #72). `invite_user`/`update_user` take
+ *     `scope: str | list[str] | None`, `normalize_scope` de-duplicates, and `_validate_scope`
+ *     checks a whole multi-select in one `= ANY(:ids)` round trip naming every missing id at once.
+ *     The form sends an array. `screens.md` §2's own first example row ("Neha B. · Ops · Jaipur,
+ *     Gurugram") is now producible end to end.
+ *  2. **The facility options are a real read** (A-G10 / issue #78). `GET /admin/facilities`
+ *     replaced the previous list, which was derived from facilities that happened to appear in
+ *     already-loaded rows — so a facility with no users and no rules was unpickable and could
+ *     never receive its first user. Options now come from `lib/facilities.ts`'s directory, narrowed
+ *     to `active_flag = 1` for a *new* assignment.
+ *
+ * Two reductions remain, each with its cause:
+ *
  *  3. **Carrier and driver scopes are Inactive.** No endpoint anywhere lists carriers or drivers
- *     for an admin, and `_validate_scope` does not even existence-check `carrier_id` (line
- *     143-146) — a free-text field here would let a typo create a user scoped to a carrier that
- *     does not exist, with no error. Same Inactive-with-explanation posture E5.2 used for ops'
- *     "Take over thread".
- *  4. **Email is read-only in edit mode.** `update_user` accepts `role` and `scope` only
- *     (`admin.py:64-68`); the address lives in the Supabase Auth identity, which this tool never
- *     touches. `mockup.html` §3.5 draws it as an editable field — rendering it editable would
- *     offer a change the tool silently discards.
+ *     for an admin, and `_validate_scope` does not even existence-check `carrier_id` — a free-text
+ *     field here would let a typo create a user scoped to a carrier that does not exist, with no
+ *     error. Same Inactive-with-explanation posture E5.2 used for ops' "Take over thread". Note
+ *     #78 does **not** unblock these: it lists facilities, not carriers or drivers.
+ *  4. **Email is read-only in edit mode.** `update_user` accepts `role` and `scope` only; the
+ *     address lives in the Supabase Auth identity, which this tool never touches. `mockup.html`
+ *     §3.5 draws it as an editable field — rendering it editable would offer a change the tool
+ *     silently discards.
+ *
+ * ## The multi-select's shape, and why it is not the mockup's chips
+ *
+ * `screens.md` draws `[ Jaipur ▾ ] [ + add ]` — a chip row with an "add" affordance, the pattern a
+ * long option list needs so it does not fill the dialog. This build uses a **native checkbox group
+ * in a `<fieldset>` with a `<legend>`** instead, for the same reason E5.3's Fork G took native
+ * controls over the mockup's `role="combobox"` divs: every facility is visible at once at this
+ * product's scale, selection state is announced by the platform rather than by hand-written ARIA,
+ * and there is no popup to trap focus in. The chip pattern is worth building the moment the
+ * facility count outgrows a visible list; it is not worth hand-rolling a combobox to save vertical
+ * space that is not scarce. **Flagged as a deliberate divergence from the artboard, not an
+ * oversight.**
  *
  * Focus lands on the first field, never a submit button; Cancel is first in DOM order (U79).
  */
@@ -54,6 +70,7 @@ export function InviteUserDialog({
   onOpenChange,
   onSubmit,
   facilities,
+  facilitiesUnavailable,
   busy,
   errorDetail,
 }: {
@@ -62,14 +79,18 @@ export function InviteUserDialog({
   user: AdminUser | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (payload: { email: string; role: string; scope?: string }) => void
+  onSubmit: (payload: { email: string; role: string; scope?: string[] }) => void
+  /** The facilities a new scope assignment may name — `active_flag = 1`, server-ordered. */
   facilities: Array<{ id: string; name: string }>
+  /** True when the facilities read itself failed, as opposed to genuinely returning none. The two
+   *  need different copy: one is "try again", the other is "there are none to pick". */
+  facilitiesUnavailable?: boolean
   busy?: boolean
   errorDetail?: string | null
 }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('')
-  const [scope, setScope] = useState('')
+  const [scope, setScope] = useState<string[]>([])
   const [emailTouched, setEmailTouched] = useState(false)
 
   const emailRef = useRef<HTMLInputElement | null>(null)
@@ -84,12 +105,36 @@ export function InviteUserDialog({
     if (!open) return
     setEmail(mode === 'edit' ? (user?.email ?? '') : '')
     setRole(mode === 'edit' ? (user?.role_name ?? '') : '')
-    setScope(mode === 'edit' ? (user?.facility_id ?? user?.driver_id ?? '') : '')
+    // Pre-fill from the server's own scope array when there is one, falling back to the single
+    // mirror column for a row that predates E2.3's backfill. Editing a two-facility user must not
+    // silently drop their second facility just because the form once held one value.
+    setScope(
+      mode === 'edit'
+        ? (user?.scoped_facility_ids?.length
+            ? [...user.scoped_facility_ids]
+            : [user?.facility_id ?? user?.driver_id].filter((v): v is string => Boolean(v)))
+        : [],
+    )
     setEmailTouched(false)
   }, [open, mode, user])
 
   const selectedRole = roleOption(role)
   const scopeKind = selectedRole?.scope ?? null
+
+  /**
+   * The options this form may offer.
+   *
+   * In edit mode a facility the user is **already** scoped to stays selectable even if it is now
+   * closed (`active_flag = 0`, so absent from `facilities`) — otherwise opening Edit on that user
+   * would silently drop a scope they hold, and saving would revoke it without ever saying so.
+   */
+  const facilityOptions = useMemo(() => {
+    const known = new Set(facilities.map((f) => f.id))
+    const carried = scope
+      .filter((id) => !known.has(id))
+      .map((id) => ({ id, name: `${id} (no longer active)` }))
+    return [...facilities, ...carried]
+  }, [facilities, scope])
 
   // Validated on blur, not on keystroke (`mockup.html` §3.4). A bare shape check only — the
   // authoritative "this email already has an account" verdict comes from Supabase Auth via the
@@ -102,7 +147,7 @@ export function InviteUserDialog({
       : scopeKind === 'none'
         ? true
         : scopeKind === 'facility'
-          ? scope !== ''
+          ? scope.length > 0
           : // carrier / driver: no source of valid ids exists, so the form can never be complete
             false
 
@@ -172,7 +217,7 @@ export function InviteUserDialog({
               setRole(e.currentTarget.value)
               // The scope's meaning changes with the role, so a value carried over from the
               // previous selection would be a facility id submitted as a carrier id.
-              setScope('')
+              setScope([])
             }}
             className="h-11 rounded-md border border-input bg-card px-3 text-body text-foreground outline-none transition-colors duration-(--d-fast) hover:border-strong focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           >
@@ -199,34 +244,98 @@ export function InviteUserDialog({
 
         {scopeKind === 'facility' ? (
           <div className="flex flex-col gap-2">
-            <Label htmlFor={scopeId}>Facility scope</Label>
-            {facilities.length === 0 ? (
-              <InactiveNote>
-                No facility can be selected — nothing in the API lists facilities, and no loaded
-                user or rule names one to derive the list from.
-              </InactiveNote>
+            {facilityOptions.length === 0 ? (
+              <>
+                <span className="text-sm font-medium">Facility scope</span>
+                <InactiveNote>
+                  {facilitiesUnavailable
+                    ? 'The facility list could not be loaded, so no scope can be chosen. Close this dialog and retry the list — a typed id is deliberately not offered, because the server existence-checks it and a guess would fail on submit rather than at the point of the mistake.'
+                    : 'No facility exists to scope this role to. Create a facility first; a typed id is deliberately not offered, because the server existence-checks it.'}
+                </InactiveNote>
+              </>
+            ) : adminMultiFacilityScopeEnabled ? (
+              /*
+                The multi-select (A-G4 / #72). A native checkbox group rather than the mockup's chip
+                row — see this component's header for the reasoning and the flagged divergence.
+                `<fieldset>`/`<legend>` is what gives the group an accessible name without a
+                hand-written `aria-labelledby`, and each box is its own label-wrapped control.
+              */
+              <fieldset className="flex flex-col gap-2 border-0 p-0">
+                <legend className="mb-1 text-sm font-medium">Facility scope</legend>
+                <div className="flex flex-col gap-1 rounded-md border border-input bg-card p-2">
+                  {facilityOptions.map((facility) => (
+                    <label
+                      key={facility.id}
+                      className="flex min-h-9 items-center gap-2 rounded-sm px-2 text-body hover:bg-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring has-[:focus-visible]:outline-offset-2"
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-[var(--color-primary)]"
+                        checked={scope.includes(facility.id)}
+                        onChange={(event) => {
+                          /*
+                            Read `checked` HERE, not inside the functional updater below.
+
+                            MDN, `Event.currentTarget` (checked 2026-08-31): "the value of
+                            `currentTarget` is only available in a handler for the event. Outside
+                            an event handler it will be `null` ... if you take a reference to the
+                            Event object inside an event handler and then access its
+                            `currentTarget` property outside the event handler, its value will be
+                            `null`." React's event object mirrors that. A functional updater runs
+                            *later*, during render — outside the handler — so
+                            `e.currentTarget.checked` in there is a read on `null` and the box
+                            silently never ticks.
+
+                            Found by a headless click-through, not by review: it type-checks, reads
+                            correctly, and fails only when a human (or Playwright) clicks it.
+                          */
+                          const nowChecked = event.currentTarget.checked
+                          setScope((current) =>
+                            nowChecked
+                              ? // De-duplicated here as well as server-side: `user_scopes` carries
+                                // UNIQUE (user_id, scope_type, scope_value), and a form that could
+                                // submit the same id twice would be leaning on the backend to save
+                                // it.
+                                current.includes(facility.id)
+                                ? current
+                                : [...current, facility.id]
+                              : current.filter((id) => id !== facility.id),
+                          )
+                        }}
+                      />
+                      {facility.name}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-supporting text-muted-foreground">
+                  {scope.length === 0
+                    ? 'Choose at least one facility.'
+                    : `${scope.length} selected.`}
+                </p>
+              </fieldset>
             ) : (
-              <select
-                id={scopeId}
-                required
-                value={scope}
-                onChange={(e) => setScope(e.currentTarget.value)}
-                className="h-11 rounded-md border border-input bg-card px-3 text-body text-foreground outline-none transition-colors duration-(--d-fast) hover:border-strong focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-              >
-                <option value="">Select a facility</option>
-                {facilities.map((facility) => (
-                  <option key={facility.id} value={facility.id}>
-                    {facility.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            {adminMultiFacilityScopeEnabled ? null : (
-              <InactiveNote>
-                One facility only. Multi-facility scope needs issue #72 —{' '}
-                <code>user_scopes</code> exists in the schema but these tools never read or write
-                it.
-              </InactiveNote>
+              <>
+                <Label htmlFor={scopeId}>Facility scope</Label>
+                <select
+                  id={scopeId}
+                  required
+                  value={scope[0] ?? ''}
+                  onChange={(e) =>
+                    setScope(e.currentTarget.value === '' ? [] : [e.currentTarget.value])
+                  }
+                  className="h-11 rounded-md border border-input bg-card px-3 text-body text-foreground outline-none transition-colors duration-(--d-fast) hover:border-strong focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                >
+                  <option value="">Select a facility</option>
+                  {facilityOptions.map((facility) => (
+                    <option key={facility.id} value={facility.id}>
+                      {facility.name}
+                    </option>
+                  ))}
+                </select>
+                <InactiveNote>
+                  One facility only, while <code>adminMultiFacilityScopeEnabled</code> is off.
+                </InactiveNote>
+              </>
             )}
           </div>
         ) : null}
@@ -268,6 +377,9 @@ export function InviteUserDialog({
               onSubmit({
                 email: email.trim(),
                 role,
+                // Omitted entirely for a global role rather than sent empty — `_validate_scope`
+                // returns early for GLOBAL_ROLES, and an empty array would be a claim about scope
+                // where the honest encoding is silence.
                 scope: scopeKind === 'none' ? undefined : scope,
               })
             }}

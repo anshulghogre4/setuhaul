@@ -1066,3 +1066,13 @@ last_updated: 2026-08-29
 - **Verified:** backend 595 passed / 8 skipped / 0 failed (from 423); `tsc -b --force` clean; `oxlint` 8 pre-existing / 0 new; `vite build` clean. Session test failures were traced to their causes (11 to #53's signature change, 3 to #61's field addition), both fixed by their own agents.
 - **Not verified:** no browser render of the newly wired `/gate`, `/carrier`, `/admin` routes (Playwright absent from `frontend/node_modules`). **#53's migration NOT applied to any database.**
 - Updated [[current-state]], [[handoff]], root CHANGELOG, and the master plan's Living sprint status. Nothing committed; #36-#41 all left OPEN.
+
+## 2026-09-01 00:45 IST | implementation | M5 closed to its ceiling: HELD lifecycle live, 17/23 flags on, both migrations applied
+
+- Coordinator (Claude Fable 5) atomic writeback for the whole resolve-M5 phase (~14 subagent tracks). Per-issue evidence on #53-#91.
+- **D2's four-state promise lifecycle is live end to end**: both migrations applied to production (backups + verification recorded in their headers and on #53/#73), `TWO_PHASE_HOLD_ENABLED` defaults True, all six consuming reads and three frontends hold-aware.
+- 16 flags flipped this phase, each on verified paths, never on issue state. Still off: 2×sequencer (#49/M8), 2×rule-editor (design, #90), fairness (P_churn needs sequencer), plannerHold (#64 design), push (no producer).
+- **Four would-be production outages prevented/fixed**: shipment_id NOT NULL vs an INSERT that never wrote it; #84's digest-coupled three-file fix (partial fix = every confirm SNAPSHOT_STALE); deps.py selecting columns production lacked (= every auth request down); ops console crashing on 157/158 live rows (#89). All four passed the always-green unit suite -- fixture-only verification's blind spot, recorded as a pattern.
+- End state: backend 815 passed / 8 skipped / 0 failed (from 423); tsc/oxlint/vite clean; Playwright installed, 75 renders 0 page errors, all ten builder claims held, zero WCAG 24px legal breaches product-wide.
+- Not verified: one live-backend HELD turn end to end (write-smoke classifier-blocked; owner command recorded in CHANGELOG). Deployed stacks still run pre-M5 code.
+- Updated [[current-state]], [[handoff]], root CHANGELOG, master-plan Living status. Nothing committed beyond 7d1031c; commit message handed to owner.

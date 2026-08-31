@@ -281,6 +281,32 @@ rather than designed over.
 
 ### 5.1 Eight escalated gaps
 
+> **Status as of 2026-08-29 — work has landed for seven of the eight; every issue is still OPEN in the
+> tracker.** That distinction is deliberate and is this project's standing rule: an issue closes on
+> verified evidence and owner review, not on an agent believing it finished. "Addressed" below means code
+> or docs are on disk and tested; it does not mean closed. **The gap write-ups are left unedited** — they
+> are the evidence the issues were filed on, and rewriting them would destroy the record of what was
+> actually found. Each addressed gap carries a resolution note immediately after it.
+>
+> | Gap | Issue | Tracker | Work landed |
+> |---|---|---|---|
+> | G1 `w_fairness` / `P_churn` | #69 | OPEN | **Partly.** `w_fairness` built as a real, defaulted-off term; unknown weight keys now refused by name. `P_churn` remains genuinely blocked on the sequencer (#49) — refused rather than ignored. |
+> | G2 `rule_type` registry | #70 | OPEN | **Docs reconciled** to the live five-value registry. `DOCK_PIN`'s missing analog and the two unmocked types are stated, not resolved. `mockup.html` untouched (out of scope). |
+> | G3 intraday effectivity | #71 | OPEN | **Claim corrected; feature deliberately not built.** See the note under G3. |
+> | G6 rule-edit impact | #74 | OPEN | **Built** — `GET /admin/facility-rules/{rule_id}/impact`. |
+> | G4 multi-facility scope | #72 | OPEN | Addressed in an earlier 2026-08-29 pass. |
+> | G5 pending invitations | #73 | OPEN | Not started. |
+> | G7 publish version conflict | #75 | OPEN | Addressed in an earlier 2026-08-29 pass. |
+> | G8 removal-impact count | #76 | OPEN | Addressed in an earlier 2026-08-29 pass. |
+>
+> **Screen 6 stays blocked even though both of its gating issues are closed**, and that is the one
+> non-obvious outcome here. #70 removed the *wrong-names* half of the block; #71's resolution was to
+> correct the claim rather than build recurrence. What remains is missing **design**, not missing backend:
+> three of the five live rule types have no artboard field set, and the `DOCK_PIN` two-field pattern the
+> editor was designed around has no live analog. `adminRuleEditorEnabled` should therefore stay off
+> pending a design decision, while `adminRuleImpactEnabled` (#74) and `adminFairnessTermEnabled` (#69,
+> `w_fairness` half only) are now genuinely unblocked.
+
 Found the standing rule's way: cross-checked this surface's own design files (`screens.md`,
 `components.md`, `edge-cases.md`, `flows-and-states.md`) against the actual shipped tool bodies and schema,
 not against the tool *names* alone (all 11 names exist — the mismatch is one layer deeper, in argument
@@ -305,6 +331,26 @@ of promises the Sequencer moved) depends on §7.5.3's re-sequencing machinery, w
 it was never added either. **Gates Screens 8 (Churn field), 9 (the whole Danger Zone), and half of
 Screen 10.**
 
+> **Resolved in part, 2026-08-29 (issue #69).** `w_fairness` is now a real key in `constraints.json`
+> shipping at `0`, evaluated by `_rank_slot` and by `admin_governance_service._score` (the copy the parity
+> test pins). It multiplies **`carrier_concentration`** — the number of *other* active appointments this
+> shipment's carrier already holds at the facility **on the candidate interval's facility-local date**.
+> Keying on the local date rather than on the carrier alone is load-bearing: Stage 2 ranks one shipment's
+> own candidates against each other, so a per-carrier constant could never reorder anything and would have
+> been a term in name only. **No schema column was needed** — `shipments.carrier_id` already exists, so
+> this gap's own "needs a schema column" framing turned out to overstate it. The concentration read is
+> issued **only when the weight is non-zero**, so the shipped policy adds no round trip to
+> `find_feasible_slots`' existing four. Byte-identity at `w_fairness = 0` is proved by recomputing the
+> pre-change formula literally, across several concentration values, not by inspection.
+>
+> **The silent-ignore is fixed, which was the sharper half of this gap.** `simulate_policy_weights` and
+> `publish_policy_version` now refuse any weight key the ranking engine does not read, with the allowlist
+> derived at runtime from `constraints.json`'s own `score_weights` so it cannot drift from the engine.
+> `P_churn` is refused **by name, with its reason stated** ("the sequencer is not built, so there is
+> nothing to count") rather than lumped in as an unknown key. **`P_churn` itself remains blocked on #49
+> and nothing here changes that** — Screen 8's Churn field still has no implementable backing, only an
+> honest refusal to render against.
+
 **G2 · 🔴 `facility_rules.rule_type`'s live registry does not match this surface's own design files, and
 the mismatch traces to a known, previously-flagged, never-reconciled deviation.** `SOLUTION_DESIGN.md`
 §7.5.7 itself states the registry as `EARLY_LIMIT`, `DOCK_PIN`, `WEIGHT_LIMIT`, `NEW_START_CUTOFF` — this
@@ -326,6 +372,27 @@ mockup's flagship `DOCK_PIN` two-field pattern (dock + cargo-type pairing) has n
 two real types (`NO_SHOW_GRACE_MIN`, `REEFER_DOCK_REQUIRED`) have zero mockup representation. **Gates
 Screen 6 entirely, weakens Screen 5.**
 
+> **Resolved as a documentation correction, 2026-08-29 (issue #70). The live registry wins.** E5.6's
+> frontend already builds against it (`features/admin/lib/rule-types.ts`), so making the docs the party
+> that moves is the only option that leaves one truth rather than two. Reconciled: `SOLUTION_DESIGN.md`
+> §7.5.7 (now carrying the full five-value table with each type's value shape and whether the feasibility
+> engine enforces it), `screens.md` §3, `components.md` §2, `edge-cases.md` #4 and #7,
+> `flows-and-states.md` Flow 5.
+>
+> **Two things this correction deliberately does not fix**, restated here because renaming everything else
+> makes them easy to lose: `DOCK_PIN` has **no live analog** — and it was the *only* registry entry
+> requiring two value fields, i.e. the whole demonstration of `components.md` §2's type-driven field
+> mechanism; `REEFER_DOCK_REQUIRED` carries RULE003's intent as a boolean, which is narrower, not
+> equivalent. And `NO_SHOW_GRACE_MIN`/`REEFER_DOCK_REQUIRED` still have **zero artboard representation**,
+> with `HEAVY_DOCK_REQUIRED_KG`'s field set only inferable from the stale `WEIGHT_LIMIT` frame. **Screen 6
+> therefore stays gated after this closes, on missing design rather than on backend** — a generic
+> free-text value field would violate the one rule §2 states outright. Screen 5 (the list) is unweakened
+> and ships.
+>
+> **`mockup.html` was NOT edited** — this pass owned the folder's `.md` files only. It still renders the
+> four stale names, and that divergence is now the one remaining instance of this gap. Flagged for the
+> owner rather than left silent.
+
 **G3 · 🔴 "Intraday effectivity" (day-of-week + hour-of-day recurring window) has no engine support.**
 `screens.md` §3 states this "genuinely support[s] intraday effectivity... closing the exact gap the spec
 named as unimplementable." Checked directly against the engine that would enforce it:
@@ -336,6 +403,32 @@ weekly-window concept anywhere in the evaluation. The column type itself (`TEXT`
 baseline migration) can store whatever string the UI serializes, but nothing downstream parses a "Weekdays
 only, 18:00–23:59" pattern out of it. The claim in `screens.md` is not true against the shipped engine.
 **Gates Screen 6's effective-window sub-flow.**
+
+> **Resolved 2026-08-29 (issue #71) by correcting the claim, not by building the feature. Stated plainly:
+> recurring intraday effectivity is UNBUILT.** Not partially built, not built-but-rough — there is no
+> day-of-week concept anywhere in the enforcing engine and none was added.
+>
+> **Why this fork went that way.** A correct recurring window wants real columns (`days_of_week`,
+> `start_time_local`, `end_time_local`) and therefore a migration. The alternative — encoding recurrence
+> into the existing unstructured `TEXT` column — would add a **third** undiscoverable shape to a column
+> already carrying two (a bare date from the original seed, an offset-bearing ISO timestamp from the demo
+> overlay), invisible to SQL and unenforceable by any constraint, and would put its parser inside
+> `active_facility_rules` — which `evaluate_candidate_slot` calls **once per candidate interval, up to 500
+> per search**, on the D1 booking hot path. No live rule uses recurrence, and D15's "intraday facility
+> rules" means the *absolute* intraday windows that already work. Building unstructured recurrence into
+> the ranking hot path to satisfy one mockup cell, at five-concurrent-user scale, is the wrong trade.
+>
+> **What was clarified rather than changed.** The absolute half of the claim was always true and is now
+> stated precisely and pinned by test: an offset-bearing boundary really is hour-precise, so a rule *can*
+> apply to part of one specific day. And a genuine hazard the original gap write-up did not reach was
+> found and pinned: because an unparseable boundary yields *no bound on that side*, a recurrence string
+> saved into that column today would make the rule apply **always**, not never — the opposite of the
+> "stored and silently never enforced" the flag comment assumed. Behaviour deliberately left unchanged
+> (over-applying rejects an interval; under-applying lets the system promise one the facility forbids, the
+> worse failure for this product), but no longer undocumented.
+>
+> **Owner fork left open:** if recurring windows are actually wanted, they are a scoped schema change plus
+> a hot-path parser, filed separately — not a doc fix and not a follow-on to this issue.
 
 **G4 · 🟡 Multi-facility scope exists in the schema and is read elsewhere, but not by this surface's own
 tools.** `user_scopes` (`supabase/migrations/20260823090000_e23_identity_model.sql`) is a real child table
@@ -363,6 +456,34 @@ names which appointments a tightened rule would affect. `edge-cases.md` #4 depen
 non-compliant... the count of affected appointments before the edit commits") and it names the exact
 scenario the mockup's own Screen 7 renders. This is the same shape as planner's `get_dock_block_impact` —
 a real, buildable, narrowly-scoped read this surface needs and doesn't have. **Gates Screen 7 entirely.**
+
+> **Resolved 2026-08-29 (issue #74).** `GET /api/v1/admin/facility-rules/{rule_id}/impact` —
+> `admin_governance_service.get_facility_rule_impact`. Built to the same shape as
+> `get_dock_block_impact`/`get_user_removal_impact` rather than a second shape for the same problem, and
+> flagged in its own docstring as an **addition to §7.5.7's catalog**, not an implementation of it.
+>
+> Four decisions worth knowing before rendering Screen 7:
+> - **It evaluates by calling the engine, not by re-implementing it.** `active_facility_rules` decides
+>   *when* the proposed rule is in force; `check_facility_rules` decides *what* it forbids. A locally
+>   rewritten "is 20:30 after 20:00" check would be correct until someone changed the engine's
+>   strict-vs-inclusive boundary and not the copy — and each affected row carries the engine's own message
+>   as `reason`, so the dialog cannot describe the breach differently from the check that will reject
+>   future bookings.
+> - **Two counts, not one.** `affected_count` is what this edit would *newly* break;
+>   `already_non_compliant_count` is what the current rule forbids anyway. Only the first is a consequence
+>   of pressing Save.
+> - **`evaluable: false` is a real answer.** `CHECKIN_EARLY_LIMIT_MIN` and `NO_SHOW_GRACE_MIN` are not
+>   enforced by the feasibility engine at all, so editing them cannot make anything retroactively
+>   non-compliant. Render the returned `note`; a bare "0 affected" would read as "checked, nothing found".
+> - **No wall-clock filter.** The scan is bounded by the proposed rule's own effectivity window. This
+>   engine has no injected clock (§9.1), so a `now()` bound would return a confident "0 affected" against
+>   any dataset whose snapshot clock differs from the wall clock — and a dialog that always says zero is
+>   worse than one that says nothing.
+>
+> Pure read; `update_facility_rule` is unchanged, so `edge-cases.md` #4's "does not mutate or escalate"
+> guarantee is structural rather than merely intended. **Screen 7 is unblocked**
+> (`adminRuleImpactEnabled`), though its only entry point is Screen 6's editor, which stays gated on the
+> G2 design gap above.
 
 **G7 · 🟡 No version-conflict detection on `publish_policy_version`.** `edge-cases.md` #3 states: "if
 another admin publishes a version between this admin's simulation and their own Publish attempt, the tool
@@ -535,6 +656,28 @@ data, not an illustrative guess.
 ---
 
 ## 6 · Owner decisions (four forks)
+
+> **Forks A and B were resolved by the owner and implemented 2026-08-29 (issues #70 and #69). The options
+> below are left as written** — they are the reasoning the decision was made against. Outcomes:
+>
+> - **Fork A → option (1), as recommended, with one deviation and one correction to its premise.** The
+>   design files were reconciled to the live five types. **Deviation:** the type-specific field sets for
+>   the three uncovered types were *not* redesigned — that is design work this pass had no mandate to
+>   invent, so it is called out explicitly instead and Screen 6 stays gated on it. **Premise correction:**
+>   "this surface hasn't been built into `frontend/` yet" was true when written and is no longer — E5.6
+>   shipped `features/admin/`, already built against the live registry, which independently reinforces (1)
+>   rather than weakening it. `mockup.html` was out of this pass's scope (`.md` files only) and still
+>   carries the stale names.
+> - **Fork B → option (1) for `w_fairness`, option (2)-in-substance for `P_churn`.** `w_fairness` is
+>   built, defaulted off, and genuinely evaluated. Its "schema default of 0" turned out to need no schema
+>   change at all — it lives in `constraints.json` alongside the other coefficients, and
+>   `shipments.carrier_id` already existed. `P_churn` stays gated on #49, but option (3) was **rejected**:
+>   a permanently-Inactive field is a weaker guarantee than a server that refuses the key by name, which
+>   is what was built instead.
+>
+> **Fork C** (multi-facility scope, G4/#72) had its backend work land in an earlier 2026-08-29 pass;
+> the fork text below is left as written and the issue is still OPEN. **Fork D** (pending-invitation
+> lifecycle, G5/#73) is untouched and genuinely open.
 
 **Fork A — `facility_rules.rule_type` reconciliation (G2).** Three options, not silently picked:
 1. Update `06-admin-console/`'s design files (`screens.md`, `components.md`, `edge-cases.md`,

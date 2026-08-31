@@ -113,7 +113,16 @@ class Settings(BaseSettings):
     # one. Flip to true only after the migration is applied AND the driver-chat HELD screens
     # (E5.1's 4 gated screens) are ready to render the intermediate state -- turning it on sooner
     # would leave `request_slot` returning a `HELD` outcome no UI knows how to display.
-    two_phase_hold_enabled: bool = False
+    # Flipped to True 2026-08-31 by owner decision, after: the D2 migration was applied to
+    # production and verified (613 rows backfilled, exclusion predicate in place), all SIX
+    # consuming reads became hold-aware (#83 driver tools, #84 planner displacement+snapshot,
+    # #85 carrier derivation, #86 driver /context + assistant prefetch, #87 carrier filter),
+    # and the flag-off path was proven byte-identical throughout. request_slot now creates a
+    # HELD row first (D2's two-phase contract); confirm_held_slot and the M8 HELD sweeper leg
+    # are live. Rolling back to False restores single-phase booking instantly with no schema
+    # change -- but note holds live at that moment stay invisible to reads for up to one TTL
+    # (90s) while still consuming capacity (documented in holds.hold_reads_enabled()).
+    two_phase_hold_enabled: bool = True
 
     # E4.4 (issue #34, M4): no timeout ceiling existed anywhere on the LLM path before this --
     # a slow provider response had nothing bounding it. `llm_call_timeout_seconds` bounds one

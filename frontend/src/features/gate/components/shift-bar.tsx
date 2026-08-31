@@ -18,9 +18,10 @@ import { TOUCH_CLASS } from '../lib/touch'
  * chrome -- **never by fading**, because fading is what glare destroys first. Both still meet the
  * 56px target, which is why they are `min-h-(--tap) min-w-(--tap)` and not text links.
  *
- * `officerName` is local device state and is never transmitted anywhere -- issue #68 (GY-G2). The
- * bar displays it exactly as U111 specifies; the server-side stamping U111 also promises does not
- * exist. See `lib/session.ts`.
+ * `officerName` is device-local state that this bar only *displays*. Since issue #68 (closed
+ * 2026-08-31) the same value is also stamped on every event the shift writes, but that path runs
+ * through `gate-kiosk.tsx` -> `TruckAction` -> `lib/api.ts`, not through here -- this component
+ * neither sends it nor decides anything with it. See `lib/session.ts`.
  */
 export function ShiftBar({
   device,

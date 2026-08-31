@@ -1,6 +1,8 @@
 import { apiGet } from '@/core/http/api'
 import { formatDay, formatTime } from './format'
-import type { DriverThread, PriorityCode, PromiseState } from './types'
+import { toHold } from './mappers'
+import { TTL_MS } from './use-promise-countdown'
+import type { DriverHold, DriverThread, PriorityCode, PromiseState } from './types'
 
 /**
  * The driver surface's real server reads, and an honest account of what the server does not have.
@@ -9,7 +11,7 @@ import type { DriverThread, PriorityCode, PromiseState } from './types'
  *
  * | Endpoint | Gives |
  * |---|---|
- * | `GET /api/v1/driver/context` | `driver`, `profile`, up to 20 `shipments[]`, `primary_shipment`, `current_appointment`, `latest_eta`, `facility` |
+ * | `GET /api/v1/driver/context` | `driver`, `profile`, up to 20 `shipments[]`, `primary_shipment`, `current_appointment`, **`current_hold` / `promise_state` / `promise_state_source`** (issue #86), `latest_eta`, `facility` |
  * | `POST /api/v1/chat/stream` | the turn (see `use-driver-turn.ts`) |
  * | `GET /api/v1/chat/history` | bounded Redis transcript restore, 24h TTL |
  *
@@ -28,10 +30,12 @@ import type { DriverThread, PriorityCode, PromiseState } from './types'
  *    their paperwork. Deliberately *not* the shipment id as a sentence subject
  *    (`voice-and-tone.md` forbids that), and deliberately not a fabricated city.
  *
- * 2. **Appointment/promise state is fetched for the primary shipment only.** The other threads
- *    therefore render `promiseState: null`, which hides the chip and the state line entirely —
- *    the specified behaviour for "no active promise", and honest rather than optimistic. A
- *    thread whose promise the client cannot see must not draw a chip.
+ * 2. **Promise state is fetched for the primary shipment only** — and since issue #86 that
+ *    promise is composed from *both* `appointments` and `dock_occupancy`, so a HELD hold now
+ *    reaches this surface where it previously read as "no appointment at all". The other threads
+ *    still render `promiseState: null`, which hides the chip and the state line entirely — the
+ *    specified behaviour for "no active promise", and honest rather than optimistic. A thread
+ *    whose promise the client cannot see must not draw a chip.
  *
  * 3. **No last-message preview anywhere.** There is no per-thread "latest message" endpoint;
  *    `/chat/history` is a single-thread restore. `lastMessagePreview` is `null` and the line is
@@ -72,7 +76,15 @@ type RawFacility = {
   timezone: string | null
 }
 
+/** `holds.live_hold_for_shipment`'s row. Typed loosely here and narrowed by `mappers.toHold`,
+ *  which refuses a hold with no server `expires_at` rather than rendering one without a deadline. */
+type RawHold = Record<string, unknown>
+
 export type DriverContext = {
+  /** Server clock reading. Fed to `CountdownProvider` so the 90-second hold is measured against the
+   *  server's time and not the phone's -- a handset three minutes fast would otherwise show a live
+   *  hold as already lapsed. */
+  as_of: string
   driver: {
     driver_id: string
     driver_name: string | null
@@ -85,6 +97,15 @@ export type DriverContext = {
   shipments: RawShipment[]
   primary_shipment: RawShipment | null
   current_appointment: RawAppointment | null
+  /** Issue #86. Its own key rather than being flattened into `current_appointment`, because a hold
+   *  genuinely is not one: no `appointment_id`, no `booked_at`, no D9 clock. */
+  current_hold: RawHold | null
+  /** The composed promise -- an active appointment outranks a live hold, a live hold outranks a
+   *  terminal appointment status (`driver_reads.resolve_promise_state`). **Preferred over deriving
+   *  it from `current_appointment` here**, so this client and the assistant answering in the same
+   *  turn cannot disagree about the same shipment. */
+  promise_state: string | null
+  promise_state_source: 'appointments' | 'dock_occupancy_hold' | null
   facility: RawFacility | null
 }
 
@@ -99,19 +120,24 @@ export async function fetchDriverContext(): Promise<DriverContext> {
 const INACTIVE = new Set(['COMPLETED', 'CANCELLED'])
 
 /**
- * `appointments.appointment_status` -> the designed promise state.
+ * The server's composed `promise_state` -> the designed chip state.
  *
- * **Note what is NOT here: `HELD`.** `appointments_appointment_status_check` admits
- * `PENDING_CONFIRMATION / CONFIRMED / IN_PROGRESS / COMPLETED / COMPLETED / CANCELLED /
- * NO_SHOW / REJECTED / EXPIRED` and no `HELD` value at all (issue #53). So there is no server
- * status this function could map to `HELD` even if the flag were on — which is the structural
- * reason the flag exists rather than a bug it is hiding.
+ * **`HELD` is here now** (issues #83/#86). It does not come from
+ * `appointments.appointment_status`, whose CHECK constraint has no such value and deliberately
+ * never will: the server composes `promise_state` from `appointments` *and* `dock_occupancy` in
+ * `driver_reads.resolve_promise_state`, and this function reads that composed value rather than
+ * re-deriving one. That is what stops this surface and the assistant, answering about the same
+ * shipment in the same turn, from saying two different things.
  *
  * `IN_PROGRESS` maps to `CONFIRMED`: from the driver's point of view an appointment being
  * unloaded is still the agreed one, and there is no fifth chip state.
  */
 function toPromiseState(status: string | null): PromiseState | null {
   switch (status) {
+    case 'HELD':
+      // Behind `heldStateEnabled` at the render site, not here -- this function reports what the
+      // server said; the flag decides whether the surface may draw it.
+      return 'HELD'
     case 'PENDING_CONFIRMATION':
       return 'PENDING_CONFIRMATION'
     case 'CONFIRMED':
@@ -127,14 +153,24 @@ function toPromiseState(status: string | null): PromiseState | null {
 
 const PRIORITIES = new Set(['CRITICAL', 'HIGH', 'NORMAL', 'LOW'])
 
+/** The live D2 hold on the driver's primary shipment, or `null`. Refuses a hold with no server
+ *  `expires_at` -- see `mappers.toHold`. */
+export function currentHold(ctx: DriverContext): DriverHold | null {
+  return toHold(ctx.current_hold)
+}
+
 export function toThreads(ctx: DriverContext): DriverThread[] {
   const facilityName = ctx.facility?.facility_name ?? null
   const primaryId = ctx.primary_shipment?.shipment_id
+  const hold = currentHold(ctx)
 
   return ctx.shipments.map((s) => {
     const isPrimary = s.shipment_id === primaryId
     const appt = isPrimary ? ctx.current_appointment : null
-    const promiseState = appt ? toPromiseState(appt.appointment_status) : null
+    // The SERVER's composed promise for the primary shipment, not a status this client re-derived.
+    // For every other thread there is no promise on this payload at all, so it stays null.
+    const promiseState = isPrimary ? toPromiseState(ctx.promise_state) : null
+    const heldHere = isPrimary && promiseState === 'HELD' ? hold : null
 
     return {
       // The thread id the chat endpoints use is minted server-side per conversation. Until a
@@ -147,13 +183,17 @@ export function toThreads(ctx: DriverContext): DriverThread[] {
       orderReference: s.order_reference ?? '',
       priority: PRIORITIES.has(s.priority_code ?? '') ? (s.priority_code as PriorityCode) : null,
       promiseState,
-      // No `expires_at` is returned for a PENDING_CONFIRMATION appointment either -- D9's
-      // fifteen-minute deadline is enforced by the M8 sweeper, not exposed on the read. So no
-      // countdown is drawn rather than one being computed from `booked_at + 15min`, which would
-      // be the client inventing a deadline.
-      expiresAt: undefined,
-      ttlMs: undefined,
-      operationalLine: operationalLineFor(appt, ctx.facility?.timezone ?? undefined),
+      // **HELD carries a real, server-stamped deadline** (`dock_occupancy.expires_at`, issue #86),
+      // so its countdown is read rather than computed. PENDING_CONFIRMATION still carries none:
+      // D9's fifteen minutes are enforced by the M8 sweeper from `booked_at` and are not exposed on
+      // this read, so no countdown is drawn rather than one being derived from `booked_at + 15min`
+      // -- which would be the client inventing a deadline. Two states, two different reasons, and
+      // only one of them is a gap now.
+      expiresAt: heldHere?.expiresAt,
+      ttlMs: heldHere ? TTL_MS.HELD : undefined,
+      operationalLine:
+        operationalLineFor(appt, ctx.facility?.timezone ?? undefined) ??
+        holdOperationalLine(heldHere, ctx.facility?.timezone ?? undefined),
       lastMessagePreview: null,
       lastActivityAt: s.updated_at ?? new Date(0).toISOString(),
       resolved: INACTIVE.has(s.current_status ?? ''),
@@ -190,6 +230,25 @@ function operationalLineFor(
   const end = formatTime(appt.slot_end_ts, timeZone)
   if (!day || !start || !end) return null
   return `${day} · ${start} – ${end}`
+}
+
+/**
+ * The same dock · dated-range line, built from a HELD hold instead of an appointment.
+ *
+ * A hold has no appointment row and therefore no `slot_start_ts` on `current_appointment` — but it
+ * does carry its own occupancy window and its dock *code* (`live_hold_for_shipment` joins `docks`
+ * for exactly that), so this line is fully renderable and does not fall back to a UUID the way the
+ * appointment path has to. Returns `null` rather than a partial line if any component is missing:
+ * `voice-and-tone.md` forbids a bare time, so half a line is not an improvement on none.
+ */
+function holdOperationalLine(hold: DriverHold | null, timeZone?: string): string | null {
+  if (!hold?.windowStart || !hold.windowEnd) return null
+  const day = formatDay(hold.windowStart, timeZone)
+  const start = formatTime(hold.windowStart, timeZone)
+  const end = formatTime(hold.windowEnd, timeZone)
+  if (!day || !start || !end) return null
+  const dock = hold.dockCode ? `Dock ${hold.dockCode} · ` : ''
+  return `${dock}${day} · ${start} – ${end}`
 }
 
 /**

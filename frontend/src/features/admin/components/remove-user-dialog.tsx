@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 
+import { getUserRemovalImpact } from '../lib/api'
 import { adminRemovalImpactEnabled } from '../lib/flags'
 import type { AdminUser } from '../lib/types'
 import { Button } from '@/shared/ui/button'
@@ -67,11 +68,57 @@ export function RemoveUserDialog({
   const whyId = useId()
   const fieldId = useId()
 
+  /**
+   * `null` means "not known" — never "zero". A-G8 / issue #76: the sentence
+   * `edge-cases.md` #1 locks names a real number, so it renders only once one has actually
+   * arrived. A failed or in-flight read leaves this `null` and the sentence is simply absent,
+   * which is the same honest state the dialog shipped in before the endpoint existed.
+   */
+  const [impactCount, setImpactCount] = useState<number | null>(null)
+  const userId = user?.user_id ?? null
+
   // Clearing on close rather than on open: a reopened dialog must never start with a previously
   // typed value still satisfying the gate.
   useEffect(() => {
     if (!open) setTyped('')
   }, [open])
+
+  /**
+   * Fetching here rather than in `UsersTab` on purpose: the count is only ever rendered by this
+   * dialog, and hoisting it would make the Users tab issue a request per row hover/menu open.
+   *
+   * `GET .../removal-impact` is a pure read and **advisory** — `remove_user` recounts inside its
+   * own removing transaction and never trusts this value — so a failure is swallowed rather than
+   * routed to `errorDetail`, which is reserved for a write that actually failed. Blocking a
+   * removal because a preview read 500'd would be strictly worse than removing without the
+   * sentence.
+   *
+   * The reflow this causes lands early: the Remove button stays unavailable until the admin has
+   * typed a full email address, which takes far longer than the read, so the sentence appears
+   * while they are typing rather than shifting layout under a destructive control at click time.
+   *
+   * `cancelled` guards the switch-users race (`apiGet` takes no `AbortSignal`, and widening the
+   * shared HTTP helper is not this change's to do) — a late response for a previously-selected
+   * user must never paint a count against the one now on screen.
+   */
+  useEffect(() => {
+    if (!adminRemovalImpactEnabled || !open || userId === null) {
+      setImpactCount(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const impact = await getUserRemovalImpact(userId)
+        if (!cancelled) setImpactCount(impact.active_escalation_count)
+      } catch {
+        if (!cancelled) setImpactCount(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, userId])
 
   if (!user) return null
 
@@ -104,13 +151,23 @@ export function RemoveUserDialog({
               This account will be removed permanently and will not appear in user search again.
             </p>
             {/*
-              A-G8 / issue #76. `remove_user`'s only read is `SELECT user_id, auth_user_id` — there
-              is no query behind "owns N active escalations" anywhere in the backend, so the
-              sentence `edge-cases.md` #1 locks is omitted rather than rendered with a made-up
-              number. The two lines that remain are both true of the shipped tool.
+              A-G8 / issue #76, wired 2026-08-29 against `GET /admin/users/{id}/removal-impact`.
+
+              Three conditions, all load-bearing: the flag is on, the read has actually answered
+              (`!== null`, not falsy — 0 is a real answer), and the count is above zero. A user who
+              owns nothing gets no sentence at all rather than "owns 0 active escalations", which
+              `edge-cases.md` #1's copy was never written to say.
+
+              The count comes from the server's `count(*) OVER ()`, evaluated before its own
+              `LIMIT 50` — so it is never `active_escalations.length`, which would silently cap at
+              50 and under-report a genuinely large removal.
             */}
-            {adminRemovalImpactEnabled ? (
-              <p>This user owns active escalations — they will show as unowned once removed.</p>
+            {adminRemovalImpactEnabled && impactCount !== null && impactCount > 0 ? (
+              <p>
+                This user owns {impactCount} active{' '}
+                {impactCount === 1 ? 'escalation' : 'escalations'} — they will show as unowned once
+                removed.
+              </p>
             ) : null}
             <p>Their past actions stay attributable in the Audit tab.</p>
           </div>

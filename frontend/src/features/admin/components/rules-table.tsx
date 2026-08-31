@@ -1,5 +1,4 @@
 import { TableCard } from './primitives'
-import { facilityDisplayName } from '../lib/facility-names'
 import { formatEffectiveWindow, formatRuleValue } from '../lib/rule-types'
 import type { FacilityRule } from '../lib/types'
 
@@ -15,7 +14,15 @@ import type { FacilityRule } from '../lib/types'
  * and Edit is 🔴 (issues #70/#71) while no `delete_facility_rule` tool exists anywhere in the
  * backend at all. An overflow button whose menu is empty is worse than no button.
  */
-export function RulesTable({ rules }: { rules: FacilityRule[] }) {
+export function RulesTable({
+  rules,
+  facilityName,
+}: {
+  rules: FacilityRule[]
+  /** Injected, not imported: facility names now come from `GET /admin/facilities` (issue #78) and
+   *  this component stays fetch-free so the gallery can render it against fixtures. */
+  facilityName: (facilityId: string) => string
+}) {
   return (
     <TableCard>
       <table className="w-full table-fixed border-collapse text-body">
@@ -36,7 +43,7 @@ export function RulesTable({ rules }: { rules: FacilityRule[] }) {
         <tbody>
           {rules.map((rule) => (
             <tr key={rule.rule_id} className="border-b border-border last:border-b-0 hover:bg-hover">
-              <td className="truncate px-4 py-3">{facilityDisplayName(rule.facility_id)}</td>
+              <td className="truncate px-4 py-3">{facilityName(rule.facility_id)}</td>
               {/* Registry values render as uppercase mono enum tokens -- registry values, not
                   prose (`mockup.html` §5). */}
               <td className="truncate px-4 py-3 font-data">{rule.rule_type}</td>

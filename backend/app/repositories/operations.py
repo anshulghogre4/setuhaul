@@ -191,6 +191,56 @@ async def list_planner_queue_rows(
     return [dict(row) for row in rows]
 
 
+# --------------------------------------------------------------------------------------------
+# The hold-aware half of `list_live_dock_occupancy` (issue #84).
+#
+# Held as a separate literal rather than an interpolated fragment so that with the D2 flag off the
+# statement below is *byte-identical* to the one that shipped -- the only guarantee that makes this
+# change zero-risk on a database where `20260829134929_d2_held_state_dock_occupancy.sql` has not
+# been applied. `o.state` / `o.expires_at` / `o.shipment_id` do not exist there, and PostgreSQL
+# resolves column references at parse time, so a runtime `if` inside one statement would not have
+# saved it: an unapplied migration turns the whole read into `UndefinedColumn`, not an empty result.
+_LIVE_DOCK_OCCUPANCY_SQL = """
+                SELECT o.occupancy_id, o.dock_id, o.appointment_id,
+                       lower(o."window") AS window_start,
+                       upper(o."window") AS window_end,
+                       a.shipment_id, a.appointment_status, s.order_reference
+                FROM public.dock_occupancy o
+                JOIN public.appointments a ON a.appointment_id = o.appointment_id
+                JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                JOIN public.docks d ON d.dock_id = o.dock_id
+                WHERE d.facility_id = :facility_id
+                  AND a.appointment_status = ANY(:active_statuses)
+                  AND o."window" && tstzrange(:range_start, :range_end, '[)')
+                ORDER BY o.dock_id ASC, lower(o."window") ASC
+"""
+
+_LIVE_DOCK_OCCUPANCY_WITH_HOLDS_SQL = """
+                SELECT o.occupancy_id, o.dock_id, o.appointment_id,
+                       lower(o."window") AS window_start,
+                       upper(o."window") AS window_end,
+                       COALESCE(a.shipment_id, o.shipment_id) AS shipment_id,
+                       COALESCE(a.appointment_status, o.state) AS appointment_status,
+                       CASE WHEN o.appointment_id IS NULL
+                            THEN 'dock_occupancy_hold' ELSE 'appointments'
+                       END AS claim_source,
+                       o.expires_at AS hold_expires_at,
+                       s.order_reference
+                FROM public.dock_occupancy o
+                LEFT JOIN public.appointments a ON a.appointment_id = o.appointment_id
+                LEFT JOIN public.shipments s
+                  ON s.shipment_id = COALESCE(a.shipment_id, o.shipment_id)
+                JOIN public.docks d ON d.dock_id = o.dock_id
+                WHERE d.facility_id = :facility_id
+                  AND o."window" && tstzrange(:range_start, :range_end, '[)')
+                  AND (
+                        a.appointment_status = ANY(:active_statuses)
+                     OR (o.appointment_id IS NULL AND o.state = ANY(:hold_states))
+                  )
+                ORDER BY o.dock_id ASC, lower(o."window") ASC
+"""
+
+
 async def list_live_dock_occupancy(
     session: AsyncSession,
     *,
@@ -198,6 +248,8 @@ async def list_live_dock_occupancy(
     range_start: datetime,
     range_end: datetime,
     active_statuses: list[str],
+    include_holds: bool = False,
+    hold_states: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Every live dock claim in one facility overlapping a bounding window.
 
@@ -211,33 +263,57 @@ async def list_live_dock_occupancy(
     two abutting windows (`[10:00,11:00)` and `[11:00,12:00)`) do **not** overlap
     (PostgreSQL "Range Functions and Operators": `&&` is "have any elements in common", while
     adjacency is the separate `-|-` operator).
+
+    ## `include_holds` -- issue #84, and why the join had to stop being INNER
+
+    D2 models a hold as a `dock_occupancy` row with `appointment_id IS NULL`
+    (`SOLUTION_DESIGN.md` §4: *"Held is not booked: no appointments row exists yet"*), so the
+    `JOIN public.appointments` this query shipped with dropped every hold on the floor. Reproduced
+    empirically 2026-08-29 against PostgreSQL 18.3 built from this repo's own migration chain: with
+    one live `HELD` row on `DOCK-JAI-D1`, the shipped statement returned **0 rows** while the same
+    cluster refused a competing claim on that interval with
+    `dock_occupancy_dock_id_window_excl`. The displacement preview said "nobody would be hurt"
+    about capacity the database was already defending.
+
+    Two things about the hold predicate are deliberate and were each checked against the live
+    constraint rather than assumed:
+
+    * **`o.state = ANY(:hold_states)`, and no `expires_at > now()` term.** §0.8 tells *promise*
+      reads to filter `state = 'HELD' AND expires_at > now()`, and the driver/carrier reads
+      (issues #83/#85) do exactly that. This query answers a different question -- "what will
+      PostgreSQL refuse?" -- and the exclusion constraint's predicate is
+      `WHERE (state IN ('HELD','PENDING_CONFIRMATION','CONFIRMED','IN_PROGRESS'))` with **no time
+      term at all**. Verified empirically the same day: a `HELD` row whose TTL lapsed ten minutes
+      ago, which the M8 sweeper has not yet retired, still raises the exclusion violation. Adding
+      the expiry filter here would therefore have re-introduced a smaller version of the same lie.
+      The caller receives `hold_expires_at` and can say "a lapsed hold the sweeper has not retired
+      yet" rather than pretending it is not there.
+    * **`COALESCE(a.appointment_status, o.state)`, not `o.state` alone.** For an
+      *appointment-backed* row `o.state` drifts: `allocation._claim_dock_occupancy` inserts without
+      naming a state (taking the column default `'PENDING_CONFIRMATION'`) and
+      `allocation.confirm_appointment` deliberately does not touch `dock_occupancy` at all, so a
+      CONFIRMED appointment's claim row still reads `PENDING_CONFIRMATION`. `appointments` remains
+      the authority for a row that has an appointment; `o.state` answers only for the rows that
+      have none.
+
+    `shipments` is joined **LEFT**, and that is not defensive tidying. `dock_occupancy.shipment_id`
+    ships *nullable* -- the D2 migration defers `SET NOT NULL` to a follow-up so it can be applied
+    ahead of the `_claim_dock_occupancy` fix that populates it -- so between those two deploys a
+    freshly written claim legitimately has no `shipment_id`. An inner join would drop exactly such a
+    row, which is issue #84's own failure mode wearing a different hat: a claim that consumes
+    capacity must never disappear from the query that predicts refusals because a *display* column
+    is NULL. `order_reference` is then NULL for that row, which is the honest answer.
     """
-    rows = (
-        await session.execute(
-            text(
-                """
-                SELECT o.occupancy_id, o.dock_id, o.appointment_id,
-                       lower(o."window") AS window_start,
-                       upper(o."window") AS window_end,
-                       a.shipment_id, a.appointment_status, s.order_reference
-                FROM public.dock_occupancy o
-                JOIN public.appointments a ON a.appointment_id = o.appointment_id
-                JOIN public.shipments s ON s.shipment_id = a.shipment_id
-                JOIN public.docks d ON d.dock_id = o.dock_id
-                WHERE d.facility_id = :facility_id
-                  AND a.appointment_status = ANY(:active_statuses)
-                  AND o."window" && tstzrange(:range_start, :range_end, '[)')
-                ORDER BY o.dock_id ASC, lower(o."window") ASC
-                """
-            ),
-            {
-                "facility_id": facility_id,
-                "active_statuses": active_statuses,
-                "range_start": range_start,
-                "range_end": range_end,
-            },
-        )
-    ).mappings().all()
+    sql = _LIVE_DOCK_OCCUPANCY_WITH_HOLDS_SQL if include_holds else _LIVE_DOCK_OCCUPANCY_SQL
+    params: dict[str, Any] = {
+        "facility_id": facility_id,
+        "active_statuses": active_statuses,
+        "range_start": range_start,
+        "range_end": range_end,
+    }
+    if include_holds:
+        params["hold_states"] = list(hold_states or [])
+    rows = (await session.execute(text(sql), params)).mappings().all()
     return [dict(row) for row in rows]
 
 

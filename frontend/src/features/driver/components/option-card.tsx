@@ -68,6 +68,11 @@ const card = {
   pressed: 'bg-hover',
   committing: 'opacity-40 pointer-events-none',
   held: 'border-2 border-dashed border-state-held-border bg-state-held-bg',
+  // Screen 15. **The dashed amber is gone and a plain 1px border returns** -- `stitch-prompts.md`
+  // section 15's before/after is explicit about that, and it matters: the dashed border is the
+  // shape channel that says "temporary, still yours", so leaving it on a lapsed card would keep
+  // asserting a hold that no longer exists, in the one channel that survives glare.
+  lapsed: 'opacity-40 pointer-events-none',
   lost: 'opacity-40 pointer-events-none',
   withdrawn: 'opacity-40 pointer-events-none',
   offline: 'opacity-40 pointer-events-none',
@@ -76,7 +81,11 @@ const card = {
 
 /** Struck-through states, i.e. "this option is gone". Never applied to a sibling of a held card
  *  and never to Committing. */
-const STRUCK: ReadonlySet<OptionCardState> = new Set<OptionCardState>(['lost', 'withdrawn'])
+const STRUCK: ReadonlySet<OptionCardState> = new Set<OptionCardState>([
+  'lapsed',
+  'lost',
+  'withdrawn',
+])
 
 export type OptionCardProps = {
   option: DriverOption
@@ -89,14 +98,16 @@ export type OptionCardProps = {
 export function OptionCard({ option, state = 'default', heldUntil, onSelect }: OptionCardProps) {
   const [pressed, setPressed] = useState(false)
 
-  // Issue #53: `held` cannot be reached from a real server state today. If the flag is off and
-  // something asks for it anyway, render `default` rather than a HELD chip over what is really
-  // already a PENDING_CONFIRMATION -- components.md section 2 calls that a broken promise in the
-  // business sense. Fail closed, loudly in dev.
+  // `held` and `lapsed` are both reachable from real server state since 2026-08-31 (#53/#83), but
+  // the guard stays: `heldStateEnabled` is a client constant and `TWO_PHASE_HOLD_ENABLED` is a
+  // server one, and they can be flipped independently. If the server grants a hold while this
+  // surface is not wired to render one, `default` is the honest fallback -- a HELD treatment over
+  // what the rest of this surface is treating as SHOWN is the broken promise `components.md`
+  // section 2 names. Fail closed, loudly in dev.
   let effective = state
-  if (state === 'held' && !heldStateEnabled) {
+  if ((state === 'held' || state === 'lapsed') && !heldStateEnabled) {
     if (import.meta.env.DEV) {
-      console.warn('[driver] option-card asked for `held` while heldStateEnabled is false (#53)')
+      console.warn(`[driver] option-card asked for \`${state}\` while heldStateEnabled is false`)
     }
     effective = 'default'
   }
@@ -195,6 +206,10 @@ export function OptionCard({ option, state = 'default', heldUntil, onSelect }: O
  *  they are not sentences and have no template; the offline one IS in `copy.ts` because it is a
  *  driver-facing reason. */
 const STATUS_LINE: Partial<Record<OptionCardState, string>> = {
+  // Its own string, not `lost`'s. "Taken by another driver" and "Hold lapsed" are different facts,
+  // and section 15 forbids blaming the driver for being slow -- so this states what happened and
+  // the notice beneath the card carries the recovery.
+  lapsed: 'Hold lapsed',
   lost: 'Taken by another driver',
   withdrawn: 'No longer available',
   offline: copy.offlineCardReason,

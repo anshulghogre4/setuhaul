@@ -84,6 +84,18 @@ export type GateEventResult = {
   dwell_min: number | null
   idempotency_key: string | null
   idempotent_replay: boolean
+  /**
+   * U111's shift label as the **server** normalised and stored it (issue #68), not as the kiosk
+   * sent it: trimmed, whitespace-collapsed, control characters sanitised, truncated. Echoed so a
+   * difference between typed and stored is visible rather than silent.
+   *
+   * `null` means no officer was attributed to this event -- a legitimate, recorded state, not an
+   * error. On an idempotent replay this is the *original* caller's label, since that is the one
+   * actually on the stored event.
+   *
+   * **Never render this as proof of who acted.** Nothing verifies it.
+   */
+  officer_name: string | null
 }
 
 /**

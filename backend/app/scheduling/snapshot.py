@@ -36,7 +36,7 @@ The digest is the SHA-256 hex of a canonical JSON object over:
 | `dock_id` | the dock the slot resolves to |
 | `interval_start` / `interval_end` | the **authoritative** interval: `dock_occupancy`'s claim when one exists, otherwise the same expression `allocation._claim_dock_occupancy` would compute (slot start + `expected_unload_min` + the flat 15-minute changeover buffer). D1 (section 0.9) makes `dock_occupancy` the authority, and `appointment_slots` cannot see a 75-minute unload booked into a 60-minute slot (section 6.2 #1) |
 | `interval_source` | `dock_occupancy` or `appointment_slot_derived` -- which of the two the interval came from, so a claim appearing or being released is itself drift |
-| `conflicts` | sorted appointment ids of other live claims overlapping that interval on that dock |
+| `conflicts` | sorted `claim_id`s of other live claims overlapping that interval on that dock -- an `appointment_id`, or `hold:<occupancy_id>` for a D2 hold, which has no appointment row (issue #84) |
 
 Deliberately **absent**: TTL remaining, ETA, and anything else that moves on a wall clock. A hash
 that changed every second would make every confirm stale and turn `SNAPSHOT_STALE` into noise. The
@@ -63,6 +63,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import get_settings
+
 # Mirrors `planner_service.SNAPSHOT_ALGORITHM`, which the queue response already advertises.
 SNAPSHOT_ALGORITHM = "sha256/planner-queue-v1"
 
@@ -80,6 +82,38 @@ INTERVAL_SOURCE_SLOT_DERIVED = "appointment_slot_derived"
 
 CONFLICT_INTERVAL = "INTERVAL_CONFLICT"
 CONFLICT_DOCK_BLOCKED = "DOCK_BLOCKED"
+
+# Which authority named a conflicting claim's promise state -- the same "never silently identical"
+# convention `interval_source` established for the interval itself (issue #60).
+CLAIM_SOURCE_APPOINTMENT = "appointments"
+CLAIM_SOURCE_HOLD = "dock_occupancy_hold"
+
+# Mirrors the D2 migration's exclusion-constraint predicate
+# (`20260829134929_d2_held_state_dock_occupancy.sql` step 5) and `holds.CAPACITY_CONSUMING_STATES`.
+# Declared here rather than imported for the same import-cycle reason the module docstring gives for
+# `ACTIVE_APPOINTMENT_STATUSES`: `holds` imports `allocation`, and `allocation` imports this module.
+CAPACITY_CONSUMING_STATES = ("HELD", "PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+
+
+def claim_id(claim: dict[str, Any]) -> str:
+    """The stable identity of one capacity claim, for the `conflicts` leg of the digest.
+
+    Defined once, here, and imported by `services/planner_service.py` rather than reimplemented
+    there -- this string goes straight into the hash, so a second copy is precisely the divergence
+    this module exists to prevent (`test_snapshot_hash_matches_the_planner_queue_producer_byte_for
+    _byte`).
+
+    A D2 hold has no `appointment_id` at all (§4: *"Held is not booked"*), so it is named by its
+    `occupancy_id` instead. Without this, every hold would hash as the literal `"None"` and two
+    different holds overlapping a request would collapse into one entry -- a real drift the planner
+    would never be told about. For an appointment-backed claim the value is the bare
+    `appointment_id`, unchanged, which is why the digest of a queue with no holds in it is
+    byte-identical before and after issue #84.
+    """
+    appointment_id = claim.get("appointment_id")
+    if appointment_id is not None:
+        return str(appointment_id)
+    return f"hold:{claim['occupancy_id']}"
 
 
 def _coerce_ts(value: datetime) -> datetime:
@@ -150,6 +184,69 @@ def batch_snapshot_hash(row_hashes: dict[str, str]) -> str:
 # `LEFT JOIN LATERAL ... ORDER BY occupancy_id ASC LIMIT 1` rather than a plain LEFT JOIN, again
 # copied from the producer: the D1 EXCLUDE constraint is on (dock_id, window), so nothing stops one
 # appointment holding claims on two different docks, and a plain join would fan the row out.
+#
+# The interval-conflict leg has two forms (issue #84). The appointment-only one is what shipped and
+# is kept verbatim, because with the D2 flag off it must be byte-identical -- `o.state` does not
+# exist until `20260829134929_d2_held_state_dock_occupancy.sql` is applied, and PostgreSQL resolves
+# column references at parse time, so the alternative is `UndefinedColumn` rather than a fallback.
+#
+# Three details in the hold-aware form each earn their line:
+#
+#   * `IS DISTINCT FROM` replaces `<>`. `o.appointment_id <> t.appointment_id` evaluates to NULL --
+#     i.e. not-true, i.e. filtered out -- for every hold, since a hold's `appointment_id` is NULL.
+#     The self-exclusion would have silently excluded the entire feature.
+#   * `o.state = ANY(:capacity_states)` with **no** `expires_at > now()` filter, for the reason
+#     `repositories/operations.py::list_live_dock_occupancy` states at length: the exclusion
+#     constraint's predicate carries no time term, so a lapsed-but-unswept hold still refuses a
+#     competing write. This query has to predict the refusal, not describe the promise.
+#   * `claim_id` is emitted by SQL and consumed by `claim_id()`'s `occupancy_id` branch, so the
+#     producer and this consumer name a hold identically or the digests diverge.
+_INTERVAL_CONFLICTS_SQL = """
+       COALESCE((
+           SELECT json_agg(json_build_object(
+                      'conflict_type', 'INTERVAL_CONFLICT',
+                      'appointment_id', oa.appointment_id,
+                      'shipment_id', oa.shipment_id,
+                      'appointment_status', oa.appointment_status,
+                      'dock_id', o.dock_id
+                  ) ORDER BY oa.appointment_id)
+             FROM public.dock_occupancy o
+             JOIN public.appointments oa ON oa.appointment_id = o.appointment_id
+            WHERE o.dock_id = t.dock_id
+              AND o.appointment_id <> t.appointment_id
+              AND oa.appointment_status = ANY(:active_statuses)
+              AND o."window" && tstzrange(t.interval_start, t.interval_end, '[)')
+       ), '[]'::json)::text AS interval_conflicts_json,
+"""
+
+_INTERVAL_CONFLICTS_WITH_HOLDS_SQL = """
+       COALESCE((
+           SELECT json_agg(json_build_object(
+                      'conflict_type', 'INTERVAL_CONFLICT',
+                      'claim_id', CASE WHEN o.appointment_id IS NULL
+                                       THEN 'hold:' || o.occupancy_id::text
+                                       ELSE o.appointment_id END,
+                      'claim_source', CASE WHEN o.appointment_id IS NULL
+                                           THEN 'dock_occupancy_hold' ELSE 'appointments' END,
+                      'occupancy_id', o.occupancy_id,
+                      'appointment_id', oa.appointment_id,
+                      'shipment_id', COALESCE(oa.shipment_id, o.shipment_id),
+                      'appointment_status', COALESCE(oa.appointment_status, o.state),
+                      'hold_expires_at', o.expires_at,
+                      'dock_id', o.dock_id
+                  ) ORDER BY o.occupancy_id)
+             FROM public.dock_occupancy o
+             LEFT JOIN public.appointments oa ON oa.appointment_id = o.appointment_id
+            WHERE o.dock_id = t.dock_id
+              AND o.appointment_id IS DISTINCT FROM t.appointment_id
+              AND o."window" && tstzrange(t.interval_start, t.interval_end, '[)')
+              AND (
+                    oa.appointment_status = ANY(:active_statuses)
+                 OR (o.appointment_id IS NULL AND o.state = ANY(:capacity_states))
+              )
+       ), '[]'::json)::text AS interval_conflicts_json,
+"""
+
 _SNAPSHOT_SQL = """
 WITH target AS (
   SELECT a.appointment_id,
@@ -187,21 +284,7 @@ SELECT t.appointment_id,
        t.occupancy_start,
        t.interval_start,
        t.interval_end,
-       COALESCE((
-           SELECT json_agg(json_build_object(
-                      'conflict_type', 'INTERVAL_CONFLICT',
-                      'appointment_id', oa.appointment_id,
-                      'shipment_id', oa.shipment_id,
-                      'appointment_status', oa.appointment_status,
-                      'dock_id', o.dock_id
-                  ) ORDER BY oa.appointment_id)
-             FROM public.dock_occupancy o
-             JOIN public.appointments oa ON oa.appointment_id = o.appointment_id
-            WHERE o.dock_id = t.dock_id
-              AND o.appointment_id <> t.appointment_id
-              AND oa.appointment_status = ANY(:active_statuses)
-              AND o."window" && tstzrange(t.interval_start, t.interval_end, '[)')
-       ), '[]'::json)::text AS interval_conflicts_json,
+       {interval_conflicts}
        COALESCE((
            SELECT json_agg(json_build_object(
                       'conflict_type', 'DOCK_BLOCKED',
@@ -230,6 +313,9 @@ def _build_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         else INTERVAL_SOURCE_SLOT_DERIVED
     )
     interval_conflicts: list[dict[str, Any]] = json.loads(row["interval_conflicts_json"] or "[]")
+    # `hold_expires_at` arrives as an ISO string through json_build_object, and is left as one --
+    # nothing in the refusal path does arithmetic on it, and parsing it would be the only place in
+    # this module that turned a conflict field into a datetime.
     dock_blocks: list[dict[str, Any]] = json.loads(row["dock_block_conflicts_json"] or "[]")
     return {
         "appointment_id": str(row["appointment_id"]),
@@ -254,9 +340,16 @@ def _build_snapshot(row: dict[str, Any]) -> dict[str, Any]:
             interval_start=interval_start,
             interval_end=interval_end,
             interval_source=interval_source,
-            conflict_ids=[str(c["appointment_id"]) for c in interval_conflicts],
+            conflict_ids=[claim_id(c) for c in interval_conflicts],
         ),
     }
+
+
+def _snapshot_sql(*, include_holds: bool) -> str:
+    """Assemble the recomputation statement. `.replace`, not `.format`, so that a future `{` in the
+    SQL (a jsonb path, a regex) cannot turn into a `KeyError` at import time."""
+    leg = _INTERVAL_CONFLICTS_WITH_HOLDS_SQL if include_holds else _INTERVAL_CONFLICTS_SQL
+    return _SNAPSHOT_SQL.replace("{interval_conflicts}", leg.strip("\n"))
 
 
 async def load_appointment_snapshots(
@@ -267,18 +360,24 @@ async def load_appointment_snapshots(
     Call this *after* the appointment rows are locked `FOR UPDATE`, never before: under READ
     COMMITTED the lock is what guarantees these are the committed values the write is about to act
     on (PostgreSQL "Transaction Isolation" 13.2.1, quoted at length in `expiry.py`).
+
+    The D2 flag is read here rather than threaded down from the caller because this function has
+    four call sites across `allocation.py` (confirm / counter-offer / bulk-confirm / proposal apply)
+    and every one of them wants the same answer: the recomputation must see exactly what the
+    exclusion constraint sees. `get_settings()` is `lru_cache`d, so this costs nothing per call.
     """
     if not appointment_ids:
         return {}
+    include_holds = get_settings().two_phase_hold_enabled
+    params: dict[str, Any] = {
+        "appointment_ids": list(appointment_ids),
+        "active_statuses": list(ACTIVE_APPOINTMENT_STATUSES),
+        "blocking_types": list(BLOCKING_EVENT_TYPES),
+    }
+    if include_holds:
+        params["capacity_states"] = list(CAPACITY_CONSUMING_STATES)
     rows = (
-        await session.execute(
-            text(_SNAPSHOT_SQL),
-            {
-                "appointment_ids": list(appointment_ids),
-                "active_statuses": list(ACTIVE_APPOINTMENT_STATUSES),
-                "blocking_types": list(BLOCKING_EVENT_TYPES),
-            },
-        )
+        await session.execute(text(_snapshot_sql(include_holds=include_holds)), params)
     ).mappings().all()
     return {str(row["appointment_id"]): _build_snapshot(dict(row)) for row in rows}
 
@@ -330,8 +429,11 @@ def describe_snapshot_drift(snapshot: dict[str, Any], *, expected_hash: str) -> 
             "interval_start": snapshot["interval_start"].isoformat(),
             "interval_end": snapshot["interval_end"].isoformat(),
             "interval_source": snapshot["interval_source"],
+            # `claim_id`, not `appointment_id`: since issue #84 a conflict can be a D2 hold, which
+            # has no appointment id to name it by. The key keeps its name because the value is
+            # unchanged for every appointment-backed conflict.
             "conflict_appointment_ids": sorted(
-                str(conflict["appointment_id"]) for conflict in snapshot.get("conflicts", [])
+                claim_id(conflict) for conflict in snapshot.get("conflicts", [])
             ),
         },
     }

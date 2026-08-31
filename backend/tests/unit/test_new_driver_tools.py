@@ -94,7 +94,14 @@ async def test_get_exception_status_returns_resolution_note(mock_session, driver
 
 
 @pytest.mark.asyncio
-async def test_report_vehicle_breakdown_or_incident(mock_session, driver_ctx):
+async def test_report_vehicle_breakdown_or_incident(mock_session, driver_ctx, monkeypatch):
+    # This test's mock session answers EVERY query with the same fake row. With
+    # TWO_PHASE_HOLD_ENABLED now defaulting on, the prefetch also issues the hold lookup,
+    # which would misread that row (KeyError: occupancy_id). Pin the no-hold case explicitly,
+    # the same seam test_held_read_paths.py patches -- this test is about breakdown reporting,
+    # not holds.
+    from app.scheduling import holds as _holds
+    monkeypatch.setattr(_holds, "live_hold_for_shipment", AsyncMock(return_value=None))
     mock_mapping = MagicMock()
     mock_mapping.mappings.return_value.first.return_value = {
         "shipment_id": "SHP1017",

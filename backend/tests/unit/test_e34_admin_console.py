@@ -768,13 +768,18 @@ async def test_publish_policy_version_hashes_the_baseline_into_the_idempotency_p
 
     monkeypatch.setattr(admin_governance_service, "store_idempotency", _capture)
     session = _session_with({"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None}, None, None)
+    # A real engine key, not a placeholder: since A-G1/#69 `publish_policy_version` refuses any
+    # weight key the ranking engine does not read, so `{"w": 1}` is now a 422 rather than a
+    # publishable payload. The property under test (baseline is inside the request hash) is
+    # unchanged.
+    weights = {"lateness_per_minute": 4}
     await admin_governance_service.publish_policy_version(
-        session, _admin_ctx(), weights={"w": 1}, idempotency_key="pub-6", based_on_version_id="POLV-1"
+        session, _admin_ctx(), weights=weights, idempotency_key="pub-6", based_on_version_id="POLV-1"
     )
     from app.services.idempotency import payload_hash
 
-    assert captured["hash"] == payload_hash({"weights": {"w": 1}, "based_on_version_id": "POLV-1"})
-    assert captured["hash"] != payload_hash({"weights": {"w": 1}, "based_on_version_id": "POLV-2"})
+    assert captured["hash"] == payload_hash({"weights": weights, "based_on_version_id": "POLV-1"})
+    assert captured["hash"] != payload_hash({"weights": weights, "based_on_version_id": "POLV-2"})
 
 
 # ---------------------------------------------------------------------------------------------
@@ -847,3 +852,344 @@ async def test_export_audit_log_returns_csv_with_a_header_row():
     csv_text = await admin_governance_service.export_audit_log(session, _admin_ctx())
     assert csv_text.splitlines()[0] == "audit_id,user_id,action_type,entity_name,entity_id,created_at"
     assert "AUD1" in csv_text
+
+
+# ---------------------------------------------------------------------------------------------
+# User lifecycle state -- issues #73 (pending invitation) and #81 (removed vs deactivated).
+# Migration: supabase/migrations/20260831132101_users_invite_lifecycle.sql (NOT applied).
+# ---------------------------------------------------------------------------------------------
+
+
+def test_derive_lifecycle_state_precedence():
+    """The precedence order IS the logic, so each rung is pinned separately.
+
+    Written as a table because the interesting cases are the overlaps: a removed user is also
+    is_active = 0, and an invited-then-deactivated user matches two rungs. Getting either
+    precedence backwards produces a plausible-looking but wrong badge.
+    """
+    d = admin_user_service.derive_lifecycle_state
+    ts = "2026-08-31T10:00:00+00:00"
+
+    # Seeded/pre-existing account: never invited through this console, so ACTIVE -- not pending.
+    assert d({"is_active": 1, "invited_at": None, "invite_accepted_at": None, "removed_at": None}) == "ACTIVE"
+    # Invited, never seen making an authenticated request.
+    assert d({"is_active": 1, "invited_at": ts, "invite_accepted_at": None, "removed_at": None}) == "INVITED"
+    # Invited and accepted -- the stamp get_execution_context writes.
+    assert d({"is_active": 1, "invited_at": ts, "invite_accepted_at": ts, "removed_at": None}) == "ACTIVE"
+    # Deactivated beats invited: re-inviting an account an admin switched off is the opposite of
+    # intent, so the row must not render a Resend action.
+    assert d({"is_active": 0, "invited_at": ts, "invite_accepted_at": None, "removed_at": None}) == "DEACTIVATED"
+    # Removed beats deactivated: remove_user sets BOTH, and this is the whole of issue #81.
+    assert d({"is_active": 0, "invited_at": None, "invite_accepted_at": None, "removed_at": ts}) == "REMOVED"
+    # A caller that selected a narrower column list degrades, it does not raise.
+    assert d({"is_active": 1}) == "ACTIVE"
+
+
+def test_removed_and_deactivated_are_distinguishable_from_the_same_is_active_value():
+    """Issue #81 stated directly: before removed_at existed, these two rows were byte-identical."""
+    deactivated = {"is_active": 0, "invited_at": None, "invite_accepted_at": None, "removed_at": None}
+    removed = {"is_active": 0, "invited_at": None, "invite_accepted_at": None, "removed_at": "2026-08-31T10:00:00+00:00"}
+    assert deactivated["is_active"] == removed["is_active"]
+    assert admin_user_service.derive_lifecycle_state(deactivated) != admin_user_service.derive_lifecycle_state(removed)
+
+
+@pytest.mark.asyncio
+async def test_list_users_hides_removed_users_by_default_and_tags_every_row():
+    rows = [
+        {
+            "user_id": "USR1", "full_name": "Neha B.", "email": "neha@setuhaul.com",
+            "role_name": "OPERATIONS_EXECUTIVE", "facility_id": FACILITY, "driver_id": None,
+            "is_active": 1, "last_login_ts": None,
+            "invited_at": "2026-08-30T09:00:00+00:00", "invite_accepted_at": None, "removed_at": None,
+            "scoped_facility_ids": [FACILITY],
+        },
+    ]
+    session = _session_with(rows)
+    result = await admin_user_service.list_users(session, _admin_ctx())
+
+    assert result["items"][0]["lifecycle_state"] == "INVITED"
+    # edge-cases.md #8: a genuinely removed user does not reappear in the default list.
+    assert "u.removed_at IS NULL" in str(session.execute.call_args.args[0])
+
+
+@pytest.mark.asyncio
+async def test_list_users_include_removed_drops_the_filter():
+    session = _session_with([])
+    await admin_user_service.list_users(session, _admin_ctx(), include_removed=True)
+    assert "u.removed_at IS NULL" not in str(session.execute.call_args.args[0])
+
+
+@pytest.mark.asyncio
+async def test_invite_user_stamps_invited_at_in_the_same_insert_that_creates_the_row(monkeypatch):
+    """The write site for #73's first stamp. A users row created by this tool WITHOUT an invite
+    stamp would render as ACTIVE forever, indistinguishable from a seeded account."""
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(
+        [FACILITY], {"role_id": "ROL003"}, None, None, None, None,
+    )
+
+    await admin_user_service.invite_user(
+        session, _admin_ctx(), _settings(), email="p@setuhaul.com", role="WAREHOUSE_PLANNER", scope=FACILITY,
+    )
+
+    users_insert = session.execute.call_args_list[2]
+    assert "INSERT INTO public.users" in str(users_insert.args[0])
+    assert "invited_at" in str(users_insert.args[0])
+    invited_at = users_insert.args[1]["invited_at"]
+    # A datetime, not the ISO string created_at takes: asyncpg refuses a str for a timestamptz
+    # bind rather than coercing it, so this assertion is load-bearing, not stylistic.
+    assert isinstance(invited_at, datetime)
+    assert invited_at.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_remove_user_stamps_removed_at_alongside_is_active_zero(monkeypatch):
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(
+        {"user_id": "USR1", "auth_user_id": "auth-uuid-1", "active_escalation_count": 0}, None, None
+    )
+
+    await admin_user_service.remove_user(
+        session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key="rm-2"
+    )
+
+    update = session.execute.call_args_list[1]
+    sql = str(update.args[0])
+    assert "is_active = 0" in sql and "removed_at = COALESCE(removed_at, :removed_at)" in sql
+    assert isinstance(update.args[1]["removed_at"], datetime)
+
+
+@pytest.mark.asyncio
+async def test_reactivate_user_refuses_a_removed_user():
+    """A removed user's Supabase Auth identity is already DELETEd, so is_active = 1 would restore
+    a row that looks active and can never log in. The discriminator is what makes this refusable."""
+    session = _session_with(None, {"removed_at": "2026-08-31T10:00:00+00:00"})
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.reactivate_user(session, _admin_ctx(), "USR1")
+    assert exc.value.code == "USER_REMOVED"
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_reactivate_user_still_reports_not_found_for_an_unknown_user():
+    """The extra error-path SELECT exists to keep 404 and 409 distinct -- pinned so a later
+    simplification cannot collapse them into one misleading answer."""
+    session = _session_with(None, None)
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.reactivate_user(session, _admin_ctx(), "USR-GHOST")
+    assert exc.value.code == "NOT_FOUND"
+
+
+def _pending_row(**overrides):
+    row = {
+        "user_id": "USR1", "email": "amit.d@setuhaul.com", "auth_user_id": "auth-uuid-1",
+        "is_active": 1, "invited_at": "2026-08-30T09:00:00+00:00",
+        "invite_accepted_at": None, "removed_at": None,
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_resend_invite_posts_to_gotrue_and_restamps_invited_at(monkeypatch):
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(_pending_row(), None, None)
+
+    result = await admin_user_service.resend_invite(
+        session, _admin_ctx(), _settings(), user_id="USR1"
+    )
+
+    assert result["code"] == "INVITE_RESENT"
+    post = next(c for c in _FakeAsyncClient.calls if c["method"] == "post")
+    # Same endpoint as the original invite -- GoTrue has no separate resend for invites, and its
+    # sendInvite regenerates the confirmation token, which is what fixes an expired link.
+    assert post["url"].endswith("/auth/v1/invite")
+    assert post["json"] == {"email": "amit.d@setuhaul.com"}
+    update = session.execute.call_args_list[1]
+    assert "invited_at = :invited_at" in str(update.args[0])
+    assert isinstance(update.args[1]["invited_at"], datetime)
+
+
+def test_resend_invite_never_takes_an_email_from_the_caller():
+    """M15: the address a Supabase Auth invite goes to is read from the stored row, so this tool
+    cannot be used to mail an arbitrary address."""
+    import inspect
+    params = inspect.signature(admin_user_service.resend_invite).parameters
+    assert "email" not in params
+    assert "user_id" in params
+
+
+@pytest.mark.asyncio
+async def test_resend_invite_refuses_an_already_accepted_user(monkeypatch):
+    """Refused locally BEFORE the HTTP call: GoTrue 422s an invite for a confirmed address, and
+    invite_accepted_at IS NULL is this system's own record of the same fact."""
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(_pending_row(invite_accepted_at="2026-08-30T12:00:00+00:00"))
+
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.resend_invite(session, _admin_ctx(), _settings(), user_id="USR1")
+    assert exc.value.code == "NOT_PENDING_INVITE"
+    assert _FakeAsyncClient.calls == []
+
+
+@pytest.mark.asyncio
+async def test_resend_invite_surfaces_gotrue_email_rate_limiting_by_name(monkeypatch):
+    """sendInvite returns 429 over_email_send_rate_limit -- the realistic failure of a Resend
+    button an impatient admin presses repeatedly, so it must not read as a generic refusal."""
+    import httpx
+    _FakeAsyncClient.post_response = _FakeResponse(status_code=429, text="over_email_send_rate_limit")
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(_pending_row())
+
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.resend_invite(session, _admin_ctx(), _settings(), user_id="USR1")
+    assert exc.value.code == "AUTH_EMAIL_RATE_LIMITED"
+    assert exc.value.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_revoke_invite_deletes_the_auth_identity_and_marks_the_row_removed(monkeypatch):
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(_pending_row(), None, None)
+
+    result = await admin_user_service.revoke_invite(
+        session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key="rv-1"
+    )
+
+    assert result["code"] == "INVITE_REVOKED"
+    delete_call = next(c for c in _FakeAsyncClient.calls if c["method"] == "delete")
+    assert "auth-uuid-1" in delete_call["url"]
+    update = session.execute.call_args_list[1]
+    assert "removed_at = COALESCE(removed_at, :removed_at)" in str(update.args[0])
+    # A distinct audit event, not REMOVE_USER -- "we withdrew an unused invite" and "we removed a
+    # working colleague" are different facts about the organisation (FR-ADM-009).
+    audit = session.execute.call_args_list[2]
+    assert json.loads(audit.args[1]["new_value_json"])["event"] == "REVOKE_INVITE"
+
+
+@pytest.mark.asyncio
+async def test_revoke_invite_requires_an_idempotency_key():
+    session = AsyncMock()
+    session.execute = AsyncMock()
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.revoke_invite(
+            session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key=" "
+        )
+    assert exc.value.code == "IDEMPOTENCY_KEY_REQUIRED"
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_revoke_invite_refuses_a_never_invited_user_before_deleting_anything(monkeypatch):
+    """Protects the admin acting on a stale list: a row that is not a pending invitation must not
+    be silently full-removed by a Revoke button that was correct when the page rendered."""
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    session = _session_with(_pending_row(invited_at=None))
+
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.revoke_invite(
+            session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key="rv-2"
+        )
+    assert exc.value.code == "NOT_PENDING_INVITE"
+    assert _FakeAsyncClient.calls == []
+
+
+@pytest.mark.asyncio
+async def test_resend_and_revoke_both_refuse_a_non_admin():
+    session = AsyncMock()
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.resend_invite(session, _non_admin_ctx(), _settings(), user_id="USR1")
+    assert exc.value.code == "FORBIDDEN"
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.revoke_invite(
+            session, _non_admin_ctx(), _settings(), user_id="USR1", idempotency_key="k"
+        )
+    assert exc.value.code == "FORBIDDEN"
+
+
+# ---------------------------------------------------------------------------------------------
+# list_facilities (A-G10, issue #78)
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_facilities_returns_every_facility_with_its_active_flag():
+    """The whole point of #78: a facility with no users and no rules must still be selectable.
+
+    So this asserts the query is unfiltered and unlimited -- either a `WHERE` on `active_flag` or a
+    `LIMIT` would silently recreate the incompleteness the endpoint exists to remove.
+    """
+    rows = [
+        {"facility_id": "FAC-GGN-01", "facility_name": "Gurugram Cross-Dock", "city": "Gurugram", "active_flag": 1},
+        {"facility_id": FACILITY, "facility_name": "Jaipur DC", "city": "Jaipur", "active_flag": 1},
+        {"facility_id": "FAC-IDR-01", "facility_name": "Indore DC", "city": "Indore", "active_flag": 0},
+    ]
+    session = _session_with(rows)
+    result = await admin_user_service.list_facilities(session, _admin_ctx())
+
+    assert [item["facility_id"] for item in result["items"]] == [
+        "FAC-GGN-01", FACILITY, "FAC-IDR-01",
+    ]
+    # active_flag is carried, not filtered: the Users tab's filter must still be able to name a
+    # closed facility that users are scoped to, while the invite form must not offer one as a new
+    # assignment. Two answers, one read.
+    assert result["items"][2]["active_flag"] == 0
+    assert result["source"] == "postgresql"
+
+    sql = str(session.execute.call_args.args[0])
+    assert "FROM public.facilities" in sql
+    assert "ORDER BY facility_name" in sql
+    assert "active_flag =" not in sql
+    assert "LIMIT" not in sql
+
+
+@pytest.mark.asyncio
+async def test_list_facilities_takes_no_client_supplied_scope():
+    """M15. The read has no arguments at all, so there is no id a caller could smuggle in; the
+    role gate on `ctx` is the entire authorisation decision."""
+    session = _session_with([])
+    await admin_user_service.list_facilities(session, _admin_ctx())
+    # One statement, and it is bound with no parameters -- nothing from the caller reaches the SQL.
+    assert len(session.execute.call_args_list) == 1
+    assert len(session.execute.call_args.args) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_facilities_refuses_a_non_admin():
+    session = AsyncMock()
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.list_facilities(session, _non_admin_ctx())
+    assert exc.value.code == "FORBIDDEN"
+
+
+def test_the_facilities_route_is_wired_behind_the_same_gate_as_its_sibling_reads():
+    """`GET /admin/facilities` is a new public entry point, so its gate is asserted structurally.
+
+    Compares the resolved dependency callables against `GET /admin/users` rather than re-asserting
+    `RoleName.ADMIN` by name, so this stays true if `AdminCtx` is ever narrowed further. Reads off
+    the router rather than `app.routes` for the reason `test_gate_yard_reads.py` records: FastAPI
+    0.141 keeps included routers wrapped rather than flattening their routes onto the app.
+    """
+    from app.api.v1.routers import admin as admin_router
+    from app.main import create_app
+
+    routes = {(r.path, frozenset(r.methods)): r for r in admin_router.router.routes}
+    facilities = routes[("/api/v1/admin/facilities", frozenset({"GET"}))]
+    users = routes[("/api/v1/admin/users", frozenset({"GET"}))]
+
+    assert facilities.endpoint is admin_router.facilities
+    assert {d.call for d in facilities.dependant.dependencies} == {
+        d.call for d in users.dependant.dependencies
+    }
+    # M15 at the transport layer: no facility id -- or anything else -- is reachable as a query
+    # parameter, so there is nothing a caller could supply to widen what this read returns.
+    assert facilities.dependant.query_params == []
+
+    paths = create_app().openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/facilities"]

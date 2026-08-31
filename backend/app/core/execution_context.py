@@ -16,6 +16,13 @@ class RoleName(StrEnum):
     # Added alongside the existing facility-scoped roles, not replacing anything -- the S7.5.6
     # carrier portal tool catalog (M3) has nowhere to attach without this.
     CARRIER = "CARRIER"
+    # Issue #79 (owner-approved 2026-08-29), superseding the 2026-08-24 mapping decision that ran
+    # the kiosk under WAREHOUSE_PLANNER/FACILITY_MANAGER. SOLUTION_DESIGN.md section 2 marks
+    # "Gate / yard officer" as a v1 persona with its own surface, section 7.5.2 gives it five tools
+    # of its own, and UI-UX/00-foundations/auth-and-scoping.md gives it a role-landing row plus a
+    # "never sees: scheduling controls" row -- none of which the borrowed planner identity could
+    # honour. See api/v1/routers/gate.py's docstring for the least-privilege argument.
+    GATE_OFFICER = "GATE_OFFICER"
 
 
 class ExecutionContext(BaseModel):
@@ -50,13 +57,37 @@ class ExecutionContext(BaseModel):
 
     @property
     def is_operator(self) -> bool:
-        """Facility-scoped ops personas (shared ops portal + operator password bucket)."""
+        """Facility-scoped ops personas (shared ops portal + operator password bucket).
+
+        `GATE_OFFICER` is deliberately **not** here, the same way `CARRIER` is not. This flag is
+        what `repositories/scope.py`'s escalation/takeover/search write gates check, and
+        `auth-and-scoping.md`'s "What each role never sees" table gives the gate officer
+        "Scheduling controls" as a never -- so folding it into `is_operator` would hand a
+        device-bound kiosk credential escalation and takeover authority by inheritance rather
+        than by decision. Its one legitimate write reach is expressed by `is_gate_officer` plus
+        `repositories.scope.assert_gate_write_scope` instead.
+        """
         return self.role_name in {
             RoleName.OPERATIONS_EXECUTIVE,
             RoleName.WAREHOUSE_PLANNER,
             RoleName.OPERATIONS_MANAGER,
             RoleName.FACILITY_MANAGER,
         }
+
+    @property
+    def is_gate_officer(self) -> bool:
+        """The gate/yard kiosk persona (issue #79) -- facility-scoped, section 7.5.2 writes only.
+
+        Facility reach comes from the ordinary `facility_id` column, so `can_read_facility` and
+        `repositories.scope.resolve_facility_scope` already behave correctly for this role with no
+        change: it is not `has_global_read_scope`, so both resolve to its own facility or refuse.
+
+        The session behind this role is *device-bound and has no idle timeout*
+        (`auth-and-scoping.md` "Session expiry"; `frontend/src/core/auth/identity.ts`
+        `idlePolicyFor` returns null for it), which is precisely why it must be the narrowest role
+        that can do the job rather than a borrowed planner login.
+        """
+        return self.role_name == RoleName.GATE_OFFICER
 
     @property
     def is_admin(self) -> bool:

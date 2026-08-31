@@ -18,32 +18,80 @@ import {
   listUsers,
   reactivateUser,
   removeUser,
+  resendInvite,
+  revokeInvite,
   updateUser,
 } from '../lib/api'
-import { facilityDisplayName } from '../lib/facility-names'
+import { useFacilities } from '../lib/facilities'
 import { ROLE_OPTIONS, roleDisplayName } from '../lib/roles'
 import { isActiveUser, type AdminUser } from '../lib/types'
-import { formatUserFriendlyError } from '@/core/http/api'
+import { formatUserFriendlyError, hasApiErrorCode } from '@/core/http/api'
 import { Button } from '@/shared/ui/button'
 
 type LoadState = 'loading' | 'ready' | 'failed'
 
 /**
- * Screen 2 — Users tab. **🟡, built in reduced form** (`implementation-spec.md` §3).
+ * Write failures this tab has copy for, by the server's own error **code**.
+ *
+ * `hasApiErrorCode` and never a message match: the wiki rule is explicit, and the mechanism is what
+ * makes it safe — a transport failure is not an `ApiError`, so it can never accidentally satisfy a
+ * code test the way it could satisfy a substring test. Everything unnamed falls through to
+ * `formatUserFriendlyError`, which is still the right answer for a 500 or a dropped connection.
+ *
+ * Three codes earn named copy because each names a *different next action*:
+ *
+ *  - **`AUTH_EMAIL_RATE_LIMITED` (429)** is the realistic failure of a Resend button — GoTrue's
+ *    `over_email_send_rate_limit`, which an impatient admin pressing Resend twice will genuinely
+ *    hit. The server's own sentence mentions Supabase Auth by name, which is an implementation
+ *    detail the admin cannot act on; "wait a minute and press Resend again" is what they can.
+ *  - **`NOT_PENDING_INVITE` (409)** means the row moved on between render and click — the person
+ *    accepted, or someone else revoked. The action is to refresh, not to retry.
+ *  - **`USER_REMOVED` (409)** means Reactivate was pressed on a removed account whose Supabase Auth
+ *    identity is already deleted. Retrying can never work.
+ */
+function describeWriteFailure(error: unknown): string {
+  if (hasApiErrorCode(error, 'AUTH_EMAIL_RATE_LIMITED')) {
+    return 'Too many invitation emails have gone out recently, so this one was not sent. Wait a minute, then press Resend again.'
+  }
+  if (hasApiErrorCode(error, 'NOT_PENDING_INVITE')) {
+    return 'This is no longer a pending invitation — the list has moved on since it was drawn. Refresh to see the current status.'
+  }
+  if (hasApiErrorCode(error, 'USER_REMOVED')) {
+    return 'This user was removed. Removal is permanent and cannot be undone here.'
+  }
+  return formatUserFriendlyError(error)
+}
+
+/**
+ * Screen 2 — Users tab. **🟢 as of 2026-08-31** (was 🟡, `implementation-spec.md` §3).
  *
  * Real and unconditional: the list itself, the role and facility filters (both genuinely
  * server-side query parameters on `list_users`), Active/Inactive rows, the overflow menu, and all
  * four write actions (invite, edit, deactivate/reactivate, remove).
  *
- * Two reductions, both flagged in code where they bite:
+ * **Both of this tab's reductions closed on 2026-08-31**, each against a shipped backend rather
+ * than an issue comment:
  *
- *  - **Scope renders at most one facility** (A-G4 / issue #72). `list_users` reads only
- *    `users.facility_id`, never `user_scopes`, so `screens.md`'s own example row
- *    ("Neha B. · Ops · Jaipur, Gurugram") is not producible. Behind
- *    `adminMultiFacilityScopeEnabled`.
- *  - **No pending-invitation row** (A-G5 / issue #73). `invite_user` sets `is_active = 1` at
- *    creation, so there is no "invited, not yet accepted" state to render and no
- *    resend/revoke tool to point the actions at. Behind `adminPendingInvitesEnabled`.
+ *  - **Multi-facility scope** (A-G4 / #72). `list_users` returns `scoped_facility_ids` per row and
+ *    `invite_user`/`update_user` accept `scope: str | list[str]`. Read *and* write are servable, so
+ *    `adminMultiFacilityScopeEnabled` is on and the flag was not split.
+ *  - **The pending-invitation row** (A-G5 / #73). `list_users` returns a server-derived
+ *    `lifecycle_state` and `resend_invite`/`revoke_invite` exist. The badge is gated on
+ *    `lifecycle_state === 'INVITED'` and **never** on `last_login_ts`, which is written nowhere in
+ *    the application and would have marked essentially every user.
+ *
+ * A third gap closed underneath both: `GET /admin/facilities` (A-G10 / #78) replaced the derived
+ * option list, so a facility with no users and no rules is now pickable and can receive its first
+ * user. The `knownFacilityIds` accumulator that used to paper over the derived list's
+ * self-narrowing is **deleted, not kept alongside** — see `lib/facilities.ts`.
+ *
+ * **`include_removed` is not exposed, and that is a decision.** `list_users` supports it, but
+ * `edge-cases.md` #8's rule is that a removed user "does not reappear in search", and every action
+ * this tab offers is refused on a removed row anyway (`reactivate_user` answers `USER_REMOVED`,
+ * `resend_invite`/`revoke_invite` answer `NOT_PENDING_INVITE`). A toggle would add a fifth control
+ * whose only outcome is rows nothing can be done to. The audit trail is where a removal is
+ * answerable, and the Audit tab already renders it. Reconsider if an admin ever needs to confirm a
+ * specific removal without leaving this tab.
  *
  * **Search is client-side, and deliberately so** — unlike the Audit tab, where
  * `flows-and-states.md` Flow 8 forbids it. `list_users` has no search parameter at all, and it
@@ -54,10 +102,7 @@ type LoadState = 'loading' | 'ready' | 'failed'
 export function UsersTab({ currentUserId }: { currentUserId: string }) {
   const [state, setState] = useState<LoadState>('loading')
   const [users, setUsers] = useState<AdminUser[]>([])
-  /** See `load` below — the facility filter's options must not be derived from the rows the
-   *  facility filter already narrowed. Also the only source of facility ids the invite form has,
-   *  since no facilities-list endpoint exists (`lib/facility-names.ts`). */
-  const [knownFacilityIds, setKnownFacilityIds] = useState<Set<string>>(() => new Set())
+  const facilities = useFacilities()
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
   const [facilityFilter, setFacilityFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -78,16 +123,6 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
     try {
       const result = await listUsers({ roleFilter, facilityFilter })
       setUsers(result.items)
-      // Accumulate rather than derive-from-current-rows. Deriving the option list from `users`
-      // is self-narrowing: once "Jaipur" is selected the response contains only Jaipur users, so
-      // every other facility disappears from the dropdown that just filtered them out and the
-      // admin cannot switch directly to another one. The first load is unfiltered, so this set
-      // starts complete; later loads can only add to it.
-      setKnownFacilityIds((known) => {
-        const next = new Set(known)
-        for (const user of result.items) if (user.facility_id) next.add(user.facility_id)
-        return next.size === known.size ? known : next
-      })
       setState('ready')
     } catch {
       setState('failed')
@@ -98,12 +133,14 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
     void load()
   }, [load])
 
+  /**
+   * The filter offers **every** facility, closed ones included — a user scoped to a since-closed
+   * facility must still be findable. The server already orders by `facility_name`, so no local
+   * sort is applied; re-sorting client-side would silently pick a different collation.
+   */
   const facilityOptions = useMemo(
-    () =>
-      [...knownFacilityIds]
-        .map((id) => ({ value: id, label: facilityDisplayName(id) }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [knownFacilityIds],
+    () => facilities.all.map((f) => ({ value: f.facility_id, label: f.facility_name })),
+    [facilities.all],
   )
 
   const visible = useMemo(() => {
@@ -129,7 +166,7 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
       setRemoving(null)
       await load()
     } catch (error) {
-      const message = formatUserFriendlyError(error)
+      const message = describeWriteFailure(error)
       // A dialog that is open keeps its own inline error and stays open with its field values
       // intact (`components.md` §1: "form stays open with the email field flagged"); a
       // menu-driven write with no dialog has nowhere inline to put it, so it surfaces as the
@@ -205,6 +242,7 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
         <UsersTable
           users={visible}
           currentUserId={currentUserId}
+          facilityName={facilities.nameOf}
           onEdit={(user) => {
             setDialogError(null)
             setEditing(user)
@@ -222,6 +260,23 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
             setDialogError(null)
             setRemoving(user)
           }}
+          /*
+            Both commit immediately — no dialog, so a failure lands in the region banner. Each
+            announcement names the reversal path rather than promising an undo affordance that has
+            no backing tool, the same treatment Deactivate already gets above.
+          */
+          onResendInvite={(user) =>
+            void runWrite(
+              () => resendInvite(user.user_id),
+              `Invitation re-sent to ${user.email}. The previous link is replaced by the new one.`,
+            )
+          }
+          onRevokeInvite={(user) =>
+            void runWrite(
+              () => revokeInvite(user.user_id),
+              `Invitation for ${user.email} revoked. The link no longer works; invite the address again to restore access.`,
+            )
+          }
         />
       )}
 
@@ -234,7 +289,11 @@ export function UsersTab({ currentUserId }: { currentUserId: string }) {
           setInviteOpen(false)
           setEditing(null)
         }}
-        facilities={facilityOptions.map((f) => ({ id: f.value, name: f.label }))}
+        /* A NEW assignment may only name an open facility, so the picker takes `assignable` while
+           the filter above takes `all`. The dialog re-adds any already-held closed facility itself
+           in edit mode, so an edit cannot silently drop a scope the user holds. */
+        facilities={facilities.assignable.map((f) => ({ id: f.facility_id, name: f.facility_name }))}
+        facilitiesUnavailable={facilities.state === 'failed'}
         busy={busy}
         errorDetail={dialogError}
         onSubmit={(payload) => {

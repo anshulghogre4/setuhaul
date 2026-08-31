@@ -44,17 +44,27 @@ import type { LivePromiseState } from '../lib/types'
 export function StatusCell({
   promiseState,
   hasOpenException,
-  shownHeldEnabled,
+  heldEnabled,
+  holdExpiresAt,
 }: {
   promiseState: LivePromiseState | null
   hasOpenException: boolean
-  shownHeldEnabled: boolean
+  heldEnabled: boolean
+  /** The server's `hold_expires_at`. Feeds the HELD chip's countdown and nothing else. */
+  holdExpiresAt?: string | null
 }) {
-  const cell = promiseCell(promiseState, shownHeldEnabled)
+  const cell = promiseCell(promiseState, heldEnabled, holdExpiresAt)
 
   return (
     <span className="flex flex-nowrap items-center gap-2">
-      {cell.kind === 'chip' ? <PromiseChip state={cell.state} className="shrink-0" /> : null}
+      {/* `expiresAt` is what switches the shared chip from its static branch to its counting one.
+          It is only ever set for HELD, and only from the server's own field -- the carrier surface
+          has no D9 deadline to count down for PENDING_CONFIRMATION (there is no such column; see
+          `types.ts`'s second recorded absence), so that chip stays static here by necessity rather
+          than by choice. */}
+      {cell.kind === 'chip' ? (
+        <PromiseChip state={cell.state} expiresAt={cell.expiresAt} className="shrink-0" />
+      ) : null}
       {cell.kind === 'plain' ? (
         <span className="text-body text-muted-foreground">{cell.label}</span>
       ) : null}

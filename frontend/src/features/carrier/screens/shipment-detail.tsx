@@ -7,7 +7,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { PromiseChip } from '@/features/driver/components/promise-chip'
 import { RegionFailedBlock } from '../components/blocks'
 import { fetchShipmentDetail, isOutOfScope } from '../lib/api'
-import { carrierShownHeldEnabled } from '../lib/flags'
+import { carrierHeldEnabled } from '../lib/flags'
 import { formatDockLine, formatTime } from '../lib/format'
 import { historyLabel } from '../lib/history'
 import { promiseCell } from '../lib/promise'
@@ -123,20 +123,19 @@ export function CarrierShipmentDetail({ onOpened }: { onOpened: (shipmentId: str
   )
 }
 
-/** Exported for the states gallery, which renders all four promise variants side by side —
- *  including the two that are flag-gated off in the live route, so they can be reviewed without
- *  flipping the flag. */
+/** Exported for the states gallery, which renders every promise variant side by side, so the
+ *  flagged-off rendering can be reviewed without flipping the live flag. */
 export function CarrierDetailCard({
   payload,
   headingRef,
-  shownHeldEnabled = carrierShownHeldEnabled,
+  heldEnabled = carrierHeldEnabled,
 }: {
   payload: ShipmentDetailPayload
   headingRef?: React.RefObject<HTMLHeadingElement | null>
-  shownHeldEnabled?: boolean
+  heldEnabled?: boolean
 }) {
   const s = payload.shipment
-  const cell = promiseCell(s.promise_state, shownHeldEnabled)
+  const cell = promiseCell(s.promise_state, heldEnabled, s.hold_expires_at)
   const dockLine = formatDockLine({
     facilityName: s.facility_name,
     dockCode: s.dock_code,
@@ -150,13 +149,16 @@ export function CarrierDetailCard({
         <span className="font-mono">{s.shipment_id}</span> · {s.driver_name}
       </h1>
 
-      {cell.kind === 'chip' ? <PromiseChip state={cell.state} /> : null}
+      {cell.kind === 'chip' ? (
+        <PromiseChip state={cell.state} expiresAt={cell.expiresAt} />
+      ) : null}
       {cell.kind === 'plain' ? (
         <p className="text-body text-muted-foreground">{cell.label}</p>
       ) : null}
       {cell.kind === 'none' ? (
         // Fork A's undesigned case, rendered honestly. No `SHOWN` chip: the system does not know
-        // this shipment has been shown anything, and until #53 lands it structurally cannot.
+        // this shipment has been shown anything, and there is no table it ever could -- see
+        // `lib/flags.ts` on why that is a design decision rather than a pending query.
         <p className="text-supporting text-muted-foreground">No appointment yet.</p>
       ) : null}
 
@@ -167,17 +169,17 @@ export function CarrierDetailCard({
           The warehouse hasn&rsquo;t confirmed this yet.
         </p>
       ) : null}
-      {cell.kind === 'chip' && cell.state === 'SHOWN' ? (
-        <p className="mt-2 text-supporting text-muted-foreground">Nothing is held yet.</p>
-      ) : null}
-      {/* Prompt 8's HELD line is `Held for the driver until 11:42:30. This is not a booking
-          yet.` The timestamp half has no field to render from — the same missing-deadline gap as
-          `PENDING`'s, and doubly so here, since a hold has no row to hang an expiry on at all
-          until #53 lands. The sentence that does not depend on a value is kept; the one that does
-          is dropped rather than invented. Unreachable while the flag is off. */}
+      {/* Prompt 8's HELD line is `Held for the driver until 11:42:30. This is not a booking yet.`
+          **Both halves render now** (issue #85): `hold_expires_at` is the server's own deadline off
+          the `dock_occupancy` row, so the timestamp is read rather than derived. The fallback
+          keeps the half that needs no value -- which is what happens on a deploy with
+          `TWO_PHASE_HOLD_ENABLED` off, where the legacy projection carries no hold columns at all.
+          Unlike PENDING's deadline, which still has no column anywhere, this one is real. */}
       {cell.kind === 'chip' && cell.state === 'HELD' ? (
         <p className="mt-2 text-supporting text-muted-foreground">
-          Held for the driver. This is not a booking yet.
+          {s.hold_expires_at
+            ? `Held for the driver until ${formatTime(s.hold_expires_at) ?? '—'}. This is not a booking yet.`
+            : 'Held for the driver. This is not a booking yet.'}
         </p>
       ) : null}
 

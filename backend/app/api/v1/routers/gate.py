@@ -7,14 +7,45 @@ Flow 1 (the entry point to every other screen on the surface) had no endpoint at
 E2.2 rule: authorise, delegate, envelope -- state-machine enforcement, bind-type handling, match
 semantics and the `facility_checkins` write all live in the services, not here.
 
-Role gate: `WAREHOUSE_PLANNER` and `FACILITY_MANAGER` plus `ADMIN`. Section 7.5.2's own "Gate/yard
-officer" persona (`SOLUTION_DESIGN.md` line 328, `auth-and-scoping.md` line 200) has no seeded DB
-role of its own -- `public.roles` only ever carried the original eight personas plus `CARRIER`
-(E2.3) -- so this is an explicit mapping decision (owner-confirmed 2026-08-24, not silently
-guessed), not a rediscovery of an existing role. Deliberately narrower than `OPS_PORTAL_ROLES`:
-`assert_facility_write_scope` (the service-tier gate) would let any `is_operator` role through, so
-this router is what actually narrows "who may work the gate kiosk" to the two chosen personas, the
-same role-gate-agrees-with-scope-rule shape `carrier.py` uses.
+Role gate: `GATE_OFFICER`, `WAREHOUSE_PLANNER`, `FACILITY_MANAGER`, `ADMIN`.
+
+**`GATE_OFFICER` added 2026-08-29 (issue #79, owner-approved), superseding the 2026-08-24 mapping
+decision that ran this kiosk under a planner/facility-manager login.** That mapping was made
+because `public.roles` carried only the original eight personas plus `CARRIER` (E2.3) and the
+design's own gate persona had no row -- a real constraint at the time, not a guess. It is now
+resolved the other way, on three pieces of evidence the mapping could not satisfy:
+
+1. `SOLUTION_DESIGN.md` section 2 lists "Gate / yard officer" as an in-v1 persona with its own
+   surface and its own table (`facility_checkins`); section 7.5.2 gives it five tools of its own.
+   The persona was always in the design; only the DB row was missing.
+2. `UI-UX/00-foundations/auth-and-scoping.md` gives the role a landing row ("Yard queue for the
+   device's facility") **and** a "never sees" row: *"Scheduling controls. Anything beyond the
+   current facility's yard."* A `WAREHOUSE_PLANNER` credential cannot honour that -- it carries
+   `planner.py`'s dock-block/schedule-apply authority and `OPS_PORTAL_ROLES`' appointment
+   confirm/reject. The borrowed identity was strictly wider than the persona it stood in for.
+3. That over-grant sat on the one session in the product with **no idle timeout at all**
+   (`auth-and-scoping.md` "Session expiry": the gate kiosk is device-bound and "signs out only on
+   explicit action or shift change"), on a shared device at a physical gate. Least privilege --
+   "assigning users only the minimum privileges necessary to complete their job", OWASP
+   *Authorization Cheat Sheet* (cheatsheetseries.owasp.org, read 2026-08-29) -- matters most
+   exactly there, and that cheat sheet's own note that permissions are far easier to grant than
+   to revoke is why this was worth fixing before any kiosk account was provisioned.
+
+`GATE_OFFICER` is therefore **not** in `OPS_PORTAL_ROLES` and **not** in `is_operator`; its only
+write reach is `repositories.scope.assert_gate_write_scope`, its own facility. U111's shared-shift
+model is unaffected -- it governs which *human* is stamped on a write within a device session
+(issue #68, closed 2026-08-31 and described below), not which role the *device* authenticates as;
+`auth-and-scoping.md` says as much when it notes the facility is "the *device's*, not the user's".
+
+The two ops roles stay for continuity: this router still narrows "who may work the gate kiosk"
+below `OPS_PORTAL_ROLES`, the same role-gate-agrees-with-scope-rule shape `carrier.py` uses.
+
+**Two identities, one request (issue #68, 2026-08-31).** Because the principal above is now a
+*device* account, every write body carries an optional `officer_name` -- U111's shift label for the
+human standing at the kiosk. The two must not be conflated and are deliberately kept apart at every
+layer: the device is authenticated and authorises the write; the human is a self-declared,
+unverified string that authorises nothing and is recorded as an attribute of the event. See
+`OfficerAttributedBody` below and `gate_yard_service.OFFICER_ATTRIBUTION_KEY`.
 """
 
 from datetime import datetime
@@ -24,10 +55,10 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db_session, get_request_id, require_roles
+from app.core.deps import GATE_KIOSK_ROLES, get_db_session, get_request_id, require_roles
 from app.core.envelope import ok
 from app.core.errors import AppError
-from app.core.execution_context import ExecutionContext, RoleName
+from app.core.execution_context import ExecutionContext
 from app.services.gate_yard_reads import MAX_QUERY_LENGTH, search_gate_yard_trucks
 from app.services.gate_yard_service import (
     record_dock_in,
@@ -41,41 +72,64 @@ router = APIRouter(prefix="/api/v1/gate", tags=["gate"])
 
 GateCtx = Annotated[
     ExecutionContext,
-    Depends(require_roles(RoleName.WAREHOUSE_PLANNER, RoleName.FACILITY_MANAGER, RoleName.ADMIN)),
+    Depends(require_roles(*GATE_KIOSK_ROLES)),
 ]
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 
 
-class GateInBody(BaseModel):
+class OfficerAttributedBody(BaseModel):
+    """Base for all five section 7.5.2 writes: U111's shift label, carried on every event.
+
+    **What this field is.** `04-gate-yard-kiosk/components.md` section 1 and `flows-and-states.md`
+    Flow 0: the officer types their name once per shift and it is stamped on every event that shift
+    -- "an attribute of the write, not as a re-asked credential" (FR-GATE-001; issue #68 was this
+    field's total absence).
+
+    **What this field is NOT: a credential, an identity or an authorisation input.** It is free text
+    somebody typed at a shared booth and no part of the system verifies it. Authorisation on every
+    route below is `require_roles(*GATE_KIOSK_ROLES)` plus, inside the service,
+    `assert_gate_write_scope` against the *verified* token -- and neither consults this value. It is
+    intentionally in the body, alongside `dock_id` and `ts`, and **not** in a header: a header would
+    sit it next to `Authorization` and `Idempotency-Key`, where a later reader could reasonably take
+    it for part of the request's identity or its replay key. It is neither. It is data being
+    recorded, and it is shaped like data being recorded.
+
+    **No length or format constraint, deliberately.** The same label is replayed on every write of a
+    whole shift, so any rule that could reject it would not lose one arrival -- it would lose the
+    shift's. `gate_yard_service.normalise_officer_name` is the single authority and it sanitises and
+    truncates rather than refusing. That is a considered divergence from `dock_id`'s `max_length`
+    below: a wrong `dock_id` must stop the write, a wrong label must never.
+
+    **Optional.** A kiosk mid-shift-change, or reloaded before Flow 0, sends nothing here and the
+    event still records, attributed to nobody. See `OFFICER_ATTRIBUTION_KEY` in the service for why
+    there is no fallback to the device account's name.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
+    officer_name: str | None = None
+
+
+class GateInBody(OfficerAttributedBody):
     ts: datetime | None = None
 
 
-class QueueStateBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class QueueStateBody(OfficerAttributedBody):
     queue_state: str = Field(min_length=1, max_length=40)
     queue_position: int | None = Field(default=None, gt=0)
 
 
-class DockInBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class DockInBody(OfficerAttributedBody):
     dock_id: str = Field(min_length=1, max_length=100)
     ts: datetime | None = None
 
 
-class UnloadPhaseBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class UnloadPhaseBody(OfficerAttributedBody):
     phase: str = Field(pattern="^(START|END)$")
     ts: datetime | None = None
 
 
-class GateOutBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class GateOutBody(OfficerAttributedBody):
     ts: datetime | None = None
 
 
@@ -118,10 +172,16 @@ async def gate_in(
     session: DbSession,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
-    """FR-GATE-004 / section 7.5.2 `record_gate_in`. `Idempotency-Key` required by the catalog."""
+    """FR-GATE-004 / section 7.5.2 `record_gate_in`. `Idempotency-Key` required by the catalog.
+
+    `body.officer_name` is FR-GATE-001's shift label, not an identity -- see `OfficerAttributedBody`.
+    """
     key = _require_idempotency_key(idempotency_key)
     try:
-        result = await record_gate_in(session, ctx, shipment_id=shipment_id, ts=body.ts, idempotency_key=key)
+        result = await record_gate_in(
+            session, ctx, shipment_id=shipment_id, ts=body.ts, idempotency_key=key,
+            officer_name=body.officer_name,
+        )
     except AppError:
         await session.rollback()
         raise
@@ -143,7 +203,7 @@ async def queue_state(
     try:
         result = await update_queue_state(
             session, ctx, shipment_id=shipment_id, queue_state=body.queue_state,
-            queue_position=body.queue_position,
+            queue_position=body.queue_position, officer_name=body.officer_name,
         )
     except AppError:
         await session.rollback()
@@ -165,7 +225,8 @@ async def dock_in(
     """FR-GATE-006 / section 7.5.2 `record_dock_in`."""
     try:
         result = await record_dock_in(
-            session, ctx, shipment_id=shipment_id, dock_id=body.dock_id, ts=body.ts
+            session, ctx, shipment_id=shipment_id, dock_id=body.dock_id, ts=body.ts,
+            officer_name=body.officer_name,
         )
     except AppError:
         await session.rollback()
@@ -187,7 +248,8 @@ async def unload_phase(
     """FR-GATE-007 / section 7.5.2 `record_unload_start_end`."""
     try:
         result = await record_unload_start_end(
-            session, ctx, shipment_id=shipment_id, phase=body.phase, ts=body.ts
+            session, ctx, shipment_id=shipment_id, phase=body.phase, ts=body.ts,
+            officer_name=body.officer_name,
         )
     except AppError:
         await session.rollback()
@@ -208,7 +270,9 @@ async def gate_out(
 ) -> dict[str, Any]:
     """FR-GATE-008 / section 7.5.2 `record_gate_out`."""
     try:
-        result = await record_gate_out(session, ctx, shipment_id=shipment_id, ts=body.ts)
+        result = await record_gate_out(
+            session, ctx, shipment_id=shipment_id, ts=body.ts, officer_name=body.officer_name
+        )
     except AppError:
         await session.rollback()
         raise

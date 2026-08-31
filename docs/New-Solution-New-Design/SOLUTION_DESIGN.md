@@ -91,6 +91,14 @@ facility per day) on the analytics surface. If the number turns ugly in practice
 already has a defined place in the formula and a policy version to land in. Document it as a knowingly
 deferred decision rather than an oversight.
 
+**Status update, 2026-08-29 (issue #69): the "defined place" is now a real, defaulted-off term, and the
+trade-off above is unchanged.** The shipped policy still runs `w_fairness = 0`, so the scored formula is
+exactly as specified and nothing about a live booking changes. What changed is that enabling it is now
+genuinely "a policy decision, not a code change" — which was not true before, because there was no term to
+enable. See §5 Stage 2 for what the term multiplies and why it is keyed on the candidate's facility-local
+date. The canary metric itself is still unbuilt (§8), so the *visibility* half of this mitigation remains
+open; only the *mechanism* half is now in place.
+
 ### D8 — how the generator must behave
 
 Volume is layered *on top of* the shipped seed, never in place of it. The 29 documented cases
@@ -509,6 +517,28 @@ slack +1/min (cap 120), non-exact dock −25. Ties broken by `shipment_id + slot
   term has a real home and a policy version to land in if the data turns ugly. The mitigation in v1 is
   **visibility, not mechanism**: the carrier-concentration metric (§8) is the canary. Enabling the term is
   a policy decision with an audit trail, not a code change.
+
+  **Built 2026-08-29 (A-G1, issue #69).** Until then the term had no home at all — `score_weights` carried
+  four coefficients plus two caps and `_rank_slot` had no fairness input, so "defaulted off" and "absent"
+  were indistinguishable from outside. `w_fairness` is now a real key in `constraints.json`, shipping at
+  `0`, multiplying a quantity this section had only named:
+
+  > `carrier_concentration` = how many **other** active appointments this shipment's carrier already holds
+  > at the destination facility **on the candidate interval's facility-local date**.
+
+  **Why per local date and not per carrier alone** — the one non-obvious part. Stage 2 ranks one shipment's
+  own candidate slots against each other, so a quantity that is constant across that pool can never change
+  which interval a driver is offered; a bare per-carrier count would be a term in name only. Keying on the
+  candidate's local date makes it vary across the 48-hour horizon, so a carrier already holding today's
+  evening capacity is pushed toward tomorrow morning — which is the displacement this decision describes.
+  `w_fairness` is expected **negative** when enabled, matching the sign convention the other penalties
+  already use. The concentration read is issued **only when the weight is non-zero**, so the shipped policy
+  adds no round trip to `find_feasible_slots`' existing four.
+
+  **`P_churn` is deliberately still absent**, and that is a different situation from `w_fairness`. Its
+  definition (§5.1, "Pricing churn") counts promises the *sequencer* moved; the sequencer (D3, §7.5.3,
+  issue #49) is unbuilt, so the count has no source. It is not silently ignored either: `simulate_policy_
+  weights` and `publish_policy_version` **refuse** it by name and say why.
 
 ### Stage 3 — Transactional FCFS
 Under D1 there is **no slot row to lock**, and that is the point. The winner is decided by the database
@@ -1314,8 +1344,9 @@ whose own actions are the primary subject of the audit trail it also exposes.
 | `update_user` | `user_id`, `role?`, `scope?` | `UPDATED` |
 | `deactivate_user` / `reactivate_user` | `user_id` | `DEACTIVATED` / `REACTIVATED` — reversible, distinct from `remove_user` |
 | `remove_user` | `user_id`, `Idempotency-Key` | `REMOVED` — permanent; High-tier destructive action (`components.md` §19), typed confirmation required |
-| `list_facility_rules` | `facility_id?` | Rules with their typed `rule_type` (the registry §0.9 issue 10 resolves — `EARLY_LIMIT`, `DOCK_PIN`, `WEIGHT_LIMIT`, `NEW_START_CUTOFF`, etc., not free text), value, and `effective_from`/`effective_to` (now genuinely time-bounded, not bare dates) |
+| `list_facility_rules` | `facility_id?` | Rules with their typed `rule_type` (the registry §0.9 issue 10 resolves — the five live values below, not free text), value, and `effective_from`/`effective_to` (an absolute window, hour-precise; **not** recurring — see the correction under this table) |
 | `create_facility_rule` / `update_facility_rule` | `facility_id`, `rule_type`, `rule_value`, `effective_from`, `effective_to` | `CREATED`/`UPDATED` — `rule_type` is drawn from the registry enum, never accepted as a free string |
+| `get_facility_rule_impact` *(addition, not in the original catalog)* | `rule_id`, `rule_value?`, `effective_from?`, `effective_to?` — the same arguments `update_facility_rule` takes, omitted meaning unchanged | Read-only preview: the already-committed appointments this edit would **newly** make non-compliant, plus `already_non_compliant_count` for the ones the current rule forbids anyway. `edge-cases.md` #4 requires the count *before* the edit commits, and nothing produced it (A-G6, issue #74). Shaped after `get_dock_block_impact`; evaluated by calling the live engine's own `active_facility_rules` + `check_facility_rules` rather than re-implementing rule semantics |
 | `simulate_policy_weights` | `weights` (the Stage-2 coefficient set, `w_fairness` included), `window` | **Read-only** — replays the window's actual decisions against the proposed weights and returns aggregate flip count plus example before/after cases, never writes a `policy_versions` row |
 | `publish_policy_version` | `weights`, `Idempotency-Key` | `PUBLISHED` — creates a new, immutable `policy_versions` row stamped onto every subsequent decision (D7); never mutates a prior version |
 | `get_audit_log` | `actor?`, `event_type?`, `date_range?`, `resource?` | `audit_logs` entries — actor, action, timestamp, affected resource, and the `policy_version`/tool-call reference where relevant (M14's exact field set) |
@@ -1325,6 +1356,76 @@ whose own actions are the primary subject of the audit trail it also exposes.
 same select-then-press-button discipline `bulk_confirm` (§7.5.1) already established: a simulation informs,
 a publish commits, and the two are never collapsed into one call that could accidentally publish while
 only intending to preview.
+
+**Both now refuse a weight key the ranking engine does not read** (A-G1, issue #69, 2026-08-29). `weights`
+is an untyped map on the wire, so before this an admin could send `w_fairness` or `P_churn` and get a real
+`flip_count` back that the field contributed nothing to — silently dropped. That is worse than a refusal,
+because the result *looks* authoritative. The allowlist is derived at runtime from `constraints.json`'s own
+`score_weights`, so it cannot drift from the engine. `P_churn` is refused **by name, with its reason**: it
+counts promises the sequencer moved, and the sequencer (§7.5.3, issue #49) is unbuilt, so there is nothing
+to count. `w_fairness` is accepted and genuinely evaluated — see the D7 note in §5 Stage 2.
+
+---
+
+#### Registry correction — `rule_type`'s real five values (A-G2, issue #70, corrected 2026-08-29)
+
+**This subsection previously named `EARLY_LIMIT`, `DOCK_PIN`, `WEIGHT_LIMIT`, `NEW_START_CUTOFF` as the
+registry. Those names were illustrative and were never built.** E3.4 shipped a deliberately different
+five-value set, enforced by a live `CHECK` constraint
+(`supabase/migrations/20260825213000_e34_policy_versions_and_rule_registry.sql:19-24`) and mirrored in
+`admin_governance_service.RULE_TYPES` — which is what `facility_rules` is actually seeded with. **The live
+registry wins**; this document is the stale party, and E5.6's frontend (`features/admin/lib/rule-types.ts`)
+already builds against the live names. Corrected here rather than left as drift for a third consumer to
+rediscover.
+
+| Live `rule_type` | Value shape | Enforced by the feasibility engine? | Stale name it roughly corresponds to |
+|---|---|---|---|
+| `LAST_NEW_START_TIME` | local time, e.g. `21:00` | **Yes** — `check_facility_rules`, strictly-after | `NEW_START_CUTOFF` |
+| `HEAVY_DOCK_REQUIRED_KG` | integer kg threshold | **Yes** — routes loads above it to a `HEAVY` dock | `WEIGHT_LIMIT` |
+| `REEFER_DOCK_REQUIRED` | `TRUE`/`1`/`YES` | **Yes** — temperature loads must use a refrigerated dock | *(none)* |
+| `CHECKIN_EARLY_LIMIT_MIN` | integer minutes | **No** — a gate-arrival rule, not an offer-time rule | `EARLY_LIMIT` |
+| `NO_SHOW_GRACE_MIN` | integer minutes | **No** — needs the §9.1 injected clock, which is not built | *(none)* |
+
+Two consequences are stated plainly rather than papered over:
+
+- **`DOCK_PIN` has no live analog at all.** It is the *flagship* of the rule editor's design — the
+  two-field, type-driven value pattern (`components.md` §2: "a `DOCK_PIN` rule's editor shows a dock picker
+  and a cargo-type picker"), and the only registry entry that motivates having more than one value field.
+  Nothing in the live registry pairs a dock with a cargo type. RULE003's reefer pin is expressed as
+  `REEFER_DOCK_REQUIRED` (a boolean), not as a dock-plus-cargo pair, so the *capability* survives in a
+  narrower form while the *pattern the mockup is built around* does not exist. Closing this is a design
+  decision (add a `DOCK_PIN` type to the registry + a migration) or a mockup revision — **not a rename**,
+  and it is not resolved by this correction.
+- **`NO_SHOW_GRACE_MIN` and `REEFER_DOCK_REQUIRED` have no mockup representation whatsoever.** Neither
+  appears in any artboard, so the editor has no designed field set for them, and `HEAVY_DOCK_REQUIRED_KG`'s
+  own field set is only inferable from the stale `WEIGHT_LIMIT` frame. The rule *list* renders all five
+  correctly today; the rule *editor* is the part still blocked, and it is blocked on missing design, not on
+  a missing backend.
+
+#### Effectivity correction — absolute yes, recurring no (A-G3, issue #71, corrected 2026-08-29)
+
+The `list_facility_rules` row above used to say `effective_from`/`effective_to` are "now genuinely
+time-bounded, not bare dates". Half true, and the half that isn't matters:
+
+- **Supported and enforced**: a single **absolute** window at whatever precision the stored text carries.
+  `2026-08-10T18:00:00+05:30` really is an 18:00 boundary, so a rule genuinely can apply to part of one day.
+- **Not supported, and not built**: a **recurring** window. `feasibility.py::active_facility_rules` has no
+  day-of-week concept; "Weekdays only, 18:00–23:59" cannot be expressed or enforced, and nothing downstream
+  parses such a pattern out of the column.
+
+**Decision: the claim was corrected, the engine was not extended.** Reasoning, since this was a genuine
+fork. `facility_rules.effective_from/to` is unstructured `TEXT` already carrying two shapes (a bare date
+from the original seed, an offset-bearing ISO timestamp from the demo overlay). Encoding a recurrence into
+that same column would add a third, undiscoverable, SQL-invisible shape and put its parser inside
+`active_facility_rules` — which `evaluate_candidate_slot` calls once **per candidate interval**, up to 500
+per search, on the D1 booking hot path. A correct implementation wants real columns (`days_of_week`,
+`start_time_local`, `end_time_local`) and therefore a migration; no live rule uses recurrence, and D15's
+"intraday facility rules" means the *absolute* intraday windows that already work. Building unstructured
+recurrence to satisfy one mockup cell would be the wrong optimisation at this scale. **If the owner wants
+recurring windows, that is a schema change plus a hot-path parser — a separate, scoped piece of work, not a
+doc fix.** One related behaviour is now pinned by test rather than left to be rediscovered: an unparseable
+boundary yields *no bound on that side*, so a recurrence string saved into that column today would make the
+rule apply **always**, not never.
 
 ### 7.5.8 Shared / cross-cutting tools — used by every role, owned by none
 

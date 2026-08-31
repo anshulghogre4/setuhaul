@@ -28,6 +28,21 @@ yet, and every one of those call sites still reads `users.facility_id`. Writing 
 here would leave a newly-invited multi-facility user with no scope at all as far as the live
 enforcement paths are concerned.
 
+**Lifecycle state is local, and `invite_accepted_at` is written outside this module (issues #73,
+#81; migration `20260831132101_users_invite_lifecycle.sql`).** `users` carried one boolean, which
+both `deactivate_user` and `remove_user` set to 0, and nothing expressed "invited, not yet
+accepted" -- so the Users tab's four-value Status column had no source. Three nullable timestamps
+now carry it, derived in exactly one place (`derive_lifecycle_state`).
+
+The stamp that matters is `invite_accepted_at`, and **no tool in this module writes it**. It is
+written by `app/core/deps.py::get_execution_context`, on the first authenticated request an
+invited user ever makes. That is deliberate and it is the reason this fix is not a repeat of
+`users.last_login_ts` -- a column in this same table, read by `list_users` and
+`account_service.get_account_profile`, and written by nothing in the application at all. Any
+"accept" signal reported by a client, or written by an endpoint a client has to remember to call,
+would rot the same way. `get_execution_context` cannot be forgotten: a request either resolved it
+or was never authenticated.
+
 **M15 note**: the `scope` argument *is* a client-supplied id, and that is correct here rather than a
 violation -- assigning another user's scope is this tool's entire purpose. What is never taken from
 the client is the *caller's own* authority (`ctx.is_admin`, derived from the verified token) or the
@@ -56,10 +71,19 @@ PASSWORD_HASH_SENTINEL = "MANAGED_BY_SUPABASE_AUTH"
 
 # Role -> what kind of scope id it takes (SS7.5.7: "scope (facility/carrier/driver id, matching
 # role)"). `None` means global -- no scope id accepted or required.
+#
+# `GATE_OFFICER` belongs here and nowhere broader (issue #79, 2026-08-29). It takes a facility
+# scope id like the other four, so `_scope_type_for` must map it to `'FACILITY'` -- without this
+# entry `invite_user`/`update_user` refuse a gate officer outright with `INVALID_ROLE`, and
+# `users.facility_id` is never written, which is what `get_execution_context` resolves scope from.
+# It is deliberately NOT added to `is_operator`, `is_admin`, `has_global_read_scope` or
+# `OPS_PORTAL_ROLES`: the kiosk is a device-bound, no-idle-timeout, shared-device session, so it
+# keeps its own `assert_gate_write_scope` rather than joining a wider tier.
 FACILITY_SCOPED_ROLES = frozenset(
     {
         RoleName.OPERATIONS_EXECUTIVE, RoleName.WAREHOUSE_PLANNER,
         RoleName.OPERATIONS_MANAGER, RoleName.FACILITY_MANAGER,
+        RoleName.GATE_OFFICER,
     }
 )
 GLOBAL_ROLES = frozenset({RoleName.ADMIN, RoleName.TRANSPORT_MANAGER, RoleName.REGIONAL_OPERATIONS_HEAD})
@@ -75,6 +99,48 @@ TERMINAL_ESCALATION_STATUSES = ("RESOLVED", "CANCELLED")
 # constraint. A role change rewrites all three, so a user moved from OPERATIONS_EXECUTIVE to
 # DRIVER cannot keep a stale FACILITY row behind.
 MANAGED_SCOPE_TYPES = ("FACILITY", "CARRIER", "DRIVER")
+
+# ---------------------------------------------------------------------------------------------
+# Lifecycle state (issues #73 and #81, migration 20260831132101_users_invite_lifecycle.sql)
+# ---------------------------------------------------------------------------------------------
+#
+# `screens.md` section 2's Status column needs four values, and `users` only ever carried one
+# boolean. `is_active = 0` was written by BOTH `deactivate_user` and `remove_user` (#81), and
+# nothing anywhere expressed "invited, not yet accepted" (#73) -- `last_login_ts IS NULL` was the
+# only proxy, and that column is read in two places and written nowhere in the application, so it
+# reports every post-seed user as pending forever.
+LIFECYCLE_ACTIVE = "ACTIVE"
+LIFECYCLE_INVITED = "INVITED"
+LIFECYCLE_DEACTIVATED = "DEACTIVATED"
+LIFECYCLE_REMOVED = "REMOVED"
+
+
+def derive_lifecycle_state(row: Any) -> str:
+    """The one place a `users` row becomes a Status-column value. Pure, so it is directly testable.
+
+    **Precedence is the whole content of this function**, and it is ordered deliberately:
+
+    1. `REMOVED` first -- `remove_user` sets `removed_at` *and* `is_active = 0`, so a removed user
+       matches the deactivated test too. Removal is the stronger, irreversible fact.
+    2. `DEACTIVATED` next -- a user invited and then deactivated before accepting is deactivated,
+       not pending. Rendering them as "Invited" would offer a Resend action that must not work:
+       re-inviting an account an admin has deliberately switched off is the opposite of intent.
+    3. `INVITED` -- invited through this console (`invited_at`) and never seen making an
+       authenticated request (`invite_accepted_at`).
+    4. `ACTIVE` -- includes every seeded/pre-existing account, whose `invited_at` is NULL because
+       it genuinely was never invited here. That is the correct answer for them, not a gap.
+
+    Reads with `.get`-style tolerance for a missing key so a caller that selected a narrower
+    column list degrades to `ACTIVE`/`DEACTIVATED` rather than raising.
+    """
+    data = dict(row)
+    if data.get("removed_at") is not None:
+        return LIFECYCLE_REMOVED
+    if int(data.get("is_active") or 0) != 1:
+        return LIFECYCLE_DEACTIVATED
+    if data.get("invited_at") is not None and data.get("invite_accepted_at") is None:
+        return LIFECYCLE_INVITED
+    return LIFECYCLE_ACTIVE
 
 
 def _as_of() -> str:
@@ -141,6 +207,55 @@ async def _create_auth_user(settings: Settings, email: str) -> str:
     if not auth_user_id:
         raise AppError("Supabase Auth did not return a user id.", code="AUTH_INVITE_FAILED", status_code=502)
     return str(auth_user_id)
+
+
+async def _resend_auth_invite(settings: Settings, email: str) -> None:
+    """`POST /auth/v1/invite` again, for a user who already exists in Supabase Auth (issue #73).
+
+    **This is the same endpoint as `_create_auth_user`, deliberately, and it is the whole of the
+    resend mechanism** -- there is no separate GoTrue resend for invites. `supabase.auth.resend()`
+    covers `signup`/`email_change`/`sms`/`phone_change` only, not `invite`. Verified by reading
+    GoTrue's own source rather than the docs (`supabase/auth`, `internal/api/invite.go`, read
+    2026-08-31), because the two are not equally specific here:
+
+      * `isConfirmed := user != nil && user.IsConfirmed()`; inside the transaction,
+        `if !isCreate { if isConfirmed { return ...ErrorCodeEmailExists, DuplicateEmailMsg } }`.
+        An **already-accepted** account is a 422, which is why `resend_invite` refuses locally
+        before ever making this call rather than translating GoTrue's error afterwards.
+      * An existing but *unconfirmed* user falls through that branch and reaches
+        `a.sendInvite(r, tx, user)` unconditionally -- so a genuinely pending invite really is
+        re-sent, not silently ignored.
+      * `sendInvite` (`internal/api/mail.go`) generates a **fresh** OTP and confirmation token
+        (`crypto.GenerateOtp` / `GenerateTokenHash`) and re-stamps `invited_at`/
+        `confirmation_sent_at`. That is what makes this a real fix for an expired invite link,
+        the case `supabase/auth` issue #2180 is about.
+      * It can fail with `EmailRateLimitExceeded` -> 429 `over_email_send_rate_limit`. That is the
+        realistic failure of a Resend button (an impatient admin pressing it repeatedly), so it is
+        surfaced by name and mapped to 429 rather than folded into a generic "Auth refused".
+
+    Returns nothing: unlike `_create_auth_user` there is no new id to capture -- the local
+    `users.auth_user_id` mapping already exists and must not change.
+    """
+    use_system_trust_store()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{settings.supabase_url.rstrip('/')}/auth/v1/invite",
+                json={"email": email},
+                headers=_auth_headers(settings),
+            )
+    except httpx.HTTPError as exc:
+        raise AppError("Unable to reach Supabase Auth.", code="AUTH_UNAVAILABLE", status_code=503) from exc
+    if response.status_code == 429:
+        raise AppError(
+            "Supabase Auth is rate-limiting invite emails for this project. Try again shortly.",
+            code="AUTH_EMAIL_RATE_LIMITED", status_code=429, detail=response.text[:300],
+        )
+    if response.status_code >= 400:
+        raise AppError(
+            "Supabase Auth refused to resend the invite.", code="AUTH_INVITE_FAILED",
+            status_code=502, detail=response.text[:300],
+        )
 
 
 async def _delete_auth_user(settings: Settings, auth_user_id: str) -> None:
@@ -277,10 +392,55 @@ async def _write_user_scopes(
     )
 
 
+async def list_facilities(session: AsyncSession, ctx: ExecutionContext) -> dict[str, Any]:
+    """The facility list every scope control on this console needs (A-G10, issue #78).
+
+    **An addition to section 7.5.7's catalog**, flagged rather than folded in silently -- the same
+    discipline `get_user_removal_impact`, `get_facility_rule_impact` and `resend_invite` already
+    use. That catalog names no facilities read at all, yet four of its own tools take a facility id
+    as an argument (`list_users.facility_filter`, `list_facility_rules.facility_id`,
+    `invite_user`/`update_user`'s `scope`) and nothing anywhere told a caller which ids exist.
+
+    **The defect this closes is not cosmetic.** Without it the console derived its facility options
+    from the `facility_id` values that happened to appear in already-loaded user and rule rows, so a
+    facility with no users and no rules was *unpickable* -- meaning a newly-opened facility could
+    never receive its first user through the UI, which is the one case an admin console exists for.
+
+    Returns every facility with `active_flag` rather than filtering inactive ones out server-side.
+    Two callers need two different answers from this one read: the Users tab's filter must still be
+    able to name a closed facility that users are still scoped to, while the invite form must not
+    offer one as a *new* assignment. The flag is what lets each decide; hiding the rows here would
+    make the first case unanswerable.
+
+    **No LIMIT, deliberately**, unlike `list_users`' 200. `facilities` is a small dimension table
+    (tens of rows at most for this product), and a truncated facility list would silently recreate
+    the exact incompleteness this endpoint exists to remove.
+
+    Admin-gated like every other tool in this module -- an addition to the catalog inherits the
+    catalog's own role gate rather than inventing a looser one. Ordered by `facility_name` so no
+    client has to pick a collation.
+    """
+    if not ctx.is_admin:
+        raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT facility_id, facility_name, city, active_flag
+                FROM public.facilities
+                ORDER BY facility_name
+                """
+            )
+        )
+    ).mappings().all()
+    return {"as_of": _as_of(), "source": "postgresql", "items": [dict(row) for row in rows]}
+
+
 async def list_users(
-    session: AsyncSession, ctx: ExecutionContext, role_filter: str | None = None, facility_filter: str | None = None,
+    session: AsyncSession, ctx: ExecutionContext, role_filter: str | None = None,
+    facility_filter: str | None = None, include_removed: bool = False,
 ) -> dict[str, Any]:
-    """SS7.5.7 `list_users` -- `role_filter?`, `facility_filter?`.
+    """SS7.5.7 `list_users` -- `role_filter?`, `facility_filter?`, plus `include_removed?`.
 
     Returns `scoped_facility_ids` per row (A-G4, issue #72): `screens.md` section 2's Scope column
     renders a list ("Jaipur, Gurugram"), which the single `users.facility_id` column cannot
@@ -290,10 +450,24 @@ async def list_users(
     `facility_filter` matches on **either** side of the mirror described in the module docstring:
     a user scoped to Jaipur and Gurugram whose primary `users.facility_id` is Jaipur must still
     appear under a Gurugram filter, which a plain `u.facility_id = :facility_filter` misses.
+
+    **Every row now carries a real `lifecycle_state` (issues #73 and #81).** `last_login_ts` is
+    still returned -- the frontend types it and it is a genuine "when did we last see them" field
+    -- but it is no longer the only thing a Status column could be derived from, and it never was
+    a pending-invitation signal (it is written nowhere in this application; only `seed.sql` sets
+    it). `derive_lifecycle_state` is the single place that mapping happens.
+
+    **Removed users are excluded by default** (`edge-cases.md` #8: "`list_users` only returns
+    active/inactive/pending accounts by default -- a genuinely removed user does not reappear in
+    search"). Before this, it could not: `remove_user` and `deactivate_user` both landed on
+    `is_active = 0`, so hiding one hid the other. `include_removed` is an **addition to section
+    7.5.7's argument list**, flagged rather than folded in silently (the discipline
+    `get_user_removal_impact`'s docstring established); it exists so the `REMOVED` state is
+    actually reachable through the API rather than being a column only the database can see.
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
-    filters = ""
+    filters = "" if include_removed else " AND u.removed_at IS NULL"
     params: dict[str, Any] = {}
     if role_filter:
         filters += " AND r.role_name = :role_filter"
@@ -311,6 +485,7 @@ async def list_users(
                 f"""
                 SELECT u.user_id, u.full_name, u.email, r.role_name, u.facility_id, u.driver_id,
                        u.is_active, u.last_login_ts,
+                       u.invited_at, u.invite_accepted_at, u.removed_at,
                        COALESCE((
                          SELECT array_agg(us.scope_value ORDER BY us.scope_value)
                          FROM public.user_scopes us
@@ -329,6 +504,7 @@ async def list_users(
     items = []
     for row in rows:
         item = dict(row)
+        item["lifecycle_state"] = derive_lifecycle_state(row)
         # A user invited before #72 (or one whose row predates E2.3's backfill) has no
         # `user_scopes` row at all; fall back to the primary mirror rather than rendering an empty
         # Scope cell for a user who genuinely has one facility.
@@ -375,17 +551,22 @@ async def invite_user(
     facility_id = scopes[0] if role_enum in FACILITY_SCOPED_ROLES and scopes else None
     driver_id = scopes[0] if role_enum == RoleName.DRIVER and scopes else None
     user_id = new_id("USR")
-    now = datetime.now(timezone.utc).isoformat()
+    # Two representations of the same instant on purpose. `users.created_at` is TEXT in the frozen
+    # baseline schema and every existing caller writes an ISO string into it; `invited_at` is
+    # timestamptz (this console's own migration), and asyncpg refuses a str for a timestamptz bind
+    # rather than coercing it -- the same reason `_write_user_scopes` already takes a datetime.
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
     try:
         await session.execute(
             text(
                 """
                 INSERT INTO public.users (
                   user_id, role_id, full_name, email, password_hash, driver_id, facility_id,
-                  is_active, created_at, auth_user_id
+                  is_active, created_at, auth_user_id, invited_at
                 ) VALUES (
                   :user_id, :role_id, :full_name, :email, :password_hash, :driver_id, :facility_id,
-                  1, :created_at, CAST(:auth_user_id AS uuid)
+                  1, :created_at, CAST(:auth_user_id AS uuid), :invited_at
                 )
                 """
             ),
@@ -393,10 +574,14 @@ async def invite_user(
                 "user_id": user_id, "role_id": role_id, "full_name": email.split("@")[0],
                 "email": email, "password_hash": PASSWORD_HASH_SENTINEL, "driver_id": driver_id,
                 "facility_id": facility_id, "created_at": now, "auth_user_id": auth_user_id,
+                # Issue #73. Written in the SAME statement that creates the row, not a follow-up
+                # UPDATE: a `users` row created by this tool without an invite stamp would render
+                # as ACTIVE and be indistinguishable from a seeded account forever.
+                "invited_at": now_dt,
             },
         )
         await _write_user_scopes(
-            session, user_id=user_id, role=role_enum, scopes=scopes, now=datetime.now(timezone.utc)
+            session, user_id=user_id, role=role_enum, scopes=scopes, now=now_dt
         )
     except Exception as exc:
         raise AppError(
@@ -522,19 +707,43 @@ async def update_user(
 
 
 async def _set_active(session: AsyncSession, ctx: ExecutionContext, user_id: str, active: bool) -> dict[str, Any]:
+    """Shared body of `deactivate_user`/`reactivate_user`.
+
+    **`AND removed_at IS NULL` is issue #81's second consequence, and it closes a real hole.**
+    Before the discriminator existed, `reactivate_user` on a removed user happily set
+    `is_active = 1`, putting a person whose Supabase Auth identity `remove_user` had already
+    DELETEd back into the Users tab as Active -- an account that looks restored, can never log in,
+    and is one `invite_user` collision away from confusing an admin badly. There is now a column
+    that can say no, so it does.
+
+    The happy path stays one statement. The extra SELECT runs only when nothing was updated, to
+    tell "no such user" apart from "removed" -- a 404 and a 409 are different answers and the
+    admin acting on a stale list deserves the accurate one.
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
     row = (
         await session.execute(
             text(
                 "UPDATE public.users SET is_active = :active, updated_at = :updated_at "
-                "WHERE user_id = :user_id RETURNING user_id, is_active"
+                "WHERE user_id = :user_id AND removed_at IS NULL RETURNING user_id, is_active"
             ),
             {"active": 1 if active else 0, "updated_at": datetime.now(timezone.utc).isoformat(), "user_id": user_id},
         )
     ).mappings().first()
     if row is None:
-        raise AppError(f"User '{user_id}' not found.", code="NOT_FOUND", status_code=404)
+        existing = (
+            await session.execute(
+                text("SELECT removed_at FROM public.users WHERE user_id = :user_id"),
+                {"user_id": user_id},
+            )
+        ).mappings().first()
+        if existing is None:
+            raise AppError(f"User '{user_id}' not found.", code="NOT_FOUND", status_code=404)
+        raise AppError(
+            f"User '{user_id}' has been removed; removal is permanent and cannot be undone here.",
+            code="USER_REMOVED", status_code=409,
+        )
     await session.commit()
     return {"as_of": _as_of(), "code": "REACTIVATED" if active else "DEACTIVATED", "user_id": user_id}
 
@@ -623,6 +832,12 @@ async def remove_user(
     so a hard delete would either cascade-destroy audit history or fail outright. `REMOVED` still
     means "this person cannot use the system again," which is what the design promises; it does
     not mean the row is gone.
+
+    **The removal mechanism is unchanged by issue #81 -- only its observability is.** It now also
+    stamps `removed_at`, which is what lets `list_users` hide this user (`edge-cases.md` #8) while
+    still showing a merely-deactivated one, and what lets `reactivate_user` refuse to un-remove
+    someone whose Auth identity is already gone. Before that column existed, `is_active = 0` was
+    the only trace either action left, so the two were literally indistinguishable in the data.
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
@@ -664,10 +879,19 @@ async def remove_user(
     if row["auth_user_id"]:
         await _delete_auth_user(settings, str(row["auth_user_id"]))
 
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    # `removed_at` is the whole of issue #81's fix on the write side, and it is set in the SAME
+    # statement that deactivates -- the two facts are one event, and a row carrying `is_active = 0`
+    # without `removed_at` is exactly the ambiguity being retired. `COALESCE` so a replayed
+    # removal that somehow reached here past the idempotency check keeps the ORIGINAL removal
+    # instant rather than sliding it forward; when the removal actually happened is audit-relevant.
     await session.execute(
-        text("UPDATE public.users SET is_active = 0, updated_at = :updated_at WHERE user_id = :uid"),
-        {"updated_at": now, "uid": user_id},
+        text(
+            "UPDATE public.users SET is_active = 0, removed_at = COALESCE(removed_at, :removed_at), "
+            "updated_at = :updated_at WHERE user_id = :uid"
+        ),
+        {"removed_at": now_dt, "updated_at": now, "uid": user_id},
     )
     await session.execute(
         text(
@@ -693,6 +917,190 @@ async def remove_user(
     result = {
         "as_of": _as_of(), "code": "REMOVED", "user_id": user_id,
         "active_escalation_count": orphaned_escalations,
+    }
+    await store_idempotency(session, key=key, user_id=ctx.user_id, route=route, request_hash=req_hash, response=result)
+    await session.commit()
+    return result
+
+
+async def _load_pending_invite(session: AsyncSession, user_id: str) -> dict[str, Any]:
+    """Read a user and insist they are genuinely `INVITED` (issue #73).
+
+    Shared by `resend_invite` and `revoke_invite` because both are meaningless on any other
+    lifecycle state, and both must refuse for the *same* reason with the *same* words. The state
+    is derived by `derive_lifecycle_state` from the row itself, not re-tested with a second copy
+    of the precedence rules -- one implementation, so the tools cannot disagree with the badge the
+    Users tab is rendering next to the button that called them.
+
+    The `INVITED` precondition is also what keeps `resend_invite` from ever making a call GoTrue
+    will reject: GoTrue 422s an invite for a *confirmed* address, and `invite_accepted_at IS NULL`
+    is this system's own record of the same fact.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT user_id, email, auth_user_id, is_active,
+                       invited_at, invite_accepted_at, removed_at
+                FROM public.users WHERE user_id = :uid
+                """
+            ),
+            {"uid": user_id},
+        )
+    ).mappings().first()
+    if row is None:
+        raise AppError(f"User '{user_id}' not found.", code="NOT_FOUND", status_code=404)
+    state = derive_lifecycle_state(row)
+    if state != LIFECYCLE_INVITED:
+        raise AppError(
+            f"User '{user_id}' is {state.lower()}, not a pending invitation.",
+            code="NOT_PENDING_INVITE", status_code=409, detail=state,
+        )
+    return dict(row)
+
+
+async def resend_invite(
+    session: AsyncSession, ctx: ExecutionContext, settings: Settings, *, user_id: str,
+) -> dict[str, Any]:
+    """`screens.md` section 2's Resend action on the pending row (A-G5, issue #73).
+
+    **An addition to section 7.5.7's catalog**, flagged rather than folded in silently -- the same
+    discipline `get_user_removal_impact` and `get_facility_rule_impact` already use. Section
+    7.5.7 lists no invite-lifecycle tool at all; `screens.md`'s Users table and its "Pending
+    invitations show their own status row ... with Resend/Revoke actions" rule are the source.
+
+    **Takes `user_id`, never an email.** Which address gets an invite email is decided server-side
+    from the stored row, so this tool cannot be used to send a Supabase Auth invite to an arbitrary
+    address by an admin who is only meant to be re-sending an existing one (M15: identity and
+    scope derived server-side, never taken from the client).
+
+    **No Idempotency-Key**, unlike `remove_user`. Section 7.5.7 requires one for the destructive
+    tool specifically, and a resend is idempotent in the way that matters: the worst outcome of a
+    duplicate is a duplicate email, and GoTrue's own `over_email_send_rate_limit` already bounds
+    that (see `_resend_auth_invite`). Adding an idempotency record here would spend a write on a
+    problem that does not exist.
+
+    `invited_at` is re-stamped because it now means "when the currently-outstanding invite was
+    sent" -- GoTrue re-stamps its own `invited_at` inside `sendInvite` for exactly the same
+    reason, and a stale local stamp would make an "invited 9 days ago" column lie after a resend.
+    """
+    if not ctx.is_admin:
+        raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    row = await _load_pending_invite(session, user_id)
+
+    # Auth first, local stamp second: if the email does not go out there is nothing to record.
+    # The reverse order would leave `invited_at` claiming a send that never happened -- the same
+    # "do not record a promise the external system did not make" ordering `invite_user` uses.
+    await _resend_auth_invite(settings, str(row["email"]))
+
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    await session.execute(
+        text(
+            "UPDATE public.users SET invited_at = :invited_at, updated_at = :updated_at "
+            "WHERE user_id = :uid"
+        ),
+        {"invited_at": now_dt, "updated_at": now, "uid": user_id},
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
+              new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :actor_id, 'UPDATE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
+            # FR-ADM-009. Recorded because "who kept re-inviting this address" is a real question
+            # an audit log should answer; the email is included for the same reason invite_user's
+            # entry includes it.
+            "new_value_json": json.dumps({"event": "RESEND_INVITE", "email": str(row["email"])}),
+            "created_at": now,
+        },
+    )
+    await session.commit()
+    return {
+        "as_of": _as_of(), "code": "INVITE_RESENT", "user_id": user_id,
+        "email": str(row["email"]), "invited_at": now,
+    }
+
+
+async def revoke_invite(
+    session: AsyncSession, ctx: ExecutionContext, settings: Settings,
+    *, user_id: str, idempotency_key: str,
+) -> dict[str, Any]:
+    """`screens.md` section 2's Revoke action on the pending row (A-G5, issue #73).
+
+    **An addition to section 7.5.7's catalog**, flagged not folded in -- see `resend_invite`.
+
+    Mechanically this is `remove_user` restricted to a pending invitation: delete the Supabase
+    Auth identity so the outstanding invite link can never mint a session, then stamp `removed_at`
+    locally. It is a **separate tool rather than a `remove_user` alias** for two reasons that both
+    show up in the audit log and the UI:
+
+      * The `NOT_PENDING_INVITE` precondition. Revoke is offered only on a pending row, so an
+        admin who acts on a stale list -- one where the person accepted the invite thirty seconds
+        ago -- gets a refusal, not a silent full removal of a now-active colleague.
+      * A `REVOKE_INVITE` audit event is not a `REMOVE_USER` audit event. "We withdrew an invite
+        nobody had used" and "we removed a working colleague" are different facts about the
+        organisation, and `audit_logs` is the place that difference has to survive (FR-ADM-009).
+
+    It carries an `Idempotency-Key` for the same reason `remove_user` does: it deletes a Supabase
+    Auth identity, which no retry can undo.
+
+    **The escalation-orphaning count `remove_user` computes is deliberately absent.** A pending
+    user has never held a session, and `escalation_queue.owner_user_id` is only ever set from an
+    authenticated caller's own context (`acknowledge_escalation`), so the count is structurally
+    zero -- querying for it would be a round trip that can only return 0.
+    """
+    if not ctx.is_admin:
+        raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    key = (idempotency_key or "").strip()
+    if not key:
+        raise AppError("Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400)
+
+    route = f"POST /api/v1/admin/users/{user_id}/revoke-invite"
+    req_hash = payload_hash({"user_id": user_id})
+    replay = await lookup_idempotency(session, key=key, user_id=ctx.user_id, route=route, request_hash=req_hash)
+    if replay is not None:
+        return {**replay["response"], "idempotent_replay": True}
+
+    row = await _load_pending_invite(session, user_id)
+    if row["auth_user_id"]:
+        await _delete_auth_user(settings, str(row["auth_user_id"]))
+
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    await session.execute(
+        text(
+            "UPDATE public.users SET is_active = 0, removed_at = COALESCE(removed_at, :removed_at), "
+            "updated_at = :updated_at WHERE user_id = :uid"
+        ),
+        {"removed_at": now_dt, "updated_at": now, "uid": user_id},
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
+              new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :actor_id, 'DELETE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
+            "new_value_json": json.dumps({"event": "REVOKE_INVITE", "email": str(row["email"])}),
+            "created_at": now,
+        },
+    )
+    result = {
+        "as_of": _as_of(), "code": "INVITE_REVOKED", "user_id": user_id, "email": str(row["email"]),
     }
     await store_idempotency(session, key=key, user_id=ctx.user_id, route=route, request_hash=req_hash, response=result)
     await session.commit()

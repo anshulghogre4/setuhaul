@@ -6,12 +6,28 @@ only -- section 7.5.7's persona table scopes this whole console to that one role
 envelope; every real decision (scope validation, the Auth Admin API calls, the rule-type registry,
 the read-only simulate/publish split) lives in `admin_user_service.py`/`admin_governance_service.py`.
 
-Two **additions to that catalog**, both pure reads, both flagged rather than folded in silently
+Three **additions to that catalog**, all pure reads, all flagged rather than folded in silently
 (the discipline `routers/planner.py`'s `/docks/{dock_id}/block-impact` established):
 `GET /users/{user_id}/removal-impact` (A-G8, issue #76 -- `edge-cases.md` #1's confirmation copy
-needs its count *before* the write) and `GET /policy/active` (A-G7, issue #75 -- nothing could read
+needs its count *before* the write), `GET /policy/active` (A-G7, issue #75 -- nothing could read
 the current policy version, so the new `based_on_version_id` baseline had no source and
-`screens.md` section 4's read-only current version had nothing to render).
+`screens.md` section 4's read-only current version had nothing to render), and
+`GET /facility-rules/{rule_id}/impact` (A-G6, issue #74 -- `edge-cases.md` #4's High-tier
+confirmation names the count of affected appointments *before* the edit commits, and no query
+anywhere produced it).
+
+**Two further additions, both writes, added 2026-08-31 (A-G5, issue #73):**
+`POST /users/{user_id}/resend-invite` and `POST /users/{user_id}/revoke-invite` -- `screens.md`
+section 2's pending row specifies both actions by name and section 7.5.7 has no invite-lifecycle
+tool at all. They became implementable only once `users` gained a real lifecycle state; before
+that there was no way to know which rows they applied to. `GET /users` also gains an
+`include_removed` query parameter (issue #81 / `edge-cases.md` #8).
+
+**A fifth addition, a pure read, added 2026-08-31 (A-G10, issue #78):** `GET /facilities`. Four
+tools in section 7.5.7 take a facility id as an argument and nothing anywhere told a caller which
+ids exist, so the console derived its options from whatever rows it had already loaded -- leaving a
+facility with no users and no rules unpickable, and a newly-opened facility unable to receive its
+first user through the UI.
 """
 
 from datetime import datetime
@@ -32,6 +48,7 @@ from app.services.admin_governance_service import (
     export_audit_log,
     get_active_policy_version,
     get_audit_log,
+    get_facility_rule_impact,
     list_facility_rules,
     publish_policy_version,
     simulate_policy_weights,
@@ -41,9 +58,12 @@ from app.services.admin_user_service import (
     deactivate_user,
     get_user_removal_impact,
     invite_user,
+    list_facilities,
     list_users,
     reactivate_user,
     remove_user,
+    resend_invite,
+    revoke_invite,
     update_user,
 )
 
@@ -105,6 +125,12 @@ class UpdateFacilityRuleBody(BaseModel):
 
 
 class SimulatePolicyBody(BaseModel):
+    """`weights` stays `dict[str, Any]` on the wire, but its KEYS are no longer free (A-G1, issue
+    #69). The allowlist is derived at runtime from `constraints.json`'s own `score_weights`, so it
+    lives in `admin_governance_service._validate_weight_keys` where it can read that file, not in a
+    Pydantic literal here that would have to be hand-synchronised with the engine. Same rule for
+    `PublishPolicyBody`. Unknown keys used to be silently dropped; they are now a named 422."""
+
     model_config = ConfigDict(extra="forbid")
 
     weights: dict[str, Any]
@@ -128,8 +154,12 @@ async def users(
     request: Request, ctx: AdminCtx, session: DbSession,
     role_filter: Annotated[str | None, Query()] = None,
     facility_filter: Annotated[str | None, Query()] = None,
+    include_removed: Annotated[bool, Query()] = False,
 ) -> dict[str, Any]:
-    result = await list_users(session, ctx, role_filter, facility_filter)
+    """`include_removed` defaults to false per `edge-cases.md` #8 ("a genuinely removed user does
+    not reappear in search"). It is an addition to section 7.5.7's argument list, flagged here
+    rather than folded in silently -- see `list_users`' own docstring."""
+    result = await list_users(session, ctx, role_filter, facility_filter, include_removed)
     return ok(result, get_request_id(request))
 
 
@@ -177,6 +207,38 @@ async def users_reactivate(user_id: str, request: Request, ctx: AdminCtx, sessio
     return ok(result, get_request_id(request))
 
 
+@router.post("/users/{user_id}/resend-invite")
+async def users_resend_invite(
+    user_id: str, request: Request, ctx: AdminCtx, session: DbSession, settings: SettingsDep,
+) -> dict[str, Any]:
+    """`screens.md` section 2's Resend action (A-G5, issue #73). Addition to section 7.5.7's
+    catalog. Takes `user_id` only -- the address the invite goes to is read from the stored row,
+    never accepted from the caller."""
+    try:
+        result = await resend_invite(session, ctx, settings, user_id=user_id)
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(result, get_request_id(request))
+
+
+@router.post("/users/{user_id}/revoke-invite")
+async def users_revoke_invite(
+    user_id: str, request: Request, ctx: AdminCtx, session: DbSession, settings: SettingsDep,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    """`screens.md` section 2's Revoke action (A-G5, issue #73). Addition to section 7.5.7's
+    catalog. Carries an `Idempotency-Key` for the same reason `/remove` does -- it deletes a
+    Supabase Auth identity, which no retry can undo."""
+    key = _require_idempotency_key(idempotency_key)
+    try:
+        result = await revoke_invite(session, ctx, settings, user_id=user_id, idempotency_key=key)
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(result, get_request_id(request))
+
+
 @router.get("/users/{user_id}/removal-impact")
 async def users_removal_impact(
     user_id: str, request: Request, ctx: AdminCtx, session: DbSession,
@@ -205,6 +267,21 @@ async def users_remove(
     return ok(result, get_request_id(request))
 
 
+@router.get("/facilities")
+async def facilities(request: Request, ctx: AdminCtx, session: DbSession) -> dict[str, Any]:
+    """The facility list every scope control on this console needs (A-G10, issue #78).
+
+    Addition to section 7.5.7's catalog, flagged rather than folded in silently. Takes no
+    arguments -- there is nothing here to scope *by*, and the role gate is the whole authorisation
+    decision (M15: authority comes from the verified token, never from a client-supplied id).
+
+    Registered before `/facility-rules` only for readability; the two paths do not overlap, so
+    Starlette's ordering is not load-bearing here.
+    """
+    result = await list_facilities(session, ctx)
+    return ok(result, get_request_id(request))
+
+
 @router.get("/facility-rules")
 async def facility_rules(
     request: Request, ctx: AdminCtx, session: DbSession,
@@ -227,6 +304,28 @@ async def facility_rules_create(
     except Exception:
         await session.rollback()
         raise
+    return ok(result, get_request_id(request))
+
+
+@router.get("/facility-rules/{rule_id}/impact")
+async def facility_rule_impact(
+    rule_id: str, request: Request, ctx: AdminCtx, session: DbSession,
+    rule_value: Annotated[str | None, Query()] = None,
+    effective_from: Annotated[str | None, Query()] = None,
+    effective_to: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    """Preview -- names the already-committed appointments a tightened rule would newly make
+    non-compliant, before the edit commits (`edge-cases.md` #4, A-G6/issue #74).
+
+    The three query parameters are `update_facility_rule`'s own arguments, omitted meaning
+    unchanged, so the preview and the write are computed from the same proposal. Not in section
+    7.5.7's own catalog; flagged as an addition, not silently folded in, per the same discipline
+    `routers/planner.py`'s `/docks/{dock_id}/block-impact` already uses.
+    """
+    result = await get_facility_rule_impact(
+        session, ctx, rule_id=rule_id, rule_value=rule_value,
+        effective_from=effective_from, effective_to=effective_to,
+    )
     return ok(result, get_request_id(request))
 
 

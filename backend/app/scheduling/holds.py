@@ -85,6 +85,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import get_settings
 from app.scheduling import allocation
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import evaluate_candidate_slot
@@ -336,6 +337,121 @@ async def create_hold(
         },
     )
     return hold
+
+
+# ------------------------------------------------------------------------------------------
+# The consuming read (issue #83 / #85) -- "does this shipment have a live hold right now?"
+# ------------------------------------------------------------------------------------------
+
+
+HOLD_PROMISE_STATE = "HELD"
+# Which authority named a shipment's promise state, in the same "never silently identical" spirit
+# as `get_planner_queue`'s `interval_source` (issue #60). A surface that renders a HELD chip must be
+# able to say *why* it is showing one.
+PROMISE_STATE_SOURCE_APPOINTMENT = "appointments"
+PROMISE_STATE_SOURCE_HOLD = "dock_occupancy_hold"
+
+
+def hold_reads_enabled() -> bool:
+    """Whether a read may reference the D2 hold columns at all.
+
+    Not a stylistic gate on a feature: `dock_occupancy.state` / `.expires_at` do not exist until
+    `20260829134929_d2_held_state_dock_occupancy.sql` is applied, and PostgreSQL resolves column
+    references at *parse* time, so a statement naming them fails outright with `UndefinedColumn`
+    on an unmigrated database rather than returning nothing. `TWO_PHASE_HOLD_ENABLED` is the flag
+    `settings.py` already documents as "flip to true only after the migration is applied", which
+    makes it the honest proxy for "these columns exist", and it is what `request_slot` itself
+    branches on (`allocation.py`).
+
+    Known limitation, stated rather than hidden: flipping the flag back off while holds are still
+    live makes them invisible to these reads again for up to one TTL (90 s), during which they
+    still consume capacity via the exclusion constraint. Correctness is unaffected -- no
+    double-booking is possible either way -- but a preview could be optimistic for that window.
+    The mitigation is the flag's own documented rollback note, not extra machinery here.
+    """
+    return get_settings().two_phase_hold_enabled
+
+
+async def live_hold_for_shipment(
+    session: AsyncSession, *, shipment_id: str, now: datetime
+) -> dict[str, Any] | None:
+    """The one live D2 hold on this shipment, or None. Safe to call with the flag off.
+
+    Issues #83 and #85 are the same gap seen from two surfaces: every read that derives a promise
+    state from `appointments.appointment_status` is blind to a hold, because §4 is explicit that
+    *"Held is not booked: no `appointments` row exists yet"*. This is the missing half, written once
+    here rather than as near-copies in `driver_reads`, `allocation` and the carrier repository.
+
+    **`expires_at > :now` is applied here and is deliberately absent from the planner's
+    displacement queries.** The two are answering different questions and §0.8 only mandates the
+    filter for one of them: *"Every read filters `state='HELD' AND expires_at > now()`"* is about
+    what promise a party actually holds -- a lapsed hold is not a promise, and telling a driver
+    "reserved for you" about one would be a lie the sweeper has merely not caught up with yet. The
+    planner's *displacement* read asks instead what PostgreSQL will refuse, and the exclusion
+    constraint's predicate carries no time term at all, so a lapsed-but-unswept hold still blocks
+    (verified empirically against PostgreSQL 18.3, 2026-08-29). Filtering there would re-introduce
+    issue #84 in miniature.
+
+    `now` is a parameter rather than SQL `now()` so §9.1's injected clock governs, the same reason
+    `sweep_expired_appointments` and `get_planner_queue` take one.
+
+    The slot join is LEFT, unlike `_locked_hold`'s: that function needs a slot because it is about
+    to revalidate feasibility against it, whereas this one only needs the countdown, and a hold
+    whose slot row cannot be resolved should still be *shown* rather than silently dropped.
+    """
+    if not hold_reads_enabled():
+        return None
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT o.occupancy_id, o.dock_id, o.shipment_id, o.state, o.expires_at,
+                       lower(o."window") AS window_start,
+                       upper(o."window") AS window_end,
+                       sl.slot_id, sl.facility_id, sl.slot_start_ts, sl.slot_end_ts,
+                       d.dock_code, d.dock_type
+                FROM public.dock_occupancy o
+                LEFT JOIN public.appointment_slots sl
+                       ON sl.dock_id = o.dock_id
+                      AND sl.slot_start_ts = lower(o."window")
+                LEFT JOIN public.docks d ON d.dock_id = o.dock_id
+                WHERE o.shipment_id = :shipment_id
+                  AND o.state = 'HELD'
+                  AND o.expires_at > :now
+                ORDER BY o.expires_at DESC
+                LIMIT 1
+                """
+            ),
+            {"shipment_id": shipment_id, "now": now},
+        )
+    ).mappings().first()
+    if row is None:
+        return None
+    hold = dict(row)
+    expires_at = hold.get("expires_at")
+    return {
+        # `hold_id` is the name every caller of `confirm_held_slot` uses for this value, so the
+        # read hands back the same key the write takes rather than making each surface rename it.
+        "hold_id": str(hold["occupancy_id"]),
+        "shipment_id": str(hold["shipment_id"]),
+        "dock_id": str(hold["dock_id"]),
+        "dock_code": hold.get("dock_code"),
+        "dock_type": hold.get("dock_type"),
+        "slot_id": hold.get("slot_id"),
+        "facility_id": hold.get("facility_id"),
+        "slot_start_ts": hold.get("slot_start_ts"),
+        "slot_end_ts": hold.get("slot_end_ts"),
+        "window_start": hold.get("window_start"),
+        "window_end": hold.get("window_end"),
+        "state": str(hold["state"]),
+        "expires_at": expires_at,
+        # The countdown the HELD screens render. Computed server-side against the same `now` the
+        # row was filtered with, so the client never has to trust its own clock to decide whether
+        # a hold is still live -- U48's "the interface renders receipts, it never computes them".
+        "expires_in_seconds": (
+            max(0, int((expires_at - now).total_seconds())) if expires_at is not None else None
+        ),
+    }
 
 
 # ------------------------------------------------------------------------------------------

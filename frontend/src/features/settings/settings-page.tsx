@@ -341,6 +341,16 @@ function Toggle({
         onClick={() => onChange?.(!checked)}
         className={cn(
           'relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors duration-(--d-base) ease-(--e-out)',
+          // Hit area, not appearance.  Measured in a real render (2026-08-31): the visible
+          // track is 36x20, so the pointer target was 20px on a `comfortable` surface whose
+          // own `--tap` is 44px (`spacing-and-layout.md` density table).  It cleared WCAG 2.2
+          // SC 2.5.8 only via the Spacing exception -- neighbouring targets are >24px away --
+          // which is a technicality, not a comfortable switch to hit on a tablet.
+          //
+          // A transparent `::before` extends the button's own hit region to 44x60 without
+          // moving, resizing or recolouring one visible pixel.  `-inset-y-3` = 20+24 = 44px
+          // tall; the knob keeps using `::after`, so the two do not collide.
+          'before:absolute before:-inset-x-3 before:-inset-y-3 before:content-[""]',
           'after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:transition-transform after:duration-(--d-base) after:ease-(--e-out) after:content-[""]',
           'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
           checked ? 'bg-primary' : 'bg-switch-track-off',

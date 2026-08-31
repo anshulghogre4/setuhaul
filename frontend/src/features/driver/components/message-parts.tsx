@@ -21,11 +21,14 @@ import type { DriverMessage, DriverOption } from '../lib/types'
 export function MessageParts({
   message,
   facilityName,
+  heldUntil,
   onSelectOption,
   onEscalate,
 }: {
   message: DriverMessage
   facilityName?: string
+  /** The live hold's server deadline, passed through to whichever card is in the `held` state. */
+  heldUntil?: string
   onSelectOption?: (option: DriverOption) => void
   onEscalate?: () => void
 }) {
@@ -39,6 +42,7 @@ export function MessageParts({
                 key={i}
                 set={part.optionSet}
                 facilityName={facilityName}
+                heldUntil={heldUntil}
                 onSelect={onSelectOption}
                 onEscalate={onEscalate}
               />

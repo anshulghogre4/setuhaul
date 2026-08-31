@@ -44,7 +44,12 @@ status updates in place. Reactivating restores exactly the role and scope the us
 4. **`CREATED`/`UPDATED`** → takes effect immediately (no simulate-before-publish here — `screens.md` §3's
    stated asymmetry with Policy).
 5. **Editing a rule with active dependent appointments** → High-tier confirmation names what's affected
-   (`components.md` §2) before the write commits.
+   (`components.md` §2) before the write commits. **Step 2.5, added 2026-08-29 (A-G6, issue #74):** the
+   affected set comes from `GET /admin/facility-rules/{rule_id}/impact`, fetched as the value/effective
+   fields complete — the same live-as-you-type shape `03-planner-dock-board/` Flow 7 step 2 uses for
+   block-dock, and for the same reason ("not deferred to submission"). The distinction that flow draws
+   between *checked, none affected* and *not yet checked* applies here unchanged: a confirmation that has
+   not run the query yet must not read as "0 affected".
 
 ## Flow 6 · Edit and simulate policy weights (U27, extended)
 

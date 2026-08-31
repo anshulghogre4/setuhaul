@@ -7,10 +7,12 @@
  * rather than silently optional. Two such absences are load-bearing on this surface and are
  * recorded where they bite:
  *
- *  1. `promise_state` is `appointments.appointment_status`, whose live CHECK constraint admits
- *     no `SHOWN` and no `HELD` (issue #53). It is `null` — not `'SHOWN'` — for a shipment with
- *     no current appointment, because the payload comes from a `LEFT JOIN LATERAL` that yields
- *     no row. See `flags.ts` and `promise.ts`.
+ *  1. **`promise_state` is no longer a raw column read (issues #85/#87, 2026-08-31).** It is
+ *     composed server-side from `appointments` *and* `dock_occupancy`, so `HELD` can now arrive
+ *     here and does. `SHOWN` still cannot, and that is a decision rather than a gap: it is a
+ *     presentation-only state with no persisted counterpart anywhere in the product. A shipment
+ *     with neither an appointment nor a live hold is `null` — not `'SHOWN'`. See `flags.ts` and
+ *     `promise.ts`.
  *  2. There is **no decision-deadline field anywhere** on `get_shipment_detail`.
  *     `public.appointments` has no `expires_at`/deadline column at all (verified against the
  *     baseline migration and `backend/app/scheduling/expiry.py:75-81`, whose own comment states
@@ -25,10 +27,19 @@ export type PromiseState = 'SHOWN' | 'HELD' | 'PENDING_CONFIRMATION' | 'CONFIRME
 /**
  * What `promise_state` can actually be on the wire.
  *
- * `appointments_appointment_status_check` admits these eight values and nothing else, plus
- * `null` when the shipment has no current appointment row.
+ * `appointments_appointment_status_check` admits eight values and nothing else — **plus `HELD`,
+ * which is not one of them and never will be** (issue #85/#87, 2026-08-31).
+ *
+ * `promise_state` stopped being a raw column read: `repositories/carrier.py::_PROMISE_STATE_SQL`
+ * composes it from two tables, because §4 is explicit that a hold has no `appointments` row at all
+ * (*"Held is not booked"*). An active appointment status passes straight through; otherwise a live
+ * `dock_occupancy` hold answers `HELD`. So this union is the set of values the *derived* field can
+ * take, which is deliberately not the same set the CHECK constraint admits.
+ *
+ * `null` still means no current appointment **and** no live hold.
  */
 export type LivePromiseState =
+  | 'HELD'
   | 'PENDING_CONFIRMATION'
   | 'CONFIRMED'
   | 'IN_PROGRESS'
@@ -37,6 +48,10 @@ export type LivePromiseState =
   | 'REJECTED'
   | 'EXPIRED'
   | 'NO_SHOW'
+
+/** Which table named the promise. A surface rendering a HELD countdown has to know it came from
+ *  `dock_occupancy` and not from a status column that structurally cannot express it. */
+export type PromiseStateSource = 'appointments' | 'dock_occupancy_hold'
 
 export type ScopeBlock = {
   carrier_id: string
@@ -78,6 +93,19 @@ export type FleetShipment = {
   facility_name: string
   facility_city: string | null
   promise_state: LivePromiseState | null
+  /** Which table named it (issue #85). `dock_occupancy_hold` is the only value that comes with an
+   *  `hold_expires_at`, and it is the only one that draws the HELD chip's countdown. */
+  promise_state_source: PromiseStateSource | null
+  /** `dock_occupancy.occupancy_id` as text. Present only on a held row. */
+  hold_id: string | null
+  /** The hold's server-side deadline. **The countdown's only legitimate source** — a client that
+   *  derived `now + 90s` would be inventing a deadline the server never asserted. Null off a hold.
+   *
+   *  ⚠ Present only while the server's `TWO_PHASE_HOLD_ENABLED` is on: with it off,
+   *  `_LEGACY_PROMISE_STATE_SQL` projects `appointment_status AS promise_state` and no hold columns
+   *  at all, so these three fields are simply absent from the payload rather than null. Typed
+   *  optional-by-null and read defensively for that reason. */
+  hold_expires_at: string | null
   slot_start_ts: string | null
   slot_end_ts: string | null
   dock_code: string | null
@@ -129,6 +157,19 @@ export type ShipmentDetailRecord = {
   facility_city: string | null
   appointment_id: string | null
   promise_state: LivePromiseState | null
+  /** Which table named it (issue #85). `dock_occupancy_hold` is the only value that comes with an
+   *  `hold_expires_at`, and it is the only one that draws the HELD chip's countdown. */
+  promise_state_source: PromiseStateSource | null
+  /** `dock_occupancy.occupancy_id` as text. Present only on a held row. */
+  hold_id: string | null
+  /** The hold's server-side deadline. **The countdown's only legitimate source** — a client that
+   *  derived `now + 90s` would be inventing a deadline the server never asserted. Null off a hold.
+   *
+   *  ⚠ Present only while the server's `TWO_PHASE_HOLD_ENABLED` is on: with it off,
+   *  `_LEGACY_PROMISE_STATE_SQL` projects `appointment_status AS promise_state` and no hold columns
+   *  at all, so these three fields are simply absent from the payload rather than null. Typed
+   *  optional-by-null and read defensively for that reason. */
+  hold_expires_at: string | null
   slot_start_ts: string | null
   slot_end_ts: string | null
   dock_code: string | null

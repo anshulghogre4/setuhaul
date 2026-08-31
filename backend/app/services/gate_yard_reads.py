@@ -18,11 +18,14 @@ Four structural notes for anyone editing this file:
    sketches the tool as `search_gate_yard_truck(query, facility_id)`; that literal signature is
    deliberately **not** implemented, because a client-supplied scope id is exactly the shape M15
    forbids. The facility comes from `repositories.scope.resolve_facility_scope`, the same resolver
-   `search_records` uses, so a `WAREHOUSE_PLANNER`/`FACILITY_MANAGER` sees only their own facility
-   and an `ADMIN` (the one `has_global_read_scope` role that also passes the router's role gate)
-   sees every facility -- which is exactly the reach `assert_facility_write_scope` already grants
-   each of them on the five writes. Read reach and write reach agree by construction; a search
-   cannot surface a truck the caller could not then act on.
+   `search_records` uses, so a `GATE_OFFICER` (issue #79), `WAREHOUSE_PLANNER` or
+   `FACILITY_MANAGER` sees only their own facility and an `ADMIN` (the one `has_global_read_scope`
+   role that also passes the router's role gate) sees every facility -- which is exactly the reach
+   `assert_gate_write_scope` already grants each of them on the five writes. Read reach and write
+   reach agree by construction; a search cannot surface a truck the caller could not then act on.
+   `GATE_OFFICER` needed no change here: it is facility-scoped through the ordinary `facility_id`
+   column and is not `has_global_read_scope`, so `resolve_facility_scope` already returns its own
+   facility (or refuses an unmapped identity) with no branch of its own.
 
 2. **Exact match on a normalised identifier, never fuzzy.** `search_records` (section 7.5.8) uses
    pg_trgm `similarity` because a desk operator scanning a palette benefits from near-misses. A

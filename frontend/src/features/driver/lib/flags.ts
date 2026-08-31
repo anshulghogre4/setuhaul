@@ -10,31 +10,66 @@
  * the Held column of screen 9's option-card state matrix, and the `HELD` branch of screen 1's
  * thread card.
  *
- * **Default OFF, and it must stay off until issue #53 lands.**
+ * **ON since 2026-08-31.** All three of the previous exit criteria are met, and the consumption
+ * work they implied has been done — which was the part flipping alone would not have delivered.
  *
- * Why (issue #53, filed 2026-08-27 — four independent confirmations in live source):
- *   - `confirm_held_slot` is not bound; the driver allowlist carries 11 of section 7.5.4's 12
- *     tools (`backend/app/assistant/tools.py`).
- *   - `appointments_appointment_status_check` admits no `HELD` value, and `dock_occupancy` has
- *     neither a `state` nor an `expires_at` column (`backend/app/scheduling/expiry.py`).
- *   - The M8 expiry sweeper's HELD leg returns `supported: false` with a reason string.
- *   - `request_slot` inserts straight at `PENDING_CONFIRMATION`
- *     (`backend/app/scheduling/allocation.py`) — there is no intermediate hold at all.
+ * ## The three gates, each verified against live source rather than an issue's text
  *
- * So the live promise lifecycle is three states (`SHOWN → PENDING_CONFIRMATION → CONFIRMED`),
- * not the four `01-driver-chat/flows-and-states.md` specifies. Turning this on before #53
- * ships would render a `HELD` chip over a booking that is really already pending — which
- * `00-foundations/components.md` section 2 calls a broken promise in the business sense, and
- * which is exactly the mis-promise this product exists to remove.
+ *  1. **The D2 migration is applied to production.** `dock_occupancy.state` / `.expires_at` exist.
+ *  2. **`TWO_PHASE_HOLD_ENABLED` defaults `True`** (`core/settings.py`), so `request_slot` takes the
+ *     `_request_slot_as_hold` branch and returns a HELD outcome rather than going straight to
+ *     `PENDING_CONFIRMATION`.
+ *  3. **#83 landed, and #86 with it.** `holds.live_hold_for_shipment` is the single read behind
+ *     `get_current_appointment`'s `hold`, `get_appointment_request_status`'s `hold`, and
+ *     `/api/v1/driver/context`'s `current_hold` + `promise_state` + `promise_state_source`. One
+ *     function, so the REST payload and the model's own prefetch cannot disagree about the same
+ *     shipment inside one turn — which is precisely the failure #86 was filed for.
  *
- * **Exit criterion:** issue #53 closed (schema + `confirm_held_slot` + sweeper leg), then flip
- * this to `true`, then delete the flag and every `heldStateEnabled` branch.
+ * ## What flipping this actually required on the client — the shapes were built before they existed
  *
- * Deliberately a module constant rather than an env var or a server-delivered flag: there is
- * nothing for an operator to decide here at 5-concurrent-user scale, and a runtime flag would
- * imply the backend can serve the state today. It cannot.
+ * E5.1 built these four screens against the *design*, before #83/#86 defined the real payload. The
+ * components were right; **nothing fed them**. Three gaps, all closed in this pass:
+ *
+ *  - `use-driver-turn.ts` rendered only `find_feasible_slots` / `explain_slot_eligibility` results,
+ *    so `request_slot`'s HELD outcome and `confirm_held_slot`'s result reached the client and were
+ *    dropped. They are now consumed as **promise transitions** rather than as cards (`PROMISE_TOOLS`
+ *    — a hold mutates the tapped card in place per U50, it does not append a fourth card).
+ *  - `data.ts` derived the promise state from `appointment_status` alone, which structurally cannot
+ *    say `HELD`. It now reads the server's **composed** `promise_state` and its `current_hold`.
+ *  - Nothing seeded the countdown clock's server offset from `/driver/context`, so every hold would
+ *    have been measured against the handset's own clock. `thread-list.tsx` now feeds `as_of`.
+ *
+ * **The 90-second countdown reads `dock_occupancy.expires_at`, reconciled through the shared
+ * clock's measured server offset, and never a client-derived deadline.** `mappers.toHold` refuses a
+ * hold with no `expires_at` outright rather than substituting `now + 90s`: a deadline the server
+ * never asserted would drift by the round-trip time, in the direction that shows the driver time
+ * they do not have. The server's `expires_in_seconds` is carried as a receipt of what it believed at
+ * answer time, deliberately **not** as a second thing to tick from — R4's lesson was that two rules
+ * for one hold end up disagreeing on screen.
+ *
+ * ## Still deliberately absent, and why that is not this flag's problem
+ *
+ * `appointments_appointment_status_check` admits **no** `HELD` value and must not: §4 says "Held ≠
+ * booked: no `appointments` row exists yet", and there is a test that fails if someone adds it, to
+ * force the conversation rather than let two models quietly coexist. A hold is a `dock_occupancy`
+ * row and nothing else, which is exactly why `promise_state` is composed server-side.
+ *
+ * ## Why the flag is kept rather than deleted
+ *
+ * Its own previous instruction was "then flip, then delete the flag and every branch". Kept, and
+ * this is the argued reason rather than an omission: `heldStateEnabled` is a **client** constant and
+ * `TWO_PHASE_HOLD_ENABLED` is a **server** one, and they are independently revertible by design (the
+ * D2 migration and its switch-on were deliberately separated for the same reason). Deleting this
+ * would leave the client with no way to stop rendering HELD if the server flag is rolled back mid-
+ * incident, and the remaining branches are not dead weight — `option-card.tsx`'s is a fail-closed
+ * guard that renders `default` rather than a HELD treatment the rest of the surface is not showing.
+ * A one-line revert on the most consequential state in the product is worth more than the tidiness.
+ *
+ * **To revert:** set this to `false`. Holds keep being granted server-side (that is the server
+ * flag's business); this surface stops rendering the HELD chip, countdown, card treatment and lapse
+ * notice, and falls back to the thread row's appointment-derived state.
  */
-export const heldStateEnabled = false
+export const heldStateEnabled = true
 
 /**
  * Web push. Separate from the HELD flag because the four high-priority push events

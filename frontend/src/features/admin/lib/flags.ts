@@ -7,7 +7,33 @@
  * SCREEN BLOCK each gap gates, per `06-admin-console/implementation-spec.md` §3's own table,
  * rather than one flag per issue number.
  *
- * All seven default OFF. Each names the issue(s) that gate it and the exit criterion.
+ * Each names the issue(s) that gate it and the exit criterion.
+ *
+ * **Re-audited 2026-08-29 (M5 flag-flip audit), again 2026-08-31, and again later the same day.**
+ * Four of the seven are now ON: `adminRemovalImpactEnabled`, `adminPolicyEditorEnabled`, and — with
+ * `GET /admin/facilities` (#78) landing — `adminMultiFacilityScopeEnabled` and
+ * `adminPendingInvitesEnabled`. Every flag below was re-checked against the live router and service
+ * source, not against its issue's state — the issues are mostly still OPEN, because this repo
+ * closes on owner review, so OPEN carries no information about whether the code exists.
+ *
+ * **#78's own flag does not exist, deliberately.** The facilities read is not an optional feature
+ * to gate: without it two other flags cannot flip, and the thing it replaces (an option list
+ * derived from already-loaded rows) is not a fallback worth keeping — it was wrong in exactly the
+ * case the endpoint exists to serve. So it was wired unconditionally and the workaround deleted.
+ *
+ * **Four flags' stated reasons had gone stale by 2026-08-31 and are corrected in place** — the
+ * corrections matter more than the flips, because a stale reason is how a wrong flip happens:
+ *  - `adminPolicyEditorEnabled`: its blocker (no read for the active version or live weights) is
+ *    gone, and the editor is now built. Flipped.
+ *  - `adminRuleEditorEnabled`: #70/#71 are resolved; the blocker is now **missing design**, not a
+ *    backend gap. Its "stored and silently never enforced" claim was also **backwards** — see
+ *    that block. Still OFF.
+ *  - `adminRuleImpactEnabled`: the endpoint now exists; the blocker is that its only entry point
+ *    (Screen 6) does not. Still OFF.
+ *  - `adminFairnessTermEnabled`: **its stated reason is stale and is deliberately left untouched
+ *    here** — `w_fairness` *is* now a live `score_weights` key and unknown keys are *no longer*
+ *    silently dropped (they are a 422). A concurrent agent owns that flag and the work behind it
+ *    (#69); rewriting its comment mid-flight would clobber theirs. Flagged, not edited.
  *
  * **What is NOT behind a flag, deliberately:**
  *
@@ -15,11 +41,16 @@
  *    but the weakening is that the design docs name a stale registry, not that the read fails.
  *    Per this build's brief and the spec's own Fork A recommendation (§6), the list is built
  *    against the **live, shipped** five-value registry (`lib/rule-types.ts`). Nothing to gate.
- *  - **A-G7 / issue #75 (no version-conflict detection on `publish_policy_version`).** There is
- *    no rendered element to gate: the Policy tab is already behind
- *    `adminPolicyEditorEnabled`, and `mockup.html` §10.D flags in its own note that no copy
- *    template for the conflict state exists to render either. Recorded here rather than given a
- *    flag with nothing behind it.
+ *  - **A-G7 / issue #75 (version-conflict detection on `publish_policy_version`).** Nothing to
+ *    gate: the backend guard exists (`based_on_version_id`, `BASE_VERSION_REQUIRED` 422,
+ *    `ALREADY_ACTIONED` 409) and Screen 10 now renders both refusals unconditionally
+ *    (`components/policy-simulation-panel.tsx`'s `PublishConflict`) — a conflict is not an
+ *    optional feature to flag off. **The copy template `mockup.html` §10.D flagged as missing was
+ *    written by this build**, following §7.5.1's "name the winning transition" rule rather than
+ *    inventing a register. #75's own implementation also corrected this gap's premise: the
+ *    truly-simultaneous race never silently succeeded, it died on `idx_policy_versions_one_active`
+ *    as a raw 500; the **sequential** case (A simulates, B publishes, A publishes) is the one that
+ *    silently overwrote. Both are handled.
  *  - **The Audit tab's free-text search box.** Not built at all, no flag — `get_audit_log` has no
  *    search parameter, and `flows-and-states.md` Flow 8 explicitly forbids client-side filtering
  *    of an already-fetched audit page ("the log can be arbitrarily large"). Both paths are closed,
@@ -29,57 +60,149 @@
 
 /**
  * Gates the multi-facility half of the Users tab and the invite/edit form — the Scope column
- * rendering more than one facility, and the chip multi-select with "+ Add facility".
+ * rendering more than one facility, and the facility multi-select.
  *
- * **Default OFF. Single-facility rendering is NOT behind this flag** and ships today: this gap
- * *weakens* Screens 2 and 3 rather than blocking them (`implementation-spec.md` §3: 🟡, §5.1 G4).
+ * **ON since 2026-08-31, as ONE flag — the split the 2026-08-29 audit recommended was NOT taken,
+ * because the reason for splitting it went away.** That audit's own words: "the read half is now
+ * real ... the write half has an unresolved blocker of its own: issue #78, still OPEN with no
+ * implementation". #78 landed in this same change (`GET /api/v1/admin/facilities`), so both halves
+ * are servable at the same moment and a split would have created two flags that could only ever be
+ * flipped together.
  *
- * Why (A-G4, issue #72): `user_scopes` is a real table built for exactly this
- * (`20260823090000_e23_identity_model.sql`) and `account_service.get_account_profile` already
- * reads `scoped_facility_ids` from it — but `admin_user_service.py`'s `list_users` reads only the
- * single `users.facility_id` column (line 168), and `invite_user`/`update_user` take
- * `scope: str | None`, a bare single value that `_validate_scope` requires exactly one of
- * (lines 134-142). `screens.md`'s own first example row ("Neha B. · Ops · Jaipur, Gurugram")
- * cannot be produced by the shipped tool.
+ * ## What was verified before flipping, on both halves
  *
- * **Exit criterion:** issue #72 closed, then flip to `true`.
+ * **Read half**, against `admin_user_service.list_users`:
+ *  - `scoped_facility_ids` is returned per row via `COALESCE(array_agg(us.scope_value ORDER BY
+ *    us.scope_value), ARRAY[]::text[])` over `user_scopes`, with a documented fallback to the
+ *    primary `users.facility_id` mirror for a row predating E2.3's backfill — so a single-facility
+ *    user never renders an empty Scope cell.
+ *  - `facility_filter` matches on **either** side of that mirror, so a user whose primary facility
+ *    is Jaipur but who also holds Gurugram appears under a Gurugram filter.
+ *  - Wired here: `AdminUser.scoped_facility_ids` is typed, and `users-table.tsx`'s `ScopeCell`
+ *    comma-joins the server's array through the facility directory's `nameOf`.
+ *
+ * **Write half**, against the same file plus `routers/admin.py`:
+ *  - `InviteUserBody.scope` / `UpdateUserBody.scope` are `str | list[str] | None` on the wire.
+ *    The form sends an **array**; `normalize_scope` treats a one-element array and a bare string
+ *    identically, so there is no second encoding to keep straight.
+ *  - `_validate_scope` checks a whole multi-select in one `= ANY(:ids)` round trip and names every
+ *    missing id at once; it refuses `SCOPE_NOT_MULTI_VALUED` (422) for DRIVER/CARRIER rather than
+ *    silently truncating to the first entry. Those two roles render Inactive here anyway — no
+ *    endpoint lists carriers or drivers — so the refusal is a backstop, not the UI's guard.
+ *  - `_write_user_scopes` deletes all three managed scope types before inserting, so a role change
+ *    cannot leave a stale row behind, and it carries `ON CONFLICT ... DO NOTHING` against
+ *    `UNIQUE (user_id, scope_type, scope_value)`. The form de-duplicates too, so neither side
+ *    depends on the other to be correct.
+ *  - `update_user` applies a **scope-only** edit by re-reading the role from the database. The
+ *    edit form still submits both, since its role select is pre-filled and may have been changed.
+ *
+ * **The option list is what made the write half real.** A multi-select over the previous
+ * derived-from-loaded-rows list would have been a worse control than the single `<select>` it
+ * replaced — that was the audit's exact objection, and #78 is what answers it.
+ *
+ * **NOT verified: a live HTTP round trip.** No running backend and no authenticated admin session
+ * were available. Stated plainly, the same way `adminRemovalImpactEnabled` and
+ * `adminPolicyEditorEnabled` record their own boundaries. The failure modes are bounded on the
+ * server: an unknown facility is `INVALID_SCOPE` (422) naming the id, an empty selection cannot be
+ * submitted (the button stays `aria-disabled` with its reason), and every scope write is validated
+ * server-side before any row is touched.
+ *
+ * **One deliberate divergence from the artboard, flagged rather than silent:** the multi-select is
+ * a native checkbox group in a `<fieldset>`, not `screens.md`'s `[ Jaipur ▾ ] [ + add ]` chip row.
+ * Reasoning in `components/invite-user-dialog.tsx`'s header. Owner call if the chips are wanted.
+ *
+ * **Delete criterion:** once #72 is closed and reviewed, delete this flag and the two branches that
+ * read it (`ScopeCell`'s array branch, the dialog's checkbox-vs-select branch).
  */
-export const adminMultiFacilityScopeEnabled = false
+export const adminMultiFacilityScopeEnabled = true
 
 /**
- * Gates the Users tab's pending-invitation row — the "◔ Invited, awaiting acceptance" badge and
- * its Resend / Revoke actions (`mockup.html` §2.1's fourth row).
+ * Gates the Users tab's pending-invitation row — the "Invited, awaiting acceptance" badge and its
+ * Resend / Revoke actions (`mockup.html` §2.1's fourth row, `screens.md` §2).
  *
- * **Default OFF.** Active and Inactive rows ship unconditionally.
+ * **ON since 2026-08-31.** Active and Inactive rows ship unconditionally as before.
  *
- * Why (A-G5, issue #73): `invite_user` sets `is_active = 1` at creation
- * (`admin_user_service.py:220`) — there is no distinct "invited, not yet accepted" state in the
- * schema or the response, and no `resend_invite`/`revoke_invite` endpoint exists at all.
- * `last_login_ts IS NULL` is the only available proxy and it conflates "genuinely pending" with
- * "account exists, this person simply hasn't signed in yet" — a different fact, and rendering a
- * badge off it would be inventing a state the system does not track.
+ * ## The wrong flip this flag existed to prevent, and how it is now structurally impossible
  *
- * **Exit criterion:** issue #73 closed (a real invite lifecycle plus the two tools), then flip.
+ * The previous comment's warning was the important part and it is preserved here: `last_login_ts`
+ * is **read** in two places and **written nowhere in the application** — only `seed.sql` sets it —
+ * so `user.last_login_ts === null`, which is what this row used to gate on, would have labelled
+ * essentially the entire user list "Invited" the moment the flag flipped.
+ *
+ * That predicate is gone. The badge now gates on **`lifecycle_state === 'INVITED'`**, derived
+ * server-side by `admin_user_service.derive_lifecycle_state` from three real stamps
+ * (`invited_at` / `invite_accepted_at` / `removed_at`, migration
+ * `20260831132101_users_invite_lifecycle.sql`). `lib/types.ts::lifecycleStateOf` is the only place
+ * a missing field falls back, and it falls back to `ACTIVE`/`DEACTIVATED` — **never** to `INVITED`,
+ * so even a pre-migration backend cannot reproduce the old failure.
+ *
+ * ## What was verified before flipping
+ *
+ *  - **The fork #73 named was decided in favour of local columns**, and the migration's own header
+ *    records why: option (b) — joining GoTrue's admin user list inside `list_users` — would put a
+ *    synchronous external call on this tab's main read, and would report a *removed* user's status
+ *    as unknown rather than removed, since `remove_user` deletes the Auth identity outright.
+ *  - **The accept stamp has a writer that cannot be forgotten**, which is the whole reason this is
+ *    not a repeat of `last_login_ts`: `core/deps.py::get_execution_context` writes
+ *    `invite_accepted_at` on the first authenticated request an invited user ever makes. A request
+ *    either resolved an `ExecutionContext` or was never authenticated.
+ *  - **Both tools exist and are role-gated**: `POST /users/{id}/resend-invite` and
+ *    `POST /users/{id}/revoke-invite`, both `AdminCtx`, the second requiring an `Idempotency-Key`.
+ *    Neither accepts an email — the address is read from the stored row (M15).
+ *  - **The refusals are rendered by code, not by message**: `AUTH_EMAIL_RATE_LIMITED` (429),
+ *    `NOT_PENDING_INVITE` (409) and `USER_REMOVED` (409) each get their own copy through
+ *    `hasApiErrorCode` in `users-tab.tsx::describeWriteFailure`.
+ *  - Backend: the 12 lifecycle/resend/revoke tests in `tests/unit/test_e34_admin_console.py` pass.
+ *
+ * ## What this actually looks like in production right now
+ *
+ * **No Invited rows at all.** The migration is applied but deliberately unbackfilled — every
+ * existing user has `invited_at IS NULL`, which `derive_lifecycle_state` correctly reports as
+ * `ACTIVE`, because those accounts were seeded rather than invited through this console. So the
+ * flip's visible effect today is *nothing changes*, and that is the correct rendering, not a
+ * failure to load. The first Invited row appears the first time an admin actually invites someone.
+ *
+ * **NOT verified: a live HTTP round trip, and no rendered Invited row against real data** (there
+ * are none to render). The gallery plate at `/admin/_states` covers the populated case against a
+ * fixture whose three lifecycle stamps are shaped exactly as the service returns them.
+ *
+ * **Delete criterion:** once #73 is closed and reviewed, delete this flag and the `invited` guard
+ * in `users-table.tsx` — but keep `lifecycleStateOf`, which is not a flag concern.
  */
-export const adminPendingInvitesEnabled = false
+export const adminPendingInvitesEnabled = true
 
 /**
  * Gates one sentence in the Remove-user confirmation: "This user owns N active escalations — they
  * will show as unowned once removed."
  *
- * **Default OFF, and Screen 4 ships regardless** — this is a single-field enrichment, not a
- * blocker (`implementation-spec.md` §3 marks Screen 4 🟢, §5.1 G8: "Ship the dialog without that
- * specific sentence").
+ * **ON since 2026-08-29.** Flipped in the M5 flag-flip audit, and wired in the same change —
+ * `remove-user-dialog.tsx` now fetches the count instead of rendering the sentence blind.
  *
- * Why (A-G8, issue #76): `remove_user`'s only read is `SELECT user_id, auth_user_id FROM
- * public.users WHERE user_id = :uid` (`admin_user_service.py:365-369`). No join to
- * `escalation_queue`, no count of any kind, and no other endpoint returns one either. The other
- * two consequence lines the dialog shows ARE true of the shipped tool and are rendered
- * unconditionally.
+ * **What was verified before flipping**, not merely that #76 has an implementation comment:
+ *  - `GET /api/v1/admin/users/{user_id}/removal-impact` is registered
+ *    (`backend/app/api/v1/routers/admin.py:180`) and carries `AdminCtx` — the same
+ *    `require_roles`-derived dependency every other read this surface already calls uses, so it is
+ *    reachable by exactly the sessions that reach the Users tab.
+ *  - `admin_user_service.get_user_removal_impact` (line 552) returns `active_escalation_count` as a
+ *    `CAST(count(*) OVER () AS integer)` evaluated **before** its own `LIMIT 50`, so the headline
+ *    number stays true when the sample list is truncated. The client reads that field and never
+ *    `active_escalations.length`.
+ *  - "Owns" is `escalation_queue.owner_user_id` with `escalation_status <> ALL(terminal)`, which is
+ *    the same ownership concept `edge-cases.md` #1 means. An `OPEN` escalation has no owner, so it
+ *    correctly contributes nothing.
+ *  - 404 on an unknown user, 403 when `ctx.is_admin` is false — both already handled by the
+ *    dialog's swallow-and-omit path.
  *
- * **Exit criterion:** issue #76 closed, then flip to `true`.
+ * **Not verified: a live round trip.** No authenticated admin session was available in this pass,
+ * and #76's own implementation note says the new SQL has not been executed against a live
+ * PostgreSQL either. The failure mode is deliberately the pre-flip behaviour rather than a broken
+ * screen — a throw leaves `impactCount` at `null`, the sentence is omitted, and the removal still
+ * proceeds, because this read is advisory and `remove_user` recounts inside its own transaction.
+ *
+ * **Delete criterion:** once #76 is closed and reviewed, delete this flag and the two conditions
+ * in `remove-user-dialog.tsx` that read it (the fetch guard and the render guard).
  */
-export const adminRemovalImpactEnabled = false
+export const adminRemovalImpactEnabled = true
 
 /**
  * Gates Screen 6 entirely — the facility-rule editor (Add rule / Edit rule), including the
@@ -87,26 +210,36 @@ export const adminRemovalImpactEnabled = false
  *
  * **Default OFF. This is a hard block (🔴), not a weakening.**
  *
- * Why (A-G2, issue #70): `components.md` §2's signature feature — "the value field set is
- * entirely driven by `rule_type`... there is no free-text 'value' field that could hold
- * anything" — is designed around `DOCK_PIN` / `EARLY_LIMIT` / `WEIGHT_LIMIT` /
- * `NEW_START_CUTOFF`, and the live `CHECK` constraint accepts none of those four
- * (`20260825213000_e34_policy_versions_and_rule_registry.sql:19-24`). The **list** is built
- * against the live registry per this build's brief; the **editor** cannot be, because three of
- * the five live types (`HEAVY_DOCK_REQUIRED_KG`, `REEFER_DOCK_REQUIRED`, `NO_SHOW_GRACE_MIN`)
- * have no field set designed anywhere — `implementation-spec.md` §6 Fork A option 1 says so in
- * as many words ("no existing artboard models these three"). Building one here would be
- * inventing design, and shipping a generic free-text value field instead would violate the one
- * rule §2 states outright.
+ * **The blocker changed on 2026-08-31 and is no longer a backend one.** #70 and #71 are both
+ * resolved — #70 reconciled the design docs to the live five-value registry, and #71 resolved to a
+ * doc correction (recurring intraday effectivity is deliberately unbuilt, not pending). **What
+ * remains missing is DESIGN**, and it is not a small remainder:
  *
- * Why also #71 (A-G3): the editor's effective-window control offers a day-of-week + hour-range
- * recurring pattern. `feasibility.py::active_facility_rules` (lines 218-246) evaluates
- * `effective_from`/`effective_to` as a plain absolute instant range; nothing downstream parses a
- * weekly pattern out of the `TEXT` column. A saved "Weekdays only, 18:00–23:59" would be stored
- * and silently never enforced.
+ *  - Three of the five live types (`HEAVY_DOCK_REQUIRED_KG`, `REEFER_DOCK_REQUIRED`,
+ *    `NO_SHOW_GRACE_MIN`) have no field set designed anywhere — `implementation-spec.md` §6 Fork A
+ *    option 1 says so in as many words ("no existing artboard models these three").
+ *  - `DOCK_PIN`, which has **no live analog at all**, was the only two-field type in the design —
+ *    i.e. it was the entire demonstration of `components.md` §2's type-driven field mechanism. The
+ *    pattern the editor was designed around does not exist in the shipped registry.
  *
- * **Exit criterion:** issue #70 closed (registry reconciled and the three uncovered types
- * designed) AND issue #71 closed (engine support), then flip to `true`.
+ * Building either here would be inventing design, and shipping a generic free-text value field
+ * instead would violate the one rule §2 states outright ("there is no free-text 'value' field that
+ * could hold anything"). The **list** is built against the live registry per E5.6's brief; the
+ * **editor** stays off.
+ *
+ * **Corrected 2026-08-31 — this comment previously stated the opposite of the real behaviour, in
+ * the dangerous direction.** It said a recurrence string saved into `effective_from`/`effective_to`
+ * would be "stored and silently never enforced". It is the reverse: `feasibility.py::parse_rule_boundary`
+ * returns `None` — meaning **no bound on that side** — both for an empty value *and* for a
+ * non-empty value that no accepted shape parses (its own docstring says so, and there is now a
+ * characterisation test pinning it). So a saved "Weekdays only, 18:00–23:59" makes the rule apply
+ * **always**, not never. "Never enforced" reads as *worst case, the rule does nothing*; the truth
+ * is *worst case, the rule blocks everything* — an over-applying rule rejects intervals the
+ * facility would actually accept. Anyone reasoning from the old wording would have misjudged the
+ * risk in the safe-sounding direction.
+ *
+ * **Exit criterion:** field sets designed for the three uncovered live types, and a decision on
+ * what replaces `DOCK_PIN` as §2's worked example. Not an issue-close; a design deliverable.
  */
 export const adminRuleEditorEnabled = false
 
@@ -114,52 +247,108 @@ export const adminRuleEditorEnabled = false
  * Gates Screen 7 — the dependent-appointment confirmation that names how many already-`CONFIRMED`
  * appointments a tightened rule would affect, before the edit commits.
  *
- * **Default OFF. Hard block (🔴).** Doubly gated in practice, since `adminRuleEditorEnabled` is
- * the only entry point to it.
+ * **Default OFF — but the reason changed on 2026-08-31. The backend gap is closed; the entry
+ * point is what is missing.**
  *
- * Why (A-G6, issue #74): `update_facility_rule` (`admin_governance_service.py:138-167`) is a bare
- * `UPDATE ... COALESCE`. No query anywhere in the backend counts or names the appointments a rule
- * edit would affect. This is the same shape as planner's `get_dock_block_impact` — a real,
- * narrowly-scoped read this surface needs and does not have — which is exactly why the gap is
- * gated rather than approximated client-side: `edge-cases.md` #4's whole point is naming the
- * count *before* the write, and a guessed count is worse than none.
+ * `GET /api/v1/admin/facility-rules/{rule_id}/impact` now exists
+ * (`admin_governance_service.get_facility_rule_impact`, A-G6 / issue #74), built to
+ * `get_dock_block_impact`'s shape and evaluating through `feasibility.py`'s own
+ * `active_facility_rules`/`check_facility_rules` rather than re-implementing rule semantics — so
+ * the preview and the enforcing engine cannot disagree.
  *
- * **Exit criterion:** issue #74 closed, then flip to `true`.
+ * **It stays off because Screen 7 has no way in.** This flag gates the confirmation that names
+ * what a rule edit would break *before it commits*; the only thing that can raise that
+ * confirmation is Screen 6's rule editor, which is `adminRuleEditorEnabled` and is blocked on
+ * missing design (above). A confirmation dialog for an edit that cannot be started is not a
+ * screen, and flipping this today would reveal nothing.
+ *
+ * **When it is wired, it needs FOUR states, not a count** — verified by reading the service's own
+ * return envelope, because a bare "N affected" would misrepresent three of them:
+ *  1. `affected_count` — appointments this *edit* newly breaks. The number `edge-cases.md` #4 means.
+ *  2. `already_non_compliant_count` — appointments the rule *already* excludes, independent of the
+ *     edit. Folding these into (1) would blame the admin's change for pre-existing state.
+ *  3. `evaluable: false` — the rule type is one the feasibility engine deliberately never enforces
+ *     (`CHECKIN_EARLY_LIMIT_MIN` is a gate-arrival rule; `NO_SHOW_GRACE_MIN` needs an injected
+ *     clock that does not exist). **This is a real answer, not an error and not a zero**: nothing
+ *     can be broken retroactively by editing a rule nothing checks at offer time.
+ *  4. `active_flag = 0` — the rule is inactive, so the engine never loads it and the edit affects
+ *     nothing until it is reactivated. Also a real answer.
+ *  Plus `truncated` / `scanned_count`: the scan is bounded at 500 rows and says so rather than
+ *  quietly under-reporting.
+ *
+ * **Exit criterion:** `adminRuleEditorEnabled` is unblocked AND all four states above are rendered
+ * distinctly. Do not flip on the count alone.
  */
 export const adminRuleImpactEnabled = false
 
 /**
  * Gates the whole Policy tab's weight editor, the simulate action, and Publish (Screens 8 and 10).
  *
- * **Default OFF — and this is a STRONGER block than `implementation-spec.md` §3's own table,
- * which marks Screens 8 and 10 🟡.** Stated as a disagreement with the spec, not slipped in:
+ * **ON since 2026-08-31. Screens 8 and 10 are built** (`components/policy-tab.tsx`,
+ * `policy-version-header.tsx`, `policy-weight-editor.tsx`, `policy-simulation-panel.tsx`).
  *
- * The gap the spec did not catch is that **there is no read endpoint for the active policy
- * version or the live score weights anywhere in the API.** `backend/app/api/v1/routers/admin.py`
- * exposes exactly two policy routes — `POST /policy/simulate` and `POST /policy/publish` — and
- * grepping `app/api/` for `policy_version` / `score_weights` / `ranking_policy` returns nothing
- * else. `simulate_policy_weights` loads `constraints.json` **server-side**
- * (`admin_governance_service.py:251`) and never returns the live weights it compared against.
+ * ## What was verified before flipping, and what was not
  *
- * Consequences, both of which the design forbids working around:
- *   - `components.md` §3 requires a "read-only current-version header (version number, publish
- *     date, publisher)" and `screens.md` §4 requires "the current policy is always visible above
- *     the editor so an admin can see what they're changing *from*." Neither is fetchable.
- *   - The four routine weight fields would have to be seeded from somewhere. Hardcoding
- *     `4 / -6 / 1 / -25` into the frontend duplicates server configuration into a client that
- *     cannot detect drift, and `AGENTS.md`'s "never invent … operational data" applies squarely
- *     to a value every future ranking decision is stamped with.
+ * Verified, mechanically rather than by reading source alone — this flag's whole history is a
+ * warning about trusting a comment:
+ *  - **The request contract, against the running app's own OpenAPI schema** (generated from
+ *    `create_app()`): `GET /api/v1/admin/policy/active` exists; `POST /policy/simulate` declares
+ *    exactly `weights` / `window_start` / `window_end`, all required, `additionalProperties: false`;
+ *    `POST /policy/publish` declares `weights` (required) + `based_on_version_id` (optional) and an
+ *    `Idempotency-Key` header parameter. The client sends exactly those and nothing else.
+ *  - **The response contract, against the backend's own passing tests** — 13 policy tests in
+ *    `tests/unit/test_e34_admin_console.py` pin every field this client reads:
+ *    `active_version.policy_version_id`, `live_weights`, `engine_matches_active_version` (all three
+ *    of its cases, including "never published"), `superseded_version_id`, and the
+ *    `BASE_VERSION_REQUIRED` / `ALREADY_ACTIONED` codes. Re-run here: 13 passed.
+ *  - **The error envelope**: `core/errors.py` + `core/envelope.py` put the code in
+ *    `errors[0].code`. The shared `apiPost` used to discard it, which is why this surface carried a
+ *    local `AdminApiError`; since 2026-08-31 it throws `ApiError` (`core/http/errors.ts`) carrying
+ *    `code`/`detail`/`status`, and the local duplicate is gone. `policy-tab.tsx` branches on
+ *    `isApiError(e) && e.code`, which is the same discrimination, centrally provided.
+ *  - `tsc -b`, `oxlint`, `vite build` clean.
  *
- * Publishing weights an admin never actually saw the current values for is precisely the failure
- * U27's simulate-before-publish gate exists to prevent, so the tab renders an honest stub rather
- * than a working-looking editor over an unknown baseline.
+ * **NOT verified: a live HTTP round trip.** No running backend and no authenticated admin session
+ * were available in this environment. Stated plainly rather than implied, the same way
+ * `adminRemovalImpactEnabled` records its own boundary.
  *
- * Also gated by issue #69 for the fairness half — see `adminFairnessTermEnabled`.
+ * The flip is defensible despite that gap because **no failure mode of this client produces a
+ * wrong write**: every guard is server-side (idempotency key, required baseline, weight-key
+ * allowlist), the editor renders no field until `GET /policy/active` has answered — so it cannot
+ * display an invented coefficient — and a broken read degrades to `LoadFailed`, a broken simulate
+ * or publish to a named banner. The `false` branch is kept so the tab can be switched off without
+ * deleting it.
  *
- * **Exit criterion:** a `GET /api/v1/admin/policy` (active version + live weights) exists —
- * filed as a new finding this build, no issue number yet — then flip to `true`.
+ * ## The history this replaces
+ *
+ * This flag was originally set stronger than `implementation-spec.md` §3's own 🟡 marks, on the
+ * grounds that **no read endpoint existed for the active policy version or the live score
+ * weights.** That gap was filed as #77 and has since been closed in substance by #75's own pass:
+ *
+ *  - **`GET /api/v1/admin/policy/active` now exists** (`routers/admin.py:258` →
+ *    `admin_governance_service.get_active_policy_version`). Verified by reading the router, not
+ *    from the issue text. It returns the active `policy_versions` row, `constraints.json`'s live
+ *    score weights, and an `engine_matches_active_version` flag — that last field specifically
+ *    because `publish_policy_version` deliberately does **not** rewrite the file the ranking engine
+ *    reads, so an admin could otherwise be shown an "active" version the engine is not using.
+ *  - So `components.md` §3's read-only current-version header and `screens.md` §4's "always visible
+ *    above the editor" are both now fetchable, and the four weight fields can be seeded from the
+ *    server instead of hardcoded. The `AGENTS.md` "never invent operational data" objection that
+ *    made this a hard stub no longer applies.
+ *  - #75 also added the version-conflict guard `edge-cases.md` #3 requires: `based_on_version_id`
+ *    is **required whenever an active version exists** (`BASE_VERSION_REQUIRED`, 422), and a stale
+ *    baseline returns `ALREADY_ACTIONED` (409) naming the winning version id and its publisher.
+ *    The editor must send it — an optional guard is not a guard.
+ *
+ * Screens 8/10 are built for the **four routine weights only**. The fairness half is still gated
+ * by `adminFairnessTermEnabled` (#69), which this build does not touch — the Danger Zone renders
+ * Inactive with its reason, and `w_fairness` is round-tripped unchanged rather than edited or
+ * dropped. `P_churn` is not offered at all: the API refuses the key with a 422.
+ *
+ * **Delete criterion:** once #77 is closed and reviewed, delete this flag and the `false` branch in
+ * `components/policy-tab.tsx` that reads it.
  */
-export const adminPolicyEditorEnabled = false
+export const adminPolicyEditorEnabled = true
 
 /**
  * Gates the fairness-term Danger Zone (Screen 9 entirely, plus the fairness box and the Churn

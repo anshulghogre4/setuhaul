@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
 import { CapacityIncidentRow } from '../components/capacity-incident-row'
-import { CopilotPane } from '../components/copilot-pane'
+import { TakeoverNoticeBanner, type TakeoverNotice } from '../components/takeover-control'
+import { CopilotPane, CopilotSuggestionCard } from '../components/copilot-pane'
 import { DetailPane } from '../components/detail-pane'
 import { QueuePane } from '../components/queue-pane'
 import { CancelDialog, ResolveDialog } from '../components/reason-picker-dialog'
@@ -11,10 +12,15 @@ import {
   ESCALATION_CAPACITY_INCIDENT,
   ESCALATION_OWNED_NOTIFICATION_FAILED,
   ESCALATION_RESOLVED,
+  ESCALATION_UNDER_TAKEOVER,
+  ESCALATION_UNMAPPED_REASON,
   ESCALATION_UNOWNED_BREACHING,
   ESCALATION_UNROUTABLE,
   ESCALATION_WAREHOUSE_CONFLICT,
   QUEUE_FIXTURE,
+  SUGGESTION_ABSTAINED,
+  SUGGESTION_RECOMMENDED,
+  THREAD_FIXTURE,
 } from './fixtures'
 
 /**
@@ -32,11 +38,13 @@ export function OpsStatesGallery() {
     <div className="min-h-dvh bg-background p-6 text-foreground" data-density="compact">
       <header className="mb-8">
         <p className="text-label text-primary uppercase">SetuHaul · ops exception console (E5.2)</p>
-        <h1 className="mt-2 text-display text-balance">9 screens ship now, 3 + 4 are honestly stubbed</h1>
+        <h1 className="mt-2 text-display text-balance">14 screens ship now, 2 are honestly stubbed</h1>
         <p className="mt-2 max-w-[80ch] text-body text-muted-foreground">
-          Gated: prompt 14's action (issue #54/G1), prompt 8's composer + takeover (issue #55/G2,
-          plus a thread-id lookup gap found during this build), prompts 12/13 (issue #57/G4). Not
-          built at all: prompt 3's live-arrival pill and prompt 10b's inline notice — both need a
+          Prompt 8 is now live: #55/#56/#58 shipped the reply path, so the composer, take-over,
+          hand-back and the durable transcript are all wired for real. Prompts 12/13 are now live
+          too: issue #57 scoped the co-pilot to a resolution-action suggestion (not summarise, not
+          draft-reply) and gave it a contract. Still gated: prompt 14's action (issue #54/G1). Not
+          built: prompt 3's live-arrival pill and prompt 10b's inline notice — both need a
           live-update transport this product does not have (issue #59/G6).
         </p>
       </header>
@@ -102,12 +110,59 @@ export function OpsStatesGallery() {
           </div>
         </Plate>
 
-        <Note n="8" title="Under takeover — composer + Resolve/Cancel">
-          The pane, take-over control, Resolve and Cancel are all real (see plate 7a — Take over
-          renders Inactive with an explanation). The live composer is not demonstrated here: it
-          has nowhere to send (issue #55, G2), and this build's brief is explicit that a control
-          with nothing to call must not be shown as if it works.
-        </Note>
+        <Plate n="8" title="Under takeover — divider, OPERATIONS message, live composer">
+          <div className="h-[720px] w-[460px] overflow-auto border border-border">
+            <DetailPane
+              item={ESCALATION_UNDER_TAKEOVER}
+              onAcknowledge={() => {}}
+              onResolve={() => {}}
+              onCancel={() => {}}
+              threadState="ready"
+              messages={THREAD_FIXTURE}
+              currentUserId="USR-DEMO-OPS"
+            />
+          </div>
+          <p className="mt-2 max-w-[70ch] text-supporting text-muted-foreground">
+            Fork G&rsquo;s gap, now renderable: the board never showed an AGENT or OPERATIONS
+            message, so a coordinator could not see what their own reply looks like beside the
+            assistant&rsquo;s and the driver&rsquo;s. All three tiers plus the centred takeover
+            divider are here.
+          </p>
+        </Plate>
+
+        <Plate n="8b" title="Take over — blocked on its prerequisite (NOT_ACKNOWLEDGED)">
+          <div className="h-[420px] w-[460px] overflow-auto border border-border">
+            <DetailPane
+              item={ESCALATION_UNOWNED_BREACHING}
+              onAcknowledge={() => {}}
+              onResolve={() => {}}
+              onCancel={() => {}}
+              threadState="ready"
+              messages={THREAD_FIXTURE.slice(0, 2)}
+            />
+          </div>
+          <p className="mt-2 max-w-[70ch] text-supporting text-muted-foreground">
+            take_over_thread refuses an unowned escalation with NOT_ACKNOWLEDGED (issue #56), so
+            Take over renders aria-disabled — focusable, explains itself — with Acknowledge beside
+            it as the fix. Flow 1&rsquo;s own order, enforced.
+          </p>
+        </Plate>
+
+        <Plate n="8c" title="No thread attached — takeover genuinely unavailable">
+          <div className="h-[420px] w-[460px] overflow-auto border border-border">
+            <DetailPane
+              item={ESCALATION_OWNED_NOTIFICATION_FAILED}
+              onAcknowledge={() => {}}
+              onResolve={() => {}}
+              onCancel={() => {}}
+              threadState="none"
+            />
+          </div>
+        </Plate>
+
+        <TakeoverNoticeDemo />
+
+        <UndeliveredMessageDemo />
 
         <Plate n="9" title="WAREHOUSE_REPLY_CONFLICT — two accounts, no auto-reconcile">
           <div className="h-[420px] w-[420px] overflow-auto border border-border">
@@ -132,17 +187,42 @@ export function OpsStatesGallery() {
           missing live-update transport as prompt 3 (issue #59, G6).
         </Note>
 
-        <Plate n="11" title="Co-pilot — Inactive">
-          <div className="h-[300px] w-[320px] border border-border">
-            <CopilotPane takeoverActive={false} />
+        <Plate n="1c" title="Queue row — a reason outside §7.4's nine (live data, 151 rows)">
+          <div className="w-[360px]">
+            <QueuePane
+              state="ready"
+              items={[ESCALATION_UNMAPPED_REASON]}
+              selectedId={null}
+              onSelect={() => {}}
+              onRetry={() => {}}
+            />
           </div>
         </Plate>
 
-        <Note n="12/13" title="Co-pilot active — draft-reply, degradations">
-          Behind `copilotActiveEnabled` (issue #57, G4 / Fork A): no endpoint, request shape or
-          error taxonomy exists for summarise / fetch-context / draft-reply anywhere in
-          `backend/app/`. Building the two-gate draft flow against nothing would mean faking an
-          LLM response.
+        <Plate n="11" title="Co-pilot — Inactive (no escalation selected)">
+          <div className="h-[300px] w-[320px] border border-border">
+            <CopilotPane escalationId={null} />
+          </div>
+        </Plate>
+
+        <Plate n="12" title="Co-pilot — a recommended resolution action (issue #57)">
+          <div className="w-[320px] border border-border p-4">
+            <CopilotSuggestionCard suggestion={SUGGESTION_RECOMMENDED} />
+          </div>
+        </Plate>
+
+        <Plate n="13" title="Co-pilot — an honest abstention (issue #57)">
+          <div className="w-[320px] border border-border p-4">
+            <CopilotSuggestionCard suggestion={SUGGESTION_ABSTAINED} />
+          </div>
+        </Plate>
+
+        <Note n="12/13 — scope" title="Suggest a resolution action, not summarise or draft">
+          The owner scoped the co-pilot on 2026-08-31 to one capability: recommend which action to
+          take, with the facts behind it. Summarise-thread and draft-reply — `components.md`
+          section 3 and `FR-OPS-003` — are deliberately NOT built, so the two-gate draft-reply card
+          and its stale marker have nothing to render. The abstention plate above is the designed
+          outcome for six of §7.4's nine reasons, not an error state.
         </Note>
 
         <Plate n="14" title="Capacity incident — collapsed / expanded / gated action">
@@ -225,6 +305,91 @@ function ReasonPickerDemo() {
       </div>
       <ResolveDialog open={resolveOpen} onOpenChange={setResolveOpen} onConfirm={() => setResolveOpen(false)} />
       <CancelDialog open={cancelOpen} onOpenChange={setCancelOpen} onConfirm={() => setCancelOpen(false)} />
+    </Plate>
+  )
+}
+
+/**
+ * Every `TakeoverNotice` variant side by side -- the states hardest to reach by clicking, and the
+ * ones most worth reviewing, since each is a refusal or a partial success a coordinator must act
+ * on.
+ *
+ * `handback-needs-start` is the one to look at: `hand_back_thread` now requires `IN_PROGRESS`, so
+ * a thread taken over before issue #56 made that value writable refuses -- and this is the real
+ * one-call recovery rather than a dead end.
+ */
+function TakeoverNoticeDemo() {
+  const notices: { label: string; notice: TakeoverNotice }[] = [
+    { label: 'NOT_ACKNOWLEDGED', notice: { kind: 'not-acknowledged' } },
+    { label: 'ALREADY_TAKEN_OVER', notice: { kind: 'already-taken-over' } },
+    { label: 'NOT_IN_PROGRESS - already handed back', notice: { kind: 'handback-noop' } },
+    { label: 'NOT_IN_PROGRESS - recoverable', notice: { kind: 'handback-needs-start' } },
+    { label: 'NOT_OWNER', notice: { kind: 'not-owner', ownerName: 'Neha B.' } },
+    { label: 'NOT_TAKEN_OVER (post refused)', notice: { kind: 'post-refused' } },
+    {
+      label: 'divider undelivered - Redis down',
+      notice: { kind: 'divider-undelivered', reason: 'REDIS_UNAVAILABLE', event: 'joined' },
+    },
+    {
+      label: 'divider undelivered - no live session',
+      notice: {
+        kind: 'divider-undelivered',
+        reason: 'NO_LIVE_DRIVER_SESSION',
+        event: 'handed-back',
+      },
+    },
+    {
+      label: 'thrown request (409 THREAD_UNSCOPED)',
+      notice: {
+        kind: 'failed',
+        message: 'This thread has no shipment, so it cannot be scoped to a facility.',
+      },
+    },
+  ]
+
+  return (
+    <Plate n="8d" title="Takeover refusals and undelivered dividers — every notice variant">
+      <div className="flex max-w-[560px] flex-col gap-4">
+        {notices.map(({ label, notice }) => (
+          <div key={label} className="flex flex-col gap-1">
+            <span className="font-mono text-micro text-muted-foreground">{label}</span>
+            <TakeoverNoticeBanner
+              notice={notice}
+              onRecover={() => {}}
+              onDismiss={() => {}}
+            />
+          </div>
+        ))}
+      </div>
+    </Plate>
+  )
+}
+
+/**
+ * The `delivered: false` marker in situ, plus the two pending-send states. Issue #58's residual:
+ * the row is durable in `chat_messages`, the driver's live feed never got it, and nothing
+ * back-fills -- so the marker is permanent and per-message, not a toast that vanishes in five
+ * seconds taking the only trace with it.
+ */
+function UndeliveredMessageDemo() {
+  return (
+    <Plate n="8e" title="Posted, durable, and the driver never saw it (#58's residual)">
+      <div className="h-[560px] w-[460px] overflow-auto border border-border">
+        <DetailPane
+          item={ESCALATION_UNDER_TAKEOVER}
+          onAcknowledge={() => {}}
+          onResolve={() => {}}
+          onCancel={() => {}}
+          threadState="ready"
+          messages={THREAD_FIXTURE}
+          currentUserId="USR-DEMO-OPS"
+          undelivered={{ 'MSG-004': 'NO_LIVE_DRIVER_SESSION' }}
+          pending={[
+            { key: 'k1', text: 'Are you still at the gate?', state: 'sending' },
+            { key: 'k2', text: 'Checking with the yard now.', state: 'failed' },
+          ]}
+        />
+      </div>
     </Plate>
   )
 }

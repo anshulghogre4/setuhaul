@@ -454,9 +454,14 @@ async def test_queue_row_carries_the_seven_fields_of_section_7_3(queue_repo):
     # 5 -- TTL remaining: booked 5 minutes ago against D9's 15-minute clock.
     assert row.ttl.remaining_seconds == 10 * 60
     assert row.ttl.expired is False
-    # 6 -- snapshot_hash (produced, not yet enforced -- issue #61).
+    # 6 -- snapshot_hash. `enforced` is True since #62 landed the consumer half: confirm_request
+    # and counter_offer recompute this digest under the row lock and refuse with SNAPSHOT_STALE.
+    # Reporting False here would tell a client the argument is advisory when it is load-bearing.
     assert len(row.snapshot_hash) == 64
-    assert queue.snapshot.enforced is False
+    assert queue.snapshot.enforced is True
+    # ...but the note must not round that up to "every tool refuses": bulk_confirm reports drift
+    # without refusing, and apply_schedule_proposal does not exist yet.
+    assert "bulk_confirm" in queue.snapshot.note and "does not refuse" in queue.snapshot.note
     # 7 -- the composite-urgency ordering is stated on the payload, not implied.
     assert queue.ordering["rule"] == "composite_urgency"
 
@@ -723,3 +728,179 @@ async def test_queue_refuses_an_unscoped_global_read(queue_repo):
             clock=CLOCK,
         )
     assert exc.value.code == "FORBIDDEN"
+
+
+# ---------------------------------------------------------------------------------------------
+# get_dock_board -- the Board tab's at-rest occupancy view (E5.3 states 2/22).
+#
+# The horizon tests are the load-bearing ones: `screens.md` section 3 fixes the axis at "four
+# hours, or until closing time, whichever comes sooner", and both halves of that sentence are a
+# real behaviour rather than a caption.
+# ---------------------------------------------------------------------------------------------
+
+
+def _facility_row(*, timezone_name: str = "Asia/Kolkata", close_time: str = "22:00") -> dict:
+    return {
+        "facility_id": FACILITY,
+        "facility_name": "Jaipur",
+        "timezone": timezone_name,
+        "close_time": close_time,
+    }
+
+
+@pytest.fixture
+def board_repo(monkeypatch):
+    """Patch the two repository reads `get_dock_board` makes, and record their arguments."""
+    calls: dict[str, list] = {"docks": [], "occupancy": []}
+    state: dict[str, list] = {"docks": [], "occupancy": []}
+
+    async def _docks(session, facility_id):
+        calls["docks"].append(facility_id)
+        return state["docks"]
+
+    async def _occupancy(session, **kwargs):
+        calls["occupancy"].append(kwargs)
+        return state["occupancy"]
+
+    monkeypatch.setattr(planner_service.facilities_repo, "list_docks", _docks)
+    monkeypatch.setattr(planner_service.operations_repo, "list_live_dock_occupancy", _occupancy)
+    return {"calls": calls, "state": state}
+
+
+@pytest.mark.asyncio
+async def test_board_returns_every_lane_even_with_no_occupancy(board_repo):
+    """`stitch-prompts.md` section 8's empty variant: a quiet facility still renders its lanes."""
+    board_repo["state"]["docks"] = [
+        {"dock_id": DOCK, "dock_code": "D1", "dock_type": "STANDARD", "dock_status": "ACTIVE",
+         "supports_refrigerated": 0, "max_vehicle_weight_kg": 20000},
+    ]
+    session = _session_with(_facility_row(), [])
+
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+
+    assert [d.dock_code for d in board.docks] == ["D1"]
+    assert board.bars == []
+    assert board.blocks == []
+    assert board.facility_name == "Jaipur"
+
+
+@pytest.mark.asyncio
+async def test_board_horizon_is_four_hours_when_the_facility_closes_later(board_repo):
+    session = _session_with(_facility_row(close_time="22:00"), [])
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+    assert board.horizon_end == NOW + timedelta(hours=planner_service.BOARD_HORIZON_HOURS)
+    assert board.horizon_end_reason == planner_service.BOARD_HORIZON_ROLLING
+
+
+@pytest.mark.asyncio
+async def test_board_horizon_stops_at_facility_close_when_that_is_sooner(board_repo):
+    """NOW is 12:00 UTC = 17:30 Asia/Kolkata, so an 18:00 close is 30 minutes away -- sooner than
+    the rolling four hours, and the axis has to stop there rather than run past closing."""
+    session = _session_with(_facility_row(close_time="18:00"), [])
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+    assert board.horizon_end_reason == planner_service.BOARD_HORIZON_FACILITY_CLOSE
+    assert board.horizon_end == NOW + timedelta(minutes=30)
+
+
+@pytest.mark.asyncio
+async def test_board_falls_back_to_the_rolling_window_on_an_unusable_timezone(board_repo):
+    """A board that renders four hours beats a board that raises. The reason field says which."""
+    session = _session_with(_facility_row(timezone_name="Not/AZone"), [])
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+    assert board.horizon_end_reason == planner_service.BOARD_HORIZON_ROLLING
+
+
+@pytest.mark.asyncio
+async def test_board_horizon_hours_can_only_narrow(board_repo):
+    session = _session_with(_facility_row(), [])
+    board = await planner_service.get_dock_board(
+        session, _planner_ctx(), horizon_hours=99, clock=CLOCK
+    )
+    assert board.horizon_end == NOW + timedelta(hours=planner_service.BOARD_HORIZON_HOURS)
+
+
+@pytest.mark.asyncio
+async def test_board_carries_a_hold_bar_with_its_source_and_expiry(board_repo):
+    """Issue #84's hold-aware occupancy read, seen from the board: a D2 hold has no appointment
+    row, so `claim_source` and `hold_expires_at` are the only channels that say it is one."""
+    start = NOW + timedelta(minutes=30)
+    expires = NOW + timedelta(seconds=90)
+    board_repo["state"]["occupancy"] = [
+        {
+            "occupancy_id": 7,
+            "dock_id": DOCK,
+            "appointment_id": None,
+            "window_start": start,
+            "window_end": start + timedelta(hours=1),
+            "shipment_id": "SHP-1",
+            "appointment_status": "HELD",
+            "claim_source": "dock_occupancy_hold",
+            "hold_expires_at": expires,
+            "order_reference": "ORD-1",
+        }
+    ]
+    session = _session_with(_facility_row(), [])
+
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+
+    assert len(board.bars) == 1
+    bar = board.bars[0]
+    assert bar.state == "HELD"
+    assert bar.claim_source == "dock_occupancy_hold"
+    assert bar.appointment_id is None
+    assert bar.hold_expires_at == expires
+
+
+@pytest.mark.asyncio
+async def test_board_reads_occupancy_over_exactly_its_own_horizon(board_repo):
+    session = _session_with(_facility_row(close_time="22:00"), [])
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+    call = board_repo["calls"]["occupancy"][0]
+    assert call["range_start"] == board.horizon_start
+    assert call["range_end"] == board.horizon_end
+    assert call["facility_id"] == FACILITY
+
+
+@pytest.mark.asyncio
+async def test_board_derives_scope_from_the_token_and_refuses_another_facility(board_repo):
+    """M15, same contract as the queue: `facility_id` narrows within scope, never decides it."""
+    session = _session_with(_facility_row(), [])
+    await planner_service.get_dock_board(session, _planner_ctx(), facility_id=None, clock=CLOCK)
+    assert board_repo["calls"]["docks"][0] == FACILITY
+
+    with pytest.raises(AppError) as exc:
+        await planner_service.get_dock_board(
+            AsyncMock(), _planner_ctx(), facility_id=OTHER_FACILITY, clock=CLOCK
+        )
+    assert exc.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_board_refuses_an_unscoped_global_read(board_repo):
+    with pytest.raises(AppError) as exc:
+        await planner_service.get_dock_board(
+            AsyncMock(), _planner_ctx(facility_id=None, role=RoleName.ADMIN), clock=CLOCK
+        )
+    assert exc.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_board_returns_open_ended_blocks_with_a_null_end(board_repo):
+    """`event_end_ts IS NULL` means "out until someone ends it"; the server does not invent one."""
+    session = _session_with(
+        _facility_row(),
+        [
+            {
+                "dock_event_id": "DEVT002",
+                "dock_id": DOCK,
+                "event_type": "MAINTENANCE",
+                "event_start_ts": NOW - timedelta(hours=1),
+                "event_end_ts": None,
+                "reason": "outage",
+            }
+        ],
+    )
+    board = await planner_service.get_dock_board(session, _planner_ctx(), clock=CLOCK)
+    assert len(board.blocks) == 1
+    assert board.blocks[0].event_end_ts is None
+    assert board.blocks[0].reason == "outage"

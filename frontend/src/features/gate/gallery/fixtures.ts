@@ -230,6 +230,10 @@ function result(
     dwell_min: null,
     idempotency_key: null,
     idempotent_replay: false,
+    // Issue #68. `'Ramesh K.'` and not `null`, so the gallery renders the shape the live surface
+    // now produces -- a fixture that defaulted to null would quietly stop exercising the attributed
+    // case the moment somebody added a screen that reads it.
+    officer_name: 'Ramesh K.',
     ...overrides,
   }
 }

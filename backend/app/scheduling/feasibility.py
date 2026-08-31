@@ -79,6 +79,38 @@ DIFFERENTIATOR_VOCABULARY = frozenset(
 # used here and it is stated as an assumption rather than presented as policy.
 NO_WAITING_MAX_MINUTES = 15
 
+# ---------------------------------------------------------------------------
+# Fairness term (A-G1 / issue #69, SOLUTION_DESIGN.md D7, 2026-08-29)
+# ---------------------------------------------------------------------------
+# D7: "the formula therefore *defines* a per-carrier displacement penalty term with
+# weight `w_fairness = 0`, so the shipped policy is exactly the specification above
+# ... while the term has a real home and a policy version to land in if the data
+# turns ugly. Enabling the term is a policy decision with an audit trail, not a
+# code change."
+#
+# Before this change the term had no home at all: `constraints.json`'s `score_weights`
+# carried four coefficients plus two caps and `_rank_slot` had no fairness input, so
+# "defaulted off" was indistinguishable from "absent" -- and an admin who typed a
+# `w_fairness` into `POST /admin/policy/simulate` got it silently dropped.
+#
+# WHAT THE TERM MEASURES, stated precisely because D7 only names it:
+#   `carrier_concentration` = how many OTHER active appointments this shipment's
+#   carrier already holds at this facility on the candidate interval's own
+#   facility-local date. That is the per-day, per-facility form of D7's own canary
+#   metric ("share of contested slots won per carrier per facility per day").
+#
+# WHY PER LOCAL DATE and not simply per carrier: Stage 2 ranks one shipment's own
+# candidate slots against each other. A quantity that is constant across that pool
+# (a bare per-carrier count) can never change which slot a driver is offered, so it
+# would be a term in name only. Keying on the candidate's local date makes it vary
+# across the 48-hour horizon -- a carrier that already owns today's evening capacity
+# is pushed toward tomorrow morning, which is exactly the displacement D7 describes.
+#
+# SIGN: `w_fairness` is expected NEGATIVE when enabled, matching the sign convention
+# the other penalties already use (`wait_after_eta_per_minute: -6`,
+# `compatible_but_not_exact_dock_penalty: -25`). It ships at 0.
+WEIGHT_FAIRNESS = "w_fairness"
+
 
 class FeasibleSlotOption(BaseModel):
     slot_id: str
@@ -228,22 +260,58 @@ def active_facility_rules(rules: list[dict[str, Any]], *, at: datetime, tz_name:
     Callers pass only rules already filtered to this facility. Rule absence is permission,
     not inheritance (section 5 Stage 1): FAC-GGN-01 defines no LAST_NEW_START_TIME and must
     never inherit Jaipur's, so nothing here back-fills a missing rule_type from elsewhere.
+
+    **What "time-bounded effectivity" does and does NOT mean here** (A-G3 / issue #71,
+    corrected 2026-08-29 -- `06-admin-console/screens.md` section 3 previously claimed more
+    than this function delivers):
+
+      SUPPORTED -- a single ABSOLUTE window, to whatever precision the stored text carries.
+      '2026-08-10T18:00:00+05:30' really is an 18:00 boundary, so a rule can genuinely be
+      scoped to part of one day. This is intraday in the literal sense.
+
+      NOT SUPPORTED -- a RECURRING window. There is no day-of-week concept and no weekly
+      pattern anywhere in this evaluation: "Weekdays only, 18:00-23:59" cannot be expressed,
+      and nothing downstream parses such a pattern out of the TEXT column.
+
+    **Known consequence of the TEXT column, deliberately left as-is**: a non-empty
+    `effective_from`/`effective_to` this function cannot parse (a recurring pattern string,
+    say) yields `None` for that boundary, which means "unbounded on that side" -- so an
+    unparseable window makes the rule apply ALWAYS rather than never. That is the safer of
+    the two directions for this product (a rule that over-applies rejects a slot; a rule
+    that under-applies lets the system promise an interval the facility forbids), and it is
+    pinned by a characterisation test rather than left as an accident. Changing it, or
+    supporting recurrence properly, needs real columns and therefore a migration -- see the
+    issue #71 write-up.
     """
-    tz = ZoneInfo(tz_name)
     in_force: list[dict[str, Any]] = []
     for rule in rules:
-        start = _coerce_timestamp(rule.get("effective_from"))
-        if start is None and rule.get("effective_from"):
-            start = _parse_bare_local_date(str(rule["effective_from"]), tz)
-        end = _coerce_timestamp(rule.get("effective_to"))
-        if end is None and rule.get("effective_to"):
-            end = _parse_bare_local_date(str(rule["effective_to"]), tz)
+        start = parse_rule_boundary(rule.get("effective_from"), tz_name)
+        end = parse_rule_boundary(rule.get("effective_to"), tz_name)
         if start is not None and at < start:
             continue
         if end is not None and at >= end:
             continue
         in_force.append(rule)
     return in_force
+
+
+def parse_rule_boundary(value: Any, tz_name: str) -> datetime | None:
+    """One `facility_rules.effective_from`/`effective_to` boundary as a real instant, or None.
+
+    Extracted from `active_facility_rules`'s body unchanged so that A-G6's rule-edit impact
+    preview (`admin_governance_service.get_facility_rule_impact`, issue #74) can bound its
+    scan by exactly the same parse the enforcing engine uses. Reusing this rather than
+    re-implementing it is the point: a preview that disagrees with the engine about when a
+    rule is in force would name the wrong appointments.
+
+    None means "no bound on this side" -- for an empty value, and also for a non-empty value
+    no accepted shape parses. See `active_facility_rules`'s docstring for why that direction
+    is deliberate.
+    """
+    parsed = _coerce_timestamp(value)
+    if parsed is None and value:
+        parsed = _parse_bare_local_date(str(value), ZoneInfo(tz_name))
+    return parsed
 
 
 def _parse_bare_local_date(value: str, tz: ZoneInfo) -> datetime | None:
@@ -383,7 +451,17 @@ def _rank_slot(
     feasible_start: datetime,
     feasible_end: datetime,
     slot_end: datetime,
+    carrier_concentration: int = 0,
 ) -> tuple[int, dict[str, Any]]:
+    """Stage 2's deterministic weighted score for one candidate interval.
+
+    `carrier_concentration` defaults to 0, which is what every caller outside
+    `find_feasible_slots` passes: `allocation.py`'s transactional revalidation and
+    `explain_slot_eligibility` both evaluate ONE interval, where a comparative fairness
+    penalty has nothing to compare against and no effect on the yes/no answer they produce.
+    Combined with the shipped `w_fairness = 0` this keeps the score those paths compute
+    identical to the score `find_feasible_slots` computed when it offered the interval.
+    """
     ranking_policy = load_scheduling_constraints().ranking_policy
     priority_scores = ranking_policy.priority_scores or {
         "CRITICAL": 4000,
@@ -403,6 +481,11 @@ def _rank_slot(
     disruption_score = 0 if exact_dock_type_match else abs(weights.get("compatible_but_not_exact_dock_penalty", -25))
     lateness_cap = weights.get("lateness_cap_minutes", 720)
     fit_slack_cap = weights.get("fit_slack_cap_minutes", 120)
+    # D7's per-carrier displacement penalty. `w_fairness` ships at 0, so this product is
+    # exactly 0 and the score below is arithmetically identical to the pre-#69 formula --
+    # pinned by test_scheduling_feasibility.py's byte-identity test, not merely asserted.
+    w_fairness = weights.get(WEIGHT_FAIRNESS, 0)
+    fairness_penalty = w_fairness * carrier_concentration
 
     score = (
         priority_scores.get(priority_code, priority_scores.get("UNKNOWN", 500))
@@ -410,6 +493,7 @@ def _rank_slot(
         + wait_after_eta_minutes * weights.get("wait_after_eta_per_minute", -6)
         + min(fit_slack_minutes, fit_slack_cap) * weights.get("fit_slack_per_minute", 1)
         + (0 if exact_dock_type_match else weights.get("compatible_but_not_exact_dock_penalty", -25))
+        + fairness_penalty
     )
     return score, {
         "priority_code": priority_code,
@@ -419,6 +503,12 @@ def _rank_slot(
         "fit_slack_minutes": fit_slack_minutes,
         "dock_match": "exact" if exact_dock_type_match else "compatible",
         "operational_disruption_score": disruption_score,
+        # Reported ALWAYS, including as a pair of zeroes. A decision receipt that omits a
+        # term because it evaluated to zero is the same silent-ignore failure #69 exists to
+        # remove -- "the fairness term contributed nothing" and "there is no fairness term"
+        # must be distinguishable by reading the receipt.
+        "carrier_concentration": carrier_concentration,
+        "fairness_penalty": fairness_penalty,
         "stable_tiebreaker": f"{shipment['shipment_id']}:{candidate['slot_id']}",
     }
 
@@ -430,7 +520,7 @@ def _explain_option(
     option: dict[str, Any],
     ranking_factors: dict[str, Any],
 ) -> list[str]:
-    return [
+    explanation = [
         f"Latest authoritative ETA {eta_dt.isoformat()} fits inside this slot with unload duration.",
         f"Dock {option['dock_code']} is compatible with required dock type {shipment['required_dock_type']}.",
         "No active appointment currently occupies the slot.",
@@ -442,6 +532,16 @@ def _explain_option(
             f"dock match {ranking_factors['dock_match']}."
         ),
     ]
+    # Prose is driver-facing (section 12.1 Q11's explanation is generated from this list), so the
+    # fairness sentence appears only when the term actually moved the score. The structured
+    # `ranking_factors` above always carries it -- that is the auditable receipt; this is copy.
+    if ranking_factors.get("fairness_penalty"):
+        explanation.append(
+            "Fairness term applied (D7): this carrier already holds "
+            f"{ranking_factors['carrier_concentration']} other appointment(s) at this facility on "
+            f"this date, for a score adjustment of {ranking_factors['fairness_penalty']}."
+        )
+    return explanation
 
 
 def assign_differentiators(options: list[FeasibleSlotOption]) -> None:
@@ -517,6 +617,7 @@ def evaluate_candidate_slot(
     checked_constraints: list[str],
     facility_rules: list[dict[str, Any]] | None = None,
     driver_window: dict[str, Any] | None = None,
+    carrier_concentration_by_local_date: dict[str, int] | None = None,
 ) -> tuple[FeasibleSlotOption | None, InfeasibleSlotReason | None]:
     """Stage 1 eligibility guard for one candidate interval.
 
@@ -525,6 +626,12 @@ def evaluate_candidate_slot(
     Passing None means those two Stage-1 invariants are NOT evaluated for that call --
     see the E1.4 follow-up note: request_slot can still claim an interval that
     find_feasible_slots would have filtered out on a facility rule or a driver window.
+
+    `carrier_concentration_by_local_date` is D7's fairness input (issue #69), keyed by the
+    facility-LOCAL date of the interval's real start. It is None on every path except
+    `find_feasible_slots` with a non-zero `w_fairness`, so the default costs one falsy
+    check and nothing else -- see WEIGHT_FAIRNESS's comment for why the key is a local date
+    rather than the carrier alone.
     """
     slot_id = str(candidate["slot_id"])
 
@@ -636,6 +743,15 @@ def evaluate_candidate_slot(
                 message=window_hit,
             )
 
+    # The interval's own facility-local date -- computed once here and reused for both the
+    # fairness lookup and `slot_local_date` below, rather than converting twice.
+    local_date = _to_local(feasible_start, facility_tz).date().isoformat()
+    carrier_concentration = (
+        int(carrier_concentration_by_local_date.get(local_date, 0))
+        if carrier_concentration_by_local_date
+        else 0
+    )
+
     rank_score, ranking_factors = _rank_slot(
         shipment=shipment,
         eta_dt=eta_dt,
@@ -643,6 +759,7 @@ def evaluate_candidate_slot(
         feasible_start=feasible_start,
         feasible_end=feasible_end_dt,
         slot_end=slot_end,
+        carrier_concentration=carrier_concentration,
     )
 
     return (
@@ -660,7 +777,7 @@ def evaluate_candidate_slot(
             # same local day as the effective ETA. Stage 0 uses is_same_day to decide
             # FEASIBLE vs NO_SAME_DAY_SLOT; the renderer uses slot_local_date so an offered
             # interval can never be shown without its date.
-            slot_local_date=_to_local(feasible_start, facility_tz).date().isoformat(),
+            slot_local_date=local_date,
             is_same_day=(
                 _to_local(feasible_start, facility_tz).date() == _to_local(eta_dt, facility_tz).date()
             ),
@@ -705,6 +822,7 @@ async def find_feasible_slots(
             text(
                 """
                 SELECT s.shipment_id, s.driver_id, s.vehicle_id, s.destination_facility_id,
+                       s.carrier_id,
                        s.priority_code, s.required_dock_type, s.temperature_control_required,
                        s.load_weight_kg, s.expected_unload_min, s.current_status,
                        s.original_eta_ts, s.latest_eta_ts,
@@ -812,6 +930,52 @@ async def find_feasible_slots(
     # from wall-clock now -- the whole engine is ETA-relative, and an ETA-relative horizon is
     # what makes "no slot today, but 06:00 tomorrow" answerable at all.
     horizon_end = eta_dt + timedelta(hours=horizon_hours)
+
+    # D7's fairness input (issue #69). Fetched ONLY when the policy actually enables the term.
+    # COMPARISON-latency F16 already flags this function's four sequential round trips, so the
+    # default path must not gain a fifth: at the shipped `w_fairness = 0` this branch is a
+    # dict lookup against an already-loaded constraints object and nothing more. When an admin
+    # deliberately turns fairness on, one extra grouped read is the honest cost of the feature.
+    carrier_concentration_by_local_date: dict[str, int] | None = None
+    if constraints.ranking_policy.score_weights.get(WEIGHT_FAIRNESS, 0):
+        concentration_rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT to_char(sl.slot_start_ts AT TIME ZONE :tz_name, 'YYYY-MM-DD') AS local_date,
+                           CAST(count(*) AS integer) AS held_count
+                    FROM public.appointments a
+                    JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                    JOIN public.shipments other ON other.shipment_id = a.shipment_id
+                    WHERE a.is_current = 1
+                      AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
+                      AND sl.facility_id = :facility_id
+                      AND other.carrier_id = :carrier_id
+                      AND other.shipment_id <> :shipment_id
+                      AND sl.slot_start_ts >= :eta_ts
+                      AND sl.slot_start_ts < :horizon_end_ts
+                    GROUP BY 1
+                    """
+                ),
+                # `AT TIME ZONE <name>` on a timestamptz yields the local wall-clock timestamp,
+                # which is what makes this a facility-LOCAL calendar day rather than a UTC one --
+                # the same distinction `slot_local_date` exists for. The shipment's own current
+                # appointment is excluded: the term measures what the carrier ALREADY holds
+                # besides this booking, not the booking being decided.
+                {
+                    "tz_name": str(facility_data["timezone"]),
+                    "facility_id": shipment_data["destination_facility_id"],
+                    "carrier_id": shipment_data["carrier_id"],
+                    "shipment_id": shipment_id,
+                    "eta_ts": eta_dt,
+                    "horizon_end_ts": horizon_end,
+                },
+            )
+        ).mappings().all()
+        carrier_concentration_by_local_date = {
+            str(row["local_date"]): int(row["held_count"]) for row in concentration_rows
+        }
+
     candidates = (
         await session.execute(
             text(
@@ -868,6 +1032,7 @@ async def find_feasible_slots(
             checked_constraints=checked_constraints,
             facility_rules=facility_rules,
             driver_window=driver_window,
+            carrier_concentration_by_local_date=carrier_concentration_by_local_date,
         )
         if option:
             options.append(option)

@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
 
-import type { DriverMessage, DriverThread, UxState } from './types'
+import type { DriverHold, DriverMessage, DriverThread, UxState } from './types'
 
 /**
  * The driver surface's message store.
@@ -60,6 +60,24 @@ export const threadsAtom = atom<DriverThread[]>([])
 
 /** `null` when no turn is in flight. */
 export const turnAtom = atom<TurnState | null>(null)
+
+/**
+ * The live D2 hold per thread — `null` for a thread with none.
+ *
+ * **Its own atom rather than a field on `DriverThread`, and the reason is which writer owns it.**
+ * `threadsAtom` is written once per `/driver/context` load; a hold is created and destroyed *inside
+ * a turn* (`request_slot` grants it, `confirm_held_slot` consumes it, the 90-second TTL ends it) and
+ * has to survive a context refresh that predates it. Folding it into the thread row would mean the
+ * list's load could silently clear a hold the driver is currently looking at.
+ *
+ * Both writers still feed it: `thread-list.tsx` seeds it from `/driver/context`'s `current_hold`
+ * (so a driver returning to a live hold sees it), and `use-driver-turn.ts` updates it from the
+ * turn's own tool results.
+ *
+ * Every value here carries a **server-stamped `expiresAt`** — `mappers.toHold` refuses a hold
+ * without one, so nothing in this atom can drive a countdown from a client-derived deadline.
+ */
+export const holdsByThreadAtom = atom<Record<string, DriverHold | null>>({})
 
 /** The last `done.data.ux_state`. **The branch key for which screen renders, not the prose.** */
 export const uxStateAtom = atom<UxState>('chat')

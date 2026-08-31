@@ -2,13 +2,12 @@ import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 're
 import { toast } from 'sonner'
 
 import { BlockDockDialog } from './components/block-dock-dialog'
-import { BoardSkeleton } from './components/board-skeleton'
+import { DockBoardPanel } from './components/dock-board'
 import { NarrowViewportGuard } from './components/narrow-viewport'
 import { NotYetAvailable } from './components/not-yet-available'
-import { QueueEmptyCaughtUp } from './components/queue-region-states'
+import { QueueTab } from './components/queue-tab'
 import { ReviewProposalButton } from './components/review-proposal-button'
 import { dockBoardEnabled, plannerQueueLiveEnabled } from './lib/flags'
-import { RegionError } from '@/components/states/region-states'
 import { Button } from '@/shared/ui/button'
 
 type Tab = 'queue' | 'board'
@@ -23,15 +22,16 @@ type Tab = 'queue' | 'board'
  * `densityFor('planner')`, resolved from `WAREHOUSE_PLANNER`'s rail destination) -- not repeated
  * here, same comment E5.2's `OpsConsole` makes for its own surface.
  *
- * **Real backend wiring for the block-dock group only** (states 16-18) -- the one group with a
- * complete backend this pass (`implementation-spec.md` section 0.1). Everything else on this
- * surface starts from a queue row `get_planner_queue` (issue #60) would produce, and that tool
- * does not exist -- see `lib/flags.ts`'s header comment for why every other flag defaults off.
+ * **Queue tab: real backend wiring** (2026-08-29) -- `get_planner_queue` plus confirm / reject /
+ * counter-offer / bulk-confirm, all shipped and all reachable. **Board tab: real occupancy**
+ * (2026-08-31) -- `GET /api/v1/planner/board` over the hold-aware `list_live_dock_occupancy` that
+ * issue #84 fixed, rendered through `components.md` section 3's nine-value mapping table. The
+ * counter-offer picker's interactive mode is still the interim dialog; see `lib/flags.ts` for what
+ * each flag now gates and what was verified before it moved.
  */
 export function PlannerConsole({ facilityId }: { facilityId: string }) {
   const [tab, setTab] = useState<Tab>('queue')
   const [blockDialogOpen, setBlockDialogOpen] = useState(false)
-  const [boardLoadError, setBoardLoadError] = useState(false)
 
   const queueTabRef = useRef<HTMLButtonElement | null>(null)
   const boardTabRef = useRef<HTMLButtonElement | null>(null)
@@ -102,7 +102,7 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
           hidden={tab !== 'queue'}
           className="min-h-0 flex-1 overflow-auto pt-4"
         >
-          <QueueTab />
+          <QueueTabRegion facilityId={facilityId} />
         </div>
 
         <div
@@ -123,10 +123,12 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
           </div>
 
           <div className="min-h-0 flex-1">
-            {boardLoadError ? (
-              <RegionError regionName="dock board" onRetry={() => setBoardLoadError(false)} />
-            ) : dockBoardEnabled ? (
-              <BoardSkeleton />
+            {dockBoardEnabled ? (
+              /* `DockBoardPanel` owns its own fetch, its own skeleton (state 28) and its own
+                 scoped error (state 23) -- the same shape `QueueTab` took, and for the same
+                 reason: a board that renders an at-rest state without having asked the server
+                 would tell a planner the lanes are clear when it has never looked. */
+              <DockBoardPanel facilityId={facilityId || null} />
             ) : (
               <NotYetAvailable
                 title="Dock occupancy view isn't available yet."
@@ -147,23 +149,26 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
   )
 }
 
-function QueueTab() {
-  // `plannerQueueLiveEnabled` gates the fetch itself, not just a rendered state -- there is
-  // nothing to attempt against `get_planner_queue` (issue #60) yet, so a skeleton would falsely
-  // imply a request is in flight. States 27/29/30 (skeleton, load-failed/out-of-scope,
-  // below-1024px) remain real, reusable components -- exercised in the gallery -- for the day the
-  // fetch this tab needs actually exists.
+/**
+ * The flag gates the **fetch**, not a rendered state.
+ *
+ * That ordering is the whole point of this wrapper and it is worth stating, because the previous
+ * shape of this function was a live trap: with the flag on it rendered `QueueEmptyCaughtUp`
+ * unconditionally, so flipping it would have told a planner "no pending requests" without the
+ * surface ever having asked the server -- strictly worse than an honest stub, because a stub does
+ * not claim to know anything. `QueueTab` now owns its own fetch, so its empty state can only ever
+ * be reached *after* a successful read that genuinely returned nothing.
+ */
+function QueueTabRegion({ facilityId }: { facilityId: string }) {
   if (!plannerQueueLiveEnabled) {
     return (
       <NotYetAvailable
         title="Live queue isn't available yet."
-        body="get_planner_queue doesn't exist in the shape section 7.5.1 needs (issue #60), and there's no live-update transport for it either (issue #59). The block-dock group on the Board tab works today regardless."
+        body="Turn on plannerQueueLiveEnabled once GET /api/v1/planner/queue is reachable from this identity. The block-dock group on the Board tab works today regardless."
       />
     )
   }
-  // Unreachable until #60/#59 land -- kept as the documented shape this branch takes, matching
-  // `QueueEmptyCaughtUp`'s own real component rather than an inline placeholder.
-  return <QueueEmptyCaughtUp />
+  return <QueueTab facilityId={facilityId || null} />
 }
 
 const TabButton = ({

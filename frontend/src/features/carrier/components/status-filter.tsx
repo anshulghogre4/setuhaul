@@ -21,14 +21,23 @@ import {
  * own documented default for `DropdownMenu` (focus returns to the trigger on close), so it is
  * inherited rather than re-implemented; nothing here overrides it.
  *
- * ## Two options are missing, on purpose (issue #53)
+ * ## Five options, not the design's six — and the missing one is a design question (2026-08-31)
  *
- * The design lists six: `All statuses · Shown · Held · Pending confirmation · Confirmed · Has
- * open exception`. `Shown` and `Held` are **omitted while `carrierShownHeldEnabled` is off**,
- * because `carrier_reads._validate_status_filter` answers **400 `FILTER_UNSUPPORTED`** for
- * either — the live `appointments.appointment_status` CHECK constraint has no such value, and
- * the endpoint refuses rather than returning a misleading empty list. Rendering the options
- * anyway would put two controls in front of a carrier that error on click.
+ * The design lists six: `All statuses · Shown · Held · Pending confirmation · Confirmed · Has open
+ * exception`.
+ *
+ * **`Held` ships** behind `carrierHeldEnabled`: issue #87 made
+ * `carrier_reads._validate_status_filter` answer it against the derived `promise_state` whenever the
+ * server's own `TWO_PHASE_HOLD_ENABLED` is on, and refuse it *with a stated reason* when it is off.
+ * The flag exists so this popover and that server flag cannot disagree about whether the option is
+ * clickable.
+ *
+ * **`Shown` is removed outright, not flagged.** `carrier_reads` refuses it in every flag state, by
+ * argued decision: §0.8/§4 make `SHOWN` a presentation-only state with no persisted counterpart
+ * anywhere in the product, so there is nothing to select on. A flag would imply a pending
+ * engineering task; what it actually needs is an owner decision about whether the state belongs in
+ * a carrier's status vocabulary at all (recorded in `lib/flags.ts`). Shipping it as an option that
+ * 400s on click would be the one thing worse than omitting it.
  *
  * Omitted, not disabled: `components.md` §18 requires an unavailable control to be **Hidden**,
  * never greyed out.
@@ -47,27 +56,24 @@ const BASE_OPTIONS: Option[] = [
   { value: 'HAS_OPEN_EXCEPTION', label: 'Has open exception' },
 ]
 
-const SHOWN_HELD_OPTIONS: Option[] = [
-  { value: 'SHOWN', label: 'Shown' },
-  { value: 'HELD', label: 'Held' },
-]
+const HELD_OPTION: Option = { value: 'HELD', label: 'Held' }
 
-function statusFilterOptions(shownHeldEnabled: boolean): Option[] {
-  if (!shownHeldEnabled) return BASE_OPTIONS
-  // Design order: All · Shown · Held · Pending confirmation · Confirmed · Has open exception.
-  return [BASE_OPTIONS[0], ...SHOWN_HELD_OPTIONS, ...BASE_OPTIONS.slice(1)]
+function statusFilterOptions(heldEnabled: boolean): Option[] {
+  if (!heldEnabled) return BASE_OPTIONS
+  // Design order minus `Shown`: All · Held · Pending confirmation · Confirmed · Has open exception.
+  return [BASE_OPTIONS[0], HELD_OPTION, ...BASE_OPTIONS.slice(1)]
 }
 
 export function StatusFilter({
   value,
   onChange,
-  shownHeldEnabled,
+  heldEnabled,
 }: {
   value: StatusFilterValue
   onChange: (value: StatusFilterValue) => void
-  shownHeldEnabled: boolean
+  heldEnabled: boolean
 }) {
-  const options = statusFilterOptions(shownHeldEnabled)
+  const options = statusFilterOptions(heldEnabled)
   const current = options.find((o) => o.value === (value ?? ALL)) ?? options[0]
 
   return (

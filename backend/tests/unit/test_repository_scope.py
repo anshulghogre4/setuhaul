@@ -22,6 +22,7 @@ from app.core.execution_context import ExecutionContext, RoleName
 from app.repositories.scope import (
     assert_facility_visible,
     assert_facility_write_scope,
+    assert_gate_write_scope,
     assert_shipment_visible,
     resolve_facility_scope,
 )
@@ -286,6 +287,87 @@ def test_global_read_only_personas_can_read_but_not_write_across_facilities():
         assert exc.value.code == "FORBIDDEN", role
         with pytest.raises(AppError):
             assert_facility_write_scope(ctx, OTHER_FACILITY)
+
+
+# --------------------------------------------------------------------------------------------
+# assert_gate_write_scope (issue #79) -- the gate/yard write tier.
+# --------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("facility_id", [OWN_FACILITY, OTHER_FACILITY])
+def test_assert_gate_write_scope_differs_from_the_ops_write_tier_by_exactly_one_role(facility_id):
+    """The two write predicates must agree on every role except GATE_OFFICER.
+
+    Written as a difference test rather than a list of expectations so that adding a role to
+    `assert_gate_write_scope` later cannot pass silently -- any second divergence fails here with
+    the offending role named.
+    """
+    diverged = []
+    for ctx in _every_role_context():
+        gate = _outcome(assert_gate_write_scope, ctx, facility_id)
+        ops = _outcome(assert_facility_write_scope, ctx, facility_id)
+        if gate != ops:
+            diverged.append((ctx.role_name, ctx.facility_id, gate, ops))
+    assert all(role is RoleName.GATE_OFFICER for role, _, _, _ in diverged), diverged
+    if facility_id == OWN_FACILITY:
+        # The one divergence: a mapped gate officer, on its own facility, only.
+        assert [(role, fac) for role, fac, _, _ in diverged] == [
+            (RoleName.GATE_OFFICER, OWN_FACILITY)
+        ], diverged
+    else:
+        assert diverged == [], diverged
+
+
+def test_gate_officer_may_write_only_its_own_facility():
+    ctx = _ctx(RoleName.GATE_OFFICER, facility_id=OWN_FACILITY)
+    assert_gate_write_scope(ctx, OWN_FACILITY)
+    with pytest.raises(AppError) as exc:
+        assert_gate_write_scope(ctx, OTHER_FACILITY)
+    assert exc.value.code == "FORBIDDEN"
+    assert exc.value.status_code == 403
+
+
+def test_unmapped_gate_officer_is_refused_rather_than_defaulting_to_any_facility():
+    """A kiosk account with no `users.facility_id` must not fall through to "everything"."""
+    ctx = _ctx(RoleName.GATE_OFFICER, facility_id=None)
+    for facility in (OWN_FACILITY, OTHER_FACILITY):
+        with pytest.raises(AppError) as exc:
+            assert_gate_write_scope(ctx, facility)
+        assert exc.value.code == "FORBIDDEN"
+    # And the read side refuses too, rather than resolving to an unfiltered search.
+    with pytest.raises(AppError):
+        resolve_facility_scope(ctx, None)
+
+
+def test_gate_officer_has_no_ops_write_reach_at_all():
+    """Issue #79's narrowing guarantee, asserted against the *shared* write gate.
+
+    `assert_facility_write_scope` is what escalation raise/resolve, thread takeover and the
+    planner writes call. A gate officer must fail it on its own facility, not merely on someone
+    else's -- otherwise the role would have gained escalation authority by being facility-scoped.
+    """
+    ctx = _ctx(RoleName.GATE_OFFICER, facility_id=OWN_FACILITY)
+    for facility in (OWN_FACILITY, OTHER_FACILITY):
+        with pytest.raises(AppError) as exc:
+            assert_facility_write_scope(ctx, facility)
+        assert exc.value.code == "FORBIDDEN"
+    # ...and it is not visible to the ops read idioms either.
+    with pytest.raises(AppError):
+        assert_shipment_visible(
+            ctx, shipment_driver_id=OWN_DRIVER, shipment_facility_id=OWN_FACILITY
+        )
+    with pytest.raises(AppError):
+        assert_facility_visible(ctx, OWN_FACILITY)
+
+
+def test_ops_kiosk_roles_still_pass_the_gate_write_tier():
+    """The 2026-08-24 mapping is superseded, not revoked: planners can still work a kiosk."""
+    for role in (RoleName.WAREHOUSE_PLANNER, RoleName.FACILITY_MANAGER):
+        assert_gate_write_scope(_ctx(role, facility_id=OWN_FACILITY), OWN_FACILITY)
+        with pytest.raises(AppError):
+            assert_gate_write_scope(_ctx(role, facility_id=OWN_FACILITY), OTHER_FACILITY)
+    # ADMIN keeps its cross-facility reach, matching what the search side already grants it.
+    assert_gate_write_scope(_ctx(RoleName.ADMIN), OTHER_FACILITY)
 
 
 def test_driver_sees_only_their_own_shipment():

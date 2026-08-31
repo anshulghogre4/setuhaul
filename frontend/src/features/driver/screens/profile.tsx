@@ -97,7 +97,9 @@ export function DriverProfile() {
         <h1 className="text-body-lg font-semibold">{copy.navProfile}</h1>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-(--content-p)">
+      {/* `<main>`, not a `<div>` -- see the note in `thread-list.tsx`. Measured 2026-08-31:
+          the driver surface had no main landmark on any screen. */}
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-(--content-p)">
         {/* Read-only identity. No edit affordance anywhere -- this is TMS-owned and displayed
             for confirmation only. */}
         <section aria-labelledby="identity-heading">
@@ -186,7 +188,7 @@ export function DriverProfile() {
         <Button variant="destructive" onClick={() => setSignOutConfirm(true)}>
           {copy.signOut}
         </Button>
-      </div>
+      </main>
 
       {/* F10's answer. Names the real consequence rather than asking "are you sure". */}
       <Dialog open={darkWarning} onOpenChange={setDarkWarning}>

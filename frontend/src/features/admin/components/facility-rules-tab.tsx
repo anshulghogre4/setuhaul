@@ -11,7 +11,7 @@ import {
 import { RulesTable } from './rules-table'
 import { FilterSelect, Toolbar, ToolbarSpacer } from './toolbar'
 import { listFacilityRules } from '../lib/api'
-import { facilityDisplayName } from '../lib/facility-names'
+import { useFacilities } from '../lib/facilities'
 import { adminRuleEditorEnabled, adminRuleImpactEnabled } from '../lib/flags'
 import type { FacilityRule } from '../lib/types'
 import { Button } from '@/shared/ui/button'
@@ -39,7 +39,7 @@ type LoadState = 'loading' | 'ready' | 'failed'
 export function FacilityRulesTab() {
   const [state, setState] = useState<LoadState>('loading')
   const [rules, setRules] = useState<FacilityRule[]>([])
-  const [knownFacilityIds, setKnownFacilityIds] = useState<Set<string>>(() => new Set())
+  const facilities = useFacilities()
   const [facilityFilter, setFacilityFilter] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -47,15 +47,6 @@ export function FacilityRulesTab() {
     try {
       const result = await listFacilityRules(facilityFilter)
       setRules(result.items)
-      // Accumulated, not derived from the current rows — same self-narrowing bug the Users tab
-      // has: filtering to one facility would otherwise delete every other option from the
-      // dropdown that just filtered them out. The first load is unfiltered, so this starts
-      // complete.
-      setKnownFacilityIds((known) => {
-        const next = new Set(known)
-        for (const rule of result.items) if (rule.facility_id) next.add(rule.facility_id)
-        return next.size === known.size ? known : next
-      })
       setState('ready')
     } catch {
       setState('failed')
@@ -66,12 +57,16 @@ export function FacilityRulesTab() {
     void load()
   }, [load])
 
+  /**
+   * Every facility, from `GET /admin/facilities` (A-G10 / issue #78) — including ones with no rules
+   * yet, which the previous derived-from-loaded-rows list could not name at all. That mattered here
+   * as well as on the Users tab: "show me the rules at the facility that has none" is a real
+   * question, and the old filter could not even ask it. The `knownFacilityIds` accumulator that
+   * worked around the derived list's self-narrowing is deleted with it. Server-ordered by name.
+   */
   const facilityOptions = useMemo(
-    () =>
-      [...knownFacilityIds]
-        .map((id) => ({ value: id, label: facilityDisplayName(id) }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [knownFacilityIds],
+    () => facilities.all.map((f) => ({ value: f.facility_id, label: f.facility_name })),
+    [facilities.all],
   )
 
   return (
@@ -131,7 +126,7 @@ export function FacilityRulesTab() {
           body="Rules constrain what the scheduling engine will offer at a facility. None exist here yet."
         />
       ) : (
-        <RulesTable rules={rules} />
+        <RulesTable rules={rules} facilityName={facilities.nameOf} />
       )}
 
       {adminRuleImpactEnabled ? null : (

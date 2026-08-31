@@ -21,12 +21,48 @@
 /**
  * The four designed promise states (`00-foundations/components.md` section 2).
  *
- * **`HELD` is designed but not servable** — see `flags.ts` / issue #53. It stays in the union
- * because the chip, the countdown and the option card all have a specified `HELD` treatment
- * that is built and unit-renderable; what is gated is any code path that could *put* a real
- * appointment into it.
+ * **`HELD` is servable since 2026-08-31** (issues #53/#83/#86): a hold is a `dock_occupancy` row
+ * with a NULL `appointment_id`, and `holds.live_hold_for_shipment` is what makes it readable. It
+ * arrives on `/driver/context` as `promise_state: 'HELD'` with `promise_state_source:
+ * 'dock_occupancy_hold'`, and from `request_slot`'s HELD outcome inside a turn.
+ *
+ * `SHOWN` remains a **client-side** state and always was: it is what an option set on screen means,
+ * and `find_feasible_slots` reserves nothing and writes no row. Nothing on the wire can say it.
  */
 export type PromiseState = 'SHOWN' | 'HELD' | 'PENDING_CONFIRMATION' | 'CONFIRMED'
+
+/**
+ * A live D2 hold, as every driver-facing read reports it.
+ *
+ * One shape for three producers, which is the point: `holds.live_hold_for_shipment` (behind
+ * `/driver/context`'s `current_hold` and `get_appointment_request_status`'s `hold`) and
+ * `request_slot`'s HELD outcome all name the same fields, so `mappers.ts` has one function rather
+ * than three near-copies that could drift about which field the countdown reads.
+ *
+ * **`expiresAt` is the server's own `expires_at` and is the countdown's only legitimate source.**
+ * A client that computed `now + 90s` on receipt would be asserting a deadline the server never
+ * gave, and would drift by exactly the round-trip time — in the wrong direction, since it would
+ * show time the driver does not have.
+ */
+export type DriverHold = {
+  holdId: string
+  shipmentId: string
+  slotId: string | null
+  dockCode: string | null
+  /** ISO, server-stamped. */
+  expiresAt: string
+  /**
+   * The server's own remaining-seconds reading at the moment it answered, computed against the
+   * same `now` the row was filtered with (`holds.live_hold_for_shipment`). Carried but **not** used
+   * to drive the countdown: the countdown runs off `expiresAt` reconciled through the shared
+   * clock's measured offset, which stays correct as the seconds pass. This value is a receipt of
+   * what the server believed at answer time, useful for a staleness check, and is deliberately not
+   * a second source of truth to tick from (R4's lesson: one rule, no possible disagreement).
+   */
+  expiresInSeconds: number | null
+  windowStart: string | null
+  windowEnd: string | null
+}
 
 /** Priority ramp for the thread card's 3px left marker (`components.md` section 5, U10).
  *  Values are `shipments.priority_code` verbatim. */
@@ -68,13 +104,26 @@ export type DriverOption = {
   optionStatus: string
 }
 
-/** The eight option-card treatments (`01-driver-chat/components.md` section 2). */
+/**
+ * The option-card treatments (`01-driver-chat/components.md` section 2).
+ *
+ * `lapsed` is **not** in that section's table and is added deliberately, from `stitch-prompts.md`
+ * §15 (screen 15, `HOLD_LAPSED`), which specifies the treatment precisely: *"same position, same
+ * size. Dock line and time line struck through, card at 40% opacity, 1px border (the dashed amber
+ * is gone), status line reading 'Hold lapsed'."* That is the `lost`/`withdrawn` shape with its own
+ * copy, and it needs its own value rather than reusing one of theirs because the status line is the
+ * whole signal: "Taken by another driver" and "Hold lapsed" are different facts, and §15 is
+ * explicit that the card must **never** be removed, because *"a driver who looks up to find their
+ * option simply gone learns nothing and trusts less."*
+ */
 export type OptionCardState =
   | 'default'
   | 'pressed'
   | 'committing'
   /** Behind `heldStateEnabled` — issue #53. */
   | 'held'
+  /** Screen 15. Behind `heldStateEnabled`, since only a held card can lapse. */
+  | 'lapsed'
   | 'lost'
   | 'withdrawn'
   | 'offline'

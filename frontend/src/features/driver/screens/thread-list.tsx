@@ -5,9 +5,10 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
+import { useCountdownClock } from '@/shared/lib/countdown'
 import { copy } from '../lib/copy'
-import { emptyKind, fetchDriverContext, toThreads } from '../lib/data'
-import { orderedThreadsAtom, threadsAtom } from '../lib/store'
+import { currentHold, emptyKind, fetchDriverContext, toThreads } from '../lib/data'
+import { holdsByThreadAtom, orderedThreadsAtom, threadsAtom } from '../lib/store'
 import { ThreadCard } from '../components/thread-card'
 import { ThreadListSkeleton } from '../components/thinking'
 
@@ -52,6 +53,8 @@ import { ThreadListSkeleton } from '../components/thinking'
  */
 export function DriverThreadList() {
   const [, setThreads] = useAtom(threadsAtom)
+  const [, setHolds] = useAtom(holdsByThreadAtom)
+  const { setServerTime } = useCountdownClock()
   const ordered = useAtomValue(orderedThreadsAtom)
   const navigate = useNavigate()
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -65,6 +68,18 @@ export function DriverThreadList() {
         if (cancelled) return
         const threads = toThreads(ctx)
         setThreads(threads)
+        // The countdown clock reconciles every hold against SERVER time using this offset. Without
+        // it a 90-second hold is only as trustworthy as the handset's own clock, and a phone three
+        // minutes fast would render a live hold as already lapsed.
+        setServerTime(ctx.as_of)
+        // Seed the live hold, so a driver returning to the app mid-hold sees the countdown they
+        // left rather than a blank promise until the next turn. `currentHold` refuses a hold with
+        // no server `expires_at`, so nothing seeded here can drive a client-derived countdown.
+        const hold = currentHold(ctx)
+        setHolds((prev) => ({
+          ...prev,
+          ...(hold ? { [hold.shipmentId]: hold } : {}),
+        }))
         setEmpty(emptyKind(ctx))
         setPhase('ready')
 
@@ -79,7 +94,7 @@ export function DriverThreadList() {
     return () => {
       cancelled = true
     }
-  }, [navigate, setThreads])
+  }, [navigate, setHolds, setServerTime, setThreads])
 
   const active = ordered.filter((t) => !t.resolved)
   const resolved = ordered.filter((t) => t.resolved)
@@ -101,7 +116,12 @@ export function DriverThreadList() {
         </Link>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {/* `<main>`, not a `<div>`: measured in a real headless render (2026-08-31) the driver
+          surface had NO main landmark on any of its three screens -- `<main>` 0, so a screen
+          reader had no main region and nothing for a skip target to point at. Same defect class
+          the planner (§5.3-R14) and ops (§5.3-R8) implementation-specs already recorded and
+          fixed. The `<header>` above stays a sibling so it keeps its `banner` role. */}
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {/* Screen 2: skeleton cards shaped like the final layout. */}
         {phase === 'loading' ? <ThreadListSkeleton /> : null}
 
@@ -166,7 +186,7 @@ export function DriverThreadList() {
             ) : null}
           </>
         ) : null}
-      </div>
+      </main>
     </div>
   )
 }

@@ -1,15 +1,18 @@
 import { ChevronLeft } from 'lucide-react'
 import { useAtomValue } from 'jotai'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { useCountdown } from '@/shared/lib/countdown'
 import { copy } from '../lib/copy'
+import { heldStateEnabled } from '../lib/flags'
 import { onlineAtom, quickRepliesAtom, threadsAtom } from '../lib/store'
+import { TTL_MS } from '../lib/use-promise-countdown'
 import { useDriverTurn } from '../lib/use-driver-turn'
 import { Composer } from '../components/composer'
 import { StateLine } from '../components/state-line'
 import { Transcript } from '../components/transcript'
-import type { DriverOption } from '../lib/types'
+import type { DriverHold, DriverOption } from '../lib/types'
 
 /**
  * Screens 4, 6, 7, 8, 10A, 10B, 11A–C, 12A/B, 16A, 17, 18, 19, 20, 21, 22A/B, 23A/B, 24,
@@ -50,12 +53,27 @@ export function DriverConversation() {
   const threads = useAtomValue(threadsAtom)
   const quickReplies = useAtomValue(quickRepliesAtom)
   const online = useAtomValue(onlineAtom)
-  const { messages, send, retry } = useDriverTurn(threadId)
+  const { messages, send, retry, hold, lapseHold } = useDriverTurn(threadId)
 
   const thread = useMemo(
     () => threads.find((t) => t.threadId === threadId),
     [threads, threadId],
   )
+
+  /**
+   * The header's promise, and **the live hold wins over the thread row**.
+   *
+   * Two writers describe the same shipment: `threadsAtom`, written once per `/driver/context` load,
+   * and `holdsByThreadAtom`, written inside a turn. Within a 90-second window the second is
+   * strictly newer, and preferring the older one is exactly how a driver ends up watching a stale
+   * "no promise" header while the assistant has just told them a slot is reserved for them.
+   *
+   * `heldStateEnabled` gates the *rendering*, not the state: with the flag off the header falls back
+   * to whatever the thread row says, which is the same fail-closed choice `option-card.tsx` makes.
+   */
+  const heldNow = heldStateEnabled ? hold : null
+  const state = heldNow ? ('HELD' as const) : (thread?.promiseState ?? null)
+  const expiresAt = heldNow ? heldNow.expiresAt : thread?.expiresAt
 
   const onSelectOption = (option: DriverOption) => {
     /**
@@ -98,15 +116,74 @@ export function DriverConversation() {
         {/* Row two. Hidden entirely when there is no active promise -- the header becomes one
             row rather than showing an empty one. */}
         <StateLine
-          state={thread?.promiseState ?? null}
-          expiresAt={thread?.expiresAt}
+          state={state}
+          expiresAt={expiresAt}
           operationalLine={thread?.operationalLine ?? undefined}
         />
       </header>
 
-      <Transcript messages={messages} onSelectOption={onSelectOption} onRetry={retry} />
+      {/* Screen 15's trigger. Mounted only while a hold is live, so its countdown subscription
+          exists for at most 90 seconds and unmounts the moment the hold resolves either way. */}
+      {heldNow ? <HoldLapseWatch hold={heldNow} onLapse={lapseHold} /> : null}
 
-      <Composer offline={!online} quickReplies={quickReplies} onSend={(text) => void send(text)} />
+      {/* `<main>` wrapping BOTH the transcript and the composer -- see the note in
+          `thread-list.tsx`. Measured 2026-08-31: the driver surface had no main landmark on any
+          screen. It carries the root's own flex classes so the transcript still grows and the
+          composer still pins to the bottom; verified by re-render, not by inspection. The
+          composer is inside `main` deliberately -- it is the primary content of this screen,
+          not chrome around it. */}
+      <main className="flex min-h-0 flex-1 flex-col">
+        <Transcript
+          messages={messages}
+          heldUntil={heldNow?.expiresAt}
+          onSelectOption={onSelectOption}
+          onRetry={retry}
+        />
+
+        <Composer offline={!online} quickReplies={quickReplies} onSend={(text) => void send(text)} />
+      </main>
     </div>
   )
+}
+
+/**
+ * Fires `onLapse` **once**, when the hold's server deadline passes.
+ *
+ * Renders nothing. It exists as a component rather than a hook inside `DriverConversation` for one
+ * reason worth stating: `useCountdown` subscribes to the shared 1 Hz tick, so calling it
+ * unconditionally in the screen would re-render the entire conversation every second for the ~99%
+ * of the time no hold exists. Mounting it only while a hold is live confines that to 90 seconds.
+ *
+ * **The deadline is the server's `expires_at`, read through the shared clock's measured offset**
+ * (`shared/lib/countdown.tsx`) -- never `Date.now()` against a locally-computed deadline. Two
+ * consequences that are the whole reason the offset exists: a phone whose clock is three minutes
+ * fast does not lapse a hold that is genuinely still live, and offline the tick **freezes**, so the
+ * reading holds at last-known rather than free-running and lapsing a hold this client can no longer
+ * reconcile. `edge-cases.md` section 10 requires exactly that behaviour.
+ *
+ * The client's lapse is a *display* decision, not a capacity one: the server refuses a lapsed
+ * `confirm_held_slot` on its own (`holds._locked_hold` carries `expires_at > :now`, and §0.8 forbids
+ * depending on the sweeper for correctness), so the worst case of a slow tick here is a card that
+ * looks live for an extra second, not a hold that can be double-committed.
+ */
+function HoldLapseWatch({
+  hold,
+  onLapse,
+}: {
+  hold: DriverHold
+  onLapse: (hold: DriverHold) => void
+}) {
+  const reading = useCountdown(hold.expiresAt, TTL_MS.HELD)
+  // Latched per hold id: a re-render inside the same second, or a second hold arriving later, must
+  // not re-fire the notice for one that already lapsed.
+  const fired = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!reading.expired || !reading.live) return
+    if (fired.current === hold.holdId) return
+    fired.current = hold.holdId
+    onLapse(hold)
+  }, [reading.expired, reading.live, hold, onLapse])
+
+  return null
 }

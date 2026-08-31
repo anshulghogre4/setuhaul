@@ -162,10 +162,37 @@ def assert_shipment_in_carrier_fleet(
 
 
 def assert_facility_write_scope(ctx: ExecutionContext, facility_id: str) -> None:
-    """Write gate for an action recorded against a facility (e.g. raising an escalation).
+    """Write gate for an *ops-portal* action recorded against a facility (e.g. an escalation).
 
     `is_admin`, not `has_global_read_scope`: this guards a mutation.
+
+    Deliberately unchanged by issue #79: `GATE_OFFICER` does **not** pass this gate. The gate
+    kiosk's own writes use `assert_gate_write_scope` below instead, so a new role could not
+    inherit escalation/takeover authority merely by being facility-scoped.
     """
     if ctx.is_admin or (ctx.is_operator and ctx.facility_id == facility_id):
+        return
+    raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
+
+
+def assert_gate_write_scope(ctx: ExecutionContext, facility_id: str) -> None:
+    """Write gate for the SS7.5.2 gate/yard check-in writes (issue #79, `FR-GATE-004..008`).
+
+    Same shape as `assert_facility_write_scope` plus `GATE_OFFICER`, and kept as a *separate*
+    function rather than a widened one on purpose. `assert_facility_write_scope` is shared by
+    escalation raise/resolve, thread takeover and the planner writes; widening it would have
+    granted the gate kiosk every one of those the moment the role existed -- the exact "silent
+    scope widening" this module's own docstring and `ExecutionContext.is_admin` both warn about.
+    Two functions, two blast radii.
+
+    `WAREHOUSE_PLANNER`/`FACILITY_MANAGER` still pass (via `is_operator`): the 2026-08-24 mapping
+    that let them work a kiosk is not being revoked here, only stopped from being the *only* way
+    in. A gate officer's reach is its own facility and nothing else -- `ADMIN` remains the single
+    cross-facility case, matching what `gate_yard_reads.resolve_facility_scope` already grants on
+    the read side, so read reach and write reach still agree by construction.
+    """
+    if ctx.is_admin:
+        return
+    if (ctx.is_operator or ctx.is_gate_officer) and ctx.facility_id == facility_id:
         return
     raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)

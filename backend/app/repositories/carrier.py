@@ -176,12 +176,88 @@ async def count_shipments_ever(session: AsyncSession, carrier_id: str) -> int:
     ).scalar_one()
 
 
+
+# --------------------------------------------------------------------------------------------
+# Issue #85: the D2 hold leg for both fleet reads.
+#
+# `promise_state` shipped as a bare alias of `appointments.appointment_status`, and #53's migration
+# deliberately does *not* add 'HELD' to `appointments_appointment_status_check` -- a hold is a
+# `dock_occupancy` row and nothing else (SOLUTION_DESIGN.md SS4: "Held is not booked: no
+# appointments row exists yet"). So a carrier could never see HELD however the flag was set, which
+# is exactly what `frontend/src/features/carrier/lib/flags.ts` predicted before this issue existed.
+#
+# Interpolated as a fragment rather than added as a new `text(...)` call on purpose: this
+# repository is guarded by `test_every_carrier_query_is_carrier_scoped`, which asserts a fixed
+# query count and a `:carrier_id` predicate on every one of them. A hold must never be a way to
+# read outside a carrier's fleet, so it is joined LATERAL *inside* the already-scoped statements
+# rather than fetched by a query of its own.
+#
+# `o.policy_version` is deliberately not selected: `components.md` SS3 forbids internal mechanics on
+# this surface and `test_carrier_sql_never_selects_internal_escalation_mechanics` enforces it.
+#
+# `expires_at > now()` -- SQL `now()`, not a bound parameter -- because these two reads take no
+# clock (nothing else in this repository does), and the database's own clock is the single
+# authority the sweeper and the `dock_occupancy_held_shape_check` also work against. SS0.8's lazy
+# expiry check is mandatory here: a carrier must not be shown "Held" for a hold that has lapsed.
+_HOLD_LATERAL_SQL = """
+                    LEFT JOIN LATERAL (
+                        SELECT o.occupancy_id, o.expires_at
+                        FROM public.dock_occupancy o
+                        WHERE o.shipment_id = s.shipment_id
+                          AND o.state = 'HELD'
+                          AND o.expires_at > now()
+                        ORDER BY o.expires_at DESC
+                        LIMIT 1
+                    ) hold ON TRUE
+"""
+
+# An active appointment outranks a live hold; a live hold outranks a non-active one (a carrier
+# whose driver cancelled and then re-held is HELD, not CANCELLED); otherwise the appointment
+# answers. Identical precedence to `services/driver_reads.resolve_promise_state`, expressed in SQL
+# because these two reads are pure projections with no Python assembly step to put it in.
+_PROMISE_STATE_SQL = """
+                           CASE
+                             WHEN appt.appointment_status IN
+                                  ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
+                               THEN appt.appointment_status
+                             WHEN hold.occupancy_id IS NOT NULL THEN 'HELD'
+                             ELSE appt.appointment_status
+                           END AS promise_state,
+                           CASE
+                             WHEN appt.appointment_status IN
+                                  ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
+                               THEN 'appointments'
+                             WHEN hold.occupancy_id IS NOT NULL THEN 'dock_occupancy_hold'
+                             WHEN appt.appointment_status IS NOT NULL THEN 'appointments'
+                           END AS promise_state_source,
+                           hold.occupancy_id::text AS hold_id,
+                           hold.expires_at AS hold_expires_at,
+"""
+
+# With the D2 flag off these resolve to the empty string, so both statements are byte-identical to
+# the ones that shipped. That is not tidiness: `dock_occupancy.state` does not exist until
+# `20260829134929_d2_held_state_dock_occupancy.sql` is applied, and PostgreSQL resolves column
+# references at parse time, so naming it on an unmigrated database fails the whole read with
+# `UndefinedColumn` rather than returning nothing.
+_LEGACY_PROMISE_STATE_SQL = """
+                           appt.appointment_status AS promise_state,
+"""
+
+
+def _hold_sql(include_holds: bool) -> tuple[str, str]:
+    """(promise-state projection, hold LATERAL) for the requested mode."""
+    if include_holds:
+        return _PROMISE_STATE_SQL.strip("\n"), _HOLD_LATERAL_SQL.strip("\n")
+    return _LEGACY_PROMISE_STATE_SQL.strip("\n"), ""
+
+
 async def list_fleet_shipments(
     session: AsyncSession,
     carrier_id: str,
     *,
-    appointment_status: str | None = None,
+    promise_state: str | None = None,
     only_with_open_exception: bool = False,
+    include_holds: bool = False,
 ) -> list[dict[str, Any]]:
     """This carrier's shipments across every facility they operate at (§7.5.6).
 
@@ -198,13 +274,55 @@ async def list_fleet_shipments(
     `has_open_exception` is computed in an inner select and filtered on in the outer one so the
     shared EXISTS fragment appears exactly once per statement; recomputing it in the WHERE clause
     would be a second identical scan for no benefit.
+
+    **`promise_state` filters the computed state, not the raw column, whenever holds are on
+    (issue #87).** The two are the same value for every *active* appointment status -- the CASE in
+    `_PROMISE_STATE_SQL` passes PENDING_CONFIRMATION/CONFIRMED/IN_PROGRESS straight through -- so
+    the only rows that move are the ones where they genuinely disagree: a shipment whose last
+    appointment was CANCELLED/EXPIRED but which currently holds a live `dock_occupancy` row reads
+    HELD, and therefore answers the HELD filter rather than the CANCELLED one. That is the whole
+    point of the issue: `appt.appointment_status` structurally cannot express HELD, because §4 is
+    explicit that a hold has no appointment row at all.
+
+    The filter moves from the inner select to the outer one to do that, which sounds like it
+    should change how many rows come back and does not: `LIMIT 200` has always been applied
+    *after* `outer_filter`, so both shapes return up to 200 *matching* rows rather than 200
+    scanned ones.
+
+    With `include_holds=False` the filter stays in the inner select against the raw column, on the
+    same `:appointment_status` bind name it always used, and the bound parameters are identical to
+    the ones that shipped. Nothing forces that: `_LEGACY_PROMISE_STATE_SQL` still aliases
+    `appt.appointment_status AS promise_state`, so an outer `t.promise_state` predicate would
+    compile and mean exactly the same thing with the flag off. It is deliberate anyway, because
+    the flag-off statement is the one that has to survive an *unmigrated* database, where
+    `dock_occupancy.state` does not exist and PostgreSQL resolves column references at parse time
+    -- a read that names it fails outright rather than degrading.
+
+    Precision about the word "byte-identical", which #85 used and this change checked rather than
+    inherited: diffed against `HEAD`'s statement on 2026-08-31 for all four filter combinations,
+    the flag-off SQL differs in exactly two places, **both introduced by #85 and both whitespace
+    only** -- `{promise_state_sql}` interpolates a fragment that carries its own leading indent, so
+    the projection line is over-indented, and `{hold_join}` interpolating the empty string leaves a
+    blank line. Whitespace outside string literals is insignificant to PostgreSQL's lexer, so
+    neither can change how the statement parses, plans or answers. The property that actually
+    protects an unmigrated database -- *this statement names no D2 column* -- holds exactly, and is
+    what the tests assert. #87 adds no third difference; that was verified the same way rather than
+    assumed.
     """
     inner_filter = ""
+    outer_conditions: list[str] = []
     params: dict[str, Any] = {"carrier_id": carrier_id, **_EXCEPTION_STATUS_PARAMS}
-    if appointment_status:
-        inner_filter = " AND appt.appointment_status = :appointment_status"
-        params["appointment_status"] = appointment_status
-    outer_filter = "WHERE t.has_open_exception" if only_with_open_exception else ""
+    if promise_state:
+        if include_holds:
+            outer_conditions.append("t.promise_state = :promise_state")
+            params["promise_state"] = promise_state
+        else:
+            inner_filter = " AND appt.appointment_status = :appointment_status"
+            params["appointment_status"] = promise_state
+    if only_with_open_exception:
+        outer_conditions.append("t.has_open_exception")
+    outer_filter = f"WHERE {' AND '.join(outer_conditions)}" if outer_conditions else ""
+    promise_state_sql, hold_join = _hold_sql(include_holds)
 
     rows = (
         await session.execute(
@@ -222,7 +340,7 @@ async def list_fleet_shipments(
                            f.facility_id,
                            f.facility_name,
                            f.city AS facility_city,
-                           appt.appointment_status AS promise_state,
+                           {promise_state_sql}
                            appt.slot_start_ts,
                            appt.slot_end_ts,
                            appt.dock_code,
@@ -239,6 +357,7 @@ async def list_fleet_shipments(
                         ORDER BY a.updated_at DESC NULLS LAST
                         LIMIT 1
                     ) appt ON TRUE
+                    {hold_join}
                     WHERE s.carrier_id = :carrier_id
                       {inner_filter}
                 ) t
@@ -254,7 +373,7 @@ async def list_fleet_shipments(
 
 
 async def get_fleet_shipment(
-    session: AsyncSession, carrier_id: str, shipment_id: str
+    session: AsyncSession, carrier_id: str, shipment_id: str, *, include_holds: bool = False
 ) -> dict[str, Any] | None:
     """One shipment, scoped in SQL -- a cross-carrier id simply produces no row.
 
@@ -266,10 +385,11 @@ async def get_fleet_shipment(
     both land here as `None`, the two are indistinguishable to the client, as that same section
     demands ("never confirms or denies whether the shipment exists at all outside their scope").
     """
+    promise_state_sql, hold_join = _hold_sql(include_holds)
     row = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT s.shipment_id, s.order_reference, s.carrier_id, s.driver_id,
                        s.origin_name, s.origin_city, s.customer_name, s.product_category,
                        s.load_weight_kg, s.pallet_count, s.required_dock_type,
@@ -280,7 +400,8 @@ async def get_fleet_shipment(
                        d.driver_name,
                        v.registration_number, v.vehicle_type_code,
                        f.facility_id, f.facility_name, f.city AS facility_city,
-                       appt.appointment_id, appt.appointment_status AS promise_state,
+                       appt.appointment_id,
+                       {promise_state_sql}
                        appt.slot_start_ts, appt.slot_end_ts, appt.dock_code,
                        appt.booked_at, appt.confirmed_at
                 FROM public.shipments s
@@ -297,6 +418,7 @@ async def get_fleet_shipment(
                     ORDER BY a.updated_at DESC NULLS LAST
                     LIMIT 1
                 ) appt ON TRUE
+                {hold_join}
                 WHERE s.shipment_id = :shipment_id
                   AND s.carrier_id = :carrier_id
                 """

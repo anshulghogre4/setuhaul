@@ -57,9 +57,10 @@ import type { DriverMessage } from '../lib/types'
  * live-hold plates below exist so those four are observable, and the spec is explicit that they
  * are **regression tests, not one-off fixes**.
  *
- * The `HELD` plates render only when `heldStateEnabled` is on (issue #53). With the flag off they
- * render a plain statement of why they are absent, so the gallery does not silently look
- * complete.
+ * The `HELD` plates render only when `heldStateEnabled` is on. **They render now** -- the flag went
+ * on 2026-08-31, once the D2 migration was applied, `TWO_PHASE_HOLD_ENABLED` defaulted true and the
+ * consuming reads (#83/#86) landed. The gated branch is kept rather than deleted so a revert is one
+ * line, and so the plates still state why they are absent instead of silently looking complete.
  */
 export function DriverStatesGallery() {
   const { choice, setChoice, resolved } = useTheme()
@@ -73,11 +74,13 @@ export function DriverStatesGallery() {
           28 screens, rendered from the built components
         </h1>
         <p className="mt-2 max-w-[70ch] text-body text-muted-foreground">
-          24 ship now. Four are gated behind <code className="font-mono">heldStateEnabled</code>{' '}
-          (issue #53 — the <code className="font-mono">HELD</code> promise state has no backend:
-          no schema value, no <code className="font-mono">confirm_held_slot</code>, and the M8
-          sweeper's HELD leg returns <code className="font-mono">supported: false</code>). The
-          live-hold plates run a real countdown; watch one for a minute rather than reading it.
+          All 28 render. The four <code className="font-mono">HELD</code> plates sit behind{' '}
+          <code className="font-mono">heldStateEnabled</code>, which went on 2026-08-31: the D2
+          migration is applied, <code className="font-mono">TWO_PHASE_HOLD_ENABLED</code> defaults
+          true, <code className="font-mono">confirm_held_slot</code> is bound, and the driver reads
+          return a real <code className="font-mono">current_hold</code> with a server-computed
+          deadline. The live-hold plates run a real countdown; watch one for a minute rather than
+          reading it.
         </p>
         <div className="mt-4 flex items-center gap-3">
           <Button variant="neutral" onClick={() => setChoice(resolved === 'dark' ? 'light' : 'dark')}>
@@ -218,10 +221,16 @@ export function DriverStatesGallery() {
             <OptionCard option={OPTIONS[0]} state="default" />
             <OptionCard option={OPTIONS[0]} state="committing" />
             {heldStateEnabled ? (
-              <OptionCard option={OPTIONS[1]} state="held" heldUntil={HELD_MID} />
+              <>
+                <OptionCard option={OPTIONS[1]} state="held" heldUntil={HELD_MID} />
+                {/* Screen 15's card treatment, in the matrix beside the state it comes from: the
+                    dashed amber is gone, the lines are struck, and the status line names the
+                    reason -- distinguishable from `lost`, which is a different fact. */}
+                <OptionCard option={OPTIONS[1]} state="lapsed" />
+              </>
             ) : (
               <p className="text-body text-muted-foreground">
-                Held column gated — issue #53.
+                Held and lapsed columns gated behind heldStateEnabled.
               </p>
             )}
             <OptionCard option={OPTIONS[1]} state="lost" />
@@ -289,7 +298,10 @@ export function DriverStatesGallery() {
         <Plate n="15" title="Hold lapsed — card mutates IN PLACE">
           {heldStateEnabled ? (
             <div className="p-4">
-              <OptionCard option={OPTIONS[1]} state="withdrawn" />
+              {/* `lapsed`, not `withdrawn`. They looked alike before this state existed, and the
+                  difference is the whole signal: "No longer available" describes a dock going out
+                  of service, "Hold lapsed" describes 90 seconds passing. */}
+              <OptionCard option={OPTIONS[1]} state="lapsed" />
               <Notice
                 body={copy.holdLapsed('Dock D1 · 13:00–14:15')}
                 action={copy.findOptionsAgainAction}

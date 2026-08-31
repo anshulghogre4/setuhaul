@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 
 import { BoardSkeleton } from '../components/board-skeleton'
+import { BoardPlate } from '../components/dock-board'
 import { NarrowViewportGuard } from '../components/narrow-viewport'
 import { NotYetAvailable } from '../components/not-yet-available'
 import {
@@ -9,8 +10,12 @@ import {
   QueueSearchEmpty,
   QueueSkeleton,
 } from '../components/queue-region-states'
+import { QueueRow } from '../components/queue-row'
 import { ReviewProposalButton } from '../components/review-proposal-button'
 import { Maintenance, NotFound, RegionError } from '@/components/states/region-states'
+import { BOARD, BOARD_EMPTY, OUTCOME_SKIPPED, ROW_CLEAN, ROW_CONFLICTED, ROW_DERIVED } from './fixtures'
+import type { PlannerRefusal } from '../lib/refusals'
+import type { BulkConfirmOutcome, PlannerQueueRow } from '../lib/types'
 
 /**
  * Every planner-dock-board screen `implementation-spec.md` section 3 marks 🟢 or 🟡, rendered by
@@ -28,17 +33,74 @@ export function PlannerStatesGallery() {
     <div className="min-h-dvh bg-background p-6 text-foreground" data-density="compact">
       <header className="mb-8">
         <p className="text-label text-primary uppercase">SetuHaul · planner dock board (E5.3)</p>
-        <h1 className="mt-2 text-display text-balance">10 states ship now, 17 are honestly stubbed</h1>
+        <h1 className="mt-2 text-display text-balance">
+          The queue is live; the board and the hold are not
+        </h1>
         <p className="mt-2 max-w-[80ch] text-body text-muted-foreground">
-          Every write path on this surface starts from a queue row `get_planner_queue` (issue #60)
-          would produce, and that tool does not exist -- only the block-dock group
-          (`block_dock`/`end_dock_block`/`get_dock_block_impact`, all fully shipped in E3.6) has a
-          complete backend. See `features/planner/lib/flags.ts` and `planner-console.tsx`'s own
-          header comment for the full gap list (issues #60-66, #53, #49, #59).
+          Updated 2026-08-29: `get_planner_queue` and the four write tools that start from one of
+          its rows all shipped, so the Queue tab, its five affordances, the refusal taxonomy and
+          bulk confirm are real. What is still stubbed is stubbed for a reason no UI can fix --
+          `dock_occupancy.state` does not exist in any live database (issue #53, migration
+          unapplied), `hold_for_information` is unbuilt (#64), the Sequencer is entirely unbuilt
+          (#49), and there is no live-update transport for the "N new" pill (#59). See
+          `features/planner/lib/flags.ts` for what each flag now gates and what was verified before
+          it moved.
         </p>
       </header>
 
       <div className="flex flex-col gap-10">
+        <Plate n="1" title="The 30-second row — clean: no displacement, exact dock, inside the safe batch">
+          <RowPlate rows={[ROW_CLEAN, ROW_DERIVED]} />
+        </Plate>
+
+        <Plate
+          n="1b"
+          title="Displacement + LOW ETA confidence — the sentence wraps, the warning never truncates"
+        >
+          <RowPlate rows={[ROW_CONFLICTED]} />
+        </Plate>
+
+        <Plate n="8a" title="ALREADY_ACTIONED — assertive, and the winning transition is named">
+          <RowPlate
+            rows={[ROW_CLEAN]}
+            refusal={{
+              kind: 'ALREADY_ACTIONED',
+              message:
+                'Cannot confirm this appointment: it is already EXPIRED. Reason recorded: D9 deadline passed.',
+            }}
+          />
+        </Plate>
+
+        <Plate n="8b" title="SNAPSHOT_STALE — deliberately quiet. Not a conflict, so it must not look like one">
+          <RowPlate
+            rows={[ROW_CLEAN]}
+            refusal={{
+              kind: 'SNAPSHOT_STALE',
+              message: 'The queue row changed since it was rendered; re-read it before deciding again.',
+              drift: null,
+            }}
+          />
+        </Plate>
+
+        <Plate
+          n="8c"
+          title="DISPLACEMENT_DETECTED — the SERVER's conflict set replaces the row's, because they are not the same set"
+        >
+          <RowPlate
+            rows={[ROW_CLEAN]}
+            refusal={{
+              kind: 'DISPLACEMENT_DETECTED',
+              message:
+                'Cannot confirm: a conflict appeared on this dock interval since the row was rendered (APT-OTHER-77, DEVT002 dock block).',
+              conflicts: [],
+            }}
+          />
+        </Plate>
+
+        <Plate n="9" title="Bulk confirm — a skipped row stays visible with its failing predicates named">
+          <RowPlate rows={[ROW_CONFLICTED]} outcome={OUTCOME_SKIPPED} />
+        </Plate>
+
         <Plate n="26a" title="Queue empty — caught up">
           <div className="w-[420px] border border-border">
             <QueueEmptyCaughtUp />
@@ -101,26 +163,64 @@ export function PlannerStatesGallery() {
           <ReviewProposalButton />
         </Plate>
 
-        <Note n="1, 6, 8, 9, 10, 11" title="Queue at rest, refusals, bulk confirm — blocked">
-          Needs `get_planner_queue` (issue #60) and `snapshot_hash` (#61)/the refusal taxonomy
-          (#62)/`bulk_confirm` (#65). The live `/planner` Queue tab renders this same honest note
-          via `NotYetAvailable` rather than a fixture queue.
+        <Note n="12, 13" title="Reject dialog — built, and reachable on /planner">
+          Not duplicated here as a fixture: it needs a live row to reject, and the preview block's
+          whole point is that it renders the exact words the driver receives for the reason code
+          actually chosen. Open it from a queue row on `/planner` (`R`, or the ✕ affordance). Built
+          against `allocation.REJECTION_REASON_CODES` — the field is `reason_code`, not the older
+          prose's `rejection_reason`, and the 422 naming the supported set is handled rather than
+          assumed unreachable.
         </Note>
 
-        <Note n="2, 3, 22, 24, 25" title="Board at rest, counter-offer picker — blocked">
-          `dock_occupancy` has no `state` column (issue #53, same migration gap that blocks the
-          HELD promise-state) and `counter_offer` does not exist (issue #63).
+        <Note n="3, 24, 25" title="Counter-offer — built as an interim form, not the board picker">
+          `counter_offer` shipped (#63) and is reachable from a queue row (`O`), but U103's
+          dock/time grid needs `dock_occupancy.state` — a column no live database has (#53,
+          migration unapplied). The interim dialog offers the intervals Stage 1 says are feasible
+          for that shipment, which is the same eligibility the dimmed lanes were going to express;
+          what is lost is the spatial context. Flagged in `lib/flags.ts`, not treated as the
+          finished design.
         </Note>
 
-        <Note n="7, 14, 15" title="Hold for information — blocked, needs a migration">
-          `public.appointments` has no deadline/expires_at column (`expiry.py:77-81`'s own
-          comment) — issue #64.
+        <Plate n="2" title="Board at rest — every bar treatment components.md §3 can produce">
+          <div className="w-[860px]">
+            {/* Rendered from a fixture through the SAME component the live Board tab mounts, so a
+                plate cannot certify markup the route does not use. Worth looking at rather than
+                reading: D3's HELD bar is 2px DASHED (the shape channel that survives greyscale and
+                glare), D2's IN_PROGRESS carries a truck icon rather than a fifth hue, D2's bar
+                clamps to the left edge because its unload began before the horizon, D4 is EMPTY --
+                its only occupancy is COMPLETED, which renders as open space and never a ghost bar --
+                and D5 carries the outage hatch, which shares no encoding with any booking. */}
+            <BoardPlate board={BOARD} />
+          </div>
+        </Plate>
+
+        <Plate n="22" title="Board — empty horizon (the lanes stay, never a blank panel)">
+          <div className="w-[860px]">
+            <BoardPlate board={BOARD_EMPTY} />
+          </div>
+        </Plate>
+
+        <Note n="7, 14, 15" title="Hold for information — still blocked, and it needs a tool">
+          The `appointments.expires_at` column the original blocker named now exists in the #53
+          migration, but that migration is applied to no database and `hold_for_information`
+          itself is unbuilt (#64). Two gates, not one — the Hold affordance renders Inactive with
+          that explanation rather than as a button with nowhere to go.
         </Note>
 
-        <Note n="12, 13" title="Reject dialog — blocked on a live row to reject">
-          `reject_appointment` is real and works, but every entry point to it is a queue row
-          (issue #60). Its `rejection_reason` enum is also not server-enforced yet (issue #66) —
-          a client-side courtesy once #60 lands, not a contract.
+        <Note n="—" title="Escalate — no tool in section 7.5.1's shape">
+          `escalate_request(appointment_id, reason, owner?)` does not exist. The shipped
+          `POST /operations/escalate` needs an `escalation_type` from a fixed nine-value
+          vocabulary with no value meaning "a planner needs help deciding this request", and it
+          would not remove the row from this queue the way Flow 5 requires. Rendered Inactive with
+          that reason rather than wired to the nearest-looking endpoint.
+        </Note>
+
+        <Note n="11" title="Toasts — built, minus the undo affordance">
+          U41's 5-second undo depends on the driver notification being queued and dispatched only
+          when the window closes, with undo cancelling it silently. No server-side mechanism does
+          that, so a button claiming to undo a committed confirm would be a lie. The confirm,
+          reject, counter-offer and partial-batch toasts are all real; the undo bar is
+          deliberately absent.
         </Note>
 
         <Note n="19, 20, 21" title="Sequencer proposal diff — blocked">
@@ -128,6 +228,60 @@ export function PlannerStatesGallery() {
           E5.2's prompt 14 is the ops half of.
         </Note>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Renders real `QueueRow`s inside a real table with the live colgroup, so a plate exercises the
+ * component the route uses rather than a look-alike. Interaction is inert here on purpose -- the
+ * handlers are no-ops, because a gallery must never be able to issue a write.
+ */
+function RowPlate({
+  rows,
+  refusal,
+  outcome,
+}: {
+  rows: PlannerQueueRow[]
+  refusal?: PlannerRefusal
+  outcome?: BulkConfirmOutcome
+}) {
+  const [focused, setFocused] = useState<string | null>(null)
+  return (
+    <div className="w-[1180px] overflow-auto border border-border">
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col style={{ width: '48px' }} />
+          <col style={{ width: '164px' }} />
+          <col style={{ width: '210px' }} />
+          <col style={{ width: '190px' }} />
+          <col style={{ width: '250px' }} />
+          <col style={{ width: '72px' }} />
+          <col style={{ width: '80px' }} />
+          <col style={{ width: '66px' }} />
+          <col style={{ width: '160px' }} />
+        </colgroup>
+        <tbody>
+          {rows.map((row) => (
+            <QueueRow
+              key={row.appointment_id}
+              row={row}
+              ttlTotalMs={15 * 60_000}
+              focused={focused === row.appointment_id}
+              selected={false}
+              busy={false}
+              selectionCaveat={null}
+              refusal={refusal ?? null}
+              outcome={outcome ?? null}
+              onFocusRow={() => setFocused(row.appointment_id)}
+              onToggleSelect={() => {}}
+              onConfirm={() => {}}
+              onReject={() => {}}
+              onCounterOffer={() => {}}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

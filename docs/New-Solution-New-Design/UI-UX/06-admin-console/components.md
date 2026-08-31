@@ -42,18 +42,54 @@ type**, effective-from/to (date + optional time-of-day range).
 ### Rules
 - **The value field set is entirely driven by `rule_type`** — this is the component-level enforcement of
   the typed-registry decision (§0.9 issue 10): there is no free-text "value" field that could hold anything.
-  A `DOCK_PIN` rule's editor shows a dock picker and a cargo-type picker; an `EARLY_LIMIT` rule's editor
-  shows one numeric minutes field; the component simply doesn't render fields that don't apply to the
-  selected type.
-- **Effective window defaults to "Always"** (no time bound) and only exposes the intraday
-  from/to-time-of-day fields when the admin explicitly narrows it — most rules genuinely are always-on
-  (RULE003's dock pin, for instance), and forcing every rule creation through a time-bound picker would
-  make the common case slower for no benefit.
+  A `LAST_NEW_START_TIME` rule's editor shows one time field; a `CHECKIN_EARLY_LIMIT_MIN` or
+  `NO_SHOW_GRACE_MIN` rule's editor shows one numeric minutes field; a `HEAVY_DOCK_REQUIRED_KG` rule's
+  shows one kg threshold; a `REEFER_DOCK_REQUIRED` rule's is a single boolean. The component simply doesn't
+  render fields that don't apply to the selected type.
+
+  > **Registry corrected 2026-08-29 (A-G2, issue #70)** — see `screens.md` §3 for the full five-value table
+  > and its provenance. Two consequences land specifically on *this* component, and they are why Screen 6
+  > stays blocked after the correction rather than being unblocked by it:
+  >
+  > - **The `DOCK_PIN` example above was this rule's whole demonstration, and `DOCK_PIN` does not exist.**
+  >   It was the only registry entry needing *two* value fields (dock picker + cargo-type picker) — the
+  >   case that makes "the field set is driven by the type" visibly worth building rather than a one-field
+  >   substitution. Every live type takes exactly one value. The rule below is unchanged and still correct;
+  >   it has simply lost its most persuasive example, and no live analog replaces it.
+  > - **Three of the five live types have no designed field set anywhere.** `NO_SHOW_GRACE_MIN` and
+  >   `REEFER_DOCK_REQUIRED` appear in no artboard at all; `HEAVY_DOCK_REQUIRED_KG`'s is only inferable
+  >   from the stale `WEIGHT_LIMIT` frame. Shipping a generic free-text value field for them instead would
+  >   violate the one rule this section states outright, so the editor waits on design, not on backend.
+- **Effective window defaults to "Always"** (no time bound) and only exposes the from/to fields when the
+  admin explicitly narrows it — most rules genuinely are always-on, and forcing every rule creation through
+  a time-bound picker would make the common case slower for no benefit.
+
+  > **Corrected 2026-08-29 (A-G3, issue #71).** This bullet previously offered "intraday
+  > from/to-time-of-day fields" implying a *recurring* daily window. The engine supports a single
+  > **absolute** window only (hour-precise, so "from 2026-08-10 18:00 until 2026-08-11 06:00" works);
+  > it has no day-of-week or repeat concept, and a recurring pattern saved into the column would be
+  > enforced as **always on**, not as written. So this control is a from/to *datetime* pair, not a
+  > weekday-plus-hours picker. See `screens.md` §3 for the reasoning and the owner fork.
 - **Editing a rule with active dependent appointments requires the High-tier confirmation** — same pattern
-  as user removal, since narrowing a rule (e.g. tightening `NEW_START_CUTOFF`) could retroactively make an
-  already-confirmed appointment non-compliant. The confirmation names what's affected, mirroring
+  as user removal, since narrowing a rule (e.g. tightening `LAST_NEW_START_TIME`) could retroactively make
+  an already-confirmed appointment non-compliant. The confirmation names what's affected, mirroring
   `03-planner-dock-board/`'s block-dock form's own "shows what it's about to strand before committing"
   discipline.
+
+  > **Backed by a real read as of 2026-08-29 (A-G6, issue #74).** `GET /api/v1/admin/facility-rules/
+  > {rule_id}/impact` takes `update_facility_rule`'s own arguments (omitted meaning unchanged) and returns
+  > the affected set *before* the edit commits. Three details this component should render as given rather
+  > than reinterpret:
+  >
+  > - It separates **`affected_count`** (appointments this edit would *newly* break) from
+  >   **`already_non_compliant_count`** (ones the current rule forbids anyway). Only the first is a
+  >   consequence of pressing Save; conflating them overstates the edit.
+  > - **`evaluable: false`** is a real answer, not an error. Two of the five live rule types
+  >   (`CHECKIN_EARLY_LIMIT_MIN`, `NO_SHOW_GRACE_MIN`) are not enforced by the feasibility engine at all,
+  >   so no appointment *can* be made retroactively non-compliant by editing them. Render the returned
+  >   `note`, not a bare "0 affected", which would read as "checked, nothing found".
+  > - Each affected row carries the **engine's own violation message** as `reason`, so the dialog cannot
+  >   describe the breach differently from the check that will actually reject future bookings.
 
 ---
 

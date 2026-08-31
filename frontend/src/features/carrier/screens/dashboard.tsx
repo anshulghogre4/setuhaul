@@ -19,7 +19,7 @@ import {
 } from '../components/shipments-table'
 import { StatusFilter } from '../components/status-filter'
 import { formatRelative, formatTime } from '../lib/format'
-import { carrierShownHeldEnabled } from '../lib/flags'
+import { carrierHeldEnabled } from '../lib/flags'
 import type { FleetDashboardState } from '../lib/use-fleet-dashboard'
 
 /**
@@ -133,7 +133,7 @@ export function CarrierDashboard({
             <StatusFilter
               value={state.statusFilter}
               onChange={state.setStatusFilter}
-              shownHeldEnabled={carrierShownHeldEnabled}
+              heldEnabled={carrierHeldEnabled}
             />
           )
         }
@@ -145,7 +145,7 @@ export function CarrierDashboard({
         {shipments && shipments.items.length > 0 ? (
           <ShipmentsTable
             rows={shipments.items}
-            shownHeldEnabled={carrierShownHeldEnabled}
+            heldEnabled={carrierHeldEnabled}
             dimmed={state.showLoading && !state.firstLoad}
           />
         ) : state.shipments.failed ? (

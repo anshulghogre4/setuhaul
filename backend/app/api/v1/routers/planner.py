@@ -23,11 +23,13 @@ from app.core.envelope import ok
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
 from app.services.planner_service import (
+    BOARD_HORIZON_HOURS,
     DEFAULT_QUEUE_LIMIT,
     MAX_QUEUE_LIMIT,
     block_dock,
     end_dock_block,
     get_dock_block_impact,
+    get_dock_board,
     get_planner_queue,
 )
 
@@ -72,6 +74,31 @@ async def planner_queue(
     """
     result = await get_planner_queue(
         session, ctx, facility_id=facility_id, horizon_hours=horizon_hours, limit=limit
+    )
+    return ok(result.model_dump(), get_request_id(request))
+
+
+@router.get("/board")
+async def planner_board(
+    request: Request,
+    ctx: PlannerCtx,
+    session: DbSession,
+    facility_id: Annotated[str | None, Query()] = None,
+    horizon_hours: Annotated[int | None, Query(ge=1, le=BOARD_HORIZON_HOURS)] = None,
+) -> dict[str, Any]:
+    """The Board tab's at-rest occupancy view (`03-planner-dock-board/screens.md` section 3).
+
+    Same scope contract as `/queue` above: `facility_id` is accepted, passed through
+    `repositories.scope.resolve_facility_scope`, and can only narrow a global-read persona or match
+    an operator's own facility (M15/`NFR-019`).
+
+    `horizon_hours` is bounded at `BOARD_HORIZON_HOURS` by the query validator rather than only in
+    the service, so a wider value is a 422 at the boundary instead of being silently clamped. The
+    axis is *"four hours, or until closing time, whichever comes sooner"* by design, and a caller
+    who could widen it would be reading a different board from the one the design specifies.
+    """
+    result = await get_dock_board(
+        session, ctx, facility_id=facility_id, horizon_hours=horizon_hours
     )
     return ok(result.model_dump(), get_request_id(request))
 

@@ -4,10 +4,28 @@
  * Every field here is copied from a verified backend response, not invented. Source for each
  * block is named at the point it is used; the two authoritative reads are
  * `backend/app/services/escalation_service.py::get_exception_queue` (the queue item shape) and
- * the six mutation functions in the same file (the action-result `code` unions).
+ * the mutation functions in the same file plus
+ * `backend/app/services/thread_message_service.py` (the action-result `code` unions).
  */
 
 export type EscalationStatus = 'OPEN' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED' | 'CANCELLED'
+
+/** `chat_threads.thread_status`'s CHECK constraint --
+ *  `supabase/migrations/20260805201923_setuhaul_baseline.sql:161-162`. Copied in full rather than
+ *  narrowed to the two values this surface acts on, so an unexpected one renders as itself
+ *  instead of falling through a `never`. */
+export type ThreadStatus =
+  | 'OPEN'
+  | 'WAITING_FOR_DRIVER'
+  | 'WAITING_FOR_WAREHOUSE'
+  | 'RESOLVED'
+  | 'ESCALATED'
+  | 'CLOSED'
+
+/** `chat_messages.sender_type`'s CHECK constraint (same baseline migration, lines 269-270).
+ *  U47's three visual tiers are DRIVER / AGENT / (OPERATIONS|WAREHOUSE); SYSTEM renders as a
+ *  centred divider rather than a bubble -- see `thread-transcript.tsx`. */
+export type ChatSenderType = 'DRIVER' | 'AGENT' | 'OPERATIONS' | 'WAREHOUSE' | 'SYSTEM'
 
 /** SS7.4's nine canonical reasons -- `escalation_service.py` `ESCALATION_TYPES`. */
 export type EscalationReason =
@@ -62,6 +80,13 @@ export type EscalationQueueItem = {
   sla_remaining_min: number
   /** Populated only for `CAPACITY_EVENT_CASCADE` rows; `null` otherwise. */
   affected_shipments: AffectedAppointment[] | null
+  /** E5.2, issues #55/#58: the shipment's most recently opened chat thread, added to the queue
+   *  read via `LEFT JOIN LATERAL` (`escalation_service.py::get_exception_queue`). **`null` is a
+   *  real, expected value** -- a `NOTIFICATION_FAILED` escalation may legitimately have no thread
+   *  at all -- and both `take_over_thread` and `post_operations_message` need this id, so a null
+   *  here is what makes takeover genuinely unavailable rather than merely unwired. */
+  thread_id: string | null
+  thread_status: ThreadStatus | null
 }
 
 export type EscalationQueueResponse = {
@@ -103,18 +128,115 @@ export type ResolveCancelResult = {
   resolution_note?: string | null
 }
 
-export type TakeOverResult = {
-  code: 'TAKEN_OVER' | 'ALREADY_TAKEN_OVER'
-  thread_id: string
+/**
+ * `POST /operations/escalations/{id}/start` -- `escalation_service.py::start_escalation_work`
+ * (issue #56). The write that makes `escalation_status = 'IN_PROGRESS'` reachable at all, and
+ * therefore the recovery path for a hand-back the backend now refuses (see `HandBackResult`).
+ *
+ * All five outcomes are HTTP **200** typed results, not exceptions -- so the console branches on
+ * `code` rather than parsing an error string out of a thrown `Error`.
+ */
+export type StartWorkResult = {
+  code: 'IN_PROGRESS' | 'ALREADY_IN_PROGRESS' | 'NOT_ACKNOWLEDGED' | 'NOT_OWNER' | 'ALREADY_ACTIONED'
   escalation_id: string
-  thread_status: 'ESCALATED'
+  shipment_id?: string
+  escalation_status?: EscalationStatus
+  owner_user_id?: string | null
+  stepper_position?: 0 | 1 | 2 | 3
+  idempotent_replay?: boolean
 }
 
+/**
+ * `POST /operations/threads/{id}/take-over` -- `escalation_service.py::take_over_thread`.
+ *
+ * **`NOT_ACKNOWLEDGED` is new in E5.2 (issue #56)** and it fixes this console's action order: the
+ * endpoint now refuses a takeover whose escalation is not `ACKNOWLEDGED`/`IN_PROGRESS` **and
+ * owned** -- exactly the order `flows-and-states.md` Flow 1 already prescribes (step 3
+ * acknowledge, step 4 take over). `delivered`/`delivery_reason` say whether the driver-visible
+ * join divider actually reached the driver's live feed; see `lib/delivery.ts`.
+ */
+export type TakeOverResult = {
+  code: 'TAKEN_OVER' | 'ALREADY_TAKEN_OVER' | 'NOT_ACKNOWLEDGED'
+  thread_id: string
+  escalation_id: string
+  thread_status?: ThreadStatus
+  escalation_status?: EscalationStatus | null
+  owner_user_id?: string | null
+  stepper_position?: 0 | 1 | 2 | 3 | null
+  delivered?: boolean
+  delivery_reason?: string | null
+  idempotent_replay?: boolean
+}
+
+/**
+ * `POST /operations/threads/{id}/hand-back` -- `escalation_service.py::hand_back_thread`.
+ *
+ * **`NOT_IN_PROGRESS` has two distinct causes and the console must tell them apart**, because one
+ * is a no-op and the other is recoverable in a single call:
+ *
+ *  - `thread_status !== 'ESCALATED'` -- already handed back. Nothing to do but refresh.
+ *  - `thread_status === 'ESCALATED'` -- still taken over, but no `IN_PROGRESS` escalation backs
+ *    it. This is the live-data case `hand_back_thread`'s own docstring calls out: a thread taken
+ *    over *before* issue #56 tightened the guard sits on an `ACKNOWLEDGED` escalation. Recovery is
+ *    `start_escalation_work` then retry -- see `takeover-control.tsx`.
+ */
 export type HandBackResult = {
   code: 'HANDED_BACK' | 'NOT_IN_PROGRESS'
   thread_id: string
   escalation_id?: string
-  thread_status: 'OPEN' | 'ESCALATED'
+  thread_status: ThreadStatus
+  delivered?: boolean
+  delivery_reason?: string | null
+}
+
+/** One row of `GET /operations/threads/{id}/messages` -- `chat_threads.list_thread_messages`'s
+ *  exact SELECT list. `sender_name` is a `LEFT JOIN` on `users.full_name` and is genuinely `null`
+ *  for a DRIVER/AGENT row whose `sender_reference` is not a `users.user_id`. */
+export type ThreadMessage = {
+  chat_message_id: string
+  thread_id: string
+  sender_type: ChatSenderType
+  sender_reference: string | null
+  message_text: string
+  message_ts: string
+  sender_name: string | null
+}
+
+export type ThreadMessagesResponse = {
+  as_of: string
+  source: string
+  thread_id: string
+  thread_status: ThreadStatus
+  shipment_id: string | null
+  driver_id: string | null
+  facility_id: string | null
+  messages: ThreadMessage[]
+  freshness: string
+}
+
+/**
+ * `POST /operations/threads/{id}/messages` -- `thread_message_service.py::post_operations_message`
+ * (issue #55). The coordinator reply path; the one thing the composer exists to do.
+ *
+ * **`delivered` and `delivery_reason` are not optional decoration.** Postgres `chat_messages` is
+ * the write of record and Redis is a projection of it; when the projection fails the row is still
+ * durable but **will never reach the driver's feed, even after Redis recovers, because nothing
+ * back-fills it** (that module's own docstring states this as a known residual). Rendering
+ * `POSTED` as an unqualified success would tell a coordinator their message reached a driver when
+ * it did not.
+ */
+export type PostMessageResult = {
+  code: 'POSTED' | 'NOT_TAKEN_OVER'
+  thread_id: string
+  chat_message_id?: string
+  sender_type?: ChatSenderType
+  sender_name?: string | null
+  message_text?: string
+  message_ts?: string
+  thread_status?: ThreadStatus
+  delivered: boolean
+  delivery_reason: string | null
+  idempotent_replay?: boolean
 }
 
 /** Flow 6 -- resolve_escalation / cancel_escalation's `reason_code`
@@ -123,3 +245,75 @@ export const RESOLVE_REASON_CODES = ['ISSUE_FIXED'] as const
 export const CANCEL_REASON_CODES = ['SHIPMENT_CANCELLED', 'DUPLICATE', 'CREATED_IN_ERROR'] as const
 export type ResolveReasonCode = (typeof RESOLVE_REASON_CODES)[number]
 export type CancelReasonCode = (typeof CANCEL_REASON_CODES)[number]
+
+// ---------------------------------------------------------------------------------------------
+// Co-pilot resolution suggestion (issue #57)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `GET /api/v1/operations/escalations/{id}/suggestion` --
+ * `backend/app/services/ops_copilot.py::build_suggestion`.
+ *
+ * **Scope, decided by the owner 2026-08-31 and narrower than the design docs describe.** The
+ * co-pilot suggests *which resolution action to take and why*. It does not summarise the thread
+ * and it does not draft the coordinator's reply -- so `components.md` section 3's three
+ * capabilities and `REQUIREMENTS.md`'s `FR-OPS-003` are not what this contract serves. Nothing in
+ * this response ever carries driver-facing text; the only free-form strings are `rationale` and
+ * the evidence labels, both of which are about the escalation, never addressed to the driver.
+ */
+export type SuggestionActionStatus = 'recommended' | 'available' | 'suppressed' | 'unavailable'
+
+/** One §7.5.5 tool name, plus the two E5.2 added (`start_escalation_work` #56,
+ *  `post_operations_message` #55). Spelled exactly as the backend spells them. */
+export type SuggestionActionName =
+  | 'acknowledge_escalation'
+  | 'start_escalation_work'
+  | 'reassign_escalation'
+  | 'take_over_thread'
+  | 'post_operations_message'
+  | 'hand_back_thread'
+  | 'resolve_escalation'
+  | 'cancel_escalation'
+  | 'request_sequencer_proposal'
+
+export type SuggestionAction = {
+  action: SuggestionActionName
+  label: string
+  status: SuggestionActionStatus
+  /** Why it is not available/recommended -- `NOT_OWNER`, `NO_THREAD`, `NOT_IMPLEMENTED`,
+   *  `SAFETY_HUMAN_ONLY`, `ALREADY_TERMINAL`, and the rest of `_classify_actions`'s set. */
+  reason_code: string | null
+  /** Only ever `{ reason_code }`, and only ever a value `resolve_escalation` /
+   *  `cancel_escalation` actually accept. **Never a facility, carrier or driver id** -- asserted
+   *  server-side by `test_no_action_argument_ever_carries_a_scope_id`. */
+  arguments: { reason_code: string } | null
+}
+
+/** One fact the recommendation rests on, and the column it was read from. `source` is the whole
+ *  point: it is what makes "never invent operational data" checkable by reading the panel. */
+export type SuggestionEvidence = {
+  code: string
+  label: string
+  source: string
+}
+
+export type ResolutionSuggestion = {
+  as_of: string
+  source: string
+  /** `"deterministic:v1"` today. If this ever becomes LLM-backed the shape does not change, so
+   *  this field is the only way a client can tell -- render it, do not drop it. */
+  generator: string
+  escalation_id: string
+  escalation_type: EscalationReason
+  escalation_status: EscalationStatus
+  stepper_position: 0 | 1 | 2 | 3
+  /** `null` is a first-class, expected outcome, not an error: six of the nine §7.4 reasons have
+   *  no ops tool that fixes them, so the honest answer is the evidence with no recommendation. */
+  recommended_action: SuggestionActionName | null
+  rationale: string | null
+  confidence: 'high' | 'medium' | null
+  abstain_reason: { code: string; label: string } | null
+  evidence: SuggestionEvidence[]
+  actions: SuggestionAction[]
+  payload_reason: string | null
+}

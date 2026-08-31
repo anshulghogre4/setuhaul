@@ -78,14 +78,19 @@ const AdminStatesGallery = lazy(() =>
 )
 
 /**
- * E5.0 routes.
+ * Application routes.
  *
- * The six surfaces themselves are E5.1-E5.6 and are deliberately NOT built here -- each
- * surface route below mounts the real shell around a placeholder, which is the actual
- * deliverable of this epic: the chrome every surface inherits, proven to mount, scope and
- * theme correctly before six teams build inside it.
+ * **All six surfaces are now built** (E5.1-E5.6, 2026-08-31). E5.0's shared shell is still the
+ * chrome most of them inherit, but there are no placeholder routes left -- `SurfacePlaceholder`
+ * was deleted when the last three landed. Two surfaces deliberately mount OUTSIDE `<ShellRoute>`
+ * and each says why at its own route: `/driver` (E5.1) and `/gate` (E5.4).
  *
- * `/_states` renders all 32 artboards for verification.  Not linked from the app.
+ * Individual screens within a surface may still be flag-gated; each flag names its own blocking
+ * issue in that surface's `lib/flags.ts`, and those comments are the authority on what is
+ * actually reachable -- not this block.
+ *
+ * `/_states` renders all 32 shared-shell artboards; each surface has its own gallery beside it
+ * (`/driver/_states`, `/ops/_states`, ...). None are linked from the app.
  *
  * ┌─────────────────────────────────────────────────────────────────────────────────────┐
  * │ FIXTURE SEAM — TODO(#52). Grep for `FIXTURE SEAM` to find every part of it.          │
@@ -177,20 +182,24 @@ export default function App() {
       <Route path="/gate" element={<GateRoute />} />
 
       {/*
-        E5.5 (#40) -- carrier portal, entirely read-only. All 9 screens ship; the SHOWN/HELD chip
-        variants and the Shown/Held filter options are gated behind `carrierShownHeldEnabled`
-        (#53) -- see `features/carrier/lib/flags.ts`, which records why flipping that flag alone is
-        not sufficient even once #53's schema lands (both carrier reads derive `promise_state` from
-        `appointments.appointment_status`, which that migration deliberately does not extend).
-        `/carrier/*` splat because this surface has two screens: dashboard and shipment detail.
+        E5.5 (#40) -- carrier portal, entirely read-only. All 9 screens ship. The HELD chip and
+        its `Held` filter option are LIVE (`carrierHeldEnabled`, 2026-09-01 -- #85/#87 made the
+        reads hold-aware and the filter run on the computed promise_state). `SHOWN` was removed
+        outright rather than gated: it has no persisted counterpart in any flag state, so what it
+        needs is an owner design decision, not engineering -- recorded in
+        `features/carrier/lib/flags.ts`. `/carrier/*` splat because this surface has two screens:
+        dashboard and shipment detail.
       */}
       <Route path="/carrier/*" element={<CarrierRoute />} />
 
       {/*
-        E5.6 (#41) -- admin console. 7 of 12 screens ship (5 clean, 2 reduced); 5 are honestly
-        stubbed pending #69-#76 -- see `features/admin/lib/flags.ts`. The Policy tab was a stronger
-        block than the readiness spec's own table until `GET /admin/policy/active` landed with #75;
-        `adminPolicyEditorEnabled` can now be revisited (#77).
+        E5.6 (#41) -- admin console. The Policy tab (Screens 8/10) is now BUILT and live:
+        `GET /admin/policy/active` (#75) supplies the baseline, so the editor renders nothing until
+        the server answers and cannot display an invented coefficient. `adminRemovalImpactEnabled`
+        and `adminPolicyEditorEnabled` are on; the rest stay gated -- see
+        `features/admin/lib/flags.ts` for each one's real blocker. Note Screen 6 is NOT waiting on
+        backend any more (#70/#71 are resolved); it waits on missing *design* -- three live rule
+        types have no field set, and `DOCK_PIN`, the only two-field type, has no live analog.
       */}
       <Route path="/admin" element={<AdminRoute />} />
 

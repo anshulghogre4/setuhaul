@@ -115,6 +115,11 @@ export function GateKiosk({ facilityId }: { facilityId: string }) {
         {phase.kind === 'truck' ? (
           <TruckAction
             truck={phase.truck}
+            // U111 / issue #68: this component owns the shift session, so it is where the officer
+            // label enters the write path. It is non-null here only because this branch renders
+            // below the `officerName === null` early return above -- `TruckAction` still accepts
+            // null, because a device whose shift ended between render and tap must still record.
+            officerName={officerName}
             onOutcome={(result) => setPhase({ kind: 'outcome', result, truck: phase.truck })}
           />
         ) : null}

@@ -281,6 +281,55 @@
   }
 }
 
+/* ============================================================================
+   ARRIVAL FLASH -- the one motion E5.7/#59 adds (motion.md "Motion and the
+   frozen sort (U19)", 03-planner-dock-board/stitch-prompts.md section 4).
+
+   "Only the row that just changed animates -- a single 200ms
+   cubic-bezier(0.16, 1, 0.3, 1) arrival flash."  Once, never looping, and
+   never on a settled row: settled rows recede in contrast rather than
+   re-highlighting when the list re-renders.
+
+   The re-sort itself is deliberately NOT animated (motion.md: several hundred
+   milliseconds during which the visible order matches neither the old nor the
+   new state is exactly the window in which a keypress does the wrong thing).
+   The flash is what preserves orientation afterwards, together with focus
+   following the same row by id.
+   ============================================================================ */
+@theme {
+  --animate-row-flash: row-flash 200ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
+@keyframes row-flash {
+  from {
+    background-color: var(--color-info-bg);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* The reduced-motion REPLACEMENT, not a removal -- the same rule the block
+   further down already states for the HELD pulse.  A planner who set the OS
+   preference must still be able to tell which rows are new after a re-sort, so
+   the 200ms flash is swapped for a persistent "New" badge that lives until the
+   next re-sort.  The badge is real markup (queue-row.tsx), hidden by default
+   here rather than injected via `content`, so it is reachable by a screen
+   reader in both modes and carries no untranslatable literal in CSS. */
+.row-arrival-badge {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-row-flash {
+    animation: none;
+  }
+
+  .row-arrival-badge {
+    display: inline;
+  }
+}
+
 /* ---- shadcn alias layer ----
    Thin, because section 1.2 already names our tokens shadcn-compatibly.
    `inline` because every value here is a var() reference to another theme

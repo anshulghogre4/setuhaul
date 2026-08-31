@@ -347,20 +347,34 @@ async def test_fleet_shipments_does_not_pay_for_the_lifetime_count_on_the_common
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("unsupported", ["SHOWN", "HELD"])
-async def test_fleet_shipments_refuses_promise_states_the_live_schema_cannot_express(
-    session, unsupported
+@pytest.mark.parametrize(
+    ("unsupported", "expected_phrase"),
+    [
+        # SHOWN is refused unconditionally: it is a presentation-only state with no persisted
+        # counterpart anywhere in the product, so no flag can make it answerable (issue #87).
+        ("SHOWN", "no persisted counterpart"),
+        # HELD is refused only while `TWO_PHASE_HOLD_ENABLED` is off, so this case PINS the
+        # flag off below rather than reading the live default -- the default flipped to True on
+        # 2026-08-31 and a test that inherits it silently tests a different product. The flag-on
+        # path is covered in `test_held_read_paths.py`, beside the rest of the D2 read work.
+        ("HELD", "TWO_PHASE_HOLD_ENABLED"),
+    ],
+)
+async def test_fleet_shipments_refuses_promise_states_it_cannot_answer(
+    session, unsupported, expected_phrase, monkeypatch
 ):
+    monkeypatch.setattr(carrier_reads.holds, "hold_reads_enabled", lambda: False)
     """Refused with a stated reason, not answered with a misleading empty list.
 
-    Same discipline `scheduling/expiry.py:89-99` applies to D2's HELD sweep: report the schema
-    gap, never silently return "you have none of those".
+    Same discipline `scheduling/expiry.py` applies to D2's HELD sweep: report the gap, never
+    silently return "you have none of those". Issue #87 split the single reason these two used to
+    share, because they are not the same refusal -- one is permanent and one is a flag away.
     """
     with pytest.raises(AppError) as exc:
         await carrier_reads.list_fleet_shipments(session, _ctx(), unsupported)
     assert exc.value.code == "FILTER_UNSUPPORTED"
     assert exc.value.status_code == 400
-    assert "no representation" in exc.value.detail
+    assert expected_phrase in exc.value.detail
 
 
 @pytest.mark.asyncio
@@ -372,7 +386,9 @@ async def test_fleet_shipments_has_open_exception_filter_narrows_membership_only
     monkeypatch.setattr(carrier_repo, "count_shipments_ever", AsyncMock(return_value=1))
     await carrier_reads.list_fleet_shipments(session, _ctx(), "has_open_exception")
     assert listed.await_args.kwargs["only_with_open_exception"] is True
-    assert listed.await_args.kwargs["appointment_status"] is None
+    # Renamed from `appointment_status` by issue #87: with holds on this value is filtered against
+    # the *computed* promise state, and HELD is not an appointment status at all.
+    assert listed.await_args.kwargs["promise_state"] is None
 
 
 @pytest.mark.asyncio

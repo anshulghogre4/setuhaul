@@ -12,6 +12,7 @@ from app.core.execution_context import ExecutionContext
 from app.repositories.drivers import load_driver_operational_snapshot
 from app.repositories.facilities import driver_serves_facility, get_facility, list_facility_contacts
 from app.repositories.scope import assert_facility_visible, assert_shipment_visible
+from app.scheduling import holds
 
 
 def _as_of() -> str:
@@ -22,24 +23,85 @@ def _serialize_row(row: Any) -> dict[str, Any] | None:
     return dict(row) if row is not None else None
 
 
+async def _snapshot_with_promise(session: AsyncSession, driver_id: str) -> dict[str, Any]:
+    """The driver snapshot plus the promise its `current_appointment` alone cannot express (#86).
+
+    `repositories.drivers.load_driver_operational_snapshot` reads `appointments`, and §4 is
+    explicit that a hold has no appointment row at all -- so the snapshot's `current_appointment`
+    is structurally blind to one. #83 fixed the two *tool-facing* driver reads
+    (`get_current_appointment`, `allocation.get_appointment_request_status`) and left this, the
+    third: the payload behind `GET /api/v1/driver/context` **and** the prefetch
+    `run_assistant.py` hands the model at the top of every turn. Left alone, the chat's opening
+    context would say "no appointment" about a shipment the very next tool call reports as HELD --
+    same driver, same shipment, two different answers inside one turn.
+
+    Composed here in the service rather than inside the repository on purpose. The repository is
+    persistence; "which of two tables holds the stronger promise" is the business rule §4 defines,
+    and it already lives in this layer as `resolve_promise_state`. Pushing it down would also mean
+    `repositories/` importing `scheduling/`, inverting the layering `AGENTS.md` states. Both
+    callers of the snapshot go through this helper, so there is no third shape to drift.
+
+    Cost with the flag **off** is exactly zero: `live_hold_for_shipment` returns `None` without
+    touching the session, so no statement changes and none is added. With the flag on it is one
+    additional indexed single-row lookup, and only when the driver actually has a primary shipment
+    -- the same guard the snapshot's own three per-shipment reads already sit behind.
+    """
+    snapshot = await load_driver_operational_snapshot(session, driver_id)
+    primary = snapshot["primary_shipment"]
+    hold = (
+        await holds.live_hold_for_shipment(
+            session, shipment_id=primary["shipment_id"], now=datetime.now(timezone.utc)
+        )
+        if primary
+        else None
+    )
+    promise_state, promise_state_source = resolve_promise_state(
+        snapshot["current_appointment"], hold
+    )
+    return {
+        **snapshot,
+        "current_hold": hold,
+        "promise_state": promise_state,
+        "promise_state_source": promise_state_source,
+    }
+
+
 async def get_driver_operational_context(
     session: AsyncSession, ctx: ExecutionContext
 ) -> dict[str, Any]:
     if not ctx.is_driver or not ctx.driver_id:
         raise AppError("Driver mapping missing.", code="DRIVER_UNMAPPED", status_code=403)
 
-    snapshot = await load_driver_operational_snapshot(session, ctx.driver_id)
+    snapshot = await _snapshot_with_promise(session, ctx.driver_id)
+    # Key order is load-bearing *for this payload only*, and it is not a style preference.
+    # `run_assistant.py` embeds `json.dumps(this)[:4000]` in the turn's system prompt, so whatever
+    # sits past 4000 characters is silently cut. Measured against the live database 2026-08-31
+    # for the busiest real driver (13 shipments): the payload serialises to 7468 characters and
+    # the old ordering put `current_appointment` at offset 6616 -- already truncated away today,
+    # before #86 added anything. Putting the single-value promise fields ahead of the two
+    # shipment *lists* moves them to roughly offset 400 and lets the cut land on the long,
+    # repetitive tail instead of the one fact the model most needs. No consumer depends on key
+    # order (JSON objects are unordered; FastAPI re-serialises the REST payload anyway), so this
+    # costs nothing and is not a substitute for fixing the 4000 cap itself, which lives in
+    # `run_assistant.py` and is filed separately.
     return {
         "as_of": _as_of(),
         "source": "postgresql",
         "driver": snapshot["driver"],
         "profile": _driver_profile(ctx),
-        "shipments": snapshot["shipments"],
-        "active_shipments": snapshot["active_shipments"],
         "primary_shipment": snapshot["primary_shipment"],
         "current_appointment": snapshot["current_appointment"],
+        # The three #86 fields. `current_hold` is its own key rather than being flattened into
+        # `current_appointment` for the reason `get_current_appointment` states below: a hold has
+        # no `appointment_id`, no `booked_at` and no D9 clock, and faking an appointment shape for
+        # it would push §4's "held is not booked" distinction onto every consumer.
+        "current_hold": snapshot["current_hold"],
+        "promise_state": snapshot["promise_state"],
+        "promise_state_source": snapshot["promise_state_source"],
         "latest_eta": snapshot["latest_eta"],
         "facility": snapshot["facility"],
+        "active_shipments": snapshot["active_shipments"],
+        "shipments": snapshot["shipments"],
         "freshness": "live",
     }
 
@@ -61,11 +123,16 @@ async def get_driver_context_payload(session: AsyncSession, ctx: ExecutionContex
     `active_shipments`, which the assistant tools consume but the REST response has never
     returned. Keeping them as two compositions over one shared query set (E2.2) removes the
     duplicated SQL without changing either caller's response shape.
+
+    Issue #86 added `current_hold`/`promise_state`/`promise_state_source` to *both* compositions
+    rather than only this one. The asymmetry was the defect: the REST payload and the assistant's
+    prefetch describe the same driver's same shipment, and only one of them being able to see a
+    hold is precisely how the surface and the model end up disagreeing.
     """
     if not ctx.driver_id:
         raise AppError("Driver mapping missing.", code="DRIVER_UNMAPPED", status_code=403)
 
-    snapshot = await load_driver_operational_snapshot(session, ctx.driver_id)
+    snapshot = await _snapshot_with_promise(session, ctx.driver_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
@@ -74,6 +141,9 @@ async def get_driver_context_payload(session: AsyncSession, ctx: ExecutionContex
         "shipments": snapshot["shipments"],
         "primary_shipment": snapshot["primary_shipment"],
         "current_appointment": snapshot["current_appointment"],
+        "current_hold": snapshot["current_hold"],
+        "promise_state": snapshot["promise_state"],
+        "promise_state_source": snapshot["promise_state_source"],
         "latest_eta": snapshot["latest_eta"],
         "facility": snapshot["facility"],
         "freshness": "live",
@@ -164,10 +234,60 @@ async def get_eta_history(
     }
 
 
+ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+
+
+def resolve_promise_state(
+    appointment: dict[str, Any] | None, hold: dict[str, Any] | None
+) -> tuple[str | None, str | None]:
+    """Which promise this shipment actually has right now, and which table said so (issue #83).
+
+    D2's lifecycle is `SHOWN -> HELD -> PENDING_CONFIRMATION -> CONFIRMED` (§4), but only the last
+    two live in `appointments`; a hold is a `dock_occupancy` row and nothing else. So the answer has
+    to be composed from two tables, and the precedence between them is a real decision rather than
+    an ordering accident:
+
+    1. **An active appointment wins.** If the shipment already has a PENDING_CONFIRMATION /
+       CONFIRMED / IN_PROGRESS appointment, that is the stronger promise and it is what the driver
+       must be shown -- even if a hold row also exists. That combination is reachable, not
+       hypothetical: `confirm_held_slot` has an `IntegrityError` branch for exactly the case where a
+       driver acquired a hold and then got an appointment for the same shipment by another route
+       inside the 90-second window.
+    2. **Otherwise a live hold wins**, including over a CANCELLED or EXPIRED current appointment.
+       A driver who cancelled and then took a fresh hold is HELD, not CANCELLED.
+    3. **Otherwise whatever the current appointment says**, unchanged from before this issue.
+
+    Returned as a pair so no caller has to re-derive the source from the value; a UI that renders a
+    HELD countdown needs to know it came from `dock_occupancy` and not from a status column that
+    cannot express it.
+    """
+    status = (appointment or {}).get("appointment_status")
+    if status is not None and str(status) in ACTIVE_APPOINTMENT_STATUSES:
+        return str(status), holds.PROMISE_STATE_SOURCE_APPOINTMENT
+    if hold is not None:
+        return holds.HOLD_PROMISE_STATE, holds.PROMISE_STATE_SOURCE_HOLD
+    if status is not None:
+        return str(status), holds.PROMISE_STATE_SOURCE_APPOINTMENT
+    return None, None
+
+
 async def get_current_appointment(
     session: AsyncSession, ctx: ExecutionContext, shipment_id: str
 ) -> dict[str, Any]:
+    """The driver's current promise -- appointment *or* D2 hold (issue #83).
+
+    Before this, the payload derived everything from `appointments.appointment_status`, so a driver
+    who had just taken a hold saw `appointment: null` -- indistinguishable from having no promise at
+    all, moments after the system told them a slot was "reserved for you for 90 seconds" (§0.8).
+    E5.1's four flag-gated HELD screens are blocked on precisely this field.
+
+    The hold is returned as its own key rather than being flattened into `appointment`, because it
+    genuinely is not one: it has no `appointment_id`, no `booked_at`, and no D9 clock. Faking an
+    appointment shape for it would push the "held is not booked" distinction §4 insists on back onto
+    every consumer.
+    """
     await get_shipment_details(session, ctx, shipment_id)
+    now = datetime.now(timezone.utc)
     row = (
         await session.execute(
             text(
@@ -185,10 +305,18 @@ async def get_current_appointment(
             {"shipment_id": shipment_id},
         )
     ).mappings().first()
+    appointment = _serialize_row(row)
+    # Costs zero queries with the flag off -- `live_hold_for_shipment` returns None without
+    # touching the session, so this path is exactly what it was on an unmigrated database.
+    hold = await holds.live_hold_for_shipment(session, shipment_id=shipment_id, now=now)
+    promise_state, promise_state_source = resolve_promise_state(appointment, hold)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
-        "appointment": _serialize_row(row),
+        "appointment": appointment,
+        "hold": hold,
+        "promise_state": promise_state,
+        "promise_state_source": promise_state_source,
         "freshness": "live",
         "label": "current_appointment_observation",
     }

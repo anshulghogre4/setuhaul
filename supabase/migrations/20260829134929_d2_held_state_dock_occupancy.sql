@@ -6,7 +6,16 @@
 -- section 7.1 (`request_slot`'s two-phase contract and the missing `confirm_held_slot`);
 -- section 7.5.1 (`hold_for_information`); D2, D9, M5, M6.
 --
--- Backup: NOT taken by this file. This migration has NOT been applied to any database. Applying
+-- Backup: NOT taken by this file; taken separately before the apply (see below).
+-- **APPLIED TO PRODUCTION 2026-08-31 18:54 IST** by direct psql with SET lock_timeout='5s',
+-- after the owner-approved dry run (throwaway cluster replay + read-only prod schema diff:
+-- zero drift) and after the shipment_id NOT NULL deferral below. ~1s apply, UPDATE 613 exactly
+-- as predicted; all 9 post-apply verification queries passed (constraint renamed-in-place with
+-- its partial predicate, 0 null shipment_id/state, 0 state/status mismatches, distribution
+-- CONFIRMED 609 / IN_PROGRESS 2 / PENDING_CONFIRMATION 2). Backup:
+-- C:/Users/ANSHUL/setuhaul-db-backups/pre_d2_backup_20260831_185410.dump (51,870 bytes,
+-- both TABLE DATA sections + the exclusion constraint confirmed via pg_restore --list).
+-- The original guidance below still applies to any OTHER database this is replayed into. Applying
 -- it is the owner's call (issue #53 is risk:high on the D1 capacity-correctness path); take a
 -- pg_dump of public.dock_occupancy and public.appointments first, as E1.1 and E1.5 both did.
 --
@@ -92,8 +101,11 @@ COMMENT ON COLUMN public.dock_occupancy.expires_at IS
   'state = ''HELD'' AND expires_at > now() -- section 0.8: "Never depend on the sweeper for '
   'correctness -- only for hygiene."';
 COMMENT ON COLUMN public.dock_occupancy.shipment_id IS
-  'Which shipment holds this interval. NOT NULL because a HELD row has no appointment_id to '
-  'derive it from, and M15 scope for confirm_held_slot is derived from this column server-side.';
+  'Which shipment holds this interval. Required in intent (a HELD row has no appointment_id to '
+  'derive it from, and M15 scope for confirm_held_slot is derived from it server-side) but '
+  'NULLABLE for now: asserting NOT NULL here was proven to break the legacy booking path before '
+  'the code deploy (see the deferral note at step 4). A follow-up migration asserts NOT NULL '
+  'once _claim_dock_occupancy''s fix is deployed.';
 
 -- --------------------------------------------------------------------------------------------
 -- 2. A hold has no appointment yet, so appointment_id has to become nullable.
@@ -126,8 +138,30 @@ WHERE a.appointment_id = o.appointment_id
 --    `ADD CONSTRAINT IF NOT EXISTS` (supabase-postgres-best-practices, "Add Constraints Safely
 --    in Migrations" -- `alter table ... add constraint if not exists` is a syntax error, 42601).
 -- --------------------------------------------------------------------------------------------
+-- `shipment_id SET NOT NULL` is DELIBERATELY DEFERRED to a follow-up migration (2026-08-29,
+-- expand/contract). A dry run against a throwaway cluster built from this repo's own chain
+-- proved that asserting it here takes production's booking path down *on the flag-off path* --
+-- i.e. exactly the state this migration claims to be safe in:
+--
+--   `allocation._claim_dock_occupancy` (allocation.py:832) INSERTs only
+--   (dock_id, appointment_id, "window"). It takes `shipment_id` as a parameter and uses it only
+--   in its JOIN, never writing the column. Three call sites would break the moment this commits:
+--   `request_slot` (1651, reached ONLY when two_phase_hold_enabled is False),
+--   `reschedule_appointment` (2028) and `counter_offer` (2285) -- the latter two not flag-gated
+--   at all. It surfaces as a raw 500, not a graceful conflict: `allocation_unique_constraint_name`
+--   (564) matches on the names in ALLOCATION_CONFLICT_CONSTRAINTS (121), and a NOT NULL violation
+--   message contains none of them, so the IntegrityError re-raises unhandled.
+--
+-- So the column ships NULLABLE here, which makes this migration genuinely behaviour-neutral and
+-- applicable ahead of any code deploy. This is the same expand/contract shape this file already
+-- uses for `policy_version` (divergence #1), applied consistently rather than selectively.
+--
+-- Apply order: (1) this migration, (2) deploy the `_claim_dock_occupancy` fix, (3) a follow-up
+-- migration that backfills stragglers and sets NOT NULL. Step 3 must not run before step 2.
+--
+-- `dock_occupancy_held_shape_check` and confirm_held_slot's M15 scope derivation both still hold
+-- with the column nullable, because `create_hold` always writes `shipment_id` itself.
 ALTER TABLE public.dock_occupancy
-  ALTER COLUMN shipment_id SET NOT NULL,
   ALTER COLUMN state       SET NOT NULL,
   ALTER COLUMN state       SET DEFAULT 'PENDING_CONFIRMATION';
 

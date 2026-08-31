@@ -78,16 +78,46 @@
  * route. The degradation if something is wrong is safe and honest rather than silent -- a throw
  * lands in `SearchPanel`'s `lookup-failed` state ("Couldn't look that truck up"), never in a wrong
  * write -- but it is a real residual gap and is named in the build report rather than glossed.
+ *
+ * ## Re-confirmed 2026-08-29 (M5 flag-flip audit) -- this flip is correct and was not re-done
+ *
+ * Checked, rather than assumed from E5.4's own report:
+ *   - `GET /api/v1/gate/trucks` is registered at `routers/gate.py:90` with `query` as its one
+ *     parameter and **no `facility_id`** -- scope comes from the verified token via
+ *     `resolve_facility_scope(ctx, None)`, so M15/NFR-019 holds and the search cannot surface a
+ *     truck the caller could not then act on. (`implementation-spec.md` section 6 Fork E's proposed
+ *     `search_gate_yard_truck(query, facility_id)` signature was deliberately **not** built; that
+ *     design doc still needs amending before anyone builds to it.)
+ *   - `lib/types.ts`'s `GateTruckMatch` / `GateTruckSearchResult` match the shipped Pydantic models
+ *     field-for-field, flat appointment fields included, and `lib/api.ts::searchTrucks` calls the
+ *     exact path with the exact `?query=` parameter name.
+ *   - The route carries `GateCtx` = `require_roles(*GATE_KIOSK_ROLES)`, the same set the five write
+ *     tools use -- so read reach and write reach agree by construction. **Issue #79 landed during
+ *     this audit** (a concurrent agent added `RoleName.GATE_OFFICER` plus
+ *     `supabase/migrations/20260829180000_gate_officer_role.sql`), so `GATE_KIOSK_ROLES` is now
+ *     `(GATE_OFFICER, WAREHOUSE_PLANNER, FACILITY_MANAGER, ADMIN)` -- **widened, not narrowed**, so
+ *     every session that could reach this kiosk before still can. That migration's applied state
+ *     was not verified here; it does not matter for this flag, because the three pre-existing roles
+ *     need no new database row.
+ *   - `MIN_QUERY_LENGTH = 2` mirrored here still matches `gate_yard_reads.py:66`.
+ *
+ * **Still not verified: a live authenticated round trip.** Unchanged from E5.4 -- no scoped session
+ * was available in this pass either.
  */
 export const gateSearchEnabled = true
 
 /**
- * Issue #68 (GY-G2) -- officer attribution. **Deliberately NOT a flag.**
+ * Issue #68 (GY-G2) -- officer attribution. **Closed 2026-08-31, and still deliberately NOT a flag.**
  *
- * There is nothing to gate: the officer name is captured at shift start and displayed in the shift
- * bar on every screen from 3 onward, which is exactly what the design specifies visually, and none
- * of the five write tools has an argument it could be sent in (checked against all five Pydantic
- * bodies in `gate.py`; `_audit` writes only `ctx.user_id`). A flag would imply a hidden capability
- * that could be switched on, and there isn't one -- so this is recorded here as an absence rather
- * than modelled as an off switch. `lib/session.ts` states the same thing at the capture site.
+ * It was recorded here as an absence rather than an off switch, because there was no hidden
+ * capability to switch on: none of the five write tools had an argument the name could be sent in.
+ * That is now fixed -- all five `gate.py` body models carry `officer_name` and `_audit` records it
+ * on every event -- and it stays flagless for the mirror-image reason. Sending a label the server
+ * already treats as optional has no failure mode worth gating: an older backend ignores the extra
+ * field or rejects it outright at `extra="forbid"`, and the kiosk is deployed against one backend,
+ * not a fleet of versions. There is no half-on state to model.
+ *
+ * The user-visible behaviour is unchanged either way -- the officer sees the same shift bar. What
+ * changed is only what the audit trail can answer afterwards. See `lib/session.ts` and
+ * `gate_yard_service.OFFICER_ATTRIBUTION_KEY`.
  */
