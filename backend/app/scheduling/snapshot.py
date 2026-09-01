@@ -358,7 +358,11 @@ def _snapshot_sql(*, include_holds: bool) -> str:
 
 
 async def load_appointment_snapshots(
-    session: AsyncSession, appointment_ids: list[str]
+    session: AsyncSession,
+    appointment_ids: list[str],
+    *,
+    actor_user_id: str,
+    now: datetime | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Recompute the snapshot (and its displacement set) for each id, in one round trip.
 
@@ -370,10 +374,48 @@ async def load_appointment_snapshots(
     four call sites across `allocation.py` (confirm / counter-offer / bulk-confirm / proposal apply)
     and every one of them wants the same answer: the recomputation must see exactly what the
     exclusion constraint sees. `get_settings()` is `lru_cache`d, so this costs nothing per call.
+
+    ## Issue #98 -- why a read function writes before it reads
+
+    `_INTERVAL_CONFLICTS_WITH_HOLDS_SQL` below deliberately carries no `expires_at > now()` term,
+    because it must predict what PostgreSQL will refuse and the exclusion constraint's predicate
+    has no time term (#84). After issue #97 gave the *claim* path a lazy-expiry leg that stopped
+    being the whole truth: a lapsed, unswept hold produced `DISPLACEMENT_DETECTED` here for a row
+    the very next claim would have quietly expired, and with no sweeper running (#20) that refusal
+    never cleared on its own.
+
+    Owner decision (b) on #98: flip the dead rows first, in this same transaction, then read. That
+    keeps #84's invariant literally true -- after the flip the constraint really does not count
+    them -- instead of teaching this query to disagree with the constraint again.
+
+    `actor_user_id` is a required keyword rather than an optional one on purpose, the same choice
+    `_claim_dock_occupancy` made for the same reason: every call site has an `ExecutionContext` in
+    scope, and a default would let a future fifth one silently opt out of the expiry and
+    reintroduce the defect. `now` defaults because it is a clock, not an identity -- tests that
+    need determinism pin it, callers that do not simply read the wall clock once here.
+
+    Lock ordering, traced across all four call sites rather than assumed: each already holds the
+    appointment rows `FOR UPDATE` before reaching this function, so the order is appointments then
+    `dock_occupancy` -- identical to `_claim_dock_occupancy`'s, which runs later in the same
+    transactions. Nothing acquires them the other way round (`holds.confirm_held_slot` locks a
+    `dock_occupancy` row first but then *inserts* an appointment rather than locking one), so this
+    adds no cycle.
     """
     if not appointment_ids:
         return {}
     include_holds = get_settings().two_phase_hold_enabled
+    if include_holds:
+        # Local import: `holds` imports `allocation`, which imports this module (see the module
+        # docstring's layering note), so a top-level import here would close that cycle. Same hook
+        # shape `allocation._claim_dock_occupancy` uses for the write half.
+        from app.scheduling import holds
+
+        await holds.expire_lapsed_holds_for_appointments(
+            session,
+            appointment_ids=list(appointment_ids),
+            now=now or datetime.now(timezone.utc),
+            actor_user_id=actor_user_id,
+        )
     params: dict[str, Any] = {
         "appointment_ids": list(appointment_ids),
         "active_statuses": list(ACTIVE_APPOINTMENT_STATUSES),
@@ -388,10 +430,16 @@ async def load_appointment_snapshots(
 
 
 async def load_appointment_snapshot(
-    session: AsyncSession, appointment_id: str
+    session: AsyncSession,
+    appointment_id: str,
+    *,
+    actor_user_id: str,
+    now: datetime | None = None,
 ) -> dict[str, Any] | None:
     """Single-appointment form, for `confirm_request` and `counter_offer`."""
-    snapshots = await load_appointment_snapshots(session, [appointment_id])
+    snapshots = await load_appointment_snapshots(
+        session, [appointment_id], actor_user_id=actor_user_id, now=now
+    )
     return snapshots.get(appointment_id)
 
 

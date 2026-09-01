@@ -1145,3 +1145,13 @@ last_updated: 2026-08-29
 ## 2026-09-01 21:55 IST | deployment | backend batch live: AgentCore v3 + ECS rolled; shim dropped; production verified green
 
 - Wrapper deploy: 834 tests in-stage, v2->3 proven. ECS: caught the stale-image trap (script only tagged/pushed a 09:54 image) -- build step added, ARM64 pinned, PRIMARY COMPLETED 1/1. Stability wait died on aws-login expiry; confirmed post-relogin. Shim dropped (4/4). Live: escalation writes 200x2, chat v3 200, HELD lifecycle green (hold 798, APT-E6ECB56EE116, cancelled clean). Frontend deploy = remaining leg. Updated [[current-state]], [[handoff]], root CHANGELOG.
+
+## 2026-09-01 22:15 IST | deployment | frontend auth live (Vercel auto-deploy verified by bundle marker + live probe)
+
+- Deployed bundle contains the new auth provider; live probe: anon /planner -> /signin, wrong password refused, real driver login -> /driver. Owner's two reported defects closed in production. Day's full scope now deployed + verified. Updated [[current-state]], [[handoff]], root CHANGELOG.
+
+## 2026-09-01 23:15 IST | fix | 30 stale issues closed; 6 fixed (#80/#82/#98/#99/#100/#101) + #103 Gemini ladder; proof 132/0, unit 901/8/0
+
+- Verification sweep over 47 open issues: 30 CLOSE on file:line+CHANGELOG evidence; #79 saved from a wrong close by a live query (ROL010 absent); #92 KEEP re-confirmed.
+- Five agents, disjoint files: shell handlers + end-block + NOT-IN-DESIGN reclassifications (sweep DEAD 3->0); carrier identity (code + live CAR002 scope row; issue evidence corrected -- ROL009 always existed); lapsed-hold expiry on both digest sides (GET-that-writes fork flagged); section-7.3 composite urgency shared by planner+ops; ten admin writes audited (PG17 self-join before-values; FK-failure coupling test); Gemini vertex_adc>vertex_express>ai_studio>openai with two SDK traps source-cited and live-verified.
+- Filed #104 (audit taxonomy), #105 (reaper concurrency), #106 (user_scopes narrowing). Coordinator re-verified everything independently on the settled tree. Commit message handed; deploy ships the batch + flips prod chat to Gemini.

@@ -150,6 +150,57 @@ def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# ---------------------------------------------------------------------------------------------
+# Audit (FR-ADM-009 / M14, `06-admin-console/flows-and-states.md` Flow 9)
+# ---------------------------------------------------------------------------------------------
+
+
+async def _write_audit_entry(
+    session: AsyncSession, *, actor_id: str, action_type: str, entity_name: str, entity_id: str,
+    new_value: dict[str, Any], created_at: str, old_value: dict[str, Any] | None = None,
+) -> None:
+    """The one place this module writes `audit_logs` -- Flow 9's "every write on this console
+    becomes its own audit entry", through M14's ordinary pipeline rather than a weaker admin path.
+
+    **`action_type` stays the generic CRUD verb and the specific event lives in
+    `new_value_json.event`.** That is not a shortcut around the vocabulary, it is the vocabulary
+    this table already has: `audit_logs_action_type_check` (last widened by
+    `supabase/migrations/20260829134929_d2_held_state_dock_occupancy.sql:290-296`) admits sixteen
+    values, none of them admin-console-specific, and `revoke_invite`'s own docstring already
+    depends on the `event` string to distinguish "we withdrew an unused invite" from "we removed a
+    working colleague" -- two facts that are both `DELETE` on `users`. Adding console-specific
+    `action_type` values would need a migration and would fork a vocabulary the D2 migration went
+    out of its way to keep single.
+
+    **No commit here, deliberately.** Every caller issues its own single `session.commit()` after
+    calling this, so the audit row and the write it records land in the same transaction and fail
+    together -- FR-ADM-009 is worthless if a write can succeed with its audit entry rolled back.
+
+    `default=str` on both dumps so a caller can hand over a date/`datetime` (a facility rule's
+    effective window, a publish timestamp) without having to remember to stringify it first.
+    """
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
+              new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :actor_id, :action_type, :entity_name, :entity_id, :old_value_json,
+              :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "actor_id": actor_id, "action_type": action_type,
+            "entity_name": entity_name, "entity_id": entity_id,
+            "old_value_json": None if old_value is None else json.dumps(old_value, default=str),
+            "new_value_json": json.dumps(new_value, default=str),
+            "created_at": created_at,
+        },
+    )
+
+
 def normalize_scope(scope: str | list[str] | None) -> list[str]:
     """Accept `scope` as one id or many, always returning a de-duplicated list (A-G4, issue #72).
 
@@ -622,28 +673,14 @@ async def invite_user(
             code="INVITE_PARTIALLY_FAILED", status_code=500, detail=f"auth_user_id={auth_user_id}",
         ) from exc
 
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
-              new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :actor_id, 'CREATE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
-            # FR-ADM-009: the audit row records the scope that was granted, not just the role --
-            # "who could see what, from when" is unanswerable from a role name alone once scope is
-            # multi-valued. json.dumps, not an f-string, so an id containing a quote can't corrupt
-            # the stored JSON.
-            "new_value_json": json.dumps(
-                {"event": "INVITE_USER", "email": email, "role": role_enum.value, "scope": scopes}
-            ),
-            "created_at": now,
-        },
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="CREATE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        # FR-ADM-009: the audit row records the scope that was granted, not just the role --
+        # "who could see what, from when" is unanswerable from a role name alone once scope is
+        # multi-valued. json.dumps (inside the helper), not an f-string, so an id containing a
+        # quote can't corrupt the stored JSON.
+        new_value={"event": "INVITE_USER", "email": email, "role": role_enum.value, "scope": scopes},
     )
     await session.commit()
     return {
@@ -665,20 +702,47 @@ async def update_user(
     changing is precisely the common case `flows-and-states.md` Flow 2 describes. When `role` is
     absent the role is re-read **from the database**, never inferred from the caller's payload, so
     the scope is validated against the role the user actually holds.
+
+    **The prior role and scope are read for the audit entry, not just for validation** (FR-ADM-009,
+    issue #80). A role/scope change is precisely the kind of write whose *before* is the whole
+    point: "Neha was ops on Jaipur+Gurugram and is now facility manager on Jaipur" is unanswerable
+    from an entry that records only the new state. Both come out of the NOT_FOUND probe this
+    function already ran, so the before/after costs no extra round trip.
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
     existing = (
         await session.execute(
             text(
-                "SELECT u.user_id, r.role_name FROM public.users u "
-                "JOIN public.roles r ON r.role_id = u.role_id WHERE u.user_id = :uid"
+                """
+                SELECT u.user_id, r.role_name, u.facility_id, u.driver_id,
+                       COALESCE((
+                         SELECT array_agg(us.scope_value ORDER BY us.scope_value)
+                         FROM public.user_scopes us
+                         WHERE us.user_id = u.user_id AND us.scope_type = ANY(:managed_types)
+                       ), ARRAY[]::text[]) AS prior_scope_values
+                FROM public.users u
+                JOIN public.roles r ON r.role_id = u.role_id
+                WHERE u.user_id = :uid
+                """
             ),
-            {"uid": user_id},
+            {"uid": user_id, "managed_types": list(MANAGED_SCOPE_TYPES)},
         )
     ).mappings().first()
     if existing is None:
         raise AppError(f"User '{user_id}' not found.", code="NOT_FOUND", status_code=404)
+
+    # Read `.get`-tolerantly, the same way `derive_lifecycle_state` does, so this degrades rather
+    # than raises for a caller (or a test) working from a narrower column list.
+    prior = dict(existing)
+    prior_role = str(prior["role_name"])
+    prior_scopes = [str(value) for value in (prior.get("prior_scope_values") or [])]
+    if not prior_scopes:
+        # Same fallback `list_users` uses: a row predating E2.3's backfill has no `user_scopes`
+        # row, and recording an empty prior scope for a user who genuinely held one facility would
+        # make the audit entry read as a grant where it was a change.
+        mirror = prior.get("facility_id") or prior.get("driver_id")
+        prior_scopes = [str(mirror)] if mirror else []
 
     scopes = normalize_scope(scope)
     effective_role: RoleName | None = None
@@ -689,10 +753,10 @@ async def update_user(
             raise AppError(f"Unknown role '{role}'.", code="INVALID_ROLE", status_code=422) from exc
     elif scope is not None:
         try:
-            effective_role = RoleName(str(existing["role_name"]).upper())
+            effective_role = RoleName(prior_role.upper())
         except ValueError as exc:
             raise AppError(
-                f"User '{user_id}' holds role '{existing['role_name']}', which this console cannot scope.",
+                f"User '{user_id}' holds role '{prior_role}', which this console cannot scope.",
                 code="INVALID_ROLE", status_code=422,
             ) from exc
 
@@ -709,6 +773,11 @@ async def update_user(
     # `scope_write` is true for a role change *or* a scope-only change; both rewrite the mirror
     # columns, and a role change to a global role correctly clears them.
     scope_write = effective_role is not None
+    # One instant for the whole write, so `users.updated_at`, any `user_scopes.created_at` and the
+    # audit row all agree about when this edit happened -- three separate `now()` calls would put
+    # the audit entry microseconds after the change it records.
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
     await session.execute(
         text(
             """
@@ -722,14 +791,30 @@ async def update_user(
         ),
         {
             "role_id": role_id, "scope_write": scope_write, "facility_id": facility_id,
-            "driver_id": driver_id, "updated_at": datetime.now(timezone.utc).isoformat(), "user_id": user_id,
+            "driver_id": driver_id, "updated_at": now, "user_id": user_id,
         },
     )
     if scope_write:
         await _write_user_scopes(
-            session, user_id=user_id, role=effective_role, scopes=scopes,
-            now=datetime.now(timezone.utc),
+            session, user_id=user_id, role=effective_role, scopes=scopes, now=now_dt,
         )
+    # FR-ADM-009 / Flow 9 (issue #80). Audited unconditionally, including the degenerate
+    # "no role, no scope" call: that call still issues the UPDATE above and still moves
+    # `updated_at`, so it IS a write, and a write this console can make without leaving a trace is
+    # exactly what this requirement forbids. The entry then honestly records that nothing else
+    # changed rather than being silently absent.
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="UPDATE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        old_value={"role": prior_role, "scope": prior_scopes},
+        new_value={
+            "event": "UPDATE_USER",
+            "role": effective_role.value if effective_role is not None else prior_role,
+            # When no scope was submitted the stored scope is unchanged, so the "after" is the
+            # prior list -- not `[]`, which would read as a revocation that never happened.
+            "scope": scopes if scope_write else prior_scopes,
+        },
+    )
     await session.commit()
     return {
         "as_of": _as_of(), "code": "UPDATED", "user_id": user_id,
@@ -751,16 +836,30 @@ async def _set_active(session: AsyncSession, ctx: ExecutionContext, user_id: str
     The happy path stays one statement. The extra SELECT runs only when nothing was updated, to
     tell "no such user" apart from "removed" -- a 404 and a 409 are different answers and the
     admin acting on a stale list deserves the accurate one.
+
+    **The pre-update `is_active` comes from an aliased self-join, not a second read** (FR-ADM-009,
+    issue #80). Production Supabase is PostgreSQL 17.6, and `RETURNING OLD.is_active` is a
+    PostgreSQL **18** feature -- so the before-value has to come from somewhere else, and the
+    `UPDATE` docs' own sanctioned form is the aliased self-join ("do not repeat the target table as
+    a from_item unless you intend a self-join (in which case it must appear with an alias)"). The
+    same docs require the join to produce at most one output row per target row; joining on
+    `users`' primary key guarantees that, so their indeterminacy warning does not apply here. This
+    keeps the happy path one statement while still giving the audit entry a real before/after --
+    which matters because these two tools are idempotent: a re-clicked Deactivate on an already
+    inactive account is recorded as the no-op it was rather than as a fresh deactivation.
     """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
+    now = datetime.now(timezone.utc).isoformat()
     row = (
         await session.execute(
             text(
-                "UPDATE public.users SET is_active = :active, updated_at = :updated_at "
-                "WHERE user_id = :user_id AND removed_at IS NULL RETURNING user_id, is_active"
+                "UPDATE public.users AS u SET is_active = :active, updated_at = :updated_at "
+                "FROM public.users AS prev "
+                "WHERE u.user_id = :user_id AND prev.user_id = u.user_id AND u.removed_at IS NULL "
+                "RETURNING u.user_id, u.is_active, prev.is_active AS previous_is_active"
             ),
-            {"active": 1 if active else 0, "updated_at": datetime.now(timezone.utc).isoformat(), "user_id": user_id},
+            {"active": 1 if active else 0, "updated_at": now, "user_id": user_id},
         )
     ).mappings().first()
     if row is None:
@@ -776,6 +875,19 @@ async def _set_active(session: AsyncSession, ctx: ExecutionContext, user_id: str
             f"User '{user_id}' has been removed; removal is permanent and cannot be undone here.",
             code="USER_REMOVED", status_code=409,
         )
+    previous = dict(row).get("previous_is_active")
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="UPDATE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        old_value={"is_active": None if previous is None else int(previous)},
+        new_value={
+            # Distinct events on the same generic `UPDATE` action_type, for the same reason
+            # REVOKE_INVITE is distinct from REMOVE_USER: "switched off" and "switched back on"
+            # are opposite organisational facts that `audit_logs` has to keep apart.
+            "event": "REACTIVATE_USER" if active else "DEACTIVATE_USER",
+            "is_active": 1 if active else 0,
+        },
+    )
     await session.commit()
     return {"as_of": _as_of(), "code": "REACTIVATED" if active else "DEACTIVATED", "user_id": user_id}
 
@@ -925,26 +1037,12 @@ async def remove_user(
         ),
         {"removed_at": now_dt, "updated_at": now, "uid": user_id},
     )
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
-              new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :actor_id, 'DELETE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
-            # Records how much work this removal orphaned, so "why did N escalations go unowned
-            # last Tuesday" is answerable from the audit log alone (FR-ADM-009).
-            "new_value_json": json.dumps(
-                {"event": "REMOVE_USER", "orphaned_active_escalations": orphaned_escalations}
-            ),
-            "created_at": now,
-        },
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="DELETE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        # Records how much work this removal orphaned, so "why did N escalations go unowned
+        # last Tuesday" is answerable from the audit log alone (FR-ADM-009).
+        new_value={"event": "REMOVE_USER", "orphaned_active_escalations": orphaned_escalations},
     )
     result = {
         "as_of": _as_of(), "code": "REMOVED", "user_id": user_id,
@@ -1034,25 +1132,13 @@ async def resend_invite(
         ),
         {"invited_at": now_dt, "updated_at": now, "uid": user_id},
     )
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
-              new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :actor_id, 'UPDATE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
-            # FR-ADM-009. Recorded because "who kept re-inviting this address" is a real question
-            # an audit log should answer; the email is included for the same reason invite_user's
-            # entry includes it.
-            "new_value_json": json.dumps({"event": "RESEND_INVITE", "email": str(row["email"])}),
-            "created_at": now,
-        },
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="UPDATE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        # FR-ADM-009. Recorded because "who kept re-inviting this address" is a real question
+        # an audit log should answer; the email is included for the same reason invite_user's
+        # entry includes it.
+        new_value={"event": "RESEND_INVITE", "email": str(row["email"])},
     )
     await session.commit()
     return {
@@ -1114,22 +1200,10 @@ async def revoke_invite(
         ),
         {"removed_at": now_dt, "updated_at": now, "uid": user_id},
     )
-    await session.execute(
-        text(
-            """
-            INSERT INTO public.audit_logs (
-              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
-              new_value_json, ip_address, user_agent, created_at
-            ) VALUES (
-              :audit_id, :actor_id, 'DELETE', 'users', :entity_id, NULL, :new_value_json, NULL, NULL, :created_at
-            )
-            """
-        ),
-        {
-            "audit_id": new_id("AUD"), "actor_id": ctx.user_id, "entity_id": user_id,
-            "new_value_json": json.dumps({"event": "REVOKE_INVITE", "email": str(row["email"])}),
-            "created_at": now,
-        },
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="DELETE", entity_name="users",
+        entity_id=user_id, created_at=now,
+        new_value={"event": "REVOKE_INVITE", "email": str(row["email"])},
     )
     result = {
         "as_of": _as_of(), "code": "INVITE_REVOKED", "user_id": user_id, "email": str(row["email"]),

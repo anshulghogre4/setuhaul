@@ -15,6 +15,11 @@ from app.db.session import db
 logger = logging.getLogger(__name__)
 
 # Names only. Values stay in SSM / process env and are never logged.
+#
+# This is a STATIC list, not a name-transform: nothing in the code derives `GOOGLE_API_KEY` from
+# `/setuhaul/google-api-key`. Every entry so far happens to follow kebab-case -> UPPER_SNAKE, and
+# new entries should keep doing so, but the pairing is explicit precisely so an env var can be
+# named for what the *app* reads (see the gcp-sa-key line) rather than for the parameter.
 _SSM_ENV = (
     ("/setuhaul/google-api-key", "GOOGLE_API_KEY"),
     ("/setuhaul/openai-api-key", "OPENAI_API_KEY"),
@@ -23,6 +28,19 @@ _SSM_ENV = (
     ("/setuhaul/langsmith-api-key", "LANGSMITH_API_KEY"),
     ("/setuhaul/supabase-url", "SUPABASE_URL"),
     ("/setuhaul/database-url", "DATABASE_URL"),
+    # Issue #103. Without these two the container has a Gemini *provider* and no Gemini
+    # *credential*, so AUTO_ORDER falls through to OpenAI on every turn -- the observed incident.
+    # `/setuhaul/gcp-project` is a plain String (a project id is not a secret);
+    # `/setuhaul/gcp-sa-key` is a SecureString holding the service-account key JSON. Both are read
+    # with WithDecryption=True below, which AWS simply ignores for a non-SecureString parameter,
+    # so the plain one needs no special case.
+    #
+    # The env name deliberately breaks the kebab->snake symmetry by one word: the parameter is
+    # named for what it holds (a service-account key), the env var for the form this app consumes
+    # it in (JSON *content*, not a file path). `GCP_SA_KEY` would read as a path to the next person
+    # and quietly invite someone to set it to one, which google-auth would then reject.
+    ("/setuhaul/gcp-project", "GCP_PROJECT"),
+    ("/setuhaul/gcp-sa-key", "GCP_SA_KEY_JSON"),
 )
 
 try:

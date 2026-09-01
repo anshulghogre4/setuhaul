@@ -1,10 +1,13 @@
 import { Truck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 import { RegionError } from '@/components/states/region-states'
+import { formatUserFriendlyError } from '@/core/http/api'
 import { useCountdownClock } from '@/shared/lib/countdown'
+import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/utils'
-import { fetchDockBoard } from '../lib/api'
+import { endDockBlock, fetchDockBoard } from '../lib/api'
 import {
   LEGEND_STATES,
   barTreatment,
@@ -58,7 +61,22 @@ const LABEL_W = 'w-14'
  *  and is named once here rather than inlined. */
 const LABEL_WIDTH_PX = 56
 
-export function DockBoardPanel({ facilityId }: { facilityId: string | null }) {
+export function DockBoardPanel({
+  facilityId,
+  /**
+   * Bumped by `PlannerConsole` after a successful `block_dock` (issue #100).
+   *
+   * Flow 7 step 4 requires the board's outage layer to update "immediately" once the form closes,
+   * and it did not: the panel owned its fetch and nothing told it a block had been created, so the
+   * new hatch (and, since #100, the new Active-blocks row) only appeared on the next tab switch or
+   * reload. That made the end-block control unreachable for the block a planner had just made,
+   * which is precisely the case it exists for.
+   */
+  externalReloadToken = 0,
+}: {
+  facilityId: string | null
+  externalReloadToken?: number
+}) {
   const [board, setBoard] = useState<DockBoardPayload | null>(null)
   const [failed, setFailed] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
@@ -81,7 +99,7 @@ export function DockBoardPanel({ facilityId }: { facilityId: string | null }) {
     return () => {
       ignore = true
     }
-  }, [facilityId, reloadToken, setServerTime])
+  }, [facilityId, reloadToken, externalReloadToken, setServerTime])
 
   const retry = useCallback(() => setReloadToken((n) => n + 1), [])
 
@@ -92,7 +110,172 @@ export function DockBoardPanel({ facilityId }: { facilityId: string | null }) {
   }
   if (board === null) return <BoardSkeleton />
 
-  return <Board board={board} nowMs={now + offsetMs} />
+  return (
+    <>
+      <Board board={board} nowMs={now + offsetMs} />
+      {/* Flow 8's second stated entry point. Rendered here rather than inside `Board` so
+          `BoardPlate` (the `/planner/_states` gallery) keeps rendering the board and nothing that
+          writes -- a gallery artboard with a live `end_dock_block` button would be a fixture page
+          that can change production capacity. `retry` is the same reload token the fetch above
+          uses, so ending a block re-reads the board rather than mutating a local copy of it. */}
+      <ActiveBlocks board={board} onEnded={retry} />
+    </>
+  )
+}
+
+/**
+ * **Flow 8 — End a dock block** (`flows-and-states.md`: *"From the outage-window marker (§4) or a
+ * small 'Active blocks' list on the Board tab — `end_dock_block(dock_status_event_id)`"*).
+ * Issue #100.
+ *
+ * `endDockBlock()` shipped with the block-dock group and had **zero call sites**: a planner who
+ * blocked a dock for a spill and cleared it early had no way back, so the block ran its course or
+ * someone ran SQL. This is that missing control.
+ *
+ * ## The list, not the marker — and why
+ *
+ * The design offers both. The list is chosen because the marker cannot carry the affordance at a
+ * usable size: a marker's width IS its duration, so the 20-minute outage a planner most often
+ * clears early draws ~8px on a four-hour axis (`placeOnTrack`), which is under every touch and
+ * pointer floor this product holds itself to and would need a popover to hang a button off. A
+ * list row is a stable target with room for the dock, the dated window and the reason.
+ *
+ * ⚠ **The list is NOT "every block".** `board.blocks` is horizon-filtered server-side —
+ * `planner_service._board_blocks` selects only events overlapping `[horizon_start, horizon_end)`,
+ * deliberately, so that the hatch appears exactly when Stage 1 would refuse the interval. So a
+ * block scheduled entirely beyond the board's horizon (tonight, tomorrow) cannot be ended from
+ * this surface, and neither can a marker-based control end it — the row simply is not in the
+ * payload. Ending those still needs a read this surface does not have (`dock_status_events` has no
+ * "list active blocks" tool in §7.5.1). Stated here rather than discovered later.
+ *
+ * ## Friction: an in-place confirm, not a modal and not a bare click
+ *
+ * `00-foundations/components.md` §19 tiers this as **Moderate** — the same tier `components.md` §6
+ * assigns to *creating* a block, on the reasoning that it is reversible. Moderate's stated
+ * treatment is "acts immediately, 5-second undo, no modal", and the undo half genuinely does not
+ * apply here: U41's undo window exists to hold back a **driver notification** until it closes
+ * (`shared/lib/undo.ts`), and ending a block notifies nobody — there is nothing to defer, so an
+ * "Undo" would have to re-block, which creates a *different* `dock_status_events` row and is a new
+ * decision rather than a reversal. So the friction is an in-place two-step, the same shape the
+ * shell's own "Sign out everywhere" uses: no modal (U41), safer action first in DOM order (U79).
+ */
+function ActiveBlocks({
+  board,
+  onEnded,
+}: {
+  board: DockBoardPayload
+  onEnded: () => void
+}) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [endingId, setEndingId] = useState<string | null>(null)
+
+  const dockCodeById = useMemo(
+    () => new Map(board.docks.map((d) => [d.dock_id, d.dock_code])),
+    [board.docks],
+  )
+
+  if (board.blocks.length === 0) return null
+
+  async function end(block: BoardBlock) {
+    if (endingId !== null) return
+    setEndingId(block.dock_event_id)
+    try {
+      const result = await endDockBlock(block.dock_event_id)
+      setConfirmingId(null)
+      if (result.code === 'NOT_BLOCKED') {
+        // Flow 8: "`NOT_BLOCKED` (already ended elsewhere) refreshes the board silently,
+        // consistent with U19's rule that a background change to something the planner wasn't
+        // focused on does not interrupt them." So no toast -- the board re-read is the whole
+        // response, and the marker disappearing IS the answer.
+        onEnded()
+        return
+      }
+      toast.success(
+        `${dockCodeById.get(block.dock_id) ?? block.dock_id} is bookable again from now.`,
+      )
+      onEnded()
+    } catch (err) {
+      // The mandatory phrase for a failed write (`stitch-prompts.md` §12) -- the block is still in
+      // place, and a planner who walks away believing the dock is free would send a truck to it.
+      toast.error(`${formatUserFriendlyError(err)} Nothing has changed — the dock is still blocked.`)
+    } finally {
+      setEndingId(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="active-blocks-heading" className="mt-4 flex flex-col gap-2">
+      <h3 id="active-blocks-heading" className="text-supporting font-semibold text-foreground">
+        Active blocks
+      </h3>
+      <ul role="list" className="flex flex-col gap-1">
+        {board.blocks.map((block) => {
+          const dockCode = dockCodeById.get(block.dock_id) ?? block.dock_id
+          const window = block.event_end_ts
+            ? `${formatDate(block.event_start_ts)} · ${formatTime(block.event_start_ts)}–${formatTime(block.event_end_ts)}`
+            : `${formatDate(block.event_start_ts)} · from ${formatTime(block.event_start_ts)}, no end set`
+          const confirming = confirmingId === block.dock_event_id
+          const busy = endingId === block.dock_event_id
+
+          return (
+            <li
+              key={block.dock_event_id}
+              className="rounded-md border border-border bg-card px-3 py-2"
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-mono text-supporting text-foreground">{dockCode}</span>
+                <span className="text-supporting text-muted-foreground" translate="no">
+                  {window}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-supporting text-muted-foreground">
+                  {block.reason ?? block.event_type}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={confirming}
+                  // Names the dock in the accessible name: three rows all reading "End block"
+                  // would give a screen-reader user three identical controls with no way to tell
+                  // which dock each one frees.
+                  aria-label={`End the block on ${dockCode}`}
+                  onClick={() => setConfirmingId(confirming ? null : block.dock_event_id)}
+                >
+                  End block
+                </Button>
+              </div>
+
+              {confirming ? (
+                <div className="mt-2 border-t border-border pt-2">
+                  <p className="mb-2 text-supporting text-muted-foreground">
+                    {dockCode} becomes bookable again from now. Appointments already stranded by
+                    this block are not restored — the escalation it opened stays open.
+                  </p>
+                  {/* U79: the safer action FIRST in DOM order, so a keyboard user who overshoots
+                      lands on the harmless one. */}
+                  <div className="flex items-center gap-2">
+                    <Button variant="neutral" size="sm" onClick={() => setConfirmingId(null)}>
+                      Keep it blocked
+                    </Button>
+                    <Button
+                      variant="cautionary"
+                      size="sm"
+                      aria-disabled={busy}
+                      onClick={() => {
+                        if (busy) return
+                        void end(block)
+                      }}
+                    >
+                      {busy ? 'Ending…' : 'End block'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
 }
 
 /**

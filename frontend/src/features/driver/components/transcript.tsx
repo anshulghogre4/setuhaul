@@ -1,5 +1,5 @@
 import { useAtomValue } from 'jotai'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 
 import { useCountdownClock } from '@/shared/lib/countdown'
 import { cn } from '@/shared/lib/utils'
@@ -55,6 +55,20 @@ import type { DriverMessage, DriverOption } from '../lib/types'
  * dependency to pre-solve a load nobody has is the wrong trade.
  */
 
+/**
+ * The imperative surface the persistent state line needs (issue #99.3).
+ *
+ * A prop (`scrollToMessageId`) was the alternative and is worse here: the same message can be the
+ * target twice in a row (tap, scroll away, tap again), and a prop whose value has not changed
+ * fires no effect -- so it would need a nonce beside it, which is a ref with extra steps. The
+ * transcript owns its scroll container, so it owns the scroll.
+ */
+export type TranscriptHandle = {
+  /** Scrolls the message to the top of the viewport and focuses it. `false` when no row with that
+   *  id is mounted, so the caller can tell "jumped" from "nothing to jump to". */
+  scrollToMessage: (messageId: string) => boolean
+}
+
 export type TranscriptProps = {
   messages: DriverMessage[]
   facilityName?: string
@@ -63,6 +77,7 @@ export type TranscriptProps = {
   onSelectOption?: (option: DriverOption) => void
   onEscalate?: () => void
   onRetry?: (message: DriverMessage) => void
+  ref?: Ref<TranscriptHandle>
 }
 
 /** Consecutive messages from the same sender within 2 minutes group: attribution on the first
@@ -77,6 +92,7 @@ export function Transcript({
   onSelectOption,
   onEscalate,
   onRetry,
+  ref,
 }: TranscriptProps) {
   const turn = useAtomValue(turnAtom)
   const { now } = useCountdownClock()
@@ -103,6 +119,41 @@ export function Transcript({
     setPinned(nowPinned)
     if (nowPinned) setUnseen(0)
   }, [])
+
+  /**
+   * Issue #99.3 -- the state line's "go to the message that set this state".
+   *
+   * Measured offsets rather than `element.offsetTop`: this scroll container is not a positioned
+   * ancestor (`h-full overflow-y-auto` with no `relative`), so `offsetTop` is measured against the
+   * wrapper above it and lands the jump ~a header's height off. Two `getBoundingClientRect()`
+   * reads and a delta are correct regardless of which ancestor happens to be positioned.
+   *
+   * `scrollIntoView` is deliberately not used: it walks every scrollable ancestor, and on the
+   * driver PWA the visual viewport is one of them, so it can scroll the whole app under a keyboard
+   * that is open. This moves exactly one container.
+   *
+   * No smooth behaviour. `motion.md`'s reduced-motion rule would make it conditional anyway, and
+   * an instant jump is what "take me to that message" means on a phone one-handed.
+   */
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToMessage(messageId: string) {
+        const container = viewport.current
+        const target = container?.querySelector<HTMLElement>(
+          `[data-message-id="${CSS.escape(messageId)}"]`,
+        )
+        if (!container || !target) return false
+        container.scrollTop += target.getBoundingClientRect().top - container.getBoundingClientRect().top
+        // The scroll handler above recomputes `pinned` from the new position, so scrolling up to
+        // history correctly surfaces the "N new" pill again rather than leaving the transcript
+        // believing it is still at the bottom.
+        target.focus({ preventScroll: true })
+        return true
+      },
+    }),
+    [],
+  )
 
   useEffect(() => {
     const added = messages.length - lastCount.current

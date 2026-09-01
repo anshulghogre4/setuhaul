@@ -175,13 +175,27 @@ export function toIdentity(me: MeProfile, profile?: AccountProfile | null): Iden
    * `identity.ts:57-59`: "True only for the cross-facility ops roles -- section 7.5.5 takes an
    * optional facility_id, and omitting it means every facility in scope."
    *
-   * Read narrowly on purpose. `OPERATIONS_MANAGER` is the role `App.tsx`'s retired `OPS_IDENTITY`
-   * fixture set it for, and it is the one the design's own persona table describes as
-   * cross-facility. An `OPERATIONS_EXECUTIVE` in the POC roster is scoped to a single facility
-   * (`tests/support/accounts.ts`), so offering them "All facilities" would advertise a breadth the
-   * server-derived scope will not honour -- the exact inference leak `auth-and-scoping.md` forbids.
+   * ## Read off the SERVER's own scope, not off a role guess (changed 2026-09-01, issue #99)
+   *
+   * This was `role === 'OPERATIONS_MANAGER'`, and that was wrong against the live backend --
+   * latent only because the switcher's selection went nowhere. `GET /api/v1/auth/me` reports
+   * `scope.type = "global_read_only" if ctx.has_global_read_scope else ...`
+   * (`backend/app/api/v1/routers/health_auth.py:57-61`), and `has_global_read_scope` is
+   * `{ADMIN, TRANSPORT_MANAGER, REGIONAL_OPERATIONS_HEAD}` (`execution_context.py:106-117`) --
+   * **`OPERATIONS_MANAGER` is not in it.** `resolve_facility_scope` branches on exactly that
+   * property (`repositories/scope.py:46-49`), so for an operations manager, omitting `facility_id`
+   * does *not* mean "every facility": the server silently scopes the read to their own facility
+   * and the UI would have labelled one facility's rows "All facilities". That is the inference
+   * leak `auth-and-scoping.md` forbids, stated as a fact about scope rather than about data.
+   *
+   * `scope.type` is the honest predicate because it is the server reporting its own branch. The
+   * `permissions` fallback covers a deployment whose `/auth/me` predates the `scope` object;
+   * `*_read_global` is what `ROLE_PERMISSIONS` grants exactly those three personas
+   * (`backend/app/core/deps.py`).
    */
-  const canSelectAllFacilities = role === 'OPERATIONS_MANAGER'
+  const canSelectAllFacilities =
+    me.scope?.type === 'global_read_only' ||
+    (me.permissions ?? []).some((p) => p.endsWith(':read_global'))
 
   const roleLabel = roleDisplayName(me.role_name)
 

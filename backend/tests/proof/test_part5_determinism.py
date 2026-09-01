@@ -263,8 +263,26 @@ async def test_the_planner_snapshot_hash_is_stable(seed_session):
     ]
     assert appointment_ids, "no live appointments to snapshot"
 
-    first = await load_appointment_snapshots(seed_session, appointment_ids)
-    second = await load_appointment_snapshots(seed_session, appointment_ids)
+    # `actor_user_id` is required since issue #98: this function lazily expires lapsed holds that
+    # overlap these intervals before recomputing, and the `EXPIRE_HOLD` audit row needs an author.
+    # Stability is unaffected and that is the point of running it twice here -- the expiry happens
+    # *before* each call's own SELECT, so both calls read the same post-flip world. On the pristine
+    # seed clone it is a proven no-op: there are no `HELD` rows in the shipped seed at all (holds
+    # are created only by `request_slot`, and this database has never been written to), and this
+    # session is rolled back at teardown regardless.
+    held_rows = await seed_session.scalar(
+        text("SELECT count(*) FROM public.dock_occupancy WHERE state = 'HELD'")
+    )
+    assert int(held_rows) == 0, (
+        "the pristine seed clone has HELD rows; this determinism read is no longer a pure read"
+    )
+
+    first = await load_appointment_snapshots(
+        seed_session, appointment_ids, actor_user_id="USR102"
+    )
+    second = await load_appointment_snapshots(
+        seed_session, appointment_ids, actor_user_id="USR102"
+    )
     assert set(first) == set(second)
     drifted = [
         aid

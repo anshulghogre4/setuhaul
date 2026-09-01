@@ -63,7 +63,7 @@ type LoadState = 'loading' | 'error' | 'ready'
  * stable key would make a second, genuine takeover after a hand-back replay the first response and
  * silently never touch the thread.
  */
-export function OpsConsole() {
+export function OpsConsole({ facilityId = null }: { facilityId?: string | null }) {
   const [state, setState] = useState<LoadState>('loading')
   const [live, setLive] = useState<OpsLiveState>(emptyOpsLiveState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -125,15 +125,25 @@ export function OpsConsole() {
   const load = useCallback(async () => {
     setState('loading')
     try {
-      const res = await fetchEscalationQueue({ owner: 'all' })
+      const res = await fetchEscalationQueue({ facilityId, owner: 'all' })
       setLive(adoptOpsQueue(res))
       setLiveChange(null)
       setState('ready')
     } catch {
       setState('error')
     }
-  }, [])
+  }, [facilityId])
 
+  /**
+   * Re-reads on mount AND whenever the facility switcher changes `facilityId` (issue #99.1) --
+   * `load` is keyed to it, so the effect below is the re-scope.
+   *
+   * `facilityId` is a **narrowing request**, never an assertion (M15/NFR-019): the server runs it
+   * through `resolve_facility_scope`, which lets a global-read persona narrow and answers 403
+   * `FORBIDDEN` for anyone else who names a facility other than their own. That refusal surfaces
+   * as this console's own error state with its Retry, which is the honest outcome -- the client
+   * does not get to decide it was allowed.
+   */
   useEffect(() => {
     void load()
   }, [load])
@@ -211,7 +221,11 @@ export function OpsConsole() {
     // skipped and re-armed rather than counted as a failure.
     paused: busy,
     pendingCount,
-    fetcher: () => fetchEscalationQueue({ owner: 'all' }),
+    // Same scope as `load` above, so a poll can never quietly widen the queue back to the
+    // identity's default facility after the coordinator has narrowed it. `useLivePoll` re-reads
+    // `opts.fetcher` into a ref on every render, so this inline closure always carries the
+    // current `facilityId` without restarting the loop.
+    fetcher: () => fetchEscalationQueue({ facilityId, owner: 'all' }),
     onData: (res) => {
       const ctx = pollContextRef.current
       setLive((prev) => mergeOpsQueue(prev, res, { frozen: ctx.frozen, keepId: ctx.selectedId }))

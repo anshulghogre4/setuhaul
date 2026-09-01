@@ -99,8 +99,8 @@ test('gate: shift start, end shift, and the search flow', async ({ page }) => {
     .getByRole('button', { name: /^Search$/ })
   say(
     'Back to shift indicator (Search screen)',
-    'MISSING',
-    `the search screen carries no back control at all (${await shiftBarBack.count()} matches in the shift bar). components/shift-bar.tsx renders its back affordance only when \`onBack\` is passed, and gate-kiosk.tsx passes it exclusively for phase.kind === 'truck' -- matching mockup.html, which draws the back control on screens 6-12 and 22b only. So the inventory's "Back to shift indicator | Search screen" row has no implementation.`,
+    'NOT-IN-DESIGN',
+    `the search screen carries no back control (${await shiftBarBack.count()} matches in the shift bar), and on re-reading the design that is CORRECT -- the inventory row came from one stale sketch, outvoted by three authoritative artefacts. (1) stitch-prompts.md section 3 gives this screen's shift bar its copy VERBATIM -- 'Shift bar left: "Gate booth · Jaipur · Shift: Ramesh K."' and 'Shift bar right: "End shift"' -- followed by "Nothing else on screen." (2) mockup.html draws the back control on artboards 6-12 and 22b only; 3a/3b/3c (Search), 4 (No match) and 5a-5c (disambiguation) have none. (3) flows-and-states.md's screen map has NO edge from Search back to Shift start: Flow 9's "End shift" is the only transition that returns to Flow 0, and screens.md section 1 confirms it ("Ending a shift ... returns here and clears the session-level officer name"). The one artefact that shows it is screens.md section 2's ASCII sketch ("← Shift: Ramesh K."), which predates the mockup and describes a destination that has no state in this surface's flow model -- there is no "view the shift screen without ending the shift". Building it would mean inventing that state. FORK for the owner if it is genuinely wanted: screens.md section 2's sketch should be corrected to match the prompt and the mockup, OR a new flow defined for what a non-destructive return to the shift screen does.`,
   )
   void backOnSearch
 

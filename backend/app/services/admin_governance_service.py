@@ -137,6 +137,62 @@ def _to_dt(value: datetime | str) -> datetime:
 
 
 # --------------------------------------------------------------------------------------
+# Audit (FR-ADM-009 / M14, `06-admin-console/flows-and-states.md` Flow 9)
+# --------------------------------------------------------------------------------------
+
+
+async def _write_audit_entry(
+    session: AsyncSession, *, actor_id: str, action_type: str, entity_name: str, entity_id: str,
+    new_value: dict[str, Any], created_at: str, old_value: dict[str, Any] | None = None,
+) -> None:
+    """The one place this module writes `audit_logs` -- Flow 9's "every write on this console
+    becomes its own audit entry", through M14's ordinary pipeline rather than a weaker admin path.
+
+    **This module wrote none at all before issue #80.** It exposes the Audit tab
+    (`get_audit_log`/`export_audit_log`) while three of its own writes -- a rule create, a rule
+    edit, and a policy publish -- left no trace in the table that tab reads. The publish is the
+    sharpest case: it changes the ranking formula every subsequent allocation is scored against
+    (D7), which makes it arguably the highest-consequence write in the product, and it was
+    invisible.
+
+    **`action_type` stays the generic CRUD verb and the specific event lives in
+    `new_value_json.event`** -- the convention `admin_user_service`'s four pre-existing entries
+    already established, and the one `audit_logs_action_type_check` permits without a migration
+    (`supabase/migrations/20260829134929_d2_held_state_dock_occupancy.sql:290-296`; its sixteen
+    values are LOGIN/LOGOUT/VIEW/CRUD/appointment/hold verbs, none console-specific).
+
+    **No commit here, deliberately.** Every caller issues its own single `session.commit()` after
+    calling this, so the audit row and the write it records land in the same transaction and fail
+    together -- FR-ADM-009 is worthless if a write can succeed with its audit entry rolled back.
+
+    Deliberately a near-duplicate of `admin_user_service._write_audit_entry` rather than a shared
+    import: the two admin modules are peers, neither imports the other today, and issue #80's scope
+    is these two files. Folding both onto one `services/audit.py` is a worthwhile follow-up, not
+    something to smuggle in here.
+    """
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id, old_value_json,
+              new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :actor_id, :action_type, :entity_name, :entity_id, :old_value_json,
+              :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"), "actor_id": actor_id, "action_type": action_type,
+            "entity_name": entity_name, "entity_id": entity_id,
+            "old_value_json": None if old_value is None else json.dumps(old_value, default=str),
+            "new_value_json": json.dumps(new_value, default=str),
+            "created_at": created_at,
+        },
+    )
+
+
+# --------------------------------------------------------------------------------------
 # Facility rules
 # --------------------------------------------------------------------------------------
 
@@ -182,7 +238,14 @@ async def create_facility_rule(
     *, facility_id: str, rule_type: str, rule_value: str, effective_from: str | None = None,
     effective_to: str | None = None, description: str = "",
 ) -> dict[str, Any]:
-    """SS7.5.7 `create_facility_rule` -- `rule_type` drawn from the registry, never free text."""
+    """SS7.5.7 `create_facility_rule` -- `rule_type` drawn from the registry, never free text.
+
+    Audited (FR-ADM-009 / Flow 9, issue #80): `old_value_json` is genuinely NULL here, matching
+    `invite_user`'s entry -- a created row has no before -- while the new value carries the whole
+    rule payload, so "who added the 21:00 cutoff at Jaipur, and with what window" is answerable
+    from the Audit tab without joining back to `facility_rules` (which a later edit will have moved
+    on anyway).
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
     validated_type = _validate_rule_type(rule_type)
@@ -205,6 +268,16 @@ async def create_facility_rule(
             },
         )
     ).mappings().one()
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="CREATE", entity_name="facility_rules",
+        entity_id=rule_id, created_at=_as_of(),
+        new_value={
+            "event": "CREATE_FACILITY_RULE", "facility_id": facility_id,
+            "rule_type": validated_type, "rule_value": rule_value,
+            "effective_from": effective_from, "effective_to": effective_to,
+            "description": description, "active_flag": 1,
+        },
+    )
     await session.commit()
     result = dict(row)
     result["code"] = "CREATED"
@@ -217,19 +290,39 @@ async def update_facility_rule(
     effective_to: str | None = None,
 ) -> dict[str, Any]:
     """SS7.5.7 `update_facility_rule`. `rule_type`/`facility_id` are not editable here -- changing
-    which rule a row represents is a new rule, not an update to an existing one."""
+    which rule a row represents is a new rule, not an update to an existing one.
+
+    **The pre-edit values come from an aliased self-join, not a second read** (FR-ADM-009, issue
+    #80). Production Supabase is PostgreSQL 17.6 and `RETURNING OLD.*` is a PostgreSQL **18**
+    feature, so the before-values need another source; the `UPDATE` docs' own sanctioned form is
+    the aliased self-join ("do not repeat the target table as a from_item unless you intend a
+    self-join (in which case it must appear with an alias)"), and joining on `facility_rules`'
+    primary key satisfies the same docs' one-output-row-per-target-row requirement, so their
+    indeterminacy warning does not apply.
+
+    The before/after is the entire content of a rule-edit audit entry: every argument here is
+    `COALESCE`d, so an entry recording only the new state cannot distinguish "the admin changed the
+    cutoff from 21:00 to 20:00" from "the admin re-saved 20:00 unchanged". The three `previous_*`
+    columns are popped off before the result is returned, so this tool's response shape is
+    unchanged.
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
     row = (
         await session.execute(
             text(
                 """
-                UPDATE public.facility_rules
-                SET rule_value = COALESCE(:rule_value, rule_value),
-                    effective_from = COALESCE(:eff_from, effective_from),
-                    effective_to = COALESCE(:eff_to, effective_to)
-                WHERE rule_id = :rule_id
-                RETURNING rule_id, facility_id, rule_type, rule_value, effective_from, effective_to
+                UPDATE public.facility_rules AS fr
+                SET rule_value = COALESCE(:rule_value, fr.rule_value),
+                    effective_from = COALESCE(:eff_from, fr.effective_from),
+                    effective_to = COALESCE(:eff_to, fr.effective_to)
+                FROM public.facility_rules AS prev
+                WHERE fr.rule_id = :rule_id AND prev.rule_id = fr.rule_id
+                RETURNING fr.rule_id, fr.facility_id, fr.rule_type, fr.rule_value,
+                          fr.effective_from, fr.effective_to,
+                          prev.rule_value AS previous_rule_value,
+                          prev.effective_from AS previous_effective_from,
+                          prev.effective_to AS previous_effective_to
                 """
             ),
             {"rule_value": rule_value, "eff_from": effective_from, "eff_to": effective_to, "rule_id": rule_id},
@@ -237,8 +330,25 @@ async def update_facility_rule(
     ).mappings().first()
     if row is None:
         raise AppError(f"Rule '{rule_id}' not found.", code="NOT_FOUND", status_code=404)
-    await session.commit()
     result = dict(row)
+    previous = {
+        "rule_value": result.pop("previous_rule_value", None),
+        "effective_from": result.pop("previous_effective_from", None),
+        "effective_to": result.pop("previous_effective_to", None),
+    }
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="UPDATE", entity_name="facility_rules",
+        entity_id=rule_id, created_at=_as_of(),
+        old_value=previous,
+        new_value={
+            "event": "UPDATE_FACILITY_RULE",
+            "facility_id": result.get("facility_id"), "rule_type": result.get("rule_type"),
+            "rule_value": result.get("rule_value"),
+            "effective_from": result.get("effective_from"),
+            "effective_to": result.get("effective_to"),
+        },
+    )
+    await session.commit()
     result["code"] = "UPDATED"
     return result
 
@@ -741,6 +851,25 @@ async def get_active_policy_version(session: AsyncSession, ctx: ExecutionContext
     }
 
 
+def _weights_of(row: Any) -> dict[str, Any] | None:
+    """The stored coefficients of a `policy_versions` row, or None if they cannot be read.
+
+    `weights_json` is `text NOT NULL` in the live schema, so the None branches are defensive rather
+    than expected -- but this runs inside the publish transaction, and an audit entry is not worth
+    turning a successful publish into a 500 over a row whose JSON somebody hand-edited. A missing
+    "before" degrades the entry; a raised exception loses both the entry and the publish.
+    """
+    if row is None:
+        return None
+    raw = dict(row).get("weights_json")
+    if not raw:
+        return None
+    try:
+        return json.loads(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 async def publish_policy_version(
     session: AsyncSession, ctx: ExecutionContext, *, weights: dict[str, Any], idempotency_key: str,
     based_on_version_id: str | None = None,
@@ -795,7 +924,7 @@ async def publish_policy_version(
         await session.execute(
             text(
                 """
-                SELECT policy_version_id, published_by_user_id, published_at
+                SELECT policy_version_id, published_by_user_id, published_at, weights_json
                 FROM public.policy_versions
                 WHERE is_active = 1
                 FOR UPDATE
@@ -815,6 +944,7 @@ async def publish_policy_version(
         raise await _policy_version_conflict(session, attempted_baseline=baseline, active=active)
 
     version_id = new_id("POLV")
+    now_dt = datetime.now(timezone.utc)
     await session.execute(
         text("UPDATE public.policy_versions SET is_active = 0 WHERE is_active = 1"),
     )
@@ -827,7 +957,25 @@ async def publish_policy_version(
         ),
         {
             "id": version_id, "weights_json": json.dumps(weights, default=str),
-            "published_at": datetime.now(timezone.utc), "published_by": ctx.user_id,
+            "published_at": now_dt, "published_by": ctx.user_id,
+        },
+    )
+    # FR-ADM-009 / Flow 9 (issue #80), and the one M14 field this table can carry directly: the
+    # design's audit row is "who, what, when, **which policy version**, which tool call", and both
+    # version ids go into this entry. `weights_json` came out of the FOR UPDATE read above, so the
+    # superseded coefficients cost no extra round trip -- which matters because the diff *is* the
+    # decision here: "w_fairness went from 0 to 0.4 on Tuesday" is the fact an auditor needs, and
+    # it is not recoverable from the new row alone.
+    await _write_audit_entry(
+        session, actor_id=ctx.user_id, action_type="CREATE", entity_name="policy_versions",
+        entity_id=version_id, created_at=now_dt.isoformat(),
+        old_value=(
+            None if current_id is None
+            else {"policy_version_id": current_id, "weights": _weights_of(active)}
+        ),
+        new_value={
+            "event": "PUBLISH_POLICY_VERSION", "policy_version_id": version_id,
+            "weights": weights, "superseded_version_id": current_id,
         },
     )
     result = {

@@ -1,4 +1,4 @@
-import { expect, test } from 'playwright/test'
+import { expect, test, type Page } from 'playwright/test'
 
 import { ACCOUNTS, ORIGIN, recorderFor, storageFor } from './support'
 import { mintSession, toStorageState } from '../support/session'
@@ -147,28 +147,12 @@ test('driver: conversation composer, send and the state line', async ({ page }) 
   await page.locator(`a[href="/driver/t/${THREAD}"]`).click()
   await expect(page).toHaveURL(new RegExp(`${THREAD}$`))
 
-  // ---- Persistent state line -----------------------------------------------------------------
-  const stateLine = page.getByRole('button', { name: 'Go to the message that set this state' })
-  await expect(stateLine).toBeVisible()
-  const before = await page.evaluate(() => {
-    const el = document.querySelector('[role="log"]')
-    return { top: el?.scrollTop ?? -1, html: document.body.innerHTML.length }
-  })
-  let requests = 0
-  page.on('request', () => {
-    requests += 1
-  })
-  await stateLine.click()
-  await page.waitForTimeout(500)
-  const after = await page.evaluate(() => {
-    const el = document.querySelector('[role="log"]')
-    return { top: el?.scrollTop ?? -1, html: document.body.innerHTML.length }
-  })
-  say(
-    'Persistent state line tap',
-    'DEAD',
-    `the line renders (promise_state=PENDING_CONFIRMATION) as a real focusable button, but activating it produces nothing: transcript scrollTop ${before.top} -> ${after.top}, DOM length ${before.html} -> ${after.html}, ${requests} network requests, no navigation, no dialog. Cause is in source: screens/conversation.tsx renders <StateLine state expiresAt operationalLine/> and never passes onScrollToOrigin, so state-line.tsx's onClick={onScrollToOrigin} is undefined.`,
-  )
+  // The state line's own activation is verified AFTER the send below, not here: on a freshly
+  // opened thread the transcript is empty (this surface has no `/chat/history` restore), so a tap
+  // now would have nothing to scroll to and would report a defect that is really an empty list.
+  await expect(
+    page.getByRole('button', { name: 'Go to the message that set this state' }),
+  ).toBeVisible()
 
   // ---- Composer ------------------------------------------------------------------------------
   const composer = page.getByRole('textbox', { name: 'Message' })
@@ -205,6 +189,9 @@ test('driver: conversation composer, send and the state line', async ({ page }) 
     `POST /api/v1/chat/stream fired (HTTP ${res.status()}) carrying client_message_id=${body.client_message_id ? 'present' : 'MISSING'} and thread_id=${body.thread_id}; the optimistic bubble appeared immediately, so the optimistic half of the control is WORKING. The stream then answers an \`error\` frame (LLM_UNAVAILABLE -- the in-process assistant has no Vertex credentials locally), which is the designed degraded state. What the transcript shows afterwards, verbatim: "${transcript.slice(0, 260)}" -- inline Retry control present: ${retryVisible > 0}; failure marked: ${marksFailure}.`,
   )
 
+  // ---- Persistent state line tap (issue #99.3) -----------------------------------------------
+  await verifyStateLineTap(page)
+
   const noTurn =
     'exists only inside a completed assistant turn. /api/v1/chat/stream returns an LLM_UNAVAILABLE error frame locally (verified above), so no option set, quick-reply row or clarification chip is ever appended to the transcript. Component wiring is present in source (option-set.tsx / composer.tsx quickReplies / use-driver-turn.ts PROMISE_TOOLS) but cannot be activated here.'
   say('Option card tap', 'BLOCKED-ENV', noTurn)
@@ -226,6 +213,77 @@ test('driver: conversation composer, send and the state line', async ({ page }) 
     'an OS-level notification activation, outside a Playwright page context. `pushSubscriptionEnabled` is also false (features/driver/lib/flags.ts) and no producer writes a notifications row yet, so no push would be delivered either.',
   )
 })
+
+/**
+ * The persistent state line's tap (issue #99.3), verified against a transcript that actually has
+ * something in it.
+ *
+ * ## Two deliberate choices in how this is proved
+ *
+ * 1. **The viewport is shrunk to 390x340 first.** The transcript only overflows when there is more
+ *    content than room, and the LLM leg is unavailable locally, so this run's transcript is the one
+ *    probe message the send test above posted. A 340px-tall phone makes that one message genuinely
+ *    scrollable, which turns "the scroll happened" into a measurable number instead of an assertion
+ *    about an unscrollable list. It is a real device size, not a rigged one -- the PWA's stated
+ *    range starts at 320px wide.
+ * 2. **Focus is asserted as well as `scrollTop`.** `transcript.tsx` moves focus to the target row
+ *    (`tabIndex={-1}`, `data-message-id`), so `document.activeElement` naming the exact message is
+ *    the proof that the handler found the RIGHT row rather than merely moving the scrollbar.
+ *
+ * ## The boundary this records honestly
+ *
+ * `components.md` §6 says the tap goes to "the message that established the state". With
+ * `promise_state=PENDING_CONFIRMATION` arriving from `/api/v1/driver/context` and no
+ * `GET /chat/history` call site anywhere in `src/`, the establishing message is not in this
+ * client's transcript at all -- so `conversation.tsx`'s tier-3 rule scrolls as far back as the
+ * transcript goes, and says so in its own comment rather than fabricating a target.
+ */
+async function verifyStateLineTap(page: Page) {
+  await page.setViewportSize({ width: 390, height: 340 })
+  const stateLine = page.getByRole('button', { name: 'Go to the message that set this state' })
+  await expect(stateLine).toBeVisible()
+
+  const before = await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('[role="log"]')
+    if (!el) return null
+    // Start from the bottom, which is where a driver reading the latest message actually is.
+    el.scrollTop = el.scrollHeight
+    return {
+      top: el.scrollTop,
+      scrollable: el.scrollHeight > el.clientHeight,
+      rows: el.querySelectorAll('[data-message-id]').length,
+      firstId: el.querySelector<HTMLElement>('[data-message-id]')?.dataset.messageId ?? null,
+    }
+  })
+
+  let requests = 0
+  page.on('request', () => {
+    requests += 1
+  })
+  await stateLine.click()
+  await page.waitForTimeout(400)
+
+  const after = await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('[role="log"]')
+    const active = document.activeElement as HTMLElement | null
+    return {
+      top: el?.scrollTop ?? -1,
+      focusedMessageId: active?.getAttribute('data-message-id') ?? null,
+    }
+  })
+
+  const moved = before !== null && after.top < before.top
+  const landed = after.focusedMessageId !== null && after.focusedMessageId === before?.firstId
+  expect(landed, 'the state-line tap must focus the origin message row').toBe(true)
+
+  say(
+    'Persistent state line tap',
+    'WORKING',
+    `the line (promise_state=PENDING_CONFIRMATION) now scrolls the transcript to its origin message and focuses it. Measured at 390x340 with ${before?.rows ?? 0} message row(s) and the transcript scrolled to the bottom: scrollTop ${before?.top ?? -1} -> ${after.top} (moved: ${moved}; transcript scrollable: ${before?.scrollable ?? false}), document.activeElement is the row data-message-id=${after.focusedMessageId} which is the transcript's origin row (${landed}), and ${requests} network request(s) fired -- the jump is local, as it should be. BOUNDARY, recorded rather than papered over: this thread's PENDING state came from GET /driver/context and its true establishing message was never loaded (no GET /chat/history call site exists in src/), so conversation.tsx's establishingMessageId() resolved via its stated tier-3 fallback -- the oldest message this client holds -- rather than tiers 1/2 (the held slot's option-set card, or the most recent optionSet/receipt part). Those two tiers need a completed assistant turn, which is BLOCKED-ENV here for the same reason every other in-turn control is.`,
+  )
+
+  await page.setViewportSize({ width: 390, height: 844 })
+}
 
 /**
  * Sign-out gets its OWN minted session rather than the shared `driver-sandbox.json`.

@@ -987,8 +987,17 @@ LAZY_EXPIRY_REASON = (
     "HELD reservation lapsed unconfirmed (D2, 90-second TTL); expired lazily by a competing claim "
     "on the same dock interval because the sweeper had not reached it"
 )
+# Issue #98's leg. Third discoverer of the same transition: a planner displacement read found the
+# dead hold standing in the way of an appointment it was about to be refused for. Recorded
+# separately from `LAZY_EXPIRY_REASON` because "who noticed" is genuinely different -- a reader,
+# not a claimant -- and M14 wants a state change reconstructable from the audit row alone.
+LAZY_EXPIRY_ON_READ_REASON = (
+    "HELD reservation lapsed unconfirmed (D2, 90-second TTL); expired lazily by a planner "
+    "displacement read over the same dock interval because the sweeper had not reached it"
+)
 ACTOR_EXPIRY_SWEEPER = "EXPIRY_SWEEPER"
 ACTOR_LAZY_CLAIM = "LAZY_EXPIRY_ON_CLAIM"
+ACTOR_LAZY_DISPLACEMENT_READ = "LAZY_EXPIRY_ON_DISPLACEMENT_READ"
 
 
 async def _audit_hold_expiries(
@@ -1048,6 +1057,136 @@ async def _audit_hold_expiries(
         )
 
 
+async def _flip_lapsed_holds(
+    session: AsyncSession,
+    *,
+    statement: str,
+    params: dict[str, Any],
+    now: datetime,
+    actor_user_id: str,
+    reason: str,
+    actor: str,
+    log_subject: str,
+) -> list[int]:
+    """Run one lapsed-hold UPDATE and audit whatever it flipped. Caller commits.
+
+    **The shared core of every lazy-expiry variant** (issues #97 and #98). Only the `WHERE` that
+    selects *which* dead holds are in the way differs between callers -- the flip itself, the audit
+    row, the CHECK-satisfying `expires_at = NULL`, and the log line are identical, and issue #98's
+    whole premise is that a second copy of this transition is how two paths drift apart. Every
+    caller's `statement` must therefore end in
+    `RETURNING o.occupancy_id, o.dock_id, o.shipment_id` and must carry
+    `state = 'HELD' AND expires_at <= :now`; nothing here re-checks that, because a variant that
+    dropped either predicate would be expiring holds somebody could still use.
+
+    `UPDATE ... FROM` is used by both variants and can join a target row to more than one driving
+    row. PostgreSQL's own wording (`SQL-UPDATE`, "FROM clause"): *"If it does, then only one of the
+    join rows will be used to update the target row, but which one will be used is not readily
+    predictable."* That ambiguity is harmless here and deliberately so -- no `SET` expression reads
+    a column from the driving side, so every candidate join row would produce the identical update.
+    Each target row is still updated at most once, so `RETURNING` yields one row per flipped hold
+    and `_audit_hold_expiries` writes exactly one audit row per hold.
+    """
+    rows = (await session.execute(text(statement), params)).mappings().all()
+    if not rows:
+        return []
+    flipped = [dict(row) for row in rows]
+    await _audit_hold_expiries(
+        session, flipped, actor_user_id=actor_user_id, now=now, reason=reason, actor=actor
+    )
+    logger.info(
+        "lazily expired %d lapsed hold(s) blocking %s: %s",
+        len(flipped),
+        log_subject,
+        [row["occupancy_id"] for row in flipped],
+    )
+    return [int(row["occupancy_id"]) for row in flipped]
+
+
+async def expire_lapsed_holds_for_appointments(
+    session: AsyncSession,
+    *,
+    appointment_ids: list[str],
+    now: datetime,
+    actor_user_id: str,
+) -> list[int]:
+    """Flip every lapsed HELD row overlapping these appointments' own intervals. Caller commits.
+
+    **Issue #98 -- the displacement-read half of the same problem `expire_lapsed_holds_on_interval`
+    solves for the claim path.** `snapshot.load_appointment_snapshots` and
+    `planner_service.get_planner_queue` both answer *"what would PostgreSQL refuse?"*, so both
+    deliberately omit the `expires_at > now()` term (`repositories/operations.py
+    ::list_live_dock_occupancy` argues that at length, and #84 is why). After issue #97 gave the
+    claim path a lazy-expiry leg, that reasoning was only half-true: the constraint still has no
+    time term, but the write path effectively acquired one -- so a planner could be refused with
+    `DISPLACEMENT_DETECTED` by a hold the very next claim would silently expire, and with no
+    sweeper running (issue #20) the refusal never cleared.
+
+    Owner decision (b) on #98: rather than teaching the reads to *ignore* lapsed holds -- which
+    would reopen the gap between what the reads see and what the constraint sees that #84 exists to
+    close -- make the table tell the truth first. After this runs the constraint genuinely does not
+    count those rows, so "the recomputation sees exactly what the exclusion constraint sees" stays
+    literally true rather than becoming an approximation.
+
+    ## The interval, and why it is not the published slot window
+
+    The `target` CTE below is `snapshot._SNAPSHOT_SQL`'s own `target` CTE, minus the columns this
+    statement does not need. It must stay that way: `dock_occupancy`'s claim when the appointment
+    has one, otherwise slot start + `expected_unload_min` + the flat changeover buffer -- D1 (§0.9)
+    makes `dock_occupancy` the authority and `appointment_slots` cannot see a 75-minute unload
+    booked into a 60-minute slot (§6.2 #1). `repositories/operations.list_planner_queue_rows`
+    computes the same expression for the same reason, which is what lets one statement serve both
+    the write-path recomputation and the queue read.
+
+    `LEFT JOIN LATERAL ... LIMIT 1` rather than a plain join, copied from the same place: the D1
+    EXCLUDE constraint is on `(dock_id, window)`, so nothing stops one appointment holding claims
+    on two docks and a plain join would fan the target row out.
+
+    Returns the `occupancy_id`s flipped; an empty list is the overwhelmingly common case and costs
+    one statement.
+    """
+    if not appointment_ids:
+        return []
+    return await _flip_lapsed_holds(
+        session,
+        statement="""
+            WITH target AS (
+              SELECT sl.dock_id,
+                     COALESCE(occ.window_start, sl.slot_start_ts) AS interval_start,
+                     COALESCE(
+                         occ.window_end,
+                         sl.slot_start_ts + ((s.expected_unload_min + 15) || ' minutes')::interval
+                     ) AS interval_end
+                FROM public.appointments a
+                JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
+                JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                LEFT JOIN LATERAL (
+                    SELECT lower(o."window") AS window_start, upper(o."window") AS window_end
+                      FROM public.dock_occupancy o
+                     WHERE o.appointment_id = a.appointment_id
+                     ORDER BY o.occupancy_id ASC
+                     LIMIT 1
+                ) occ ON true
+               WHERE a.appointment_id = ANY(:appointment_ids)
+            )
+            UPDATE public.dock_occupancy o
+            SET state = 'EXPIRED', expires_at = NULL
+            FROM target t
+            WHERE o.dock_id = t.dock_id
+              AND o.state = 'HELD'
+              AND o.expires_at <= :now
+              AND o."window" && tstzrange(t.interval_start, t.interval_end, '[)')
+            RETURNING o.occupancy_id, o.dock_id, o.shipment_id
+        """,
+        params={"appointment_ids": list(appointment_ids), "now": now},
+        now=now,
+        actor_user_id=actor_user_id,
+        reason=LAZY_EXPIRY_ON_READ_REASON,
+        actor=ACTOR_LAZY_DISPLACEMENT_READ,
+        log_subject=f"{len(appointment_ids)} appointment interval(s)",
+    )
+
+
 async def expire_lapsed_holds_on_interval(
     session: AsyncSession,
     *,
@@ -1082,7 +1221,8 @@ async def expire_lapsed_holds_on_interval(
     driver not choosing in time, not an operational failure -- see its own closing comment) and
     releases nothing else, because under §4 a hold *is* a `dock_occupancy` row and nothing else:
     no appointment, no slot mutation, no notification. So there is no fourth thing for this path to
-    mirror, and it reuses `_audit_hold_expiries` for the third rather than re-writing it.
+    mirror, and it reuses `_flip_lapsed_holds` (which reuses `_audit_hold_expiries`) for the third
+    rather than re-writing it.
 
     `expires_at = NULL` is not tidiness: `dock_occupancy_held_shape_check` is
     `(state='HELD' AND expires_at IS NOT NULL AND appointment_id IS NULL) OR (state<>'HELD' AND
@@ -1102,49 +1242,41 @@ async def expire_lapsed_holds_on_interval(
     reach the INSERT and the exclusion constraint admits exactly one, which is M6's guarantee
     unchanged -- this function widens what may be claimed, never who wins.
 
+    Since issue #98 a *reader* can be the other party in that race
+    (`expire_lapsed_holds_for_appointments`, called from the displacement paths). It resolves the
+    same way and adds no new lock-ordering risk: both variants take appointment-row locks first
+    (their callers' `SELECT ... FOR UPDATE`) and `dock_occupancy` row locks second, so every path
+    that touches both tables acquires them in the same order. `confirm_held_slot` is the one path
+    that locks `dock_occupancy` first, and it goes on to *insert* an appointment rather than lock
+    an existing one, so it closes no cycle.
+
     Returns the `occupancy_id`s flipped, so the caller can log or assert on them. An empty list is
     the overwhelmingly common case and costs one indexed statement.
     """
-    rows = (
-        await session.execute(
-            text(
-                f"""
-                UPDATE public.dock_occupancy o
-                SET state = 'EXPIRED', expires_at = NULL
-                FROM public.appointment_slots sl
-                JOIN public.shipments s ON s.shipment_id = :shipment_id
-                WHERE sl.slot_id = :slot_id
-                  AND o.dock_id = sl.dock_id
-                  AND o.state = 'HELD'
-                  AND o.expires_at <= :now
-                  AND o."window" && {claim_window_sql(
-                      start_expr="sl.slot_start_ts",
-                      unload_min_expr="s.expected_unload_min",
-                  )}
-                RETURNING o.occupancy_id, o.dock_id, o.shipment_id
-                """
-            ),
-            {"slot_id": slot_id, "shipment_id": shipment_id, "now": now},
-        )
-    ).mappings().all()
-    if not rows:
-        return []
-    flipped = [dict(row) for row in rows]
-    await _audit_hold_expiries(
+    return await _flip_lapsed_holds(
         session,
-        flipped,
-        actor_user_id=actor_user_id,
+        statement=f"""
+            UPDATE public.dock_occupancy o
+            SET state = 'EXPIRED', expires_at = NULL
+            FROM public.appointment_slots sl
+            JOIN public.shipments s ON s.shipment_id = :shipment_id
+            WHERE sl.slot_id = :slot_id
+              AND o.dock_id = sl.dock_id
+              AND o.state = 'HELD'
+              AND o.expires_at <= :now
+              AND o."window" && {claim_window_sql(
+                  start_expr="sl.slot_start_ts",
+                  unload_min_expr="s.expected_unload_min",
+              )}
+            RETURNING o.occupancy_id, o.dock_id, o.shipment_id
+        """,
+        params={"slot_id": slot_id, "shipment_id": shipment_id, "now": now},
         now=now,
+        actor_user_id=actor_user_id,
         reason=LAZY_EXPIRY_REASON,
         actor=ACTOR_LAZY_CLAIM,
+        log_subject=f"slot {slot_id}",
     )
-    logger.info(
-        "lazily expired %d lapsed hold(s) blocking slot %s: %s",
-        len(flipped),
-        slot_id,
-        [row["occupancy_id"] for row in flipped],
-    )
-    return [int(row["occupancy_id"]) for row in flipped]
 
 
 async def sweep_held_holds(

@@ -61,13 +61,15 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 
-from app.scheduling import holds
+from app.core.execution_context import ExecutionContext, RoleName
+from app.scheduling import allocation, holds
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import find_feasible_slots
 from app.scheduling.occupancy import live_blocking_occupancy_sql
+from app.services.planner_service import get_planner_queue
 from tests.proof.evidence import record_evidence
-from tests.proof.harness import CONTESTED_DOCK, RaceFixture, seed_race
+from tests.proof.harness import CONTESTED_DOCK, FACILITY_ID, RaceFixture, seed_race
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -601,4 +603,307 @@ async def test_c_every_offered_option_is_individually_requestable(work_sessionma
     assert not refused, (
         "find_feasible_slots offered intervals request_slot then refused -- issue #97 exactly: "
         f"{refused}"
+    )
+
+
+# =================================================================================================
+# D. Issue #98 -- the planner displacement reads, the third party to the same liveness predicate
+# =================================================================================================
+#
+# #97 gave the *claim* path a lazy-expiry leg, and #84 had already established that the
+# displacement reads must see exactly what the exclusion constraint sees -- so they carry no
+# `expires_at > now()` term. Together those two facts produced a third defect: a planner was
+# refused with `DISPLACEMENT_DETECTED` by a hold the very next claim would have silently expired,
+# and with no sweeper running (issue #20) that refusal never cleared on its own.
+#
+# Owner decision (b): the displacement reads lazily expire lapsed holds *first*, in the same
+# transaction, and then read -- so #84's invariant stays literally true (after the flip the
+# constraint genuinely does not count the row) rather than being weakened into "the read ignores
+# some rows the constraint still enforces".
+#
+# The fixture below builds the one shape in which an appointment and an overlapping hold can
+# coexist at all. The exclusion constraint is partial on
+# `state IN ('HELD','PENDING_CONFIRMATION','CONFIRMED','IN_PROGRESS')`, so while an appointment
+# holds its own `dock_occupancy` claim nothing overlapping can be inserted. The claim is therefore
+# released through `allocation._release_dock_occupancy` -- the production function -- leaving the
+# appointment with a slot-derived interval and no claim. That is not a contrivance: it is exactly
+# the case `planner_service._conflicts_for`'s own docstring says the displacement check exists for
+# (E1.1's D12 worklist rows, and anything whose claim was released).
+
+OFFSET_DISPLACEMENT = 7200  # 2099-03-06 10:00 IST
+
+
+def _planner_ctx() -> ExecutionContext:
+    """`USR102` / Rahul Verma -- the shipped seed's WAREHOUSE_PLANNER at FAC-JAI-01.
+
+    A seeded user rather than a synthesised one because `audit_logs.user_id` is NOT NULL and the
+    lazy expiry writes an `EXPIRE_HOLD` row attributed to whoever's read discovered the dead hold.
+    """
+    return ExecutionContext(
+        request_id="proof-p7d",
+        auth_subject="proof-p7d",
+        user_id="USR102",
+        email="rahul.verma@setuhaul.com",
+        full_name="Rahul Verma",
+        role_id="ROL003",
+        role_name=RoleName.WAREHOUSE_PLANNER,
+        facility_id=FACILITY_ID,
+    )
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def displacement_lapsed_hold_case(work_sessionmaker):
+    """A PENDING_CONFIRMATION appointment with a lapsed, unswept hold across its interval."""
+    run_id = f"D{uuid4().hex[:7].upper()}"
+    async with work_sessionmaker() as session:
+        fixture = await seed_race(
+            session,
+            run_id=run_id,
+            contenders=2,
+            start_offset_minutes=OFFSET_DISPLACEMENT,
+            alternatives=0,
+        )
+
+    # 1. Contender 0 takes the interval and converts it into a real appointment, through the real
+    #    two-phase path -- hold, then `confirm_held_slot`. Nothing is inserted by hand.
+    holder = fixture.contenders[0]
+    taken = await _take_hold(work_sessionmaker, fixture, holder, key=f"p7-disp-hold-{run_id}")
+    assert taken.code == "SLOT_HELD", f"fixture setup failed: {taken.code}"
+    async with work_sessionmaker() as session:
+        confirmed = await holds.confirm_held_slot(
+            session,
+            holder.ctx(),
+            hold_id=str(taken.hold_id),
+            idempotency_key=f"p7-disp-confirm-{run_id}",
+        )
+    # `SLOT_REQUESTED`, not "confirmed": section 4 / M7 -- `confirm_held_slot` commits the hold into
+    # a PENDING_CONFIRMATION *request*, and only a planner can reach CONFIRMED from there.
+    assert confirmed.code == "SLOT_REQUESTED", f"fixture setup failed: {confirmed.code}"
+    appointment_id = str(confirmed.appointment_id)
+
+    # 2. Release that appointment's claim, through the production function. This is what makes the
+    #    fixture possible at all -- see the section comment above -- and it is a state the live
+    #    system genuinely produces.
+    async with work_sessionmaker() as session:
+        released = await allocation._release_dock_occupancy(session, appointment_id)
+        await session.commit()
+    assert released, "the appointment held no claim to release; the fixture is not what it claims"
+
+    # 3. An *overlapping, later* slot on the same dock, for the blocking hold to be taken against.
+    #    Not the same slot the appointment sits on: `find_feasible_slots` derives availability from
+    #    `appointment_slots` joined to `appointments`, so a slot already carrying a
+    #    PENDING_CONFIRMATION row is not offered and `request_slot` refuses it --  correctly.
+    #    Starting 30 minutes in gives a claim window of 10:30-11:30 against the appointment's
+    #    slot-derived 10:00-11:00 (start + `expected_unload_min` 45 + the flat 15-minute
+    #    changeover), which is a genuine `&&` overlap on `DOCK-JAI-D1` rather than the abutting
+    #    pair `&&` deliberately does not count.
+    blocking_slot_id = f"SLOT-PROOFOVL-{run_id}"
+    blocking_start = fixture.slot_start + timedelta(minutes=30)
+    async with work_sessionmaker() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.appointment_slots (
+                  slot_id, facility_id, dock_id, slot_start_ts, slot_end_ts,
+                  slot_status, block_reason, created_at
+                ) VALUES (
+                  :slot_id, :facility_id, :dock_id, :slot_start, :slot_end, 'OPEN', NULL,
+                  :created_at
+                )
+                """
+            ),
+            {
+                "slot_id": blocking_slot_id,
+                "facility_id": FACILITY_ID,
+                "dock_id": CONTESTED_DOCK,
+                "slot_start": blocking_start,
+                "slot_end": blocking_start + timedelta(minutes=60),
+                "created_at": blocking_start,
+            },
+        )
+        await session.commit()
+
+    # 4. The competing hold itself -- created by `request_slot`, not by an INSERT -- and then aged
+    #    past its deadline. This is the live incident's shape: `state` still 'HELD', `expires_at`
+    #    long gone, nothing having swept it.
+    blocker = fixture.contenders[1]
+    async with work_sessionmaker() as session:
+        dead = await request_slot(
+            session,
+            blocker.ctx(),
+            shipment_id=blocker.shipment_id,
+            slot_id=blocking_slot_id,
+            command=RequestSlotCommand(
+                note="issue #98 displacement read",
+                displayed_policy_version=load_scheduling_constraints().policy_version,
+            ),
+            idempotency_key=f"p7-disp-dead-{run_id}",
+        )
+    assert dead.code == "SLOT_HELD", f"fixture setup failed: {dead.code} {dead.conflict}"
+    lapsed_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+    async with work_sessionmaker() as session:
+        await _set_hold_deadline(session, occupancy_id=int(dead.hold_id), expires_at=lapsed_at)
+        state = await session.scalar(
+            text("SELECT state FROM public.dock_occupancy WHERE occupancy_id = :id"),
+            {"id": int(dead.hold_id)},
+        )
+        assert state == "HELD", f"the blocking hold is {state}, not the unswept HELD this needs"
+
+    return {
+        "fixture": fixture,
+        "appointment_id": appointment_id,
+        "shipment_id": holder.shipment_id,
+        "dead_hold_id": int(dead.hold_id),
+        "lapsed_at": lapsed_at,
+    }
+
+
+async def test_d_the_queue_row_does_not_report_a_dead_hold_as_a_displacement(
+    displacement_lapsed_hold_case, work_sessionmaker
+):
+    """The read the planner actually looks at.
+
+    Against pre-#98 code this row renders `displacement: CONFLICT` naming `hold:<id>` -- capacity
+    nobody holds. It is also the half that cannot be skipped: `conflict_ids` feeds `snapshot_hash`,
+    so a queue that still counted the dead hold would hand the planner a digest the write path
+    (which does expire it) can no longer reproduce, turning every first confirm into
+    `SNAPSHOT_STALE` instead of a displacement refusal.
+    """
+    case = displacement_lapsed_hold_case
+    async with work_sessionmaker() as session:
+        queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    row = next(
+        (item for item in queue.items if item.appointment_id == case["appointment_id"]), None
+    )
+    assert row is not None, "the fixture's pending appointment is not in the planner queue at all"
+    record_evidence(
+        "7. #98: queue displacement over a dead hold",
+        f"{row.displacement.status} ({len(row.displacement.conflicts)} conflict(s))",
+    )
+    assert row.displacement.status == "NONE", (
+        "a hold that lapsed 30 minutes ago is still reported as a displacement: "
+        f"{row.displacement.conflicts}"
+    )
+
+
+async def test_d_confirm_is_not_refused_with_displacement_detected_by_a_dead_hold(
+    displacement_lapsed_hold_case, work_sessionmaker
+):
+    """The refusal #98 is named for, exercised through the real section 7.5.1 tool.
+
+    Deliberately self-contained rather than reusing the digest the test above read: it re-renders
+    the queue itself, exactly as a planner does before pressing Confirm, so it bites on its own
+    against pre-#98 code instead of failing on a missing precondition. Pre-fix that render carries
+    the dead hold in `conflicts` and therefore in `snapshot_hash`, and the confirm is refused
+    `DISPLACEMENT_DETECTED` -- forever, because nothing else in the system will ever retire the
+    hold (the sweeper is not wired; issue #20).
+    """
+    case = displacement_lapsed_hold_case
+    async with work_sessionmaker() as session:
+        queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    rendered = next(
+        item for item in queue.items if item.appointment_id == case["appointment_id"]
+    )
+
+    async with work_sessionmaker() as session:
+        result = await allocation.confirm_appointment(
+            session,
+            _planner_ctx(),
+            shipment_id=case["shipment_id"],
+            command=allocation.ConfirmAppointmentCommand(
+                appointment_id=case["appointment_id"],
+                snapshot_hash=rendered.snapshot_hash,
+            ),
+            idempotency_key="p7-disp-apt-" + case["fixture"].run_id,
+        )
+    record_evidence("7. #98: confirm over a dead hold", result.code)
+    assert result.code == "APPOINTMENT_CONFIRMED", (
+        f"expected APPOINTMENT_CONFIRMED, got {result.code}"
+    )
+
+
+async def test_d_the_dead_hold_ends_expired_rather_than_merely_ignored(
+    displacement_lapsed_hold_case, work_sessionmaker
+):
+    """Owner decision (b), stated as an assertion.
+
+    (a) would have taught the reads to skip lapsed holds while leaving them HELD in the table --
+    which keeps the exclusion constraint refusing writes the reads say are fine, i.e. #84 again.
+    (b) requires the row to genuinely leave the constraint's set, so this asserts the *table*, not
+    the response: EXPIRED, with `expires_at` cleared as `dock_occupancy_held_shape_check` demands.
+    """
+    case = displacement_lapsed_hold_case
+    async with work_sessionmaker() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT state, expires_at FROM public.dock_occupancy "
+                    "WHERE occupancy_id = :id"
+                ),
+                {"id": case["dead_hold_id"]},
+            )
+        ).mappings().first()
+    assert row is not None, "the lazy expiry deleted the row instead of expiring it"
+    record_evidence("7. #98: dead hold after a displacement read", str(row["state"]))
+    assert row["state"] == "EXPIRED", f"the dead hold is still {row['state']}"
+    assert row["expires_at"] is None, (
+        "EXPIRED with a deadline still attached violates dock_occupancy_held_shape_check"
+    )
+
+
+async def test_d_the_read_path_expiry_is_audited_and_names_itself(
+    displacement_lapsed_hold_case, work_sessionmaker
+):
+    """M14 again, and the reason #98 got its own actor string rather than reusing #97's.
+
+    "A competing claim expired this" and "a planner's displacement read expired this" are different
+    facts about how the system behaved, and an auditor reconstructing a capacity decision needs to
+    tell them apart.
+    """
+    case = displacement_lapsed_hold_case
+    async with work_sessionmaker() as session:
+        rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT new_value_json
+                    FROM public.audit_logs
+                    WHERE entity_name = 'dock_occupancy' AND entity_id = :entity_id
+                      AND action_type = 'EXPIRE_HOLD'
+                    """
+                ),
+                {"entity_id": str(case["dead_hold_id"])},
+            )
+        ).mappings().all()
+    assert rows, "the read-path lazy expiry wrote no EXPIRE_HOLD audit row"
+    actors = {json.loads(str(row["new_value_json"])).get("actor") for row in rows}
+    record_evidence(
+        "7. #98: read-path expiry audit actor", ", ".join(sorted(a or "?" for a in actors))
+    )
+    assert holds.ACTOR_LAZY_DISPLACEMENT_READ in actors
+    # Exactly one audit row per hold, not one per read: a second render finds `state <> 'HELD'`
+    # and updates nothing, so nothing is audited twice.
+    assert len(rows) == 1, f"the same hold was audited {len(rows)} times"
+
+
+async def test_d_the_sweeper_still_finds_nothing_to_do_afterwards(
+    displacement_lapsed_hold_case, work_sessionmaker
+):
+    """Same hygiene property #97's leg has: the lazy path must leave the scheduled path no work."""
+    case = displacement_lapsed_hold_case
+    async with work_sessionmaker() as session:
+        result = await holds.sweep_held_holds(
+            session,
+            actor_user_id="USR102",
+            now=case["lapsed_at"] + timedelta(seconds=1),
+            ttl_seconds=90,
+        )
+        await session.commit()
+    record_evidence("7. #98: sweeper after a read-path expiry", f"expired={result.expired}")
+    assert result.expired == 0, (
+        f"the sweeper re-expired {result.expired} row(s) the displacement read had handled"
     )

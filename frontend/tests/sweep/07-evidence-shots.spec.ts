@@ -14,6 +14,17 @@ import { ORIGIN, SWEEP_OUT, carrierStorageState, storageFor } from './support'
  * Full-page shots rather than element shots on purpose: a cropped picture of a control that does
  * nothing looks identical to a picture of one that works, so the useful frame is the whole surface
  * showing that nothing else changed either.
+ *
+ * ## Updated 2026-09-01 for #99 / #100 / #102
+ *
+ * Three findings are no longer findings and their `DEAD-*` / `MISSING-*` shots are **gone rather
+ * than kept for the record**: a screenshot named `DEAD-…` that shows working software is worse
+ * than no screenshot, because the filename is what a reader trusts. The facility switcher (#99.1),
+ * the driver state-line tap (#99.3) and the planner end-block control (#100) are now proved by
+ * the assertions in `02-ops` / `03-planner` / `01-driver`, which is stronger evidence than a
+ * still frame anyway. Two more (`MISSING-ops-rail-no-profile…`, `MISSING-gate-search-screen-no-
+ * back-control`) are reclassified `NOT-IN-DESIGN` and their shots renamed to say so, because the
+ * absence is correct -- see those specs' own evidence lines for the rulings.
  */
 
 const SHOTS = resolve(SWEEP_OUT, 'shots')
@@ -24,45 +35,15 @@ test.beforeAll(() => {
 
 const shot = (name: string) => ({ path: resolve(SHOTS, `${name}.png`), fullPage: true })
 
-test.describe('DEAD — facility switcher selection is a no-op', () => {
-  test.use({ storageState: storageFor('ops-ggn'), viewport: { width: 1600, height: 900 } })
-
-  test('ops', async ({ page }) => {
-    await page.goto('/ops')
-    await expect(page.getByRole('listbox', { name: 'Escalations' })).toBeVisible({ timeout: 30_000 })
-    const switcher = page.getByRole('button', { name: /Gurugram|Select facility/ })
-    await switcher.click()
-    await expect(page.getByRole('listbox', { name: 'Facility' })).toBeVisible()
-    await page.screenshot(shot('DEAD-ops-facility-switcher-open'))
-    await page.getByRole('listbox', { name: 'Facility' }).getByRole('option').first().click()
-    await page.waitForTimeout(800)
-    // The point of the frame: identical to the one before, which is the defect.
-    await page.screenshot(shot('DEAD-ops-facility-switcher-after-selection'))
-  })
-})
-
-test.describe('DEAD — driver state line tap', () => {
-  test.use({ storageState: storageFor('driver-sandbox'), viewport: { width: 390, height: 844 } })
-
-  test('driver', async ({ page }) => {
-    await page.goto('/driver')
-    await page.waitForResponse((r) => r.url().includes('/api/v1/driver/context'))
-    await page.locator('a[href="/driver/t/SHP-RS-PENDING"]').click()
-    const line = page.getByRole('button', { name: 'Go to the message that set this state' })
-    await expect(line).toBeVisible()
-    await line.click()
-    await page.waitForTimeout(600)
-    await page.screenshot(shot('DEAD-driver-state-line-after-tap'))
-  })
-})
-
 test.describe('MISSING — ops surface', () => {
   test.use({ storageState: storageFor('ops-ggn'), viewport: { width: 1600, height: 900 } })
 
-  test('rail has no Profile; queue header has no settings gear', async ({ page }) => {
+  // The rail's single destination is the resolved design (Fork E, 2026-08-29), so this frame is
+  // named for what it actually shows. The queue settings gear IS still a real gap.
+  test('rail is single-destination by design; queue header has no settings gear', async ({ page }) => {
     await page.goto('/ops')
     await expect(page.getByRole('listbox', { name: 'Escalations' })).toBeVisible({ timeout: 30_000 })
-    await page.screenshot(shot('MISSING-ops-rail-no-profile-and-no-queue-gear'))
+    await page.screenshot(shot('MISSING-ops-queue-gear-and-NOT-IN-DESIGN-rail-profile'))
   })
 
   test('co-pilot has no Summarise / Fetch context / Draft a reply; detail pane has no overflow menu', async ({
@@ -87,25 +68,31 @@ test.describe('MISSING — planner surface', () => {
     await page.screenshot(shot('MISSING-planner-queue-toolbar-no-priority-eta-filter'))
   })
 
-  test('board has no interval picker, no end-block control, no re-sequence', async ({ page }) => {
+  // The end-block control landed with #100 and is proved by assertion in `03-planner`, so this
+  // frame is now only about the picker and the re-sequence action.
+  test('board has no interval picker and no re-sequence action', async ({ page }) => {
     await page.goto('/planner')
     await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible({ timeout: 30_000 })
     await page.getByRole('tab', { name: 'Board' }).click()
     await page.waitForResponse((r) => r.url().includes('/api/v1/planner/board'))
     await page.waitForTimeout(600)
-    await page.screenshot(shot('MISSING-planner-board-no-picker-no-endblock-no-resequence'))
+    await page.screenshot(shot('MISSING-planner-board-no-picker-no-resequence'))
   })
 })
 
-test.describe('MISSING — gate surface', () => {
+test.describe('NOT-IN-DESIGN — gate surface', () => {
   test.use({ storageState: storageFor('gate-booth'), viewport: { width: 1280, height: 800 } })
 
-  test('search screen carries no back-to-shift control', async ({ page }) => {
+  // Kept as a frame, renamed as a verdict: the search screen's shift bar matches
+  // `stitch-prompts.md` section 3's verbatim copy exactly ("Nothing else on screen"), so the
+  // absent back control is the design rather than a gap. See `04-gate.spec.ts` for the full
+  // three-artefact citation and the fork it raises for screens.md section 2's stale sketch.
+  test('search screen shift bar matches the prompt verbatim (no back control)', async ({ page }) => {
     await page.goto('/gate')
     await page.getByLabel('Officer name').fill('Sweep Probe Officer')
     await page.getByRole('button', { name: 'Start shift' }).click()
     await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible()
-    await page.screenshot(shot('MISSING-gate-search-screen-no-back-control'))
+    await page.screenshot(shot('NOT-IN-DESIGN-gate-search-screen-back-control'))
     await page.getByRole('button', { name: 'End shift' }).click()
   })
 })
@@ -141,7 +128,9 @@ test.describe('MISSING — admin surface', () => {
 })
 
 test.describe('MISSING — carrier surface', () => {
-  test('rail has no Profile entry', async ({ browser }) => {
+  // The rail is single-destination by the same resolved ruling; the frame is kept because it also
+  // shows the 403 sections, which ARE a real finding.
+  test('403 sections (rail is single-destination by design)', async ({ browser }) => {
     const context = await browser.newContext({
       storageState: await carrierStorageState(ORIGIN),
       viewport: { width: 1440, height: 900 },

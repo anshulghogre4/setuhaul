@@ -65,8 +65,8 @@ test('carrier: dashboard controls', async () => {
     .count()
   say(
     'Icon rail — console + profile',
-    'MISSING',
-    `the rail renders ${railCount} destination (the carrier console) and no Profile entry -- icon-rail.tsx emits exactly one railDestinationFor(role). The absence of a facility switcher IS correct here and is confirmed: ${switcherCount} switcher control(s) in the top bar (U83 Hidden, not disabled, because a carrier is carrier_id-scoped, not facility-scoped).`,
+    'NOT-IN-DESIGN',
+    `the rail renders ${railCount} destination (the carrier console) and no Profile entry -- which this surface's own readiness pass already recorded as correct rather than missing: 05-carrier-portal/implementation-spec.md line 125 says the project-wide rail-Profile ruling is "Already compliant, independently confirmed by measurement, no action needed", and the ruling itself is 02-ops-exception-console/implementation-spec.md section 6 Fork E ("Resolved 2026-08-29: owner picked (a)"). The account menu in the top bar is the sole entry point by design. The absence of a facility switcher is also correct and is confirmed here: ${switcherCount} switcher control(s) in the top bar (U83 Hidden, not disabled, because a carrier is carrier_id-scoped, not facility-scoped).`,
   )
 
   // ---- Refresh ---------------------------------------------------------------------------------

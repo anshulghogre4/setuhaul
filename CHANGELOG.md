@@ -2,6 +2,46 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 23:15 IST - Remaining-work sweep: 30 stale issues closed with evidence; #80/#82/#98/#99/#100/#101 fixed; Gemini three-shape credential ladder built (#103); five new issues filed (#104-#106 + rulings recorded)
+
+**Agent/surface:** Claude Fable 5 (Claude Code) coordinating five `fullstack-engineer` subagents (Claude Opus 5) on disjoint file sets; coordinator did the tracker sweep, live data/DDL checks, and independent re-verification.
+
+### Tracker healed a second time: 30 delivered-but-open issues closed
+
+An evidence-based verification pass over all 47 open issues (each verified against current code, flags, migrations, and dated CHANGELOG entries -- never inference) closed 30 that M5 delivered without closing keywords: the HELD backend epic (#53), coordinator chat (#55-#58), live-updates (#59), the planner tool suite (#60-#63, #65, #66), gate (#67/#68), admin (#70-#78, #81), the HELD read paths (#83-#87), the ops crash (#89), and design debt (#90/#91). Two verifier errors caught before acting: #79 stays OPEN (live query: ROL010 absent -- "both migrations applied" meant the other two) and #92's KEEP was re-confirmed (grants still absent from the project's own IaC). Premise-refresh comments left on #52 and #79.
+
+### The six fixes (all proof-of-bite verified, all in-tree, NOT yet deployed)
+
+- **#99 shell handlers**: facility switching now real on ops+planner (narrowing request only; server re-derives via resolve_facility_scope -- 403/200 pairs proven live), sign-out-everywhere wired (order load-bearing: POST with the caller's own bearer BEFORE local clear; test intercepts the route rather than revoking the shared account's sessions), driver state-line tap scrolls/focuses the origin message. Bonus correctness fix: canSelectAllFacilities now reads /auth/me's scope.type instead of a wrong role test.
+- **#100 end dock block**: ActiveBlocks section on the planner board calling the existing endDockBlock(); two-step in-place confirm per U41/U79; an adjacent Flow-7 defect fixed en route (the outage layer never refreshed after a block -- externalReloadToken added). Sweep DEAD count: 3 -> 0.
+- **#101 carrier identity**: CARRIER_PORTAL_ROLES={CARRIER,TRANSPORT_MANAGER} across execution_context/deps/carrier router (the deps half was load-bearing) + the live data row SCP-CAR-USR105 -> CARRIER/CAR002 (applied; CAR002 chosen on evidence -- 178 live shipments, the most; owner re-points one row if wrong). Evidence correction recorded on the issue: ROL009/CARRIER always existed; the click-sweep's "no CARRIER role" claim was wrong.
+- **#98 lapsed holds in displacement reads**: option (b) on BOTH digest sides -- expire_lapsed_holds_for_appointments (shared core extracted from #97's helper, distinct audit actor LAZY_DISPLACEMENT_READ) runs inside load_appointment_snapshots (a fifth call site cannot opt out) and in get_planner_queue. Lock ordering traced at all four call sites (appointments -> dock_occupancy everywhere; no new deadlock edge). **Owner fork flagged in-code: the queue GET now writes-and-commits its lazy expiry.**
+- **#82 pending-confirmations ordering**: section 7.3's composite urgency (TTL pressure + priority + physically-waiting) extracted to scheduling/urgency.py (leaf module) and adopted by BOTH planner queue and ops pending-confirmations -- one ranking policy, two consumers. Response gains inspectable ordering/urgency blocks (additive). Proof-of-bite: FIFO buries section 7.3's own named CRITICAL example (APT1014A).
+- **#80 admin audit trail**: all ten admin writes now audit (six were silent); no migration needed (generic CRUD verb in action_type + specific event in new_value_json.event, per the existing convention); before-values via PG17-sanctioned self-joins (RETURNING OLD is PG18 -- checked against docs); transaction-coupling proven three ways incl. a real-FK failure test showing the write dies with its audit.
+- **#66**: verified already fixed in-tree (2026-08-29) with proof-of-bite; closed on evidence.
+
+### #103: Gemini three-shape credential ladder (owner rulings executed)
+
+Owner re-admitted the API-key path ("no worries on production and local"), then supplied Google's Vertex express-mode example. Empirical probes (this machine, the app's own SDK): the EXISTING production key serves gemini-3.7-flash via BOTH AI Studio and **Vertex express mode** (vertexai=True + api_key -- real Vertex, zero provisioning), express ~4x faster warm (2.2s vs 8.2s single-call). Built: preference ladder vertex_adc > vertex_express > ai_studio > openai; two SDK traps found by source-reading and verified live (the wrapper passes the key via a temporary env var; explicit OR environment-leaked project/location silently kills express mode -- guarded with a logged downgrade); generation-aware thinking config (thinking_level is Gemini-3-only -- the naive 2.5 pin would have 400'd every turn; 2.5 gets thinking_budget=-1, an owner-flagged approximation); location=global accepted as explicit opt-in with a residency WARNING; SA-key/ADC materialization for the full-Vertex upgrade path (mkstemp 0600, lazy, never logged). **Go-live = the next backend deploy, zero new parameters.** Residency note for the owner: full in-region asia-south1 works TODAY with gemini-2.5-flash (3.49s live) -- 3.7 in-region waits on Google's rollout.
+
+### New issues from the work
+
+**#104** audit event taxonomy (specific events unfilterable; M14 correlation field homeless -- owner decision), **#105** proof-suite reaper not concurrency-safe (two agents destroyed each other's clusters -- workaround --runs-dir), **#106** resolve_facility_scope ignores user_scopes (a multi-facility non-global user 403s on their own second facility -- latent until #72's shipped feature is used). #102 triage updated: 5 "missing" rows reclassified NOT-IN-DESIGN with citations (rail Profile = owner Fork E removal; gate back-to-shift = sketch-only, fork raised); 14 remain, all backend-blocked or ruling-needed.
+
+### Verification (coordinator-independent, settled tree)
+
+**Proof suite 132 passed / 0 failed / 3 skipped / 2 xfailed** (16 migrations replayed). **Unit suite 901 passed / 8 skipped / 0 failed.** tsc -b + tests-tsc clean, vite build clean, auth+isolation Playwright 14/14, full click-sweep 32/32 with 144 controls (DEAD=0). One-line TS2801 fix applied to a sweep spec (behavior-identical guard).
+
+**Deploy note:** production runs the previous batch; this one (backend #80/#82/#98/#101/#103 + frontend #99/#100) ships on the next AgentCore-wrapper + ECS + Vercel cycle. No migration in this batch; #101's data row is already live and inert to old code.
+
+**Rollback:** revert the commit; per-issue rollback notes in the agents' reports; the #101 scope row deletes with one DELETE if ever unwanted.
+
+## 2026-09-01 22:15 IST - Frontend leg confirmed LIVE: Vercel git-integration auto-shipped the auth build with ab2bd98; live probe passes all three auth assertions
+
+**Agent/surface:** Claude Fable 5 (Claude Code). Verified rather than assumed: the deployed bundle at setuhaul-roan.vercel.app contains the new auth provider (unique error-copy marker present, 861 kB matching the verified build, Supabase host baked in), then a headless probe against the LIVE site: (1) anonymous /planner redirects to /signin; (2) a wrong password is refused without navigation; (3) the sandbox driver's real login lands on /driver with a real session. **Both owner-reported defects are closed in production**: URL access without authentication, and any-credentials "login" (which was also the root of "no LLM response" -- no token meant silent 401s; chat now carries the real bearer).
+
+**With this, the entire day's scope is deployed and live-verified end to end: backend batch (#93/#96/#97 + demo tooling) on AgentCore v3 + ECS, the #96 migration at full semantics (shim dropped), and the real-auth frontend.** Probe script kept at frontend/tests/.artifacts/ (gitignored).
+
 ## 2026-09-01 21:55 IST - Backend batch DEPLOYED and live-verified: AgentCore v3 + ECS rolled, shim dropped, full #96 semantics live; the incident class is dead in production
 
 **Agent/surface:** Claude Fable 5 (Claude Code) + owner (aws login x2, ECS script run, shim drop). Sequence executed exactly as planned:

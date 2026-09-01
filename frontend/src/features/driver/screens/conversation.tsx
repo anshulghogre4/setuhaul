@@ -1,6 +1,6 @@
 import { ChevronLeft } from 'lucide-react'
 import { useAtomValue } from 'jotai'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { useCountdown } from '@/shared/lib/countdown'
@@ -11,8 +11,8 @@ import { TTL_MS } from '../lib/use-promise-countdown'
 import { useDriverTurn } from '../lib/use-driver-turn'
 import { Composer } from '../components/composer'
 import { StateLine } from '../components/state-line'
-import { Transcript } from '../components/transcript'
-import type { DriverHold, DriverOption } from '../lib/types'
+import { Transcript, type TranscriptHandle } from '../components/transcript'
+import type { DriverHold, DriverMessage, DriverOption } from '../lib/types'
 
 /**
  * Screens 4, 6, 7, 8, 10A, 10B, 11A–C, 12A/B, 16A, 17, 18, 19, 20, 21, 22A/B, 23A/B, 24,
@@ -75,6 +75,21 @@ export function DriverConversation() {
   const state = heldNow ? ('HELD' as const) : (thread?.promiseState ?? null)
   const expiresAt = heldNow ? heldNow.expiresAt : thread?.expiresAt
 
+  /**
+   * The state line's tap target (issue #99.3, `components.md` §6: *"Tapping scrolls the transcript
+   * to the message that established the state."*). The prop was never passed, so the line rendered
+   * as a real focusable button that did nothing in every state.
+   */
+  const transcriptRef = useRef<TranscriptHandle>(null)
+  const originMessageId = useMemo(
+    () => establishingMessageId(messages, heldNow?.slotId ?? null),
+    [messages, heldNow?.slotId],
+  )
+  const scrollToOrigin = useCallback(() => {
+    if (originMessageId === null) return
+    transcriptRef.current?.scrollToMessage(originMessageId)
+  }, [originMessageId])
+
   const onSelectOption = (option: DriverOption) => {
     /**
      * Tapping a card is a **capacity-affecting action**, so it carries an idempotency key bound
@@ -119,6 +134,7 @@ export function DriverConversation() {
           state={state}
           expiresAt={expiresAt}
           operationalLine={thread?.operationalLine ?? undefined}
+          onScrollToOrigin={scrollToOrigin}
         />
       </header>
 
@@ -134,6 +150,7 @@ export function DriverConversation() {
           not chrome around it. */}
       <main className="flex min-h-0 flex-1 flex-col">
         <Transcript
+          ref={transcriptRef}
           messages={messages}
           heldUntil={heldNow?.expiresAt}
           onSelectOption={onSelectOption}
@@ -144,6 +161,56 @@ export function DriverConversation() {
       </main>
     </div>
   )
+}
+
+/**
+ * "The message that established the state" (`components.md` §6), resolved against what this
+ * client actually holds — and honest about the case where that is not enough.
+ *
+ * Three tiers, most specific first:
+ *
+ *  1. **A live hold with a `slot_id`** — the establishing message is exactly the one carrying the
+ *     option set that contains that slot, because that is the card the driver tapped and the card
+ *     `use-driver-turn.ts` mutated in place (U50). Searched backwards for the same reason
+ *     `findLastOptionSetIndex` is: an older, superseded set can legitimately contain the same
+ *     `slot_id`, and jumping to it would land the driver on a card they can no longer act on.
+ *  2. **The most recent promise-bearing structured part** — an `optionSet` *is* the `SHOWN` state
+ *     (`find_feasible_slots` reserves nothing, so nothing on the wire can say `SHOWN`), and a
+ *     `receipt` is what a committed promise leaves behind. Text parts are excluded deliberately:
+ *     the assistant narrates a hold in prose too, and jumping to the narration rather than to the
+ *     card would be jumping to a description of the fact instead of the fact.
+ *  3. **The oldest loaded message**, as a stated boundary rather than a guess.
+ *
+ * ⚠ **Why tier 3 exists at all, and what it does not claim.** This surface does not restore the
+ * transcript: `lib/data.ts` reads `/api/v1/driver/context` only, and `GET /api/v1/chat/history`
+ * has no call site anywhere in `src/`. So a driver who opens a thread whose `PENDING_CONFIRMATION`
+ * was established in an earlier session has an EMPTY transcript, and no message in this client is
+ * the one that set the state. Tier 3 therefore scrolls as far back as this client's transcript
+ * goes — "toward it", not "to it" — and returns nothing at all when the transcript is empty, which
+ * is the only truthful answer available until history restore is wired. It deliberately does not
+ * fabricate a target, and it never picks a message merely because a state happens to be active.
+ */
+function establishingMessageId(
+  messages: DriverMessage[],
+  heldSlotId: string | null,
+): string | null {
+  if (heldSlotId !== null) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const carriesSlot = messages[i].parts.some(
+        (p) => p.kind === 'optionSet' && p.optionSet.options.some((o) => o.slotId === heldSlotId),
+      )
+      if (carriesSlot) return messages[i].id
+    }
+  }
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const promiseBearing = messages[i].parts.some(
+      (p) => p.kind === 'optionSet' || p.kind === 'receipt',
+    )
+    if (promiseBearing) return messages[i].id
+  }
+
+  return messages[0]?.id ?? null
 }
 
 /**

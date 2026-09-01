@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import Clock, resolve_clock
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
 from app.core.settings import Settings
 from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
+from app.scheduling.constraints import load_scheduling_constraints
+
+# Issue #82: `get_pending_confirmations` adopts §7.3's composite ordering instead of the FIFO it
+# shipped with. Imported from the one implementation rather than copied -- see `scheduling/
+# urgency.py`'s docstring, and `get_pending_confirmations` below, for why a second copy of a
+# scheduling policy in this file would have been the wrong fix. `DEFAULT_PENDING_TTL_MINUTES` comes
+# from `expiry.py` for the same reason `planner_service` takes it from there: that module is what
+# actually expires these rows, so a local "15" could silently disagree with the clock being counted
+# down to. Neither import closes a cycle -- `scheduling/` imports nothing from `services/`.
+from app.scheduling.expiry import DEFAULT_PENDING_TTL_MINUTES
+from app.scheduling.urgency import (
+    PHYSICALLY_WAITING_QUEUE_STATES,
+    composite_urgency,
+    urgency_sort_key,
+)
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 from app.services.thread_message_service import SENDER_SYSTEM, deliver_to_driver_feed
@@ -1054,7 +1070,11 @@ async def hand_back_thread(
 
 
 async def get_pending_confirmations(
-    session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    facility_id: str | None,
+    *,
+    clock: Clock | None = None,
 ) -> dict[str, Any]:
     """Pending-confirmation appointments for the ops console's queue read.
 
@@ -1066,13 +1086,30 @@ async def get_pending_confirmations(
     the console could show a coordinator a row the sweeper would never touch. Verified no caller
     wanted the superseded rows: the sole caller is `GET /api/v1/operations/pending-confirmations`.
 
-    **`ORDER BY a.booked_at ASC` is pure FIFO, which §7.3 rejects by name** ("Queue ordering -- not
-    FIFO": order by composite urgency -- TTL remaining, priority code, and whether the driver is
-    physically waiting at the gate). Deliberately **not** changed here: that is a scheduling-policy
-    implementation needing `facility_checkins.queue_state` and the priority code, and the #60 pass
-    has just shipped exactly that ordering in `planner_service.get_planner_queue`. The correct fix
-    is for this read to adopt that one, not for a second implementation to appear in this file.
-    Left as its own issue with that assessment rather than half-done here.
+    **Ordering: §7.3's composite urgency, not FIFO (issue #82, fixed 2026-09-01).** This shipped
+    `ORDER BY a.booked_at ASC` -- the pure FIFO §7.3 rejects by name ("Queue ordering -- not FIFO":
+    order by composite urgency -- TTL remaining, priority code, and whether the driver is
+    physically waiting at the gate). §7.3's objection is concrete rather than stylistic: FIFO buries
+    the seeded SHP1014 case, a CRITICAL request that entered the queue *after* lower-priority ones,
+    and a coordinator scanning this list needs the most urgent first because arrival order is not
+    urgency.
+
+    The ordering is **adopted, not reimplemented**. `scheduling/urgency.py` holds the one
+    implementation -- the same weights, the same `QueueUrgency` shape and the same tiebreaker
+    `planner_service.get_planner_queue` uses -- because #82's whole assessment was that a second
+    copy of one scheduling policy in a second service is how the two drift apart. Two columns were
+    added to the statement to feed it (`s.priority_code`, `fc.queue_state`) and nothing else about
+    the row set changed.
+
+    `ORDER BY a.booked_at ASC` survives as the **truncation** order under `LIMIT 100`, not the
+    display order -- exactly the split `repositories/operations.list_planner_queue_rows` documents.
+    Oldest-first is the honest way to cut the list because `booked_at` is what the D9 deadline is
+    derived from, so the rows kept are the ones closest to expiring; the composite sort then runs
+    over what survived, in Python, the same way the planner queue does it.
+
+    Each item carries its own `urgency` block (score plus all three terms) rather than only the
+    score, so the sort is inspectable rather than magic -- the same posture `PlannerQueueRow`
+    takes, and the reason #60's ordering was reviewable in the first place.
     """
     scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
     rows = (
@@ -1081,10 +1118,11 @@ async def get_pending_confirmations(
                 """
                 SELECT a.appointment_id, a.shipment_id, s.driver_id, s.order_reference,
                        sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
-                       a.booked_at
+                       a.booked_at, s.priority_code, fc.queue_state
                 FROM public.appointments a
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
                 JOIN public.shipments s ON s.shipment_id = a.shipment_id
+                LEFT JOIN public.facility_checkins fc ON fc.shipment_id = a.shipment_id
                 WHERE a.appointment_status = 'PENDING_CONFIRMATION'
                   AND a.is_current = 1
                   AND sl.facility_id = :facility_id
@@ -1095,7 +1133,49 @@ async def get_pending_confirmations(
             {"facility_id": scope},
         )
     ).mappings().all()
-    return {"as_of": _as_of(), "source": "postgresql", "facility_id": scope, "items": [dict(r) for r in rows]}
+
+    # section 9.1's injected clock, for the same reason `get_planner_queue` takes one: the TTL term
+    # of the ordering below is the one thing here that moves on a wall clock, and a test that could
+    # not pin `now` would be asserting against the minute it happened to run in.
+    now = resolve_clock(clock).now()
+    priority_scores = load_scheduling_constraints().ranking_policy.priority_scores
+    ttl_total_seconds = DEFAULT_PENDING_TTL_MINUTES * 60
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        booked_at = item["booked_at"]
+        if booked_at.tzinfo is None:
+            # asyncpg hands back an aware value for `timestamptz`; the guard exists because a naive
+            # one would make the subtraction below raise rather than silently mis-order.
+            booked_at = booked_at.replace(tzinfo=timezone.utc)
+        remaining_seconds = int(
+            (booked_at + timedelta(minutes=DEFAULT_PENDING_TTL_MINUTES) - now).total_seconds()
+        )
+        item["urgency"] = composite_urgency(
+            priority_code=str(item.get("priority_code") or "NORMAL"),
+            priority_scores=priority_scores,
+            ttl_remaining_seconds=remaining_seconds,
+            ttl_total_seconds=ttl_total_seconds,
+            physically_waiting=str(item.get("queue_state") or "")
+            in PHYSICALLY_WAITING_QUEUE_STATES,
+        ).model_dump()
+        items.append(item)
+
+    items.sort(key=lambda item: urgency_sort_key(item["urgency"]["score"], item["appointment_id"]))
+    return {
+        "as_of": _as_of(),
+        "source": "postgresql",
+        "facility_id": scope,
+        # Named so a client cannot mistake this for arrival order, and so the two queue-shaped
+        # reads advertise the same rule string.
+        "ordering": {
+            "rule": "composite_urgency",
+            "terms": ["ttl_remaining", "priority_code", "physically_waiting"],
+            "tiebreaker": "appointment_id",
+        },
+        "items": items,
+    }
 
 
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:

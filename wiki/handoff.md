@@ -10,6 +10,12 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 23:15 IST: fix-everything round complete; commit message handed (owner commits/pushes).** In-tree awaiting deploy: #80/#82/#98/#99/#100/#101/#103 + the #99 canSelectAllFacilities correctness fix. **NEXT: (1) owner pushes; (2) backend deploy via the wrapper + ECS script (ships the batch AND flips production chat to gemini-3.7-flash on Vertex express -- verify in LangSmith: provider=gemini; if it says AI Studio instead, something set GOOGLE_CLOUD_PROJECT/LOCATION in the container); (3) Vercel auto-ships the frontend on push; (4) then the short board: #42 (M6's last item, needs owner go-ahead), #49/M8, #64, #88, #92, #94, #52, #79 ruling, #104/#106 decisions, M7 (#45/#46/#51).** Owner forks recorded: queue-GET-that-writes (#98, in-code), 2.5-in-region vs 3.7-express residency (#103), thinking_budget for 2.5 (#103).
+
+
+- **2026-09-01 22:15 IST: ALL DEPLOY LEGS DONE.** Backend (AgentCore v3 + ECS) and frontend (Vercel auto-deploy, live-probed: anon redirect / wrong-password refusal / real login green) are live and verified. Uncommitted: deploy-day writebacks + deploy_m5_ecs.ps1 build-step fix; commit message handed. **NEXT (the board):** #99/#100 (small frontend fixes), #101 (carrier identity -- owner decision), #102 triage, #98 (displacement fork), #42 (E6.1 Locust -- last open M6 item, needs owner go-ahead for mutating load runs), #94, #92, ROL010, M8/#49.
+
+
 - **2026-09-01 21:55 IST: backend batch LIVE and verified; sequence steps 1-3+5 done.** AgentCore v3 + ECS rolled (script now builds from the current tree, ARM64-pinned); shim dropped; escalate/chat/HELD all green on production. **NEXT: (1) frontend deploy -- ships the real login/guards (the live site still has the placeholder auth until then); (2) commit message handed for the remaining writeback+script tree; (3) then the board: #99/#100 small frontend fixes, #101 carrier-identity decision, #102 triage, #98, #42, #94, #92, ROL010, M8/#49.**
 
 

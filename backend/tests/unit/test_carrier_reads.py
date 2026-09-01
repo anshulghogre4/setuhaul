@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.core.errors import AppError
-from app.core.execution_context import ExecutionContext, RoleName
+from app.core.execution_context import CARRIER_PORTAL_ROLES, ExecutionContext, RoleName
 from app.repositories import carrier as carrier_repo
 from app.repositories.scope import assert_shipment_in_carrier_fleet, resolve_carrier_scope
 from app.services import carrier_reads
@@ -81,18 +81,84 @@ def test_resolve_carrier_scope_refuses_an_unmapped_carrier_identity():
     assert exc.value.status_code == 403
 
 
-@pytest.mark.parametrize("role", [r for r in RoleName if r is not RoleName.CARRIER])
-def test_no_other_role_can_resolve_a_carrier_scope(role):
-    """Including ADMIN and the two global-read personas.
+@pytest.mark.parametrize("role", [r for r in RoleName if r not in CARRIER_PORTAL_ROLES])
+def test_no_role_outside_the_carrier_portal_set_can_resolve_a_carrier_scope(role):
+    """Including ADMIN and REGIONAL_OPERATIONS_HEAD.
 
     `has_global_read_scope` is facility reach, not carrier reach -- `can_read_carrier`'s docstring
     records that deliberately, and this asserts the tool layer honours it rather than quietly
     letting an ops persona read a carrier's fleet.
+
+    Parametrised off `CARRIER_PORTAL_ROLES` rather than a hand-written exclusion list so that
+    widening that set (as issue #101 did) cannot leave this test silently asserting the old world.
     """
     with pytest.raises(AppError) as exc:
         resolve_carrier_scope(_ctx(role, carrier_id=OWN_CARRIER))
     assert exc.value.code == "FORBIDDEN"
     assert exc.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------------------------
+# Issue #101 -- the carrier portal's identity. TRANSPORT_MANAGER is the roster's carrier persona.
+# ---------------------------------------------------------------------------------------------
+
+
+def test_carrier_portal_admits_transport_manager_and_only_with_a_scope_row():
+    """Owner decision (a) on #101, and the guard that keeps it from being a scope widening.
+
+    `USR105`/sanjay.gupta@setuhaul.com is seeded as `ROL006` = TRANSPORT_MANAGER
+    (`supabase/seed.sql:684-696`) and no user anywhere holds `CARRIER` (migration 20260823090000's
+    own closing comment: "zero CARRIER-role users exist today"), so before this the carrier surface
+    had no usable identity at all. The role now clears the gate -- but the *reach* still comes from
+    a `user_scopes(scope_type='CARRIER')` row, so a TRANSPORT_MANAGER without one is refused.
+    """
+    scoped = _ctx(RoleName.TRANSPORT_MANAGER, carrier_id=OWN_CARRIER)
+    assert resolve_carrier_scope(scoped) == OWN_CARRIER
+
+    unmapped = _ctx(RoleName.TRANSPORT_MANAGER, carrier_id=None)
+    with pytest.raises(AppError) as exc:
+        resolve_carrier_scope(unmapped)
+    assert exc.value.code == "CARRIER_UNMAPPED"
+    assert exc.value.status_code == 403
+
+
+def test_a_transport_manager_carrier_scope_is_still_one_carrier_not_all_of_them():
+    """The role holds `has_global_read_scope` over *facilities*. That must not leak into carriers.
+
+    This is the specific regression #101's change could have introduced: two independent scoping
+    dimensions, and neither may imply the other.
+    """
+    ctx = _ctx(RoleName.TRANSPORT_MANAGER, carrier_id=OWN_CARRIER)
+    assert ctx.has_global_read_scope
+    assert ctx.can_read_carrier(OWN_CARRIER)
+    assert not ctx.can_read_carrier(OTHER_CARRIER)
+    with pytest.raises(AppError):
+        assert_shipment_in_carrier_fleet(ctx, shipment_carrier_id=OTHER_CARRIER)
+
+
+def test_the_router_gate_and_the_scope_rule_name_the_same_role_set():
+    """The two halves of #101's fix must not drift: a role the router admits and the scope tier
+    refuses would be a 403 nobody can explain, and the reverse would be an unguarded route."""
+    from app.api.v1.routers import carrier as carrier_router
+
+    gate = inspect.getsource(carrier_router)
+    assert "require_roles(*sorted(CARRIER_PORTAL_ROLES))" in gate
+    assert RoleName.CARRIER in CARRIER_PORTAL_ROLES
+    assert RoleName.TRANSPORT_MANAGER in CARRIER_PORTAL_ROLES
+    assert RoleName.ADMIN not in CARRIER_PORTAL_ROLES
+    assert RoleName.REGIONAL_OPERATIONS_HEAD not in CARRIER_PORTAL_ROLES
+
+
+def test_deps_resolves_a_carrier_scope_row_for_every_carrier_portal_role():
+    """Without this half the route change alone is inert: `core/deps.py` is the only thing that
+    can put a `carrier_id` on the context, and it used to look one up only for `RoleName.CARRIER`.
+    A TRANSPORT_MANAGER would then have passed the router gate and been refused `CARRIER_UNMAPPED`
+    on every read no matter how many `user_scopes` rows existed."""
+    from app.core import deps
+
+    source = inspect.getsource(deps.get_execution_context)
+    assert "if role_name in CARRIER_PORTAL_ROLES:" in source
+    assert "scope_type = 'CARRIER'" in source
 
 
 # ---------------------------------------------------------------------------------------------

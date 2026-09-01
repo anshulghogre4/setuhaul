@@ -49,7 +49,10 @@ from app.core.settings import get_settings
 from app.repositories import facilities as facilities_repo
 from app.repositories import operations as operations_repo
 from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
+from app.scheduling import holds
+from app.scheduling import urgency as _urgency_policy
 from app.scheduling.constraints import load_scheduling_constraints
+from app.scheduling.urgency import QueueUrgency, composite_urgency, urgency_sort_key
 
 # `claim_id` and the two source labels are imported, never re-implemented: `claim_id`'s output goes
 # straight into `_snapshot_hash`, and `scheduling/snapshot.py` recomputes the same digest on the
@@ -79,31 +82,16 @@ ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS
 DEFAULT_QUEUE_LIMIT = 50
 MAX_QUEUE_LIMIT = 200
 
-# `facility_checkins.queue_state` values that mean "this driver is physically waiting at the gate"
-# -- section 7.3's third ordering term, "queue_state in WAITING_*". Read off the live CHECK
-# constraint (baseline migration line 220): NOT_QUEUED / WAITING_EARLY / WAITING_LATE /
-# WAITING_DOCK_UNAVAILABLE / CALLED_TO_DOCK / IN_DOCK / COMPLETED. CALLED_TO_DOCK and IN_DOCK are
-# deliberately excluded: that truck is being served, not burning detention in the yard, which is
-# the metric section 13.1 asks this term to express.
-PHYSICALLY_WAITING_QUEUE_STATES = ("WAITING_EARLY", "WAITING_LATE", "WAITING_DOCK_UNAVAILABLE")
-
-# Section 7.3 names the three composite-urgency terms and their intent but assigns no weights, so
-# these two numbers are an implementation choice and are stated as one rather than buried:
-#
-#   * TTL_PRESSURE_MAX = 1000 -- exactly one priority step in the shipped `ranking_policy`
-#     (CRITICAL 4000 / HIGH 3000 / NORMAL 2000 / LOW 1000). A request that has burnt its whole D9
-#     clock is therefore promoted by one band and no further: an expiring NORMAL ties a fresh HIGH
-#     and can never outrank a fresh CRITICAL. That is what stops this being "pure TTL ordering",
-#     which section 7.3 rejects for the same reason it rejects FIFO -- both bury the seeded SHP1014
-#     case (CRITICAL, entered the queue late).
-#   * WAITING_BONUS = 500 -- half a band. A driver physically waiting outranks a comparable one
-#     still in transit, but never inverts a priority step on its own.
-#
-# Owner-reviewable: the calibration is defensible but it is not in any design document. The score
-# and every term are returned per row (`PlannerQueueRow.urgency`) so the sort is inspectable
-# instead of magic.
-TTL_PRESSURE_MAX = 1000
-WAITING_BONUS = 500
+# section 7.3's composite ordering -- the policy, its two weights, its `QueueUrgency` shape and its
+# tiebreaker -- moved to `scheduling/urgency.py` for issue #82 and imported back under the names
+# this module already published. It moved because a *second* read needs the identical ordering:
+# `escalation_service.get_pending_confirmations` shipped `ORDER BY booked_at ASC`, the pure FIFO
+# section 7.3 rejects by name, and #82's assessment was that it must adopt this ordering rather
+# than grow a second implementation of the same scheduling policy. Nothing about the calibration
+# changed in the move; see that module for the full argument.
+PHYSICALLY_WAITING_QUEUE_STATES = _urgency_policy.PHYSICALLY_WAITING_QUEUE_STATES
+TTL_PRESSURE_MAX = _urgency_policy.TTL_PRESSURE_MAX
+WAITING_BONUS = _urgency_policy.WAITING_BONUS
 
 # Version tag on the `snapshot_hash` serialisation. `enforced` flipped to True once issue #62 landed
 # the consumer half: `confirm_request` and `counter_offer` now recompute this digest under the row
@@ -237,15 +225,6 @@ class QueueGateState(BaseModel):
     queue_position: int | None = None
     gate_in_ts: datetime | None = None
     physically_waiting: bool = False
-
-
-class QueueUrgency(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    score: int
-    priority_score: int
-    ttl_pressure: int
-    waiting_bonus: int
 
 
 class PlannerQueueRow(BaseModel):
@@ -476,37 +455,11 @@ def _snapshot_hash(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _urgency(
-    *,
-    priority_code: str,
-    priority_scores: dict[str, int],
-    ttl_remaining_seconds: int,
-    ttl_total_seconds: int,
-    physically_waiting: bool,
-) -> QueueUrgency:
-    """Section 7.3's composite urgency as one inspectable number.
-
-    A *score*, not a lexicographic sort, because section 7.3 rejects both pure FIFO and pure TTL
-    ordering by name -- either one buries the seeded SHP1014 case. See `TTL_PRESSURE_MAX` /
-    `WAITING_BONUS` above for the calibration and why those two numbers are stated rather than
-    tuned in silence.
-    """
-    priority_score = priority_scores.get(
-        priority_code, priority_scores.get("UNKNOWN", 500)
-    )
-    if ttl_total_seconds <= 0:
-        burnt = 1.0
-    else:
-        burnt = 1.0 - (ttl_remaining_seconds / ttl_total_seconds)
-    burnt = min(1.0, max(0.0, burnt))
-    ttl_pressure = int(round(TTL_PRESSURE_MAX * burnt))
-    waiting_bonus = WAITING_BONUS if physically_waiting else 0
-    return QueueUrgency(
-        score=priority_score + ttl_pressure + waiting_bonus,
-        priority_score=priority_score,
-        ttl_pressure=ttl_pressure,
-        waiting_bonus=waiting_bonus,
-    )
+# `scheduling/urgency.composite_urgency` under this module's own historical name (issue #82). Kept
+# as an alias rather than renamed at the ~15 call/patch sites so the move stays a move: existing
+# tests that monkeypatch or assert on `planner_service._urgency` keep working, and the diff shows
+# no behaviour change to review.
+_urgency = composite_urgency
 
 
 async def get_planner_queue(
@@ -567,6 +520,42 @@ async def get_planner_queue(
     if intervals:
         range_start = min(start for start, _ in intervals.values())
         range_end = max(end for _, end in intervals.values())
+
+        # ------------------------------------------------------------------------------------
+        # Issue #98, the read half. A GET that writes -- deliberately, and here is the argument.
+        # ------------------------------------------------------------------------------------
+        #
+        # `list_live_dock_occupancy` below carries no `expires_at > now()` term, because its job is
+        # to predict what the exclusion constraint will refuse and that constraint has no time term
+        # (#84; the repository function argues it at length). Since #97 the *claim* path lazily
+        # expires colliding dead holds, so this read could show a `CONFLICT` -- and put that dead
+        # hold's id into `snapshot_hash` -- for capacity the very next write would release.
+        #
+        # Owner decision (b) on #98 is to make the table true rather than to make the read
+        # disagree with the constraint. It has to happen on *this* side too, not only in
+        # `snapshot.load_appointment_snapshots`: `conflict_ids` feeds the digest, so a queue row
+        # rendered with a dead hold in it and a write path that expired the same hold would
+        # produce two different hashes and turn every first confirm into `SNAPSHOT_STALE`. Fixing
+        # one side alone converts a permanent `DISPLACEMENT_DETECTED` into a permanent-until-
+        # re-render staleness refusal, which is not the fix.
+        #
+        # Same appointment ids, same statement as the write path uses, so the two cannot drift.
+        # The commit is real rather than deferred: without it the flip is rolled back when the
+        # request's session closes, the rows stay HELD for the next reader, and the audit trail
+        # claims an expiry that did not happen. It costs no read consistency -- under READ
+        # COMMITTED each statement already takes its own snapshot, so the two SELECTs either side
+        # of it were never a consistent pair to begin with (PostgreSQL "Transaction Isolation"
+        # 13.2.1). Safe here specifically because the sole caller is the router
+        # (`api/v1/routers/planner.py`), which has nothing uncommitted in flight.
+        if get_settings().two_phase_hold_enabled:
+            await holds.expire_lapsed_holds_for_appointments(
+                session,
+                appointment_ids=list(intervals),
+                now=now,
+                actor_user_id=ctx.user_id,
+            )
+            await session.commit()
+
         live_occupancy = await operations_repo.list_live_dock_occupancy(
             session,
             facility_id=scope_facility,
@@ -677,12 +666,10 @@ async def get_planner_queue(
             )
         )
 
-    # Highest urgency first, `appointment_id` ascending as the stable tiebreaker -- the same
-    # "no randomness, deterministic tiebreaker" posture `ranking_policy.ordered_factors` ends on.
-    # A stable order matters more here than it looks: U19 freezes the sort while a row has focus,
-    # and a sort that could reorder equal-scoring rows between two polls would move a row out from
-    # under a planner mid-decision.
-    items.sort(key=lambda item: (-item.urgency.score, item.appointment_id))
+    # Highest urgency first, `appointment_id` ascending as the stable tiebreaker. The key lives in
+    # `scheduling/urgency.py` alongside the score since issue #82, so the ops console's pending
+    # list cannot adopt this metric and then sort by it differently.
+    items.sort(key=lambda item: urgency_sort_key(item.urgency.score, item.appointment_id))
 
     return PlannerQueue(
         as_of=now.isoformat(),

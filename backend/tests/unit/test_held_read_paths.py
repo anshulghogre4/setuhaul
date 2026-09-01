@@ -67,6 +67,24 @@ def flag_on(monkeypatch):
 
 
 @pytest.fixture
+def no_lapsed_holds(monkeypatch):
+    """Stub issue #98's lazy expiry out of `get_planner_queue`, for tests about #84's read.
+
+    With the D2 flag on, `get_planner_queue` now flips colliding lapsed holds to EXPIRED before it
+    reads occupancy (#98). These tests hand it a bare `AsyncMock()` session and are about what
+    `_conflicts_for` does with the rows it is given, so the real statement has nothing to run
+    against. Stubbed to "nothing lapsed", which is also the case they mean: `_hold_occupancy`
+    below carries a deadline 90 seconds in the future, so a live cluster would flip nothing here
+    either.
+    """
+    from app.scheduling import holds
+
+    monkeypatch.setattr(
+        holds, "expire_lapsed_holds_for_appointments", AsyncMock(return_value=[])
+    )
+
+
+@pytest.fixture
 def flag_off(monkeypatch):
     monkeypatch.setenv("TWO_PHASE_HOLD_ENABLED", "false")
     get_settings.cache_clear()
@@ -190,7 +208,9 @@ def _hold_occupancy(occupancy_id=77, dock_id="DOCK-JAI-D1"):
 
 
 @pytest.mark.asyncio
-async def test_displacement_names_a_hold_that_would_refuse_the_confirm(flag_on, monkeypatch):
+async def test_displacement_names_a_hold_that_would_refuse_the_confirm(
+    flag_on, no_lapsed_holds, monkeypatch
+):
     """#84 end to end through the service: the preview must stop lying.
 
     Before this, `_conflicts_for` never saw the hold, so the row rendered `displacement: NONE`
@@ -216,7 +236,7 @@ async def test_displacement_names_a_hold_that_would_refuse_the_confirm(flag_on, 
 
 
 @pytest.mark.asyncio
-async def test_a_hold_never_self_excludes_a_queue_row(flag_on, monkeypatch):
+async def test_a_hold_never_self_excludes_a_queue_row(flag_on, no_lapsed_holds, monkeypatch):
     """`_conflicts_for`'s self-exclusion compares appointment ids, and a hold has none.
 
     Guards the `str(None) == str(appointment_id)` shape: it happened to be a never-match, but only

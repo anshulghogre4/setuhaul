@@ -1,7 +1,8 @@
 import { expect, test, type Page } from 'playwright/test'
 
-import { recorderFor, storageFor } from './support'
+import { ACCOUNTS, ORIGIN, recorderFor, storageFor, verifyFacilitySwitcher } from './support'
 import { apiAs, createFreshEscalation } from '../support/race'
+import { mintSession, toStorageState } from '../support/session'
 
 /**
  * 02 - Ops exception console. 32 designed controls.
@@ -49,32 +50,26 @@ test('ops: shell chrome (rail, switcher, search, bell, help, account)', async ({
   )
   say(
     'Icon rail — Profile',
-    'MISSING',
-    `the rail renders exactly ${railCount} destination(s) -- the surface console -- and no Profile item. components/shell/icon-rail.tsx maps one \`railDestinationFor(role)\` and renders one <RailItem>; there is no second entry. Settings is reachable only from the account menu.`,
+    'NOT-IN-DESIGN',
+    `the rail renders exactly ${railCount} destination(s) -- the surface console -- and no Profile item, and that is the RESOLVED design, not a gap. The inventory row came from 02-ops-exception-console/screens.md section 1 ("two destinations, Escalations and Profile"), which 02-ops-exception-console/implementation-spec.md section 6 Fork E then overturned: "Resolved 2026-08-29: owner picked (a). All 17 rail Profile links removed from mockup.html; the top-bar account menu is the sole entry point." The same ruling was applied project-wide (03-planner-dock-board/implementation-spec.md Fork H, 06-admin-console/implementation-spec.md sections 92/149, 05-carrier-portal/implementation-spec.md line 125), and iconography.md's Rail destinations table (U101) gives every role exactly ONE destination. Building it would re-introduce the duplication the owner removed.`,
   )
 
   // ---- Facility switcher ---------------------------------------------------------------------
-  const switcher = page.getByRole('button', { name: /Gurugram|Select facility|All facilities/ })
-  await expect(switcher).toBeVisible()
-  await switcher.click()
-  const listbox = page.getByRole('listbox', { name: 'Facility' })
-  await expect(listbox).toBeVisible()
-  const options = listbox.getByRole('option')
-  const optionCount = await options.count()
-  const labelBefore = (await switcher.textContent())?.trim()
-  let reqs = 0
-  page.on('request', () => {
-    reqs += 1
+  await verifyFacilitySwitcher(page, {
+    say,
+    control: 'Facility switcher ("All facilities")',
+    ownFacility: 'FAC-GGN-01',
+    otherFacility: 'FAC-JAI-01',
+    triggerName: /Gurugram|Jaipur|Select facility|All facilities/,
+    // The ops queue is this surface's facility-scoped read.
+    scopedRead: '/operations/escalation-queue',
+    // After the reload the console may be in its error state (the previous selection was refused),
+    // so settle on the shell's own switcher rather than on the queue, which is what the helper's
+    // own `expect(trigger)` does -- nothing extra is needed here beyond letting the shell mount.
+    settle: async (p) => {
+      await expect(p.getByRole('navigation', { name: /^Main/ })).toBeVisible({ timeout: 30_000 })
+    },
   })
-  await options.first().click()
-  await page.waitForTimeout(600)
-  const labelAfter = (await switcher.textContent())?.trim()
-  say(
-    'Facility switcher ("All facilities")',
-    'DEAD',
-    `the trigger opens a real combobox with a filter input and ${optionCount} option(s), so the popover half works -- but SELECTING a facility changes nothing: label "${labelBefore}" -> "${labelAfter}", ${reqs} network request(s), no re-scoped read. Cause is in source: App.tsx's ShellRoute passes onFacilityChange={() => {}} to <AppShell>, so FacilitySwitcher's onChange lands on an empty function. (This role is single-facility, so "All facilities" is also correctly absent per U91.)`,
-  )
-  await page.keyboard.press('Escape')
 
   // ---- Global search --------------------------------------------------------------------------
   await page.keyboard.press('Control+k')
@@ -116,6 +111,92 @@ test('ops: shell chrome (rail, switcher, search, bell, help, account)', async ({
     'WORKING-ON-FIXTURE',
     `bell opened its panel (${notifCount} item(s), unread badge from DEMO_CHROME -- fixture by the documented CHROME SEAM); Help is a direct contact route with href="${href}" and no intermediate menu (U73); the account menu opened with items [${items.map((t) => t.trim()).join(' | ')}].`,
   )
+})
+
+/**
+ * "Sign out everywhere" (issue #99.2), on its own minted session and with the revocation
+ * INTERCEPTED rather than executed.
+ *
+ * ## The blast radius, and the choice made about it
+ *
+ * `POST /api/v1/sign-out-everywhere` forwards the caller's bearer token to Supabase's
+ * `POST /auth/v1/logout?scope=global`, which revokes **every refresh token for that account**
+ * (`backend/app/services/account_service.py:123-160`). The POC roster shares three bucket
+ * passwords across the whole cast, and `ops-a`/`ops-b`/`ops-ggn` are the same human being as far
+ * as any other suite's storageState is concerned -- so genuinely firing it here would invalidate
+ * sessions the seven race suites and the rest of this sweep are holding, and would do it silently
+ * (a revoked refresh token still leaves a live access token until it expires, so the damage would
+ * surface as a confusing 401 an hour later rather than as this test failing).
+ *
+ * So the route is fulfilled locally with the server's real envelope shape. **What is verified is
+ * everything up to and including the request leaving the browser**: that the click emits
+ * `POST /api/v1/sign-out-everywhere` at all (it emitted nothing before this fix), that it carries
+ * a real `Authorization: Bearer` header (the endpoint 401s without one), and that the app then
+ * signs out locally and redirects. The one thing not verified here is Supabase's own revocation,
+ * which is E3.5's backend test's job and not a UI question.
+ *
+ * The session is minted for this test rather than read from the shared `ops-ggn.json`, because the
+ * LOCAL half of the sign-out is real (`signOut({ scope: 'local' })` does call
+ * `/auth/v1/logout?scope=local`) and would otherwise revoke the file the rest of the sweep uses.
+ */
+test('ops: sign out everywhere', async ({ browser }) => {
+  const session = await mintSession(ACCOUNTS['ops-ggn'])
+  const context = await browser.newContext({
+    storageState: toStorageState(session, ORIGIN),
+    viewport: { width: 1600, height: 900 },
+  })
+  const page = await context.newPage()
+
+  let authHeader: string | undefined
+  let calls = 0
+  await page.route('**/api/v1/sign-out-everywhere', async (route) => {
+    calls += 1
+    authHeader = route.request().headers()['authorization']
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        message: 'Signed out everywhere.',
+        data: {
+          code: 'SIGNED_OUT_EVERYWHERE',
+          message:
+            'Other devices have been signed out. Already-issued access tokens remain valid until they individually expire.',
+        },
+      }),
+    })
+  })
+
+  await page.goto(`${ORIGIN}/ops`)
+  await expect(page.getByRole('navigation', { name: /^Main/ })).toBeVisible({ timeout: 30_000 })
+
+  await page.getByRole('button', { name: /^Account menu/ }).click()
+  const menu = page.getByRole('menu', { name: 'Account' })
+  await expect(menu).toBeVisible()
+  const trigger = menu.getByRole('menuitem', { name: 'Sign out everywhere' })
+  const expandedBefore = await trigger.getAttribute('aria-expanded')
+  await trigger.click()
+  const expandedAfter = await trigger.getAttribute('aria-expanded')
+  const confirmCopy = (await menu.getByText(/every device/i).innerText()).trim()
+  const dialogs = await page.getByRole('dialog').count()
+
+  // The commit button inside the expanded confirmation, not the menu item that opened it.
+  await menu.getByRole('button', { name: 'Sign out everywhere' }).click()
+  await expect(page).toHaveURL(/\/signin$/, { timeout: 20_000 })
+  const sessionLeft = await page.evaluate(() =>
+    Object.keys(window.localStorage).filter((k) => k.startsWith('sb-')).length,
+  )
+
+  expect(calls, 'the commit must emit POST /api/v1/sign-out-everywhere').toBe(1)
+  expect(authHeader?.startsWith('Bearer '), 'the call must carry the caller\'s own token').toBe(true)
+
+  say(
+    'Sign out everywhere (account menu)',
+    'WORKING',
+    `activating the menu item expanded the confirmation IN PLACE (aria-expanded ${expandedBefore} -> ${expandedAfter}; ${dialogs} dialog(s) opened, i.e. no modal -- the design's own "expands in place inside the same popover") reading "${confirmCopy}". Committing fired POST /api/v1/sign-out-everywhere exactly ${calls} time with an Authorization: Bearer header present (${authHeader?.startsWith('Bearer ')}) -- it fired ZERO times before this fix, because App.tsx's ShellRoute never passed onSignOutEverywhere. The app then cleared its own session (${sessionLeft} sb-* keys left in localStorage) and the guard redirected to /signin. TEST-SAFETY, stated rather than hidden: the endpoint was INTERCEPTED and fulfilled with the server's real envelope, never executed -- a genuine call revokes every refresh token for a shared-bucket POC account and would silently invalidate the sessions the other sweep files and the seven race suites hold. The Supabase revocation itself is covered by E3.5's own backend test; what is proved here is the wiring, the request, and the local sign-out that follows it.`,
+  )
+
+  await context.close()
 })
 
 test('ops: queue pane filters, selection, resort and error retry', async ({ page }) => {
@@ -379,7 +460,7 @@ test('ops: detail-pane lifecycle — acknowledge, reassign, takeover, resolve', 
   )
   await commit.click()
   const resolveRes = await resolveReq
-  const resolveBody = resolveReq ? JSON.parse(resolveRes.request().postData() ?? '{}') : {}
+  const resolveBody = resolveReq !== undefined ?JSON.parse(resolveRes.request().postData() ?? '{}') : {}
   say(
     'Resolve',
     'WORKING',

@@ -126,8 +126,14 @@ def resolve_carrier_scope(ctx: ExecutionContext) -> str:
     client-supplied-scope shape M15 exists to forbid.
 
     Raises rather than returning `None` on an unmapped identity: unlike a global-read facility
-    persona, "no carrier filter" is never a legal carrier-portal outcome, so an unmapped CARRIER
-    user must be refused, not silently served the whole fleet table.
+    persona, "no carrier filter" is never a legal carrier-portal outcome, so an unmapped
+    carrier-portal user must be refused, not silently served the whole fleet table.
+
+    That second guard is what keeps issue #101's role widening honest. `ctx.is_carrier` now admits
+    TRANSPORT_MANAGER as well as CARRIER, and TRANSPORT_MANAGER *does* hold `has_global_read_scope`
+    over facilities -- so if this function had ever fallen through to "no filter" for an unmapped
+    identity, widening the role set would have turned the carrier portal into a cross-carrier read
+    for that persona. It does not: no `user_scopes(scope_type='CARRIER')` row, no reach.
     """
     if not ctx.is_carrier:
         raise AppError("Insufficient permissions.", code="FORBIDDEN", status_code=403)

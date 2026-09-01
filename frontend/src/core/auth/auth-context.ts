@@ -52,6 +52,28 @@ export type AuthState = {
   retry: () => void
   /** Local (single-device) sign-out. Clears the Supabase session; the guards do the redirect. */
   signOutLocal: () => Promise<void>
+  /**
+   * §7.5.8 `sign_out_everywhere` -- revokes every refresh token for this account through
+   * `POST /api/v1/sign-out-everywhere`, THEN clears the local session.
+   *
+   * Rejects if the server refused, and deliberately does not sign out locally in that case: a
+   * button that logs you out of this device while the other devices stay signed in would report
+   * the opposite of what happened. The caller renders the failure.
+   *
+   * Honesty note carried from `account_service.sign_out_everywhere`'s own docstring: this revokes
+   * refresh tokens, so another device stays usable until its already-issued access token expires
+   * on its own. The menu copy says "signs you out on every device", never "immediately".
+   */
+  signOutEverywhere: () => Promise<void>
+  /**
+   * Sets the active facility for this viewer's session (issue #99.1).
+   *
+   * **Ignores any id the server-supplied identity does not grant** (M15): the argument is a
+   * client-supplied value and is checked against `selectableFacilityIds(identity)` before it can
+   * reach a read. See `core/auth/active-facility.ts` for where that set comes from and what the
+   * server still re-derives on every request regardless.
+   */
+  setActiveFacility: (facilityId: string) => void
 }
 
 export const AuthContext = createContext<AuthState | null>(null)

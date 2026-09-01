@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { Check, ChevronDown, Search } from 'lucide-react'
 
 import { hasFacilityScope, type Facility, type RoleName } from '@/core/auth/identity'
+// The sentinel moved to `core/auth/active-facility.ts` (issue #99.1): it is now read by the auth
+// provider's validation gate as well as by this component, and a constant that decides what a
+// read may be scoped to does not belong inside a popover.
+import { ALL_FACILITIES } from '@/core/auth/active-facility'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-
-export const ALL_FACILITIES = '__all__'
 
 /**
  * Artboard 32.  A search-filterable combobox that **always shows the facility name**, never

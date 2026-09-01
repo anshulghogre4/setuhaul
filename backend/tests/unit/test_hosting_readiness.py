@@ -171,8 +171,39 @@ def test_agentcore_ssm_map_is_names_only():
     assert _SSM_ENV
     for name, env_key in _SSM_ENV:
         assert name.startswith("/setuhaul/")
+        # Parameter names are kebab-case; env keys are UPPER_SNAKE. Asserted as a shape rather
+        # than an allowlist of substrings (the old form here) because that allowlist would have
+        # rejected GCP_PROJECT purely for not containing the word KEY/URL/TOKEN.
+        assert name == name.lower()
+        assert " " not in name
         assert env_key.isupper()
-        assert "KEY" in env_key or "URL" in env_key or "TOKEN" in env_key or env_key == "DATABASE_URL"
+        assert env_key.replace("_", "").isalnum()
+    # One env var must not be fed from two parameters -- last-write-wins would be silent.
+    env_keys = [env_key for _, env_key in _SSM_ENV]
+    assert len(env_keys) == len(set(env_keys))
+
+
+def test_agentcore_ssm_map_carries_both_vertex_credentials():
+    """Issue #103: the container had a Gemini provider and no Gemini credential, so AUTO_ORDER
+    fell through to OpenAI on every production turn. These two entries are what make the Vertex
+    leg reachable; the exact parameter names are the contract with the owner's SSM puts."""
+    from app.assistant.agentcore_main import _SSM_ENV
+
+    mapping = dict(_SSM_ENV)
+    assert mapping["/setuhaul/gcp-project"] == "GCP_PROJECT"
+    assert mapping["/setuhaul/gcp-sa-key"] == "GCP_SA_KEY_JSON"
+
+
+def test_agentcore_ssm_env_keys_are_real_settings_fields():
+    """A hydrated env var that no Settings field reads is a silent no-op -- which is the failure
+    mode #103 is about, one layer down. GOOGLE_API_KEY/DATABASE_URL etc. all map to fields, and
+    so must the two new Vertex ones."""
+    from app.assistant.agentcore_main import _SSM_ENV
+    from app.core.settings import Settings
+
+    fields = set(Settings.model_fields)
+    for _, env_key in _SSM_ENV:
+        assert env_key.lower() in fields, f"{env_key} hydrates into nothing Settings reads"
 
 
 def test_agentcore_unwraps_cli_prompt_file_json():

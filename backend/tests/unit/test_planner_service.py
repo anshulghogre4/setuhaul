@@ -406,21 +406,40 @@ def _occupancy_row(
 
 @pytest.fixture
 def queue_repo(monkeypatch):
-    """Patch the two repository reads `get_planner_queue` makes, and record their arguments."""
-    calls: dict[str, list] = {"rows": [], "occupancy": []}
+    """Patch the two repository reads `get_planner_queue` makes, and record their arguments.
+
+    Issue #98 added a third database call to this read -- the lazy expiry of lapsed holds that must
+    happen *before* the occupancy query, so the displacement column and `snapshot_hash` cannot be
+    built from a hold the constraint no longer counts. It is stubbed here (its own SQL is proved
+    against a real cluster in `tests/proof/`, which is the only place it can be) but its arguments
+    are recorded, so `test_queue_expires_lapsed_holds_before_reading_displacement` can assert both
+    that it ran and that it ran first.
+    """
+    calls: dict[str, list] = {"rows": [], "occupancy": [], "expiry": []}
     state: dict[str, list] = {"rows": [], "occupancy": []}
+    order: list[str] = []
 
     async def _rows(session, **kwargs):
         calls["rows"].append(kwargs)
+        order.append("rows")
         return state["rows"]
 
     async def _occupancy(session, **kwargs):
         calls["occupancy"].append(kwargs)
+        order.append("occupancy")
         return state["occupancy"]
+
+    async def _expiry(session, **kwargs):
+        calls["expiry"].append(kwargs)
+        order.append("expiry")
+        return []
 
     monkeypatch.setattr(planner_service.operations_repo, "list_planner_queue_rows", _rows)
     monkeypatch.setattr(planner_service.operations_repo, "list_live_dock_occupancy", _occupancy)
-    return {"calls": calls, "state": state}
+    monkeypatch.setattr(
+        planner_service.holds, "expire_lapsed_holds_for_appointments", _expiry
+    )
+    return {"calls": calls, "state": state, "order": order}
 
 
 @pytest.mark.asyncio
@@ -686,6 +705,60 @@ async def test_queue_clamps_the_limit_and_reports_when_the_page_is_full(queue_re
         AsyncMock(), _planner_ctx(), limit=3, clock=CLOCK
     )
     assert full.limit_reached is True
+
+
+@pytest.fixture
+def two_phase_hold_on(monkeypatch):
+    """Pin the D2 flag on rather than inheriting whatever `.env.local` happens to say.
+
+    `get_settings` is `lru_cache`d, so the cache is cleared on both sides -- without the second
+    clear a later test in the same session would inherit this one's flag.
+    """
+    from app.core.settings import get_settings
+
+    monkeypatch.setenv("TWO_PHASE_HOLD_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    monkeypatch.delenv("TWO_PHASE_HOLD_ENABLED", raising=False)
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_queue_expires_lapsed_holds_before_reading_displacement(
+    queue_repo, two_phase_hold_on
+):
+    """Issue #98. Order is the whole assertion, not just that the call happened.
+
+    The displacement column and `snapshot_hash` are both built from `list_live_dock_occupancy`'s
+    rows, and that query deliberately carries no `expires_at > now()` term (#84 -- it has to
+    predict what the exclusion constraint refuses). So a lapsed, unswept hold has to be gone from
+    the *table* before that read runs, not filtered out of its result afterwards. Running the
+    expiry after the read would leave the dead hold in this render's conflicts and its digest,
+    which is exactly the `DISPLACEMENT_DETECTED`-from-a-dead-hold #98 reports.
+    """
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT1", shipment_id="SHP1"),
+        _queue_row(appointment_id="APT2", shipment_id="SHP2"),
+    ]
+
+    await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue_repo["order"] == ["rows", "expiry", "occupancy"]
+    call = queue_repo["calls"]["expiry"][0]
+    # The same appointment ids the displacement check is about to be computed for -- not a
+    # facility-wide sweep, and not a subset.
+    assert sorted(call["appointment_ids"]) == ["APT1", "APT2"]
+    assert call["now"] == NOW
+    assert call["actor_user_id"] == "USR-PLN-1"
+
+
+@pytest.mark.asyncio
+async def test_queue_skips_the_expiry_entirely_when_there_is_nothing_to_read(queue_repo):
+    """An empty queue costs no extra statement -- the common case for four of the five
+    coordinators at any moment, and the reason the whole occupancy branch is already guarded."""
+    queue_repo["state"]["rows"] = []
+    await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+    assert queue_repo["calls"]["expiry"] == []
 
 
 @pytest.mark.asyncio

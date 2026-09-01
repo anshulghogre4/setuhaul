@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.core.execution_context import ExecutionContext, RoleName
+from app.core.execution_context import CARRIER_PORTAL_ROLES, ExecutionContext, RoleName
 from app.core.security import JwtVerifier
 from app.core.settings import Settings, get_settings
 from app.db.session import db, release_transaction
@@ -191,11 +191,19 @@ async def get_execution_context(
         raise AppError("Unknown role.", code="ROLE_UNKNOWN", status_code=403) from exc
 
     # E2.3 (issue #23, M15): carrier_id has no column on users -- user_scopes is its source of
-    # truth. Only looked up for the CARRIER role; every other role's identity resolution is
+    # truth. Only looked up for the carrier-portal roles; every other role's identity resolution is
     # unchanged from before this migration, which is what issue #23's rollback note requires
     # ("every existing role's scope resolves identically before and after").
+    #
+    # Issue #101 widened the guard from `== RoleName.CARRIER` to `in CARRIER_PORTAL_ROLES`. Without
+    # this half the route change alone would have been useless: a TRANSPORT_MANAGER would have
+    # passed `require_roles` on `/carrier/*` and then had `carrier_id` resolve to None, so
+    # `resolve_carrier_scope` would refuse every read with `CARRIER_UNMAPPED`. A scope row must
+    # still exist for the specific user -- `user_scopes(scope_type='CARRIER')` -- and this SELECT
+    # is the only thing that can produce a `carrier_id`. No row, no carrier reach; a role name on
+    # its own grants nothing.
     carrier_id: str | None = None
-    if role_name == RoleName.CARRIER:
+    if role_name in CARRIER_PORTAL_ROLES:
         scope_row = (
             await session.execute(
                 text(

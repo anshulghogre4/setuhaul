@@ -32,6 +32,10 @@ type Tab = 'queue' | 'board'
 export function PlannerConsole({ facilityId }: { facilityId: string }) {
   const [tab, setTab] = useState<Tab>('queue')
   const [blockDialogOpen, setBlockDialogOpen] = useState(false)
+  /** Flow 7 step 4 (issue #100): a successful `block_dock` must update the board's outage layer
+   *  immediately. The dialog and the board are siblings, so the console owns the signal between
+   *  them; `DockBoardPanel` folds this into its own fetch effect. */
+  const [boardReloadToken, setBoardReloadToken] = useState(0)
 
   const queueTabRef = useRef<HTMLButtonElement | null>(null)
   const boardTabRef = useRef<HTMLButtonElement | null>(null)
@@ -128,7 +132,10 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
                  scoped error (state 23) -- the same shape `QueueTab` took, and for the same
                  reason: a board that renders an at-rest state without having asked the server
                  would tell a planner the lanes are clear when it has never looked. */
-              <DockBoardPanel facilityId={facilityId || null} />
+              <DockBoardPanel
+                facilityId={facilityId || null}
+                externalReloadToken={boardReloadToken}
+              />
             ) : (
               <NotYetAvailable
                 title="Dock occupancy view isn't available yet."
@@ -143,7 +150,10 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
         open={blockDialogOpen}
         onOpenChange={setBlockDialogOpen}
         facilityId={facilityId}
-        onBlocked={(dockCode) => toast.success(`${dockCode} blocked; affected appointments named in the response.`)}
+        onBlocked={(dockCode) => {
+          toast.success(`${dockCode} blocked; affected appointments named in the response.`)
+          setBoardReloadToken((n) => n + 1)
+        }}
       />
     </NarrowViewportGuard>
   )

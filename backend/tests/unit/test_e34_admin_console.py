@@ -57,6 +57,52 @@ def _settings() -> Settings:
     return Settings(supabase_url="https://proj.supabase.co", supabase_service_role_key="service-key-not-real")
 
 
+def _audit_calls(session) -> list:
+    """Every `audit_logs` INSERT this session saw, in order.
+
+    Found by matching the SQL rather than by index, unlike the older assertions in this file: an
+    index breaks the moment a tool gains or loses an unrelated statement, and issue #80 adds one to
+    six different tools at once. The four pre-existing entries this module already wrote are found
+    by the same predicate, so a refactor that dropped one of *them* fails here too.
+    """
+    return [
+        call for call in session.execute.call_args_list
+        if "INSERT INTO public.audit_logs" in str(call.args[0])
+    ]
+
+
+def _one_audit(session) -> dict:
+    """The single audit row a write produced, with both JSON payloads already decoded.
+
+    Insists on exactly one: Flow 9 says every write becomes *its own* audit entry, so a tool that
+    wrote two (or none) has not satisfied the requirement even if one of them looks right.
+    """
+    calls = _audit_calls(session)
+    assert len(calls) == 1, f"expected exactly one audit_logs INSERT, saw {len(calls)}"
+    params = dict(calls[0].args[1])
+    params["new_value"] = json.loads(params["new_value_json"])
+    params["old_value"] = (
+        None if params["old_value_json"] is None else json.loads(params["old_value_json"])
+    )
+    return params
+
+
+# The live CHECK constraint, reproduced from
+# `supabase/migrations/20260829134929_d2_held_state_dock_occupancy.sql:290-296` -- the last
+# migration to widen `audit_logs_action_type_check`. Issue #80 deliberately adds NO new value to
+# this vocabulary: the six new entries reuse the generic CRUD verbs and carry their specific event
+# in `new_value_json.event`, the convention `revoke_invite` already depends on. Any future edit
+# that reaches for a console-specific action_type fails here rather than at COMMIT in production.
+PERMITTED_ACTION_TYPES = frozenset(
+    {
+        "LOGIN", "LOGOUT", "VIEW", "CREATE", "UPDATE", "DELETE",
+        "BOOK_APPOINTMENT", "CANCEL_APPOINTMENT", "UPDATE_ETA", "SEND_MESSAGE",
+        "RESCHEDULE_APPOINTMENT", "REJECT_APPOINTMENT", "EXPIRE_APPOINTMENT",
+        "CREATE_HOLD", "CONFIRM_HELD_SLOT", "EXPIRE_HOLD",
+    }
+)
+
+
 @pytest.fixture(autouse=True)
 def _no_idempotency_replay(monkeypatch):
     monkeypatch.setattr(admin_user_service, "lookup_idempotency", AsyncMock(return_value=None))
@@ -234,6 +280,7 @@ async def test_update_user_changes_role_and_scope():
         None,  # UPDATE users
         None,  # DELETE user_scopes
         None,  # INSERT user_scopes
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
     )
     result = await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", role="FACILITY_MANAGER", scope=FACILITY)
     assert result["code"] == "UPDATED"
@@ -413,6 +460,7 @@ async def test_update_user_accepts_a_single_facility_gate_officer():
         None,  # UPDATE users
         None,  # DELETE user_scopes
         None,  # INSERT user_scopes
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
     )
     result = await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", scope=FACILITY)
     assert result["scope_values"] == [FACILITY]
@@ -482,6 +530,7 @@ async def test_update_user_applies_a_scope_only_edit_against_the_stored_role():
         None,  # UPDATE users
         None,  # DELETE user_scopes
         None,  # INSERT user_scopes
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
     )
 
     result = await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", scope=facilities)
@@ -498,13 +547,15 @@ async def test_update_user_applies_a_scope_only_edit_against_the_stored_role():
 
 @pytest.mark.asyncio
 async def test_update_user_with_no_role_and_no_scope_leaves_the_mirror_columns_alone():
-    session = _session_with({"user_id": "USR1", "role_name": "OPERATIONS_EXECUTIVE"}, None)
+    session = _session_with({"user_id": "USR1", "role_name": "OPERATIONS_EXECUTIVE"}, None, None)
     result = await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1")
     assert result["code"] == "UPDATED"
     update_call = session.execute.call_args_list[1]
     assert update_call.args[1]["scope_write"] is False
-    # No scope rewrite at all -- the UPDATE is the last statement.
-    assert len(session.execute.call_args_list) == 2
+    # No scope rewrite at all -- the UPDATE is followed only by the audit entry (issue #80), not
+    # by a DELETE/INSERT pair on user_scopes.
+    assert len(session.execute.call_args_list) == 3
+    assert "INSERT INTO public.audit_logs" in str(session.execute.call_args_list[2].args[0])
 
 
 @pytest.mark.asyncio
@@ -514,13 +565,16 @@ async def test_update_user_role_change_clears_every_stale_scope_type():
         {"role_id": "ROL008"},  # ADMIN: global, so _validate_scope makes no DB call
         None,  # UPDATE users
         None,  # DELETE user_scopes
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
     )
     await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", role="ADMIN")
     delete_call = session.execute.call_args_list[3]
     assert "DELETE FROM public.user_scopes" in str(delete_call.args[0])
     assert delete_call.args[1]["types"] == list(admin_user_service.MANAGED_SCOPE_TYPES)
-    # A global role holds no scope rows at all -- the DELETE is the last statement, no INSERT.
-    assert len(session.execute.call_args_list) == 4
+    # A global role holds no scope rows at all -- the DELETE is followed only by the audit entry,
+    # never by a scope INSERT.
+    assert len(session.execute.call_args_list) == 5
+    assert "INSERT INTO public.audit_logs" in str(session.execute.call_args_list[4].args[0])
 
 
 @pytest.mark.asyncio
@@ -562,11 +616,11 @@ async def test_list_users_falls_back_to_the_primary_facility_when_no_scope_row_e
 
 @pytest.mark.asyncio
 async def test_deactivate_then_reactivate_user():
-    session = _session_with({"user_id": "USR1", "is_active": 0})
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 1}, None)
     result = await admin_user_service.deactivate_user(session, _admin_ctx(), "USR1")
     assert result["code"] == "DEACTIVATED"
 
-    session2 = _session_with({"user_id": "USR1", "is_active": 1})
+    session2 = _session_with({"user_id": "USR1", "is_active": 1, "previous_is_active": 0}, None)
     result2 = await admin_user_service.reactivate_user(session2, _admin_ctx(), "USR1")
     assert result2["code"] == "REACTIVATED"
 
@@ -718,10 +772,13 @@ async def test_create_facility_rule_rejects_an_unregistered_rule_type():
 
 @pytest.mark.asyncio
 async def test_create_facility_rule_accepts_a_registered_rule_type():
-    session = _session_with({
-        "rule_id": "RULE1", "facility_id": FACILITY, "rule_type": "NO_SHOW_GRACE_MIN",
-        "rule_value": "15", "effective_from": None, "effective_to": None,
-    })
+    session = _session_with(
+        {
+            "rule_id": "RULE1", "facility_id": FACILITY, "rule_type": "NO_SHOW_GRACE_MIN",
+            "rule_value": "15", "effective_from": None, "effective_to": None,
+        },
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
+    )
     result = await admin_governance_service.create_facility_rule(
         session, _admin_ctx(), facility_id=FACILITY, rule_type="no_show_grace_min", rule_value="15",
     )
@@ -795,6 +852,7 @@ async def test_publish_policy_version_clears_the_prior_active_row_first():
         {"policy_version_id": "POLV-1", "published_by_user_id": "USR-ADMIN-9", "published_at": None},
         None,  # UPDATE clear prior active
         None,  # INSERT new version
+        None,  # INSERT audit_logs (FR-ADM-009, issue #80)
     )
     result = await admin_governance_service.publish_policy_version(
         session, _admin_ctx(), weights={"lateness_per_minute": 5}, idempotency_key="pub-1",
@@ -815,7 +873,9 @@ async def test_publish_policy_version_clears_the_prior_active_row_first():
 async def test_publish_policy_version_locks_the_active_row_before_deciding():
     """edge-cases.md #3's race is only decidable if the baseline read serialises against the other
     admin's write -- a plain SELECT would let both publishes read the same pre-state."""
-    session = _session_with({"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None}, None, None)
+    session = _session_with(
+        {"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None}, None, None, None
+    )
     await admin_governance_service.publish_policy_version(
         session, _admin_ctx(), weights={}, idempotency_key="pub-lock", based_on_version_id="POLV-1"
     )
@@ -876,7 +936,8 @@ async def test_publish_policy_version_treats_a_vanished_active_row_as_a_conflict
 
 @pytest.mark.asyncio
 async def test_publish_policy_version_allows_the_first_ever_publish_with_no_baseline():
-    session = _session_with(None, None, None)  # nothing active, then UPDATE + INSERT
+    # nothing active, then UPDATE + INSERT + the audit entry
+    session = _session_with(None, None, None, None)
     result = await admin_governance_service.publish_policy_version(
         session, _admin_ctx(), weights={"lateness_per_minute": 5}, idempotency_key="pub-5"
     )
@@ -894,7 +955,9 @@ async def test_publish_policy_version_hashes_the_baseline_into_the_idempotency_p
         captured["hash"] = request_hash
 
     monkeypatch.setattr(admin_governance_service, "store_idempotency", _capture)
-    session = _session_with({"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None}, None, None)
+    session = _session_with(
+        {"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None}, None, None, None
+    )
     # A real engine key, not a placeholder: since A-G1/#69 `publish_policy_version` refuses any
     # weight key the ranking engine does not read, so `{"w": 1}` is now a 422 rather than a
     # publishable payload. The property under test (baseline is inside the request hash) is
@@ -1320,3 +1383,531 @@ def test_the_facilities_route_is_wired_behind_the_same_gate_as_its_sibling_reads
 
     paths = create_app().openapi()["paths"]
     assert "get" in paths["/api/v1/admin/facilities"]
+
+
+# ---------------------------------------------------------------------------------------------
+# FR-ADM-009 / Flow 9 (issue #80) -- every write on this console becomes its own audit entry.
+#
+# Before this, four of the ten writes audited and six did not: update_user, deactivate_user,
+# reactivate_user (this module) and create_facility_rule, update_facility_rule,
+# publish_policy_version (admin_governance_service, which wrote no audit row at all while being
+# the module that *serves* the Audit tab).
+#
+# These tests assert four things per write, which is what the requirement actually needs:
+# the actor is the verified caller, the action_type is one the live CHECK admits, the entity
+# names the row that changed, and the before/after carry the change rather than just the outcome.
+# ---------------------------------------------------------------------------------------------
+
+
+def _commit_watcher(session) -> dict:
+    """Replace `commit` with one that records how much audit had landed before it ran.
+
+    This is the transaction-coupling assertion, and it has to be an ordering check rather than a
+    "both happened" check: an audit row written *after* the commit that persists the change is
+    exactly the failure mode FR-ADM-009 cannot tolerate (the write survives a crash, its evidence
+    does not). Mocks cannot roll anything back, so ordering plus a single commit is the strongest
+    statement available here -- the real-SQL half of this proof lives in
+    `tests/proof/test_part8_admin_audit_trail.py`.
+    """
+    seen: dict[str, int] = {"commits": 0}
+
+    async def _commit():
+        seen["audit_inserts_at_commit"] = len(_audit_calls(session))
+        seen["commits"] += 1
+
+    session.commit = AsyncMock(side_effect=_commit)
+    return seen
+
+
+def _existing_user_row(**overrides):
+    row = {
+        "user_id": "USR1", "role_name": "OPERATIONS_EXECUTIVE", "facility_id": FACILITY,
+        "driver_id": None, "prior_scope_values": [FACILITY, "FAC-GGN-01"],
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_update_user_audits_the_role_and_scope_it_changed_away_from():
+    """The before is the whole point of a role/scope audit entry: an entry recording only the new
+    state cannot answer "what could this person see last month", which is the question
+    `audit_logs` exists for."""
+    session = _session_with(
+        _existing_user_row(),
+        [FACILITY],  # facility existence check
+        {"role_id": "ROL005"},  # _resolve_role_id
+        None,  # UPDATE users
+        None,  # DELETE user_scopes
+        None,  # INSERT user_scopes
+        None,  # INSERT audit_logs
+    )
+    watcher = _commit_watcher(session)
+
+    await admin_user_service.update_user(
+        session, _admin_ctx(), user_id="USR1", role="FACILITY_MANAGER", scope=FACILITY
+    )
+
+    audit = _one_audit(session)
+    assert audit["actor_id"] == "USR-ADMIN-1"
+    assert audit["action_type"] == "UPDATE"
+    assert audit["entity_name"] == "users"
+    assert audit["entity_id"] == "USR1"
+    assert audit["old_value"] == {"role": "OPERATIONS_EXECUTIVE", "scope": [FACILITY, "FAC-GGN-01"]}
+    assert audit["new_value"] == {
+        "event": "UPDATE_USER", "role": "FACILITY_MANAGER", "scope": [FACILITY],
+    }
+    # Audit row first, commit second -- one transaction, one commit.
+    assert watcher == {"commits": 1, "audit_inserts_at_commit": 1}
+
+
+@pytest.mark.asyncio
+async def test_update_user_reads_the_prior_scope_in_the_probe_it_already_ran():
+    """No extra round trip for the audit's before-value: the NOT_FOUND probe carries it."""
+    session = _session_with(
+        _existing_user_row(), [FACILITY], None, None, None, None,
+    )
+    await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1", scope=FACILITY)
+
+    probe_sql = str(session.execute.call_args_list[0].args[0])
+    assert "FROM public.user_scopes us" in probe_sql
+    assert "prior_scope_values" in probe_sql
+    assert session.execute.call_args_list[0].args[1]["managed_types"] == list(
+        admin_user_service.MANAGED_SCOPE_TYPES
+    )
+    # Exactly one statement reads `public.users` -- the probe. If the before-value had needed its
+    # own SELECT there would be two, which is the round trip this shape exists to avoid.
+    reads_users = [c for c in session.execute.call_args_list if "FROM public.users u" in str(c.args[0])]
+    assert len(reads_users) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_user_falls_back_to_the_mirror_column_for_a_pre_backfill_row():
+    """A row predating E2.3's `user_scopes` backfill holds its facility only in the mirror column.
+    Recording `[]` as the before would make a plain role change read as a scope revocation."""
+    session = _session_with(
+        _existing_user_row(prior_scope_values=[]),
+        [FACILITY], {"role_id": "ROL005"}, None, None, None, None,
+    )
+    await admin_user_service.update_user(
+        session, _admin_ctx(), user_id="USR1", role="FACILITY_MANAGER", scope=FACILITY
+    )
+    assert _one_audit(session)["old_value"]["scope"] == [FACILITY]
+
+
+@pytest.mark.asyncio
+async def test_update_user_audits_even_when_nothing_but_updated_at_moved():
+    """`update_user(user_id)` with neither argument still issues the UPDATE and still moves
+    `updated_at`, so it is a write -- and a write this console can make without leaving a trace is
+    precisely what Flow 9 forbids. The entry records that the role and scope did not change."""
+    session = _session_with(_existing_user_row(), None, None)
+    await admin_user_service.update_user(session, _admin_ctx(), user_id="USR1")
+
+    audit = _one_audit(session)
+    assert audit["new_value"]["event"] == "UPDATE_USER"
+    # Unchanged is recorded as unchanged, never as an empty grant: before and after agree on both
+    # fields, which is exactly what makes this entry readable as a no-op rather than a revocation.
+    assert audit["old_value"] == {"role": "OPERATIONS_EXECUTIVE", "scope": [FACILITY, "FAC-GGN-01"]}
+    assert audit["new_value"]["role"] == "OPERATIONS_EXECUTIVE"
+    assert audit["new_value"]["scope"] == [FACILITY, "FAC-GGN-01"]
+
+
+@pytest.mark.asyncio
+async def test_deactivate_user_audits_the_previous_is_active():
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 1}, None)
+    watcher = _commit_watcher(session)
+
+    await admin_user_service.deactivate_user(session, _admin_ctx(), "USR1")
+
+    audit = _one_audit(session)
+    assert audit["actor_id"] == "USR-ADMIN-1"
+    assert audit["action_type"] == "UPDATE"
+    assert audit["entity_name"] == "users"
+    assert audit["entity_id"] == "USR1"
+    assert audit["old_value"] == {"is_active": 1}
+    assert audit["new_value"] == {"event": "DEACTIVATE_USER", "is_active": 0}
+    assert watcher == {"commits": 1, "audit_inserts_at_commit": 1}
+
+
+@pytest.mark.asyncio
+async def test_reactivate_user_audits_a_distinct_event_from_deactivate():
+    """Same table, same action_type, opposite organisational fact -- kept apart by `event`, the
+    way REVOKE_INVITE is kept apart from REMOVE_USER."""
+    session = _session_with({"user_id": "USR1", "is_active": 1, "previous_is_active": 0}, None)
+    await admin_user_service.reactivate_user(session, _admin_ctx(), "USR1")
+
+    audit = _one_audit(session)
+    assert audit["old_value"] == {"is_active": 0}
+    assert audit["new_value"] == {"event": "REACTIVATE_USER", "is_active": 1}
+
+
+@pytest.mark.asyncio
+async def test_deactivating_an_already_inactive_user_is_audited_as_the_no_op_it_was():
+    """These tools are idempotent, so "did this click actually change anything" is only answerable
+    from a real before-value -- which is why `_set_active` captures one at all."""
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 0}, None)
+    await admin_user_service.deactivate_user(session, _admin_ctx(), "USR1")
+    audit = _one_audit(session)
+    assert audit["old_value"] == {"is_active": 0}
+    assert audit["new_value"]["is_active"] == 0
+
+
+@pytest.mark.asyncio
+async def test_set_active_takes_the_before_value_without_a_second_read():
+    """PostgreSQL 17 (production Supabase is 17.6) has no `RETURNING OLD.`; the aliased self-join
+    the UPDATE docs sanction is what keeps the happy path one statement. Pinned because the obvious
+    "fix" for a future reader -- adding a SELECT before the UPDATE -- both costs a round trip and
+    reintroduces a read/write gap another admin can act inside."""
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 1}, None)
+    await admin_user_service.deactivate_user(session, _admin_ctx(), "USR1")
+
+    update_sql = str(session.execute.call_args_list[0].args[0])
+    assert "FROM public.users AS prev" in update_sql
+    assert "prev.is_active AS previous_is_active" in update_sql
+    assert "prev.user_id = u.user_id" in update_sql  # PK join: one output row per target row
+    assert "RETURNING OLD" not in update_sql.upper()  # PG18 only; production is 17.6
+    # Two statements total: the UPDATE and the audit INSERT. No probe read.
+    assert len(session.execute.call_args_list) == 2
+
+
+@pytest.mark.asyncio
+async def test_deactivate_user_writes_no_audit_row_when_the_update_matched_nothing():
+    """A refusal is not a write, so it must not manufacture an audit entry -- the requirement is
+    "every write is audited", not "every request is audited"."""
+    session = _session_with(None, {"removed_at": "2026-08-31T10:00:00+00:00"})
+    with pytest.raises(AppError) as exc:
+        await admin_user_service.deactivate_user(session, _admin_ctx(), "USR1")
+    assert exc.value.code == "USER_REMOVED"
+    assert _audit_calls(session) == []
+
+
+@pytest.mark.asyncio
+async def test_create_facility_rule_audits_the_whole_rule_payload():
+    session = _session_with(
+        {
+            "rule_id": "RULE1", "facility_id": FACILITY, "rule_type": "LAST_NEW_START_TIME",
+            "rule_value": "21:00", "effective_from": "2026-01-01", "effective_to": None,
+        },
+        None,
+    )
+    watcher = _commit_watcher(session)
+
+    await admin_governance_service.create_facility_rule(
+        session, _admin_ctx(), facility_id=FACILITY, rule_type="last_new_start_time",
+        rule_value="21:00", effective_from="2026-01-01", description="No new starts after 21:00.",
+    )
+
+    audit = _one_audit(session)
+    assert audit["actor_id"] == "USR-ADMIN-1"
+    assert audit["action_type"] == "CREATE"
+    assert audit["entity_name"] == "facility_rules"
+    # The audited id is the one actually inserted, not the caller's echo of it.
+    insert_params = session.execute.call_args_list[0].args[1]
+    assert audit["entity_id"] == insert_params["rule_id"]
+    # A created row has no before, exactly like invite_user's entry.
+    assert audit["old_value_json"] is None
+    assert audit["new_value"] == {
+        "event": "CREATE_FACILITY_RULE", "facility_id": FACILITY,
+        # Normalised, not the caller's lowercase input -- the audit records what was stored.
+        "rule_type": "LAST_NEW_START_TIME", "rule_value": "21:00",
+        "effective_from": "2026-01-01", "effective_to": None,
+        "description": "No new starts after 21:00.", "active_flag": 1,
+    }
+    assert watcher == {"commits": 1, "audit_inserts_at_commit": 1}
+
+
+def _updated_rule_row(**overrides):
+    row = {
+        "rule_id": "RULE005", "facility_id": FACILITY, "rule_type": "LAST_NEW_START_TIME",
+        "rule_value": "20:00", "effective_from": "2026-01-01", "effective_to": None,
+        "previous_rule_value": "21:00", "previous_effective_from": "2026-01-01",
+        "previous_effective_to": None,
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_update_facility_rule_audits_both_sides_of_the_edit():
+    """Every argument here is COALESCEd, so an entry with only the new state cannot tell "changed
+    the cutoff from 21:00 to 20:00" from "re-saved 20:00 unchanged"."""
+    session = _session_with(_updated_rule_row(), None)
+    watcher = _commit_watcher(session)
+
+    result = await admin_governance_service.update_facility_rule(
+        session, _admin_ctx(), rule_id="RULE005", rule_value="20:00"
+    )
+
+    audit = _one_audit(session)
+    assert audit["actor_id"] == "USR-ADMIN-1"
+    assert audit["action_type"] == "UPDATE"
+    assert audit["entity_name"] == "facility_rules"
+    assert audit["entity_id"] == "RULE005"
+    assert audit["old_value"] == {
+        "rule_value": "21:00", "effective_from": "2026-01-01", "effective_to": None,
+    }
+    assert audit["new_value"] == {
+        "event": "UPDATE_FACILITY_RULE", "facility_id": FACILITY,
+        "rule_type": "LAST_NEW_START_TIME", "rule_value": "20:00",
+        "effective_from": "2026-01-01", "effective_to": None,
+    }
+    assert watcher == {"commits": 1, "audit_inserts_at_commit": 1}
+
+    # The before-values are a query mechanism, not part of this tool's contract -- they must not
+    # leak into the response the router returns.
+    assert result["code"] == "UPDATED"
+    assert not [key for key in result if key.startswith("previous_")]
+
+
+@pytest.mark.asyncio
+async def test_update_facility_rule_takes_the_before_value_without_a_second_read():
+    session = _session_with(_updated_rule_row(), None)
+    await admin_governance_service.update_facility_rule(
+        session, _admin_ctx(), rule_id="RULE005", rule_value="20:00"
+    )
+    update_sql = str(session.execute.call_args_list[0].args[0])
+    assert "FROM public.facility_rules AS prev" in update_sql
+    assert "prev.rule_value AS previous_rule_value" in update_sql
+    assert "prev.rule_id = fr.rule_id" in update_sql  # PK join: one output row per target row
+    assert "RETURNING OLD" not in update_sql.upper()  # PG18 only; production is 17.6
+    # The COALESCE fallbacks must name the target alias, or they are ambiguous against `prev`.
+    assert "COALESCE(:rule_value, fr.rule_value)" in update_sql
+    assert len(session.execute.call_args_list) == 2
+
+
+@pytest.mark.asyncio
+async def test_update_facility_rule_writes_no_audit_row_for_an_unknown_rule():
+    session = _session_with(None)
+    with pytest.raises(AppError):
+        await admin_governance_service.update_facility_rule(session, _admin_ctx(), rule_id="RULE-GHOST")
+    assert _audit_calls(session) == []
+
+
+@pytest.mark.asyncio
+async def test_publish_policy_version_audits_both_version_ids_and_both_weight_sets():
+    """The highest-consequence write in the product -- it changes the ranking formula every
+    subsequent allocation is scored against (D7) -- and it left no audit record at all before
+    issue #80. The diff *is* the decision, so both sides are recorded."""
+    prior_weights = {"lateness_per_minute": 4, "w_fairness": 0}
+    session = _session_with(
+        {
+            "policy_version_id": "POLV-1", "published_by_user_id": "USR-ADMIN-9",
+            "published_at": None, "weights_json": json.dumps(prior_weights),
+        },
+        None,  # UPDATE clear prior active
+        None,  # INSERT new version
+        None,  # INSERT audit_logs
+    )
+    watcher = _commit_watcher(session)
+
+    new_weights = {"lateness_per_minute": 5}
+    result = await admin_governance_service.publish_policy_version(
+        session, _admin_ctx(), weights=new_weights, idempotency_key="pub-audit-1",
+        based_on_version_id="POLV-1",
+    )
+
+    audit = _one_audit(session)
+    assert audit["actor_id"] == "USR-ADMIN-1"
+    assert audit["action_type"] == "CREATE"
+    assert audit["entity_name"] == "policy_versions"
+    assert audit["entity_id"] == result["policy_version_id"]
+    assert audit["old_value"] == {"policy_version_id": "POLV-1", "weights": prior_weights}
+    assert audit["new_value"] == {
+        "event": "PUBLISH_POLICY_VERSION", "policy_version_id": result["policy_version_id"],
+        "weights": new_weights, "superseded_version_id": "POLV-1",
+    }
+    assert watcher == {"commits": 1, "audit_inserts_at_commit": 1}
+
+
+@pytest.mark.asyncio
+async def test_publish_policy_version_reads_the_superseded_weights_from_the_row_it_already_locked():
+    """M14's "which policy version" field, at no extra cost: `weights_json` rides along on the
+    SELECT ... FOR UPDATE the conflict guard already performs."""
+    session = _session_with(
+        {"policy_version_id": "POLV-1", "published_by_user_id": "U", "published_at": None,
+         "weights_json": json.dumps({"lateness_per_minute": 4})},
+        None, None, None,
+    )
+    await admin_governance_service.publish_policy_version(
+        session, _admin_ctx(), weights={"lateness_per_minute": 5},
+        idempotency_key="pub-audit-2", based_on_version_id="POLV-1",
+    )
+    baseline_sql = str(session.execute.call_args_list[0].args[0])
+    assert "weights_json" in baseline_sql
+    assert "FOR UPDATE" in baseline_sql
+
+
+@pytest.mark.asyncio
+async def test_first_ever_publish_audits_with_a_null_before():
+    """Nothing was superseded, so `old_value_json` is genuinely NULL rather than an invented
+    empty version -- the same honesty create_facility_rule's entry uses."""
+    session = _session_with(None, None, None, None)
+    await admin_governance_service.publish_policy_version(
+        session, _admin_ctx(), weights={"lateness_per_minute": 5}, idempotency_key="pub-audit-3"
+    )
+    audit = _one_audit(session)
+    assert audit["old_value_json"] is None
+    assert audit["new_value"]["superseded_version_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_publish_policy_version_writes_no_audit_row_when_it_refuses():
+    session = _session_with({"policy_version_id": "POLV-2", "published_by_user_id": "B", "published_at": None})
+    with pytest.raises(AppError) as exc:
+        await admin_governance_service.publish_policy_version(
+            session, _admin_ctx(), weights={"lateness_per_minute": 5},
+            idempotency_key="pub-audit-4", based_on_version_id="POLV-1",
+        )
+    assert exc.value.code == "ALREADY_ACTIONED"
+    assert _audit_calls(session) == []
+
+
+@pytest.mark.asyncio
+async def test_every_admin_console_write_uses_an_action_type_the_live_check_admits():
+    """Issue #80 adds six audit entries and NO new `action_type` value, deliberately: a value the
+    CHECK refuses is a CheckViolationError at COMMIT, i.e. a 500 on a real admin action, and no
+    mocked-session test can see it (the D2 migration records exactly that near-miss for
+    `CREATE_HOLD`). This runs the six writes and checks each verb against the constraint's own
+    value list, so a future edit that reaches for `PUBLISH_POLICY_VERSION` as an action_type is
+    caught here rather than in production.
+    """
+    ctx = _admin_ctx()
+    used: dict[str, str] = {}
+
+    session = _session_with(_existing_user_row(), [FACILITY], {"role_id": "ROL005"}, None, None, None, None)
+    await admin_user_service.update_user(session, ctx, user_id="USR1", role="FACILITY_MANAGER", scope=FACILITY)
+    used["update_user"] = _one_audit(session)["action_type"]
+
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 1}, None)
+    await admin_user_service.deactivate_user(session, ctx, "USR1")
+    used["deactivate_user"] = _one_audit(session)["action_type"]
+
+    session = _session_with({"user_id": "USR1", "is_active": 1, "previous_is_active": 0}, None)
+    await admin_user_service.reactivate_user(session, ctx, "USR1")
+    used["reactivate_user"] = _one_audit(session)["action_type"]
+
+    session = _session_with(
+        {"rule_id": "RULE1", "facility_id": FACILITY, "rule_type": "NO_SHOW_GRACE_MIN",
+         "rule_value": "15", "effective_from": None, "effective_to": None},
+        None,
+    )
+    await admin_governance_service.create_facility_rule(
+        session, ctx, facility_id=FACILITY, rule_type="NO_SHOW_GRACE_MIN", rule_value="15"
+    )
+    used["create_facility_rule"] = _one_audit(session)["action_type"]
+
+    session = _session_with(_updated_rule_row(), None)
+    await admin_governance_service.update_facility_rule(session, ctx, rule_id="RULE005", rule_value="20:00")
+    used["update_facility_rule"] = _one_audit(session)["action_type"]
+
+    session = _session_with(None, None, None, None)
+    await admin_governance_service.publish_policy_version(
+        session, ctx, weights={"lateness_per_minute": 5}, idempotency_key="pub-vocab"
+    )
+    used["publish_policy_version"] = _one_audit(session)["action_type"]
+
+    assert set(used) == {
+        "update_user", "deactivate_user", "reactivate_user",
+        "create_facility_rule", "update_facility_rule", "publish_policy_version",
+    }
+    unpermitted = {tool: verb for tool, verb in used.items() if verb not in PERMITTED_ACTION_TYPES}
+    assert unpermitted == {}, (
+        f"audit_logs_action_type_check would refuse these at COMMIT: {unpermitted}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_six_new_events_are_named_distinctly_from_each_other():
+    """`get_audit_log`'s `event_type` filter matches `action_type`, which is a generic CRUD verb --
+    so the specific event has to be unambiguous inside `new_value_json`, or the Audit tab's Event
+    column ("Policy published", "Rule updated") cannot be rendered at all. Pinned as a set so a
+    copy-paste that gave two writes the same event string fails here.
+    """
+    ctx = _admin_ctx()
+    events = []
+
+    session = _session_with(_existing_user_row(), [FACILITY], {"role_id": "ROL005"}, None, None, None, None)
+    await admin_user_service.update_user(session, ctx, user_id="USR1", role="FACILITY_MANAGER", scope=FACILITY)
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    session = _session_with({"user_id": "USR1", "is_active": 0, "previous_is_active": 1}, None)
+    await admin_user_service.deactivate_user(session, ctx, "USR1")
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    session = _session_with({"user_id": "USR1", "is_active": 1, "previous_is_active": 0}, None)
+    await admin_user_service.reactivate_user(session, ctx, "USR1")
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    session = _session_with(
+        {"rule_id": "RULE1", "facility_id": FACILITY, "rule_type": "NO_SHOW_GRACE_MIN",
+         "rule_value": "15", "effective_from": None, "effective_to": None},
+        None,
+    )
+    await admin_governance_service.create_facility_rule(
+        session, ctx, facility_id=FACILITY, rule_type="NO_SHOW_GRACE_MIN", rule_value="15"
+    )
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    session = _session_with(_updated_rule_row(), None)
+    await admin_governance_service.update_facility_rule(session, ctx, rule_id="RULE005", rule_value="20:00")
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    session = _session_with(None, None, None, None)
+    await admin_governance_service.publish_policy_version(
+        session, ctx, weights={"lateness_per_minute": 5}, idempotency_key="pub-events"
+    )
+    events.append(_one_audit(session)["new_value"]["event"])
+
+    assert events == [
+        "UPDATE_USER", "DEACTIVATE_USER", "REACTIVATE_USER",
+        "CREATE_FACILITY_RULE", "UPDATE_FACILITY_RULE", "PUBLISH_POLICY_VERSION",
+    ]
+    # ...and distinct from the four this console already wrote, so the Audit tab can tell all ten
+    # admin actions apart.
+    assert not set(events) & {"INVITE_USER", "REMOVE_USER", "RESEND_INVITE", "REVOKE_INVITE"}
+
+
+@pytest.mark.asyncio
+async def test_the_four_pre_existing_audit_entries_still_write_through_the_shared_helper(monkeypatch):
+    """Issue #80 routed invite/remove/resend/revoke through the same `_write_audit_entry` the six
+    new writes use, so this module has one audit shape rather than two. Their payloads must be
+    byte-identical to what they wrote before, which is what this pins."""
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+    session = _session_with([FACILITY], {"role_id": "ROL003"}, None, None, None, None)
+    await admin_user_service.invite_user(
+        session, _admin_ctx(), _settings(), email="p@setuhaul.com",
+        role="WAREHOUSE_PLANNER", scope=FACILITY,
+    )
+    audit = _one_audit(session)
+    assert audit["action_type"] == "CREATE" and audit["entity_name"] == "users"
+    assert audit["old_value_json"] is None
+    assert audit["new_value"] == {
+        "event": "INVITE_USER", "email": "p@setuhaul.com",
+        "role": "WAREHOUSE_PLANNER", "scope": [FACILITY],
+    }
+
+    session = _session_with(
+        {"user_id": "USR1", "auth_user_id": "auth-uuid-1", "active_escalation_count": 2}, None, None
+    )
+    await admin_user_service.remove_user(
+        session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key="rm-helper"
+    )
+    audit = _one_audit(session)
+    assert audit["action_type"] == "DELETE" and audit["entity_name"] == "users"
+    assert audit["new_value"] == {"event": "REMOVE_USER", "orphaned_active_escalations": 2}
+
+    session = _session_with(_pending_row(), None, None)
+    await admin_user_service.resend_invite(session, _admin_ctx(), _settings(), user_id="USR1")
+    audit = _one_audit(session)
+    assert audit["action_type"] == "UPDATE"
+    assert audit["new_value"] == {"event": "RESEND_INVITE", "email": "amit.d@setuhaul.com"}
+
+    session = _session_with(_pending_row(), None, None)
+    await admin_user_service.revoke_invite(
+        session, _admin_ctx(), _settings(), user_id="USR1", idempotency_key="rv-helper"
+    )
+    audit = _one_audit(session)
+    assert audit["action_type"] == "DELETE"
+    assert audit["new_value"] == {"event": "REVOKE_INVITE", "email": "amit.d@setuhaul.com"}

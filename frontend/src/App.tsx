@@ -1,11 +1,14 @@
 import { Suspense, lazy, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
+import { toast } from 'sonner'
 
 import { AppShell, type ShellChrome } from '@/components/shell/app-shell'
 import { RequireAuth } from '@/components/auth/require-auth'
 import type { Density } from '@/core/auth/identity'
+import { facilityIdForReads } from '@/core/auth/active-facility'
 import { useAuth, useIdentity } from '@/core/auth/auth-context'
+import { formatUserFriendlyError } from '@/core/http/api'
 import { signIn } from '@/core/auth/supabase'
 import { canAccess, homePathFor } from '@/core/auth/surface-access'
 import { NotFound } from '@/components/states/region-states'
@@ -387,7 +390,7 @@ function ShellRoute({
   density?: Density
 }) {
   const identity = useIdentity()
-  const { signOutLocal } = useAuth()
+  const { signOutLocal, signOutEverywhere, setActiveFacility } = useAuth()
   const navigate = useNavigate()
   // CHROME SEAM — TODO(#52): stands in for the debounced `search_records` call the surface
   // epics will wire here.  Deliberately a state hand-off rather than filtering inside
@@ -400,7 +403,22 @@ function ShellRoute({
       identity={identity}
       density={density}
       chrome={{ ...DEMO_CHROME, searchResults: results }}
-      onFacilityChange={() => {}}
+      /**
+       * Facility switching, issue #99.1. **This was `() => {}`** -- a real popover with a real
+       * option list whose selection went nowhere on both desk consoles.
+       *
+       * The handler is `AuthProvider`'s, not a local `useState`, for one load-bearing reason:
+       * the shell renders the switcher from `identity`, and the surfaces read their scope from
+       * the same `identity`. One writer keeps those two from disagreeing, which is precisely the
+       * failure a shell-local state would reintroduce -- a switcher reading "Gurugram" over a
+       * board still showing Jaipur.
+       *
+       * The id is validated against the server-supplied `identity.facilities` inside the provider
+       * before it is applied (M15, `core/auth/active-facility.ts`), and the server re-derives
+       * scope again on every request regardless (`repositories/scope.py::resolve_facility_scope`).
+       * Nothing here grants reach.
+       */
+      onFacilityChange={setActiveFacility}
       onSearchQueryChange={(q) => {
         const needle = q.trim().toLowerCase()
         setResults(
@@ -426,6 +444,29 @@ function ShellRoute({
       onSignOut={() => {
         void signOutLocal().then(() => navigate('/signin', { replace: true }))
       }}
+      /**
+       * "Sign out everywhere", issue #99.2. **This prop was never passed** -- the account menu's
+       * confirmation expanded in place and its commit button did nothing on every desk surface.
+       *
+       * `signOutEverywhere` calls `POST /api/v1/sign-out-everywhere` (E3.5) *before* clearing the
+       * local session, because the endpoint forwards this caller's own bearer token; see the
+       * provider for why that ordering is not incidental.
+       *
+       * A failure does NOT sign this device out and says so, rather than silently degrading into
+       * an ordinary sign-out. The toast is the only surface available: `UserMenu` is specified as
+       * one button with no error slot ("no modal, no separate dialog, no active-sessions list"),
+       * and inventing an error row inside the popover would be redesigning a specified component
+       * to report a transport fault.
+       */
+      onSignOutEverywhere={() => {
+        void signOutEverywhere()
+          .then(() => navigate('/signin', { replace: true }))
+          .catch((err: unknown) => {
+            toast.error(
+              `${formatUserFriendlyError(err)} You are still signed in on this device and on your other devices.`,
+            )
+          })
+      }}
     >
       {children}
     </AppShell>
@@ -441,12 +482,19 @@ function SettingsRoute() {
  * E5.2 (#37). The rail/status-bar/density now resolve from the viewer's OWN role rather than from
  * a hard-coded `OPERATIONS_MANAGER` fixture -- which means an `OPERATIONS_EXECUTIVE` on this
  * console finally sees their own name and facility instead of "Priya Nair, All facilities".
- * `canSelectAllFacilities` is derived in `identity-mapping.ts` from the role, per U91.
+ * `canSelectAllFacilities` is derived in `identity-mapping.ts` from the server's own reported
+ * scope (`/auth/me`'s `scope.type`), per U91.
+ *
+ * `facilityId` (issue #99.1) is the viewer's ACTIVE facility, so the escalation queue re-reads
+ * when the switcher changes. `facilityIdForReads` maps the "All facilities" sentinel to `null`,
+ * which `fetchEscalationQueue` turns into an omitted `facility_id` -- §7.5.5's own "omitted means
+ * every facility in scope", and the only form the server will honour for a global-read persona.
  */
 function OpsRoute() {
+  const identity = useIdentity()
   return (
     <ShellRoute>
-      <OpsConsole />
+      <OpsConsole facilityId={facilityIdForReads(identity.activeFacilityId)} />
     </ShellRoute>
   )
 }
@@ -456,12 +504,18 @@ function OpsRoute() {
  * It was `PLANNER_MULTI_ROLE.activeFacilityId` -- a hard-coded `FAC-JAI-01` -- so every planner,
  * whichever facility they actually belong to, was pointing this console's reads at Jaipur.
  * The empty-string fallback is unchanged: `PlannerConsole` already treats it as "no facility yet".
+ *
+ * Since issue #99.1 this follows the facility switcher too -- `PlannerConsole` already passes it
+ * straight into `fetchPlannerQueue` / `fetchDockBoard` / the block-dock dock list, so changing it
+ * re-scopes all three with no further wiring. `facilityIdForReads` cannot return the "All
+ * facilities" sentinel; a planner is not a global-read persona, so that option is never offered,
+ * and if it ever were, `''` here means "no facility yet" rather than "every facility".
  */
 function PlannerRoute() {
   const identity = useIdentity()
   return (
     <ShellRoute>
-      <PlannerConsole facilityId={identity.activeFacilityId ?? ''} />
+      <PlannerConsole facilityId={facilityIdForReads(identity.activeFacilityId) ?? ''} />
     </ShellRoute>
   )
 }
@@ -485,6 +539,15 @@ function CarrierRoute() {
  * E5.6 (#41). `currentUserId` is now the signed-in admin's real `user_id`, which matters for
  * correctness and not only for chrome: `AdminConsole` uses it to keep an admin from removing their
  * own account, and a fixture id could never match a real row, so that guard was inert.
+ *
+ * **Facility-switch boundary, stated rather than left to be discovered (issue #99.1):** an admin
+ * DOES get the switcher (`hasFacilityScope('ADMIN')` is true) and, being a global-read persona,
+ * gets its "All facilities" row -- but **no read on this console takes a `facility_id`**. Every
+ * admin tool is scoped per action instead (a user's scope, a rule's facility, a policy version),
+ * which `06-admin-console/screens.md` §1 states outright: "admin actions span facilities by
+ * nature". So switching here changes the rail stripe and the status bar and nothing else, and
+ * that is correct, not a missing hookup. `AdminConsole` is deliberately not given a `facilityId`
+ * prop it would have nowhere to send.
  */
 function AdminRoute() {
   const identity = useIdentity()

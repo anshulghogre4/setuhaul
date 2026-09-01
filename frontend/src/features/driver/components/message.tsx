@@ -67,7 +67,20 @@ export function DriverMessageRow({
   return (
     <div
       role="listitem"
-      className={cn('flex flex-col', isDriver ? 'items-end' : 'items-start')}
+      // `data-message-id` + `tabIndex={-1}` are the state line's scroll target (issue #99.3):
+      // `Transcript.scrollToMessage` finds the row by id and moves focus to it so the tap lands a
+      // keyboard/screen-reader user on the message, not merely a sighted user's viewport. -1 keeps
+      // it out of the tab order -- a transcript where every message is a tab stop would be
+      // unusable, which is why this is not `tabIndex={0}`.
+      tabIndex={-1}
+      data-message-id={message.id}
+      className={cn(
+        'flex flex-col outline-none',
+        // The row is only focusable programmatically, so the ring is the confirmation that the
+        // jump landed somewhere real.
+        'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 focus-visible:rounded-md',
+        isDriver ? 'items-end' : 'items-start',
+      )}
       data-tier={message.tier}
     >
       {showAttribution ? <Attribution message={message} /> : null}

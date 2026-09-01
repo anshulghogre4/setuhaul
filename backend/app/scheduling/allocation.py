@@ -569,6 +569,7 @@ async def _snapshot_guard(
     appointment_id: str,
     expected_hash: str,
     attempted: str,
+    actor_user_id: str,
 ) -> dict[str, Any]:
     """The section 7.5 principle-3 gate shared by `confirm_request` and `counter_offer`.
 
@@ -579,8 +580,14 @@ async def _snapshot_guard(
 
     Costs one round trip. Returns the recomputed snapshot so the caller can hand its fresh
     `snapshot_hash` back in the success response.
+
+    `actor_user_id` is threaded through for issue #98's lazy expiry inside
+    `load_appointment_snapshot`, which needs an author for the `EXPIRE_HOLD` audit row it may
+    write. It is required rather than defaulted so a future caller cannot opt out of it.
     """
-    snapshot = await load_appointment_snapshot(session, appointment_id)
+    snapshot = await load_appointment_snapshot(
+        session, appointment_id, actor_user_id=actor_user_id
+    )
     if snapshot is None:
         raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
     conflicts = displacement_conflicts(snapshot)
@@ -1364,6 +1371,7 @@ async def confirm_appointment(
         appointment_id=command.appointment_id,
         expected_hash=command.snapshot_hash,
         attempted="confirm",
+        actor_user_id=ctx.user_id,
     )
 
     # One instant, two representations -- see the bind-type note above `_as_of`.
@@ -2313,6 +2321,7 @@ async def counter_offer(
         appointment_id=command.appointment_id,
         expected_hash=command.snapshot_hash,
         attempted="counter-offer",
+        actor_user_id=ctx.user_id,
     )
 
     start_ts = command.start_ts
@@ -2460,7 +2469,9 @@ async def counter_offer(
             ),
         ) from exc
 
-    refreshed = await load_appointment_snapshot(session, command.appointment_id)
+    refreshed = await load_appointment_snapshot(
+        session, command.appointment_id, actor_user_id=ctx.user_id
+    )
     result = CounterOfferResult(
         as_of=_as_of(),
         code="COUNTER_OFFERED",
@@ -2718,7 +2729,9 @@ async def bulk_confirm(
 
     found_ids = sorted(locked)
     inputs = await _safe_batch_inputs(session, found_ids)
-    snapshots = await load_appointment_snapshots(session, found_ids)
+    snapshots = await load_appointment_snapshots(
+        session, found_ids, actor_user_id=ctx.user_id
+    )
 
     current_batch_hash = batch_snapshot_hash(
         {appointment_id: snapshot["snapshot_hash"] for appointment_id, snapshot in snapshots.items()}

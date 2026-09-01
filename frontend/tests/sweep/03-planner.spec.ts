@@ -1,6 +1,6 @@
 import { expect, test, type Page } from 'playwright/test'
 
-import { recorderFor, storageFor } from './support'
+import { recorderFor, storageFor, verifyFacilitySwitcher } from './support'
 import { apiAs } from '../support/race'
 
 /**
@@ -49,31 +49,23 @@ test('planner: shell chrome and the two tabs', async ({ page }) => {
   await expect(page).toHaveURL(/\/planner$/)
   say(
     'Icon rail — console + Profile',
-    'MISSING',
-    `the console destination works (navigates to /planner, aria-current set) but the rail renders ${railCount} item(s) and carries no Profile entry -- icon-rail.tsx renders exactly one railDestinationFor(role). Same gap as ops.`,
+    'NOT-IN-DESIGN',
+    `the console destination works (navigates to /planner, aria-current set) and the rail renders ${railCount} item(s) with no Profile entry -- which is the RESOLVED design. 03-planner-dock-board/screens.md section 1 asserts two destinations, but this surface's own implementation-spec.md section 6 Fork H records the ruling: "Resolved 2026-08-29: owner picked (a), drop the rail Profile item. Applied here too, not just to ops -- all 14 rail Profile links removed from this surface's mockup.html; the top-bar account control is the sole entry point. This decision now applies project-wide." Same finding as ops, and it is a correct build rather than a shared gap.`,
   )
 
   // ---- Facility switcher --------------------------------------------------------------------
-  const switcher = page.getByRole('button', { name: /Jaipur|Select facility/ })
-  await switcher.click()
-  const listbox = page.getByRole('listbox', { name: 'Facility' })
-  await expect(listbox).toBeVisible()
-  const options = await listbox.getByRole('option').count()
-  const hasAll = await listbox.getByRole('option', { name: 'All facilities' }).count()
-  const before = (await switcher.textContent())?.trim()
-  let reqs = 0
-  page.on('request', (r) => {
-    if (r.url().includes('/api/v1/planner/')) reqs += 1
+  await verifyFacilitySwitcher(page, {
+    say,
+    control: 'Facility switcher',
+    ownFacility: 'FAC-JAI-01',
+    otherFacility: 'FAC-GGN-01',
+    triggerName: /Jaipur|Gurugram|Select facility/,
+    // The Queue tab is the default tab, so `get_planner_queue` is this surface's scoped read.
+    scopedRead: '/api/v1/planner/queue',
+    settle: async (p) => {
+      await expect(p.getByRole('tab', { name: 'Queue' })).toBeVisible({ timeout: 30_000 })
+    },
   })
-  await listbox.getByRole('option').first().click()
-  await page.waitForTimeout(600)
-  const after = (await switcher.textContent())?.trim()
-  say(
-    'Facility switcher',
-    'DEAD',
-    `the trigger opens a real combobox (${options} option(s); "All facilities" correctly absent -- ${hasAll} matches -- per the single-facility rule), but selecting a facility does nothing: label "${before}" -> "${after}", ${reqs} planner read(s) re-issued. App.tsx's ShellRoute passes onFacilityChange={() => {}}.`,
-  )
-  await page.keyboard.press('Escape')
 
   // ---- Queue / Board tabs -------------------------------------------------------------------
   const boardTab = page.getByRole('tab', { name: 'Board' })
@@ -237,13 +229,6 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
     'there is no picker banner on the Board tab, because the board picker itself is not built (see above). The interim counter-offer dialog carries its own dismissal, but that is a different control from the design\'s pinned banner.',
   )
 
-  // ---- End dock block ------------------------------------------------------------------------------
-  say(
-    'End dock block',
-    'MISSING',
-    'no UI control ends a block. `endDockBlock()` is exported from features/planner/lib/api.ts and has ZERO call sites anywhere in src/ (verified by grep); the board renders outage markers as non-interactive <span>s and there is no "Active blocks" list. So a block created here can only be ended out-of-band.',
-  )
-
   // ---- "Block a dock" + the form -------------------------------------------------------------------
   await page.getByRole('button', { name: 'Block a dock' }).click()
   const form = page.getByRole('dialog').filter({ hasText: 'Block a dock' })
@@ -319,6 +304,140 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
     expect(undo.status, 'the block-dock write must be reverted').toBe(200)
   }
 
+})
+
+/**
+ * "End dock block" (issue #100), driven entirely through the UI.
+ *
+ * ## Why this needs its own block rather than reusing the one above
+ *
+ * `GET /api/v1/planner/board` returns only the outage windows that **overlap the board's horizon**
+ * (`planner_service._board_blocks`: `event_start_ts < window_end AND (event_end_ts IS NULL OR
+ * event_end_ts > window_start)`), and the horizon is "the next four hours, or until closing time".
+ * The block-dock form test above deliberately writes at 03:0x, a window nobody uses -- which is
+ * almost always in the past, so it never appears in the board payload and no board-hosted control
+ * could reach it. Proving the end-block affordance therefore needs a block placed INSIDE the
+ * horizon, which is a different window and so a different write.
+ *
+ * ## Safety
+ *
+ * The window is 25 minutes out and five minutes long, and the form's own live impact check gates
+ * it: if any confirmed appointment falls inside, the form is CANCELLED and nothing is written --
+ * recorded as BLOCKED-ENV with the real count rather than blocking a real truck to make a test
+ * pass. Whatever is written is ended in the same test, by the control under test, with an
+ * out-of-band `apiAs` revert as the backstop if the UI path did not fire.
+ */
+test('planner: board tab — end a dock block through the UI', async ({ page }) => {
+  await openConsole(page)
+  const boardRead = page.waitForResponse((r) => r.url().includes('/api/v1/planner/board'))
+  await page.getByRole('tab', { name: 'Board' }).click()
+  const boardPayload = (await (await boardRead).json()) as {
+    data?: { horizon_end?: string; horizon_end_reason?: string }
+  }
+  const horizon = `${boardPayload.data?.horizon_end ?? 'unknown'} (${boardPayload.data?.horizon_end_reason ?? '?'})`
+
+  // Local wall-clock, because the form's two <input type="time"> fields are local and
+  // `toIsoWindow` combines them with today's local date.
+  const start = new Date(Date.now() + 25 * 60_000)
+  const end = new Date(start.getTime() + 5 * 60_000)
+  const hhmm = (d: Date) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+  await page.getByRole('button', { name: 'Block a dock' }).click()
+  const form = page.getByRole('dialog').filter({ hasText: 'Block a dock' })
+  await expect(form).toBeVisible()
+  await form.getByLabel('Dock').selectOption({ index: 1 })
+  await form.getByLabel('From').fill(hhmm(start))
+  await form.getByLabel('To').fill(hhmm(end))
+  const impact = await page.waitForResponse((r) => r.url().includes('/block-impact'))
+  const affected =
+    ((await impact.json()) as { data?: { affected_count?: number } }).data?.affected_count ?? -1
+
+  if (affected !== 0) {
+    await form.getByRole('button', { name: 'Cancel' }).click()
+    say(
+      'End dock block',
+      'BLOCKED-ENV',
+      `refused to create the probe block: GET /block-impact reported affected_count=${affected} for ${hhmm(start)}-${hhmm(end)} on this dock, so blocking it would have stranded a real confirmed appointment. The form was cancelled and nothing was written. The control itself is built (features/planner/components/dock-board.tsx's Active blocks list) but cannot be exercised without a block inside the board horizon.`,
+    )
+    return
+  }
+
+  await form.getByLabel('Reason').fill('UI click-sweep probe — ended through the UI in this test')
+  const blockRes = page.waitForResponse(
+    (r) => r.url().includes('/block') && r.request().method() === 'POST',
+  )
+  await form.getByRole('button', { name: /Block dock/ }).click()
+  const created = (await (await blockRes).json()) as {
+    data?: { code?: string; dock_status_event_id?: string | null }
+  }
+  const eventId = created.data?.dock_status_event_id ?? null
+
+  if (created.data?.code !== 'BLOCKED' || !eventId) {
+    say(
+      'End dock block',
+      'BLOCKED-ENV',
+      `could not create a probe block inside the board horizon to end: block_dock answered code=${created.data?.code ?? 'none'} for ${hhmm(start)}-${hhmm(end)} (ALREADY_BLOCKED means a previous run's window is still open on this dock). Nothing was written, so there is nothing to end.`,
+    )
+    return
+  }
+
+  let endedThroughUi = false
+  try {
+    // Flow 7 step 4: the board's outage layer updates immediately once the form closes. That is
+    // now wired (`PlannerConsole` bumps `externalReloadToken` in `onBlocked`), and this wait is
+    // what proves it -- before issue #100 the panel never re-read and the new block was invisible
+    // until a tab switch.
+    await page.waitForResponse((r) => r.url().includes('/api/v1/planner/board'))
+    const blocksList = page.getByRole('region', { name: 'Active blocks' })
+    await expect(blocksList).toBeVisible({ timeout: 15_000 })
+    const row = blocksList.getByRole('listitem').filter({ hasText: 'click-sweep probe' }).first()
+    await expect(row).toBeVisible()
+    const rowText = (await row.innerText()).replace(/\s+/g, ' ').trim()
+
+    const endBtn = row.getByRole('button', { name: /^End the block on / })
+    const expandedBefore = await endBtn.getAttribute('aria-expanded')
+    await endBtn.click()
+    const expandedAfter = await endBtn.getAttribute('aria-expanded')
+
+    // U79: the safer action must come FIRST in DOM order, read off the document rather than
+    // guessed at from visual position. The `aria-expanded` button is the row's own trigger (it
+    // also reads "End block") and is excluded -- including it would compare the disclosure control
+    // against the commit control, which is not the pair U79 is about.
+    const order = await row.evaluate((el) =>
+      Array.from(el.querySelectorAll('button'))
+        .filter((b) => !b.hasAttribute('aria-expanded'))
+        .map((b) => (b.textContent ?? '').trim())
+        .filter((t) => t.length > 0),
+    )
+    const keepIdx = order.findIndex((t) => /keep it blocked/i.test(t))
+    const endIdx = order.findIndex((t) => /^end block$/i.test(t))
+
+    const endRes = page.waitForResponse(
+      (r) => r.url().includes('/dock-status-events/') && r.url().endsWith('/end'),
+    )
+    await row.getByRole('button', { name: /^End block$/ }).click()
+    const res = await endRes
+    const payload = (await res.json()) as { data?: { code?: string } }
+    endedThroughUi = res.status() === 200 && payload.data?.code === 'UNBLOCKED'
+
+    // The board must re-read and the row must go, which is the visible half of `UNBLOCKED`.
+    await expect(row).toBeHidden({ timeout: 15_000 })
+
+    say(
+      'End dock block',
+      'WORKING',
+      `the Board tab now carries an "Active blocks" list and its control ends the block. The block created moments earlier (${hhmm(start)}-${hhmm(end)}, dock_status_event_id=${eventId}) appeared in the list without a reload -- board re-read on block, which is Flow 7 step 4 and was NOT happening before -- rendering as "${rowText.slice(0, 120)}". Activating "End block" expanded an in-place confirmation (aria-expanded ${expandedBefore} -> ${expandedAfter}; no modal, per U41) whose buttons in DOM order are [${order.join(' | ')}], so the safer action precedes the committing one (U79: keepIt@${keepIdx} < endBlock@${endIdx} = ${keepIdx < endIdx}). Committing fired POST /api/v1/planner/dock-status-events/${eventId}/end (HTTP ${res.status()}, code=${payload.data?.code}) and the row disappeared on the board's own re-read. Boundary worth recording: board.blocks is horizon-filtered server-side (planner_service._board_blocks), so a block scheduled entirely outside the board's horizon (this run's horizon ended ${horizon}) still cannot be ended from this surface -- §7.5.1 has no "list active blocks" read to hang that on.`,
+    )
+  } finally {
+    // Backstop. If the UI path did not complete for any reason, the probe block must still not
+    // survive this test.
+    if (!endedThroughUi) {
+      const undo = await apiAs('planner', 'POST', `/api/v1/planner/dock-status-events/${eventId}/end`)
+      console.log(`[sweep revert] end dock block ${eventId} -> HTTP ${undo.status}`)
+      expect(undo.status, 'the probe block must be reverted').toBe(200)
+    }
+  }
 })
 
 test('planner: block-dock form Cancel writes nothing', async ({ page }) => {

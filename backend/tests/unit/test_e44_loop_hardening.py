@@ -79,12 +79,21 @@ def test_build_chat_model_passes_the_configured_timeout_to_openai():
     assert model.request_timeout == 12.5
 
 
-def test_build_chat_model_passes_the_configured_timeout_to_gemini():
+def test_build_chat_model_passes_the_configured_timeout_to_gemini(tmp_path, monkeypatch):
     from app.assistant.llm import build_chat_model
 
     # llm_provider forced explicitly: this process's real environment may have OPENAI_API_KEY set
     # (from .env/.env.local), which would otherwise win under "auto" mode regardless of the
     # gcp_project set here -- exactly the ordering issue #31 flags.
+    #
+    # GOOGLE_APPLICATION_CREDENTIALS is pointed at a throwaway file because issue #103 made a
+    # project id alone insufficient for Gemini readiness. Pointing at an existing file (rather
+    # than passing GCP_SA_KEY_JSON) keeps this timeout test from materializing a key file as a
+    # side effect -- the ADC path itself is covered in test_llm_factory.py. Nothing here
+    # authenticates: google-genai resolves credentials lazily, on the first request.
+    adc = tmp_path / "adc.json"
+    adc.write_text('{"type": "service_account"}', encoding="utf-8")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(adc))
     settings = Settings(
         gcp_project="proj-x", llm_call_timeout_seconds=8.0, llm_provider="gemini",
     )

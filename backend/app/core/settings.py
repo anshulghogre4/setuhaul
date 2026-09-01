@@ -1,4 +1,5 @@
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,6 +24,36 @@ DESIGNED_AWS_REGION = "ap-south-1"
 # over the Developer API's simpler API-key auth, which Google's own docs warn can silently route
 # through the global endpoint regardless of configured location.
 DESIGNED_GCP_VERTEX_LOCATION = "asia-south1"
+
+# Name of the gcloud CLI's config directory, and the ADC filename inside it. These are not our
+# invention -- they mirror google-auth's own `_cloud_sdk.get_config_path()` /
+# `get_application_default_credentials_path()` (verified against the pinned google-auth 2.56.3),
+# and Google's ADC documentation names the same two locations explicitly:
+# `$HOME/.config/gcloud/application_default_credentials.json` (POSIX) and
+# `%APPDATA%\gcloud\application_default_credentials.json` (Windows), with `CLOUDSDK_CONFIG`
+# overriding the directory. Re-stated here rather than imported because `_cloud_sdk` is a private
+# module of that library; see `gcloud_adc_file()` for why we need the path at all.
+_GCLOUD_CONFIG_DIR_NAME = "gcloud"
+_GCLOUD_ADC_FILENAME = "application_default_credentials.json"
+
+
+def gcloud_adc_file() -> Path:
+    """Where `gcloud auth application-default login` writes ADC. The file may not exist.
+
+    Second step of the three-step ADC chain google-auth walks (GOOGLE_APPLICATION_CREDENTIALS ->
+    this file -> the GCE/Cloud Run metadata server). SetuHaul needs to *predict* that chain's
+    outcome, not just let it run: issue #103's production incident was that the AgentCore
+    container has none of the three, so `resolve_llm` picked Gemini on `gcp_project` alone and
+    the failure only surfaced deep inside the first Vertex call. `Settings.gcp_adc_available`
+    below turns that into a readiness check made before a provider is chosen.
+    """
+    override = (os.environ.get("CLOUDSDK_CONFIG") or "").strip()
+    if override:
+        return Path(override) / _GCLOUD_ADC_FILENAME
+    if os.name == "nt":
+        root = os.environ.get("APPDATA") or os.environ.get("SystemDrive") or "C:"
+        return Path(root) / _GCLOUD_CONFIG_DIR_NAME / _GCLOUD_ADC_FILENAME
+    return Path.home() / ".config" / _GCLOUD_CONFIG_DIR_NAME / _GCLOUD_ADC_FILENAME
 
 
 class RegionMismatchError(RuntimeError):
@@ -56,15 +87,36 @@ class Settings(BaseSettings):
     # Sprint 2+ — declared so .env.example keys do not break settings load
     openai_api_key: str = ""
     openrouter_api_key: str = ""
+    # AI Studio (generativelanguage.googleapis.com) key. E4.1/issue #31 had excluded this path as
+    # the "trap" TECH_STACK.md section 7 warns about -- it can silently forfeit the in-region
+    # guarantee. OWNER RULING 2026-09-01 (recorded on #103) re-admits it for the POC, in
+    # production and locally, as the credential that needs no provisioning work because it is
+    # already in SSM. See `ready_gemini_api_key` for the tradeoff being accepted.
     google_api_key: str = ""
     # E4.1 (issue #31): the Vertex AI credential is a GCP project + ADC (Application Default
     # Credentials resolved from the environment -- a service account key file, workload identity,
     # or `gcloud auth application-default login`), not a string this app holds directly the way
-    # `google_api_key` above is. `gcp_project` being set is therefore what "Gemini is configured"
-    # actually means now; `google_api_key` alone is deliberately no longer sufficient (see
-    # `llm.py::resolve_llm` -- the Developer/API-key path this project used before is exactly the
-    # "trap" TECH_STACK.md section 7 warns can silently forfeit the in-region guarantee).
+    # `google_api_key` above is. Vertex remains the *preferred* Gemini path whenever it is
+    # configured (`resolve_llm` picks it over the key), because it is the only one that keeps
+    # inference in `asia-south1`; the key path is the fallback the owner ruling re-admitted, not a
+    # replacement for this one.
     gcp_project: str = ""
+    # Issue #103 option (a) -- the deliberately *pragmatic POC* credential mechanism, recorded as
+    # such rather than presented as the right long-term answer. A GCP service-account key JSON
+    # carried as a string (SSM SecureString `/setuhaul/gcp-sa-key` -> env `GCP_SA_KEY_JSON`),
+    # because the AgentCore container has no gcloud ADC file and no GCE metadata server, so every
+    # step of google-auth's ADC chain comes up empty there and Gemini silently loses to OpenAI --
+    # the exact production incident #103 records (LangSmith, 2026-09-01: gpt-4o-mini, P50 7.2s).
+    # `llm.ensure_vertex_adc` materializes this to a 0600 container-local file and points
+    # GOOGLE_APPLICATION_CREDENTIALS at it.
+    #
+    # The tradeoff being accepted: this is a long-lived key at rest in SSM. The recorded upgrade is
+    # #103 option (b), Workload Identity Federation from the AgentCore execution role -- no key
+    # material at all. That upgrade needs no change to this module: WIF also advertises itself
+    # through GOOGLE_APPLICATION_CREDENTIALS (as an external-account config file), which
+    # `gcp_adc_available` below already accepts, so switching means dropping this param and adding
+    # that one env var.
+    gcp_sa_key_json: str = ""
     gcp_vertex_location: str = DESIGNED_GCP_VERTEX_LOCATION
     llm_provider: str = "auto"  # auto | gemini | openai | openrouter
     llm_model: str = ""  # optional override; defaults per provider
@@ -187,10 +239,69 @@ class Settings(BaseSettings):
         return self.ready_llm
 
     @property
+    def gcp_adc_available(self) -> bool:
+        """True when google-auth's ADC chain will actually resolve credentials in this process.
+
+        Checks the same first two steps google-auth checks, in the same order:
+        GOOGLE_APPLICATION_CREDENTIALS (a *path* to a service-account key or an external-account /
+        Workload-Identity config -- the variable never carries inline JSON), then the gcloud
+        well-known file. The third step, the GCE/Cloud Run metadata server, is deliberately not
+        probed: it needs a network round trip, and SetuHaul's compute is AgentCore on AWS where it
+        can never succeed. If this app is ever hosted on GCP, that omission becomes a real gap and
+        this is the line to revisit.
+
+        The env var is only honoured when the file it names exists -- a stale
+        GOOGLE_APPLICATION_CREDENTIALS pointing at nothing makes `google.auth.default()` raise
+        rather than fall through, so treating "set" as "ready" would recreate #103's failure shape
+        (Gemini selected, blows up on the first Vertex call) instead of degrading to OpenAI.
+        """
+        explicit = (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+        if explicit and Path(explicit).is_file():
+            return True
+        try:
+            return gcloud_adc_file().is_file()
+        except OSError:  # unresolvable HOME/APPDATA -- treat as "no ADC", never as a crash
+            return False
+
+    @property
+    def ready_gemini_vertex(self) -> bool:
+        """The Vertex shape: a project *and* a credential ADC can actually resolve.
+
+        Issue #103 tightened this from "project id set". Before, `GCP_PROJECT` alone made
+        `resolve_llm` choose Gemini, and the missing credential only surfaced as a
+        `DefaultCredentialsError` from inside the first live Vertex call -- a 503 mid-turn instead
+        of the documented fallback. Requiring a credential *shape* too means an under-provisioned
+        deployment falls through AUTO_ORDER cleanly, which is what the fallback exists for.
+        """
+        if not (self.gcp_project or "").strip():
+            return False
+        return bool((self.gcp_sa_key_json or "").strip()) or self.gcp_adc_available
+
+    @property
+    def ready_gemini_api_key(self) -> bool:
+        """The `GOOGLE_API_KEY` shape, whichever endpoint ends up serving it.
+
+        OWNER RULING 2026-09-01 (recorded on issue #103) re-admits this path, which E4.1/issue #31
+        had deliberately excluded: "if ADC is not working we can simply use API key based with no
+        worries." Verified empirically the same day through this app's own
+        `ChatGoogleGenerativeAI` dependency -- the key serves `gemini-3.7-flash` today.
+
+        One key, two possible endpoints, chosen in `llm._gemini_key_backend`: Vertex **express
+        mode** (preferred -- genuinely Vertex-served, so it keeps more of E4.1's intent) or plain
+        AI Studio at generativelanguage.googleapis.com.
+
+        The tradeoff, stated plainly rather than buried: neither is pinned to `asia-south1`. E4.1
+        chose regional Vertex precisely because every alternative leaves India, so selecting a key
+        path relaxes the SS11 data-residency goal. Relaxed by an explicit owner decision for the
+        POC -- not forgotten, and not a bug for a later reader to "fix" silently.
+        `ready_gemini_vertex` is preferred over this whenever both are configured.
+        """
+        return bool((self.google_api_key or "").strip())
+
+    @property
     def ready_gemini(self) -> bool:
-        """E4.1 (issue #31): `gcp_project` set, not `google_api_key` -- Vertex/ADC is the only
-        Gemini path this app resolves to now; see the field's own comment for why."""
-        return bool((self.gcp_project or "").strip())
+        """Either Gemini credential shape. Vertex is preferred at resolve time; see `resolve_llm`."""
+        return self.ready_gemini_vertex or self.ready_gemini_api_key
 
     @property
     def ready_llm(self) -> bool:

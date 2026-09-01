@@ -21,16 +21,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db_session, get_request_id, require_roles
 from app.core.envelope import ok
-from app.core.execution_context import ExecutionContext, RoleName
+from app.core.execution_context import CARRIER_PORTAL_ROLES, ExecutionContext
 from app.services import carrier_reads
 
 router = APIRouter(prefix="/api/v1", tags=["carrier"])
 
-# CARRIER only -- deliberately not widened to the global-read personas. `can_read_carrier`
-# (core/execution_context.py) refuses non-carrier roles by design, so adding ADMIN or
-# TRANSPORT_MANAGER here would produce a 403 from the service tier anyway; the role gate and the
-# scope rule agree rather than one quietly overriding the other.
-CarrierCtx = Annotated[ExecutionContext, Depends(require_roles(RoleName.CARRIER))]
+# The carrier-portal roles, and nothing else -- still deliberately not "the global-read personas".
+#
+# **Issue #101 (owner decision (a), 2026-09-01).** This was `RoleName.CARRIER` alone, and the note
+# that used to sit here ("adding TRANSPORT_MANAGER would produce a 403 from the service tier
+# anyway") was correct about the mechanism and wrong about the consequence: *no user holds the
+# CARRIER role*, so the gate refused every real account and the surface had no working identity at
+# all. `CARRIER_PORTAL_ROLES` (core/execution_context.py) carries the full argument, including why
+# this is not a scope widening -- the reach still comes from a per-user
+# `user_scopes(scope_type='CARRIER')` row, never from the role name, and a TRANSPORT_MANAGER
+# without one is refused with `CARRIER_UNMAPPED` rather than served the whole fleet table.
+#
+# The role gate and the scope rule still agree; what changed is which roles the scope rule can
+# admit, not whether it is enforced. ADMIN and REGIONAL_OPERATIONS_HEAD are deliberately still out.
+CarrierCtx = Annotated[
+    ExecutionContext, Depends(require_roles(*sorted(CARRIER_PORTAL_ROLES)))
+]
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 
 

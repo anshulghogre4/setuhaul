@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -179,19 +181,7 @@ async def test_get_pending_confirmations_scopes_to_own_facility():
         facility_id="FAC-GGN-01",
     )
     mock_rows = MagicMock()
-    mock_rows.mappings.return_value.all.return_value = [
-        {
-            "appointment_id": "APT-1",
-            "shipment_id": "SHP-RS-PENDING",
-            "driver_id": "DRV-RS-01",
-            "order_reference": "ORD-RS-001",
-            "facility_id": "FAC-GGN-01",
-            "dock_id": "DOCK-GGN-D2",
-            "slot_start_ts": "2026-08-16T09:00:00+05:30",
-            "slot_end_ts": "2026-08-16T09:30:00+05:30",
-            "booked_at": "2026-08-16T21:25:23+00:00",
-        }
-    ]
+    mock_rows.mappings.return_value.all.return_value = [_pending_row()]
     mock_session = AsyncMock()
     mock_session.execute.return_value = mock_rows
 
@@ -202,6 +192,173 @@ async def test_get_pending_confirmations_scopes_to_own_facility():
     assert res["items"][0]["appointment_id"] == "APT-1"
     params = mock_session.execute.call_args.args[1]
     assert params["facility_id"] == "FAC-GGN-01"
+
+
+# ---------------------------------------------------------------------------------------------
+# Issue #82 -- get_pending_confirmations orders by section 7.3's composite urgency, not FIFO.
+# ---------------------------------------------------------------------------------------------
+
+_PENDING_NOW = datetime(2026, 8, 16, 21, 30, tzinfo=timezone.utc)
+
+
+def _pending_row(
+    appointment_id: str = "APT-1",
+    *,
+    priority_code: str = "NORMAL",
+    queue_state: str | None = None,
+    booked_minutes_ago: int = 5,
+):
+    """One `get_pending_confirmations` row, shaped like the live statement's output.
+
+    `booked_at` is a real `datetime`: `appointments.booked_at` became `timestamptz` in migration
+    20260823060000, so asyncpg hands back an aware datetime and the TTL term is arithmetic on it.
+    """
+    return {
+        "appointment_id": appointment_id,
+        "shipment_id": f"SHP-{appointment_id}",
+        "driver_id": "DRV-RS-01",
+        "order_reference": f"ORD-{appointment_id}",
+        "facility_id": "FAC-GGN-01",
+        "dock_id": "DOCK-GGN-D2",
+        "slot_start_ts": "2026-08-16T09:00:00+05:30",
+        "slot_end_ts": "2026-08-16T09:30:00+05:30",
+        "booked_at": _PENDING_NOW - timedelta(minutes=booked_minutes_ago),
+        "priority_code": priority_code,
+        "queue_state": queue_state,
+    }
+
+
+async def _pending(rows):
+    """Call the read with `now` pinned to `_PENDING_NOW` (section 9.1's injected clock)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.core.clock import FrozenClock
+    from app.core.execution_context import ExecutionContext, RoleName
+    from app.services.escalation_service import get_pending_confirmations
+
+    ctx = ExecutionContext(
+        request_id="r", auth_subject="sub", user_id="USR-OPS-TEST",
+        email="ops@setuhaul.com", full_name="Ops User", role_id="ROL002",
+        role_name=RoleName.OPERATIONS_EXECUTIVE, facility_id="FAC-GGN-01",
+    )
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = rows
+    session = AsyncMock()
+    session.execute.return_value = result
+    return await get_pending_confirmations(session, ctx, None, clock=FrozenClock(_PENDING_NOW))
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmations_does_not_bury_a_critical_that_arrived_late():
+    """Section 7.3's own worked example, and the reason issue #82 exists.
+
+    The seeded SHP1014 case is a CRITICAL request that entered the queue *after* lower-priority
+    ones. Under the FIFO this read shipped with (`ORDER BY booked_at ASC`) it came last; section
+    7.3 rejects that ordering by name for exactly this outcome.
+    """
+    res = await _pending(
+        [
+            _pending_row("APT-OLD-LOW", priority_code="LOW", booked_minutes_ago=12),
+            _pending_row("APT-NEW-CRITICAL", priority_code="CRITICAL", booked_minutes_ago=1),
+        ]
+    )
+    assert [item["appointment_id"] for item in res["items"]] == [
+        "APT-NEW-CRITICAL",
+        "APT-OLD-LOW",
+    ]
+    assert res["ordering"]["rule"] == "composite_urgency"
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmations_promotes_a_driver_physically_waiting_at_the_gate():
+    """Section 7.3's third term: "a truck burning detention in the yard outranks one still in
+    transit". Same two requests otherwise -- only `facility_checkins.queue_state` differs."""
+    res = await _pending(
+        [
+            _pending_row("APT-IN-TRANSIT", queue_state="NOT_QUEUED"),
+            _pending_row("APT-WAITING", queue_state="WAITING_LATE"),
+        ]
+    )
+    assert [item["appointment_id"] for item in res["items"]] == [
+        "APT-WAITING",
+        "APT-IN-TRANSIT",
+    ]
+    assert res["items"][0]["urgency"]["waiting_bonus"] > 0
+    assert res["items"][1]["urgency"]["waiting_bonus"] == 0
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmations_uses_the_shared_ranking_not_a_second_copy():
+    """The point of issue #82: one implementation of the policy, not two that can drift.
+
+    Asserts the term-by-term identity against `scheduling/urgency.py` itself rather than against
+    re-typed expected numbers -- a test carrying its own copy of the weights would be a third
+    implementation and would go on passing if this read forked from the planner queue's.
+    """
+    from app.scheduling.constraints import load_scheduling_constraints
+    from app.scheduling.expiry import DEFAULT_PENDING_TTL_MINUTES
+    from app.scheduling.urgency import composite_urgency
+
+    res = await _pending([_pending_row("APT-1", priority_code="HIGH", queue_state="WAITING_EARLY")])
+    urgency = res["items"][0]["urgency"]
+
+    # The TTL term is the only clock-dependent one, so it is read back rather than recomputed
+    # against a second `now`; every other term must match the shared policy exactly.
+    expected = composite_urgency(
+        priority_code="HIGH",
+        priority_scores=load_scheduling_constraints().ranking_policy.priority_scores,
+        ttl_remaining_seconds=0,
+        ttl_total_seconds=DEFAULT_PENDING_TTL_MINUTES * 60,
+        physically_waiting=True,
+    )
+    assert urgency["priority_score"] == expected.priority_score
+    assert urgency["waiting_bonus"] == expected.waiting_bonus
+    assert urgency["score"] == (
+        urgency["priority_score"] + urgency["ttl_pressure"] + urgency["waiting_bonus"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmations_ties_break_on_appointment_id_not_arrival():
+    """Deterministic under equal urgency -- U19 freezes the sort while a row has focus, so two
+    polls of an unchanged queue must not reorder it."""
+    res = await _pending([_pending_row("APT-B"), _pending_row("APT-A")])
+    assert [item["appointment_id"] for item in res["items"]] == ["APT-A", "APT-B"]
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmations_ttl_pressure_lifts_a_row_by_at_most_one_priority_band():
+    """Why this is a composite score and not "sort by TTL". Section 7.3 rejects pure TTL ordering
+    for the same reason it rejects FIFO, so a fully-burnt NORMAL must not outrank a fresh
+    CRITICAL."""
+    from app.scheduling.urgency import TTL_PRESSURE_MAX
+
+    res = await _pending(
+        [
+            _pending_row("APT-EXPIRING-NORMAL", priority_code="NORMAL", booked_minutes_ago=60),
+            _pending_row("APT-FRESH-CRITICAL", priority_code="CRITICAL", booked_minutes_ago=0),
+        ]
+    )
+    by_id = {item["appointment_id"]: item for item in res["items"]}
+    assert by_id["APT-EXPIRING-NORMAL"]["urgency"]["ttl_pressure"] == TTL_PRESSURE_MAX
+    assert by_id["APT-FRESH-CRITICAL"]["urgency"]["ttl_pressure"] == 0
+    assert [item["appointment_id"] for item in res["items"]] == [
+        "APT-FRESH-CRITICAL",
+        "APT-EXPIRING-NORMAL",
+    ]
+
+
+def test_pending_confirmations_keeps_booked_at_as_the_truncation_order():
+    """`LIMIT 100` still cuts oldest-first, because `booked_at` is what the D9 deadline derives
+    from -- the rows kept are the ones closest to expiring. Only the *display* order changed, so
+    the SQL must keep both, and a future edit that "tidies" the ORDER BY away has to fail here."""
+    import inspect
+
+    from app.services import escalation_service
+
+    source = inspect.getsource(escalation_service.get_pending_confirmations)
+    assert "ORDER BY a.booked_at ASC" in source
+    assert "LIMIT 100" in source
 
 
 @pytest.mark.asyncio

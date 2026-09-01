@@ -25,6 +25,31 @@ class RoleName(StrEnum):
     GATE_OFFICER = "GATE_OFFICER"
 
 
+# Issue #101 (owner decision (a), 2026-09-01). Who may work the §7.5.6 carrier portal.
+#
+# The problem this fixes, stated plainly: **no account in the system could use the carrier surface
+# at all.** `CARRIER` (ROL009) exists as a role row -- migration 20260823090000 inserts it -- but
+# that same migration's closing comment records that *zero* users hold it ("no CARRIER-scope
+# backfill: zero CARRIER-role users exist today"), and none has been provisioned since. The roster's
+# carrier persona is `USR105` / sanjay.gupta@setuhaul.com, seeded as `ROL006` = TRANSPORT_MANAGER
+# (`supabase/seed.sql:684-696`), and the frontend's `identity-mapping.ts` already maps that account
+# to `/carrier/*`. So the five carrier reads answered 403 for the only human who was ever meant to
+# call them, and E5.5's nine screens were built against an identity that cannot exist.
+#
+# Option (b) -- provision a real CARRIER account -- was the backend's original design and is still
+# available; (a) was chosen because it matches the UI mapping and the seeded roster without a new
+# identity to manage. Adding `TRANSPORT_MANAGER` here does **not** widen its reach:
+# `resolve_carrier_scope` and `can_read_carrier` both still require a non-NULL `carrier_id`, which
+# comes only from a `user_scopes` row of `scope_type='CARRIER'` for that user (`core/deps.py`), and
+# every carrier query then filters on that single id. A TRANSPORT_MANAGER without such a row gets
+# `CARRIER_UNMAPPED`, not the whole fleet table -- so this is "one more role may hold a carrier
+# scope", never "a global-read persona may read every carrier".
+#
+# That is also why `can_read_carrier` still refuses to fall back to `has_global_read_scope`: the
+# reach is granted by an explicit per-user scope row, not by role seniority.
+CARRIER_PORTAL_ROLES = frozenset({RoleName.CARRIER, RoleName.TRANSPORT_MANAGER})
+
+
 class ExecutionContext(BaseModel):
     """Trusted request identity derived server-side from a verified JWT + DB mapping."""
 
@@ -52,8 +77,13 @@ class ExecutionContext(BaseModel):
 
     @property
     def is_carrier(self) -> bool:
-        """Read-only fleet persona (E2.3, M15) -- own carrier_id only, never global."""
-        return self.role_name == RoleName.CARRIER
+        """Read-only fleet persona (E2.3, M15) -- own carrier_id only, never global.
+
+        Membership of `CARRIER_PORTAL_ROLES` rather than `== RoleName.CARRIER` since issue #101 --
+        see that constant for why, and for why this is not a scope widening. The `carrier_id`
+        check every caller performs afterwards is unchanged and is what actually bounds the read.
+        """
+        return self.role_name in CARRIER_PORTAL_ROLES
 
     @property
     def is_operator(self) -> bool:
@@ -130,12 +160,18 @@ class ExecutionContext(BaseModel):
         """A carrier persona reads only its own fleet -- never global, unlike facility scope.
 
         Deliberately does not fall back to `has_global_read_scope`: SOLUTION_DESIGN.md line 1290
-        requires a cross-carrier id to be refused server-side, not merely hidden, and a carrier
-        user is never one of the roles `has_global_read_scope` names. `has_global_read_scope`
-        stays facility-only on purpose -- widening it to also mean "any carrier" would let an
-        ADMIN/ops persona's read reach silently expand to carrier data the moment this method
-        existed, which is exactly the "silent scope widening" issue #23's rollback note warns
-        against.
+        requires a cross-carrier id to be refused server-side, not merely hidden.
+        `has_global_read_scope` stays facility-only on purpose -- widening it to also mean "any
+        carrier" would let an ADMIN/ops persona's read reach silently expand to carrier data the
+        moment this method existed, which is exactly the "silent scope widening" issue #23's
+        rollback note warns against.
+
+        Since issue #101 a carrier-portal caller *can* be one of the roles `has_global_read_scope`
+        names (TRANSPORT_MANAGER holds global *facility* read reach), which makes the paragraph
+        above load-bearing rather than incidental: that persona's carrier reach is still exactly
+        the one `carrier_id` names and nothing more. Its global reach over facilities and its
+        single-carrier reach over fleets are two independent scoping dimensions, and neither is
+        allowed to imply the other.
         """
         if not self.is_carrier:
             return False
