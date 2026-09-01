@@ -10,6 +10,9 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 21:55 IST: backend batch LIVE and verified; sequence steps 1-3+5 done.** AgentCore v3 + ECS rolled (script now builds from the current tree, ARM64-pinned); shim dropped; escalate/chat/HELD all green on production. **NEXT: (1) frontend deploy -- ships the real login/guards (the live site still has the placeholder auth until then); (2) commit message handed for the remaining writeback+script tree; (3) then the board: #99/#100 small frontend fixes, #101 carrier-identity decision, #102 triage, #98, #42, #94, #92, ROL010, M8/#49.**
+
+
 - **2026-09-01 15:20 IST: auth real + click-sweep done; #99-#102 filed; commit message handed.** THE SEQUENCE: (1) owner runs deploy/hotfix_96_compat_shim.py (prod escalation writes broken since 13:40 -- incident on #96); (2) owner commits/pushes the handed message; (3) backend deploy (batch #93/#96/#97) -- AgentCore via the wrapper + ECS script; (4) frontend deploy (ships real auth -- fixes the live placeholder login); (5) re-run deploy/apply_96_dedupe_migration.py (drops shim, re-verifies). Then triage #99 (shell handlers -- small), #100 (end-block button -- small), #101 (carrier identity -- owner decision), #102 (19 gaps -- triage), #98, #42, #94, #92, ROL010, M8/#49. Local stack: uvicorn:8000 (in-process assistant, chat=typed 503 sans Vertex ADC) + vite:5173, both healthy.
 
 

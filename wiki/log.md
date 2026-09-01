@@ -1137,3 +1137,11 @@ last_updated: 2026-08-29
 - Sweep (32/32 tests, writes reverted): 54 WORKING / 4 on-fixture / 16 inactive-all-labeled / 6 to-dialog / 36 blocked-env / 3 DEAD (#99) / 24 MISSING (#100 endDockBlock zero call sites; #102 19 gaps; 5 = #57 rescope). #101: carrier portal has NO working identity (no CARRIER role; TRANSPORT_MANAGER 403s) -- was "latent", proven live.
 - Chat: threads = server-created per driver+shipment; deployed-site silence = placeholder-login 401 (fixed by this work, needs frontend deploy); local = dead servers (restarted; designed 503 sans Vertex ADC; prod 200 verified).
 - Updated [[current-state]], [[handoff]], root CHANGELOG. Owner sequence: shim -> push -> backend deploy -> frontend deploy -> drop shim.
+
+## 2026-09-01 15:45 IST | incident | #96 shim applied; production escalation writes restored (outage ~2h05m, writes only)
+
+- First shim run ABORTed on 3 duplicate groups: the sweep (new code, local, live DB) had legally created sandbox terminal twins -- 16 rows verified SHP-RS-*/terminal before deletion. Guarded consolidation added; second run green end to end. Lesson: local new code shares the production DB -- "cannot happen" arguments must include it. Resolution on #96; updated [[current-state]], root CHANGELOG.
+
+## 2026-09-01 21:55 IST | deployment | backend batch live: AgentCore v3 + ECS rolled; shim dropped; production verified green
+
+- Wrapper deploy: 834 tests in-stage, v2->3 proven. ECS: caught the stale-image trap (script only tagged/pushed a 09:54 image) -- build step added, ARM64 pinned, PRIMARY COMPLETED 1/1. Stability wait died on aws-login expiry; confirmed post-relogin. Shim dropped (4/4). Live: escalation writes 200x2, chat v3 200, HELD lifecycle green (hold 798, APT-E6ECB56EE116, cancelled clean). Frontend deploy = remaining leg. Updated [[current-state]], [[handoff]], root CHANGELOG.

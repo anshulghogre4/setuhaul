@@ -4,6 +4,18 @@ $ErrorActionPreference = "Stop"
 $env:AWS_DEFAULT_REGION = "ap-south-1"
 $ECR = "118490268011.dkr.ecr.ap-south-1.amazonaws.com"
 
+# BUILD STEP ADDED 2026-09-01: this script originally only tagged and pushed whatever
+# setuhaul-api:m5 image already existed locally -- the Docker variant of the codezip trap
+# (AGENTS.md's deploy lesson): editing backend/** does nothing for ECS until the image is
+# rebuilt, and the push "succeeds" either way. Nearly shipped a stale image (built 09:54)
+# over the #93/#96/#97 batch (landed 12:00+). The build is now part of the deploy.
+Write-Host "[0/5] build image from the current tree"
+# --platform pinned: the live task definition is runtimePlatform ARM64 (verified via
+# describe-task-definition 2026-09-01); an unpinned build on this amd64 host would push
+# an image the service cannot run, caught only at the [5/5] stability wait.
+docker build --platform linux/arm64 -t setuhaul-api:m5 backend
+if ($LASTEXITCODE -ne 0) { throw "docker build failed -- nothing was pushed or rolled" }
+
 Write-Host "[1/5] ECR login"
 aws ecr get-login-password | docker login --username AWS --password-stdin $ECR
 if ($LASTEXITCODE -ne 0) { throw "ECR login failed" }

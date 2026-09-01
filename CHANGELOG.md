@@ -2,6 +2,21 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 21:55 IST - Backend batch DEPLOYED and live-verified: AgentCore v3 + ECS rolled, shim dropped, full #96 semantics live; the incident class is dead in production
+
+**Agent/surface:** Claude Fable 5 (Claude Code) + owner (aws login x2, ECS script run, shim drop). Sequence executed exactly as planned:
+
+1. **AgentCore via the mandatory wrapper**: 834 backend tests green in-stage, packaged (62.29 MB), deployed, **agentRuntimeVersion 2 -> 3** -- provable content change.
+2. **ECS**: the deploy script was caught about to ship a STALE image -- it only tagged-and-pushed the existing local setuhaul-api:m5 (built 09:54, pre-batch): the Docker variant of the codezip trap. Script gained a [0/5] build-from-current-tree step with `--platform linux/arm64` pinned (live task definition verified ARM64). Docker Desktop relaunched (daemon was down; guard correctly stopped the push). Rolled: **PRIMARY COMPLETED 1/1, 0 failed** (the [5/5] stability wait itself died on the thrice-daily aws-login expiry; confirmed via describe-services after re-login).
+3. **Shim dropped** (owner re-ran the apply script): 4/4 verifications PASS -- the partial-index-only state is back, now with matching code everywhere.
+4. **Live-verified on production (CloudFront)**: escalation write path 200 twice (insert + dedupe refresh -- the 13:40-15:45 incident class is dead); chat 200 through AgentCore v3 with a real tool-backed answer; HELD lifecycle green (hold 798 -> PENDING_CONFIRMATION APT-E6ECB56EE116 -> cancelled, sandbox as found -- #97's claim path exercised live).
+
+**Production now runs the full batch: #93 + #96 (real semantics) + #97 + the demo-tooling fixes. Remaining deploy debt: the FRONTEND still serves the placeholder login -- the real auth ships with the next frontend deploy.**
+
+## 2026-09-01 15:45 IST - #96 incident RESOLVED: shim applied (owner-run), production escalation writes restored after ~2h05m
+
+**Agent/surface:** owner ran deploy/hotfix_96_compat_shim.py. The first run ABORTed on its own guard -- 3 duplicate dedupe_key groups existed, which my safety argument said could not happen: the click-sweep had run the NEW code locally against the live DB and legally created terminal twins on the sandbox (16 rows, all SHP-RS-*, all terminal, 14:36-15:14 IST -- verified row-by-row before any deletion). Script gained a guarded consolidation pre-step (sandbox+terminal rows inside duplicate groups only; anything else still aborts for owner review). Second run: consolidated 16, zero duplicates remained, shim index created, VERIFY PASS -- old-code arbiter infers again. **Outage window: 13:40-15:45 IST on escalation writes only.** While the shim exists production behaves pre-#96 (typed merge, no 500); the shim drops via the apply script after the backend deploy. Second lesson recorded: "cannot happen yet" claims must account for LOCAL new code sharing the production database -- the dev/prod boundary here is code, not data.
+
 ## 2026-09-01 15:20 IST - Real auth shipped to the frontend tree + the 143-control click-sweep executed: 3 dead controls, 19 design gaps, carrier identity proven broken (#99-#102)
 
 **Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5) and one read-only inventory agent; independent spot-verification by the coordinator.
