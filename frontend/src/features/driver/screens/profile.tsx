@@ -2,7 +2,7 @@ import { Bell, BellOff, ChevronLeft, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { signOut } from '@/core/auth/supabase'
+import { useAuth } from '@/core/auth/auth-context'
 import { useTheme } from '@/shared/lib/theme'
 import { Button } from '@/shared/ui/button'
 import {
@@ -61,12 +61,17 @@ import { fetchDriverContext, type DriverContext } from '../lib/data'
  * product failure."* Built as a **confirm dialog whose safer action is first in DOM order**
  * (U79) and which names what the driver loses. Also flagged as F11's answer, not settled.
  *
- * `signOut()` here is the shared single-device sign-out from `core/auth/supabase.ts` — which was
- * fixed during E3.5 to pass `scope: 'local'` explicitly, because Supabase's bare `signOut()`
- * defaults to `scope: 'global'` and was silently revoking every other device's session. Do not
- * "simplify" it back to the bare call.
+ * Sign-out goes through `useAuth().signOutLocal()`, which wraps the shared single-device
+ * `signOut()` in `core/auth/supabase.ts` — fixed during E3.5 to pass `scope: 'local'` explicitly,
+ * because Supabase's bare `signOut()` defaults to `scope: 'global'` and was silently revoking
+ * every other device's session. Do not "simplify" it back to the bare call.
+ *
+ * Routed through the provider rather than calling `signOut()` directly (2026-09-01) so the React
+ * state clears in the same tick as the revocation; `RequireAuth` then redirects to `/signin` on
+ * the next render. A direct call worked only because the `SIGNED_OUT` event eventually arrived.
  */
 export function DriverProfile() {
+  const { signOutLocal } = useAuth()
   const [ctx, setCtx] = useState<DriverContext | null>(null)
   const { choice, setChoice, resolved } = useTheme()
   const [darkWarning, setDarkWarning] = useState(false)
@@ -232,7 +237,7 @@ export function DriverProfile() {
             <DialogClose asChild>
               <Button variant="neutral">Stay signed in</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={() => void signOut()}>
+            <Button variant="destructive" onClick={() => void signOutLocal()}>
               {copy.signOut}
             </Button>
           </DialogFooter>

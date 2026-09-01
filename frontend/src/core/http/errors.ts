@@ -142,6 +142,26 @@ export class ApiError extends Error {
 }
 
 /**
+ * Parses the envelope defensively.
+ *
+ * `Response.json()` **rejects with a `SyntaxError`** when the body is not valid JSON (MDN,
+ * `Response.json()`, checked 2026-08-31). A proxy's HTML 502 page is exactly that case, and it is
+ * still a real HTTP failure -- so a parse failure yields `null` here and the caller reports the
+ * status, instead of a `SyntaxError` about an unexpected `<` masquerading as the problem.
+ *
+ * Lives here rather than in `api.ts` because the SSE transport (`core/http/sse.ts`) needs the same
+ * parser for its own failure path, and two copies of "parse the envelope, tolerantly" is exactly
+ * how the two halves drift.
+ */
+export async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
+  try {
+    return (await res.json()) as ApiEnvelope<T>
+  } catch {
+    return null
+  }
+}
+
+/**
  * Builds an `ApiError` from a response and whatever body could be parsed from it.
  *
  * `body` is nullable on purpose: a proxy error page or a truncated stream is still a failure, it

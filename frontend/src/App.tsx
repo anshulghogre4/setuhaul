@@ -1,19 +1,17 @@
 import { Suspense, lazy, useState } from 'react'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 
 import { AppShell, type ShellChrome } from '@/components/shell/app-shell'
-import type { Density, Identity } from '@/core/auth/identity'
+import { RequireAuth } from '@/components/auth/require-auth'
+import type { Density } from '@/core/auth/identity'
+import { useAuth, useIdentity } from '@/core/auth/auth-context'
+import { signIn } from '@/core/auth/supabase'
+import { canAccess, homePathFor } from '@/core/auth/surface-access'
 import { NotFound } from '@/components/states/region-states'
 import { PasswordReset } from '@/features/auth/password-reset'
-import { SignIn } from '@/features/auth/sign-in'
-import {
-  CARRIER,
-  NOTIFICATIONS,
-  OPS_MANAGER,
-  PLANNER_MULTI_ROLE,
-  RECENT_SEARCHES,
-  SEARCH_RESULTS,
-} from '@/features/gallery/fixtures'
+import { SignIn, type SignInState } from '@/features/auth/sign-in'
+import { NOTIFICATIONS, RECENT_SEARCHES, SEARCH_RESULTS } from '@/features/gallery/fixtures'
 import { SettingsPage } from '@/features/settings/settings-page'
 import { DriverShell } from '@/features/driver/driver-shell'
 import { DriverConversation } from '@/features/driver/screens/conversation'
@@ -21,7 +19,7 @@ import { DriverProfile } from '@/features/driver/screens/profile'
 import { DriverThreadList } from '@/features/driver/screens/thread-list'
 import { OpsConsole } from '@/features/ops/ops-console'
 import { PlannerConsole } from '@/features/planner/planner-console'
-import { ADMIN_IDENTITY, AdminConsole } from '@/features/admin'
+import { AdminConsole } from '@/features/admin'
 import { CarrierPortal } from '@/features/carrier/carrier-portal'
 import { GateRoute } from '@/features/gate/gate-route'
 
@@ -93,23 +91,32 @@ const AdminStatesGallery = lazy(() =>
  * (`/driver/_states`, `/ops/_states`, ...). None are linked from the app.
  *
  * ┌─────────────────────────────────────────────────────────────────────────────────────┐
- * │ FIXTURE SEAM — TODO(#52). Grep for `FIXTURE SEAM` to find every part of it.          │
+ * │ AUTH (2026-09-01). The identity half of the old FIXTURE SEAM is GONE.                │
  * │                                                                                     │
- * │ The shell is driven entirely by an `Identity` object the server is meant to supply.  │
- * │ `GET /api/v1/auth/me` currently returns a single `role_name`, NOT a multi-role       │
- * │ `grants[]` list, so the role picker has no server contract to sit on.  Rather than   │
- * │ invent an endpoint, the shell renders from a fixture behind exactly two named        │
- * │ constants, both in this file:                                                        │
+ * │ Every surface route below is wrapped in `<RequireAuth>`, and the shell's `Identity`  │
+ * │ now comes from `core/auth/auth-context.tsx`, mapped from a real `GET /auth/me` in    │
+ * │ `core/auth/identity-mapping.ts`. `PLANNER_MULTI_ROLE`, `OPS_MANAGER`, `CARRIER` and  │
+ * │ `ADMIN_IDENTITY` are no longer read by any route -- the fixtures survive only for    │
+ * │ the `_states` galleries, which is what they were written for.                        │
  * │                                                                                     │
- * │   1. `PLANNER_MULTI_ROLE`  (imported from features/gallery/fixtures)  -> `Identity`  │
- * │   2. `DEMO_CHROME`         (defined below)                            -> `ShellChrome`│
+ * │ Guards are PRESENTATION, not authorisation: the server re-derives scope from the     │
+ * │ token on every request (M15). See `core/auth/surface-access.ts`, whose table mirrors │
+ * │ each backend `require_roles(...)` gate row by row.                                   │
  * │                                                                                     │
- * │ TO REPLACE: fetch the real identity + chrome, delete both constants and the          │
- * │ `features/gallery/fixtures` import, and pass the fetched values to `<AppShell>`.     │
- * │ Nothing else in `components/shell/**` reads a fixture — every one of those components │
- * │ is already fully prop-driven, so no component needs changing when #52 lands.         │
- * │ Verified by grep: `features/gallery/fixtures` is imported by this file and by the    │
- * │ states gallery only.                                                                 │
+ * │ **The `_states` galleries stay UNGUARDED, deliberately.** They render fixture        │
+ * │ artboards and make no authenticated call at all -- there is no real data behind them │
+ * │ to protect, and they are the one tool for inspecting a surface's states without      │
+ * │ holding that surface's role. Race suite 6 already drives `/gate/_states` as part of  │
+ * │ its evidence.                                                                        │
+ * └─────────────────────────────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────────────────────────┐
+ * │ CHROME SEAM — TODO(#52), the remaining half. One constant: `DEMO_CHROME` below.      │
+ * │                                                                                     │
+ * │ Connection state, last-sync, pending count, policy version, notifications and search │
+ * │ results are still fixture-backed. Each needs its own server contract (`search_records`│
+ * │ §7.5.8 for the palette, the notifications reads for the panel, a live-update          │
+ * │ transport — issue #59 — for connection/last-sync), so they are a separate piece of   │
+ * │ work from identity, not a leftover of it.                                            │
  * └─────────────────────────────────────────────────────────────────────────────────────┘
  */
 export default function App() {
@@ -143,14 +150,30 @@ export default function App() {
         because the gallery renders its own 390x844 frames and a bottom nav around them would
         be wrong.
       */}
-      <Route path="/driver" element={<DriverShell />}>
+      <Route
+        path="/driver"
+        element={
+          <RequireAuth>
+            <DriverShell />
+          </RequireAuth>
+        }
+      >
         <Route index element={<DriverThreadList />} />
         <Route path="t/:threadId" element={<DriverConversation />} />
         <Route path="profile" element={<DriverProfile />} />
       </Route>
 
       {/* Settings is `comfortable` for every role (prompt 8), not the viewer's surface density. */}
-      <Route path="/settings" element={<ShellRoute density="comfortable"><SettingsRoute /></ShellRoute>} />
+      <Route
+        path="/settings"
+        element={
+          <RequireAuth>
+            <ShellRoute density="comfortable">
+              <SettingsRoute />
+            </ShellRoute>
+          </RequireAuth>
+        }
+      />
       {/*
         E5.3 (#38) -- planner dock board. 10 of 30 designed screens ship unconditionally, 17 are
         honestly stubbed pending issues #60-66/#53/#49/#59 -- see `features/planner/lib/flags.ts`
@@ -158,16 +181,17 @@ export default function App() {
         has real backend wiring, since `get_planner_queue` (issue #60) -- the entry point for
         every other write on this surface -- does not exist yet.
       */}
-      <Route path="/planner" element={<PlannerRoute />} />
+      <Route path="/planner" element={<RequireAuth><PlannerRoute /></RequireAuth>} />
       {/*
         E5.2 (#37) -- ops exception console. 9 of 16 designed screens ship unconditionally; 3 are
         behind `sequencerProposalEnabled` (issue #54) and the rest are honestly stubbed pending
         #55/#56/#57/#58/#59 -- see `features/ops/lib/flags.ts` and `ops-console.tsx`'s own header
-        comment. Uses `OPS_MANAGER` (not `PLANNER_MULTI_ROLE`) so the rail/status-bar render for
-        the actual OPERATIONS_MANAGER role this surface is built for -- same FIXTURE SEAM
-        (TODO #52) as every other route here, just a different fixture identity.
+        comment. The rail/status-bar now render for the viewer's OWN ops role (any of
+        OPERATIONS_EXECUTIVE / OPERATIONS_MANAGER / WAREHOUSE_PLANNER / TRANSPORT_MANAGER / ADMIN,
+        mirroring `OPS_PORTAL_ROLES` -- see `core/auth/surface-access.ts`), not for a hard-coded
+        `OPS_MANAGER` fixture.
       */}
-      <Route path="/ops" element={<OpsRoute />} />
+      <Route path="/ops" element={<RequireAuth><OpsRoute /></RequireAuth>} />
       {/*
         E5.4 (#39) -- gate/yard kiosk. **Deliberately NOT inside `<ShellRoute>`**, like `/driver`.
         `stitch-prompts.md` and `mockup.html` both specify no icon rail, no top bar, no status bar,
@@ -179,7 +203,7 @@ export default function App() {
         imports `core/auth/identity` or references `RoleName`, so issue #79 resolves either way
         without touching this route.
       */}
-      <Route path="/gate" element={<GateRoute />} />
+      <Route path="/gate" element={<RequireAuth><GateRoute /></RequireAuth>} />
 
       {/*
         E5.5 (#40) -- carrier portal, entirely read-only. All 9 screens ship. The HELD chip and
@@ -190,7 +214,7 @@ export default function App() {
         `features/carrier/lib/flags.ts`. `/carrier/*` splat because this surface has two screens:
         dashboard and shipment detail.
       */}
-      <Route path="/carrier/*" element={<CarrierRoute />} />
+      <Route path="/carrier/*" element={<RequireAuth><CarrierRoute /></RequireAuth>} />
 
       {/*
         E5.6 (#41) -- admin console. The Policy tab (Screens 8/10) is now BUILT and live:
@@ -201,9 +225,9 @@ export default function App() {
         backend any more (#70/#71 are resolved); it waits on missing *design* -- three live rule
         types have no field set, and `DOCK_PIN`, the only two-field type, has no live analog.
       */}
-      <Route path="/admin" element={<AdminRoute />} />
+      <Route path="/admin" element={<RequireAuth><AdminRoute /></RequireAuth>} />
 
-      <Route path="*" element={<ShellRoute><NotFound backHref="/planner" /></ShellRoute>} />
+      <Route path="*" element={<RequireAuth><NotFoundRoute /></RequireAuth>} />
     </Routes>
   )
 }
@@ -215,14 +239,124 @@ function Lazy({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<p className="p-6 text-body">Loading artboards…</p>}>{children}</Suspense>
 }
 
+/**
+ * Real sign-in. **This route used to be the security hole**: `onSubmit={() => navigate('/planner')}`
+ * accepted any string in either box and dropped the visitor on the planner console with a fixture
+ * identity in the shell.
+ *
+ * ## What happens now
+ *
+ *   1. `signIn()` -> `supabase.auth.signInWithPassword` (the password grant).
+ *   2. On success, supabase-js persists the session and emits `SIGNED_IN`; `AuthProvider` picks it
+ *      up and reads the real identity from `GET /auth/me`.
+ *   3. The redirect below fires from that identity -- never from the form. This is why the button
+ *      stays busy until `status === 'authenticated'`: the landing surface is not known until the
+ *      server has said who this is.
+ *
+ * ## Where it lands, and why not `roleToPortal`
+ *
+ * `landingPathFor` (via `homePathFor`) is the authority: it derives from `identity.ts`'s
+ * `RAIL_BY_ROLE`, which derives from `auth-and-scoping.md`'s own "Role landing" table and covers
+ * all six surfaces. `core/auth/supabase.ts`'s `roleToPortal` only knows two portals and predates
+ * that model -- using it would send a gate officer and an admin both to `/ops`.
+ *
+ * The attempted location wins over the role's home when the role may actually open it, so a driver
+ * who followed a link to `/driver/t/THREAD`, got bounced to sign-in, and signed in, lands on that
+ * thread. `canAccess` is checked first so a *stale* attempted location belonging to another role
+ * (a shared machine, a bookmarked `/planner`) can never bounce them straight back out again.
+ *
+ * ## Error branching is on `code`, never on a message
+ *
+ * `supabase.com/docs/guides/auth/debugging/error-codes` (checked 2026-09-01): *"Always use
+ * `error.code` and `error.name` to identify errors, not string matching on error messages."*
+ * `AuthApiError` carries `code` and `status` (`@supabase/auth-js@2.112.2`, `lib/errors.js:53-60`).
+ *
+ *  - `invalid_credentials` (and any other server-side refusal) -> the screen's own anti-enumeration
+ *    copy, identical for a wrong address and a wrong password, with neither field marked.
+ *  - `over_request_rate_limit` / HTTP 429 -> the rate-limited state, whose "Forgotten your
+ *    password?" link stays live.
+ *  - `AuthRetryableFetchError` -> a network sentence. Deliberately NOT the credential copy: telling
+ *    a driver on a roadside that their details don't match when the request never left the phone
+ *    burns their attempts against a real rate limit for a fault that is not theirs.
+ */
 function SignInRoute() {
-  const navigate = useNavigate()
-  return <SignIn onSubmit={() => navigate('/planner')} />
+  const { status, identity } = useAuth()
+  const location = useLocation()
+  const [state, setState] = useState<SignInState>('at-rest')
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
+  const [submitting, setSubmitting] = useState(false)
+
+  // `location.state.from` is set by `RequireAuth` when it bounced an unauthenticated visitor.
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+
+  if (status === 'authenticated' && identity) {
+    const home = homePathFor(identity.activeRole)
+    const target = from && canAccess(identity.activeRole, from) ? from : home
+    return <Navigate to={target} replace />
+  }
+
+  // `submitting` deliberately stays true across the whole of: password grant -> `SIGNED_IN` ->
+  // `/auth/me` -> redirect. Clearing it when the grant returns would re-enable the button while the
+  // destination is still unknown, inviting a second grant request against a real rate limit. It is
+  // only cleared on a failure path, where there IS something for the user to do.
+  return (
+    <SignIn
+      state={state}
+      pending={submitting}
+      errorMessage={errorMessage}
+      onSubmit={(identifier, password) => {
+        setSubmitting(true)
+        setState('at-rest')
+        setErrorMessage(undefined)
+        void (async () => {
+          try {
+            const { error } = await signIn(identifier, password)
+            if (error) {
+              setSubmitting(false)
+              if (isAuthRetryableFetchError(error)) {
+                setState('error')
+                setErrorMessage('Could not reach SetuHaul. Check your connection and try again.')
+              } else if (error.code === 'over_request_rate_limit' || error.status === 429) {
+                setState('rate-limited')
+              } else {
+                setState('error')
+                setErrorMessage(undefined)
+              }
+              return
+            }
+            // Success: leave `submitting` true. `AuthProvider` is now reading the identity, and the
+            // `<Navigate>` above fires as soon as it lands.
+          } catch (err) {
+            // `signIn` throws (rather than returning `error`) only when the Supabase client is not
+            // configured at all -- a deployment fault, not a credential one, so say so.
+            setSubmitting(false)
+            setState('error')
+            setErrorMessage(
+              err instanceof Error && err.message.includes('not configured')
+                ? 'Sign-in is not configured on this deployment.'
+                : 'Could not reach SetuHaul. Check your connection and try again.',
+            )
+          }
+        })()
+      }}
+    />
+  )
+}
+
+/** 404 inside the shell. `backHref` is the viewer's OWN home rather than a hard-coded `/planner` --
+ *  sending a driver "back" to a planner console they cannot open was the old behaviour. */
+function NotFoundRoute() {
+  const identity = useIdentity()
+  return (
+    <ShellRoute>
+      <NotFound backHref={homePathFor(identity.activeRole)} />
+    </ShellRoute>
+  )
 }
 
 /**
- * FIXTURE SEAM — TODO(#52).  Chrome values that will come from the server.
- * Held in one place so a future implementer replaces two constants rather than hunting
+ * CHROME SEAM — TODO(#52). **Chrome only: there is no identity in here any more.**
+ * Held in one place so a future implementer replaces one constant rather than hunting
  * fixture imports across six files.  See the block comment at the top of this file.
  */
 const DEMO_CHROME: ShellChrome = {
@@ -237,20 +371,25 @@ const DEMO_CHROME: ShellChrome = {
   recentSearches: RECENT_SEARCHES,
 }
 
+/**
+ * The shared shell wrapper.
+ *
+ * **No `identity` prop any more.** It reads the real one from `AuthProvider`, which is safe
+ * precisely because every route that renders a `ShellRoute` sits inside `<RequireAuth>` -- and
+ * `useIdentity()` throws rather than returning null if that ever stops being true. Passing an
+ * identity down from each route was how four different fixtures ended up hard-coded in this file.
+ */
 function ShellRoute({
   children,
   density,
-  identity = PLANNER_MULTI_ROLE,
 }: {
   children: React.ReactNode
   density?: Density
-  /** FIXTURE SEAM — TODO(#52). Defaults to the multi-role planner fixture every other
-   *  still-placeholder route uses; `OpsRoute` below passes `OPS_MANAGER` instead so E5.2's real
-   *  console renders the rail/status-bar for the role it is actually built for. */
-  identity?: Identity
 }) {
+  const identity = useIdentity()
+  const { signOutLocal } = useAuth()
   const navigate = useNavigate()
-  // FIXTURE SEAM — TODO(#52): stands in for the debounced `search_records` call the surface
+  // CHROME SEAM — TODO(#52): stands in for the debounced `search_records` call the surface
   // epics will wire here.  Deliberately a state hand-off rather than filtering inside
   // AppShell: the shell must never decide what a user may see, because scope is
   // server-derived (M15).
@@ -274,7 +413,19 @@ function ShellRoute({
               ),
         )
       }}
-      onSignOut={() => navigate('/signin')}
+      /**
+       * Sign-out was a REAL BUG until 2026-09-01: this handler only navigated, so the Supabase
+       * session survived and the next visit to any surface walked straight back in. It now revokes
+       * the session first (single-device -- `signOut({ scope: 'local' })`, see
+       * `core/auth/supabase.ts` for why that argument is not optional), and only then navigates.
+       *
+       * The navigate is belt-and-braces: clearing the session already makes `RequireAuth`
+       * redirect. It is kept so the transition is immediate rather than dependent on a state
+       * round-trip, and `replace` keeps the signed-out surface out of the back stack.
+       */
+      onSignOut={() => {
+        void signOutLocal().then(() => navigate('/signin', { replace: true }))
+      }}
     >
       {children}
     </AppShell>
@@ -282,64 +433,64 @@ function ShellRoute({
 }
 
 function SettingsRoute() {
-  // FIXTURE SEAM — TODO(#52)
-  return <SettingsPage identity={PLANNER_MULTI_ROLE} />
+  const identity = useIdentity()
+  return <SettingsPage identity={identity} />
 }
 
 /**
- * E5.2 (#37). `OPS_MANAGER` rather than `PLANNER_MULTI_ROLE` so `railDestinationFor` /
- * `densityFor` resolve for `OPERATIONS_MANAGER` (rail = "Exceptions", density = compact) instead
- * of `WAREHOUSE_PLANNER`. `activeFacilityId: null` matches U91's "All facilities" default for the
- * one role that can select it (`canSelectAllFacilities: true` on this fixture already).
+ * E5.2 (#37). The rail/status-bar/density now resolve from the viewer's OWN role rather than from
+ * a hard-coded `OPERATIONS_MANAGER` fixture -- which means an `OPERATIONS_EXECUTIVE` on this
+ * console finally sees their own name and facility instead of "Priya Nair, All facilities".
+ * `canSelectAllFacilities` is derived in `identity-mapping.ts` from the role, per U91.
  */
-const OPS_IDENTITY: Identity = { ...OPS_MANAGER, activeFacilityId: null }
-
 function OpsRoute() {
   return (
-    <ShellRoute identity={OPS_IDENTITY}>
+    <ShellRoute>
       <OpsConsole />
     </ShellRoute>
   )
 }
 
 /**
- * E5.3 (#38). Uses the default `PLANNER_MULTI_ROLE` fixture (`ShellRoute`'s own default identity
- * prop) rather than a dedicated constant -- unlike ops, this surface's rail/density/facility-scope
- * derivation already resolves correctly for `WAREHOUSE_PLANNER` from that fixture as-is
- * (`screens.md` section 1: single-facility, not "All facilities" -- `PLANNER_MULTI_ROLE.
- * canSelectAllFacilities` is already `false`). Same FIXTURE SEAM (TODO #52) as every other route.
+ * E5.3 (#38). `facilityId` is the viewer's real active facility, from the server-derived identity.
+ * It was `PLANNER_MULTI_ROLE.activeFacilityId` -- a hard-coded `FAC-JAI-01` -- so every planner,
+ * whichever facility they actually belong to, was pointing this console's reads at Jaipur.
+ * The empty-string fallback is unchanged: `PlannerConsole` already treats it as "no facility yet".
  */
 function PlannerRoute() {
+  const identity = useIdentity()
   return (
     <ShellRoute>
-      <PlannerConsole facilityId={PLANNER_MULTI_ROLE.activeFacilityId ?? ''} />
+      <PlannerConsole facilityId={identity.activeFacilityId ?? ''} />
     </ShellRoute>
   )
 }
 
 /**
- * E5.5 (#40). `CARRIER` rather than `PLANNER_MULTI_ROLE`: this fixture is the only one with
- * `facilities: []`, `activeFacilityId: null` and a real `carrierId`, so `hasFacilityScope`
- * resolves false and the facility switcher and status-bar facility/policy fields are absent from
- * the DOM rather than disabled (U83). Same FIXTURE SEAM (TODO #52) as every other route.
+ * E5.5 (#40). A real carrier identity has `facilities: []` (nothing in `user_scopes` of type
+ * FACILITY for a `CARRIER` account), so `hasFacilityScope('TRANSPORT_MANAGER')` still resolves
+ * false and the facility switcher and status-bar facility/policy fields stay absent from the DOM
+ * rather than disabled (U83) -- the same property the `CARRIER` fixture used to encode by hand.
  */
 function CarrierRoute() {
+  const identity = useIdentity()
   return (
-    <ShellRoute identity={CARRIER}>
-      <CarrierPortal identity={CARRIER} />
+    <ShellRoute>
+      <CarrierPortal identity={identity} />
     </ShellRoute>
   )
 }
 
 /**
- * E5.6 (#41). `ADMIN_IDENTITY` lives in `features/admin/admin-identity.ts` rather than
- * `features/gallery/fixtures.ts` because that shared file was being read by two concurrent
- * surface builds when this was written. Same FIXTURE SEAM (TODO #52) as every other route.
+ * E5.6 (#41). `currentUserId` is now the signed-in admin's real `user_id`, which matters for
+ * correctness and not only for chrome: `AdminConsole` uses it to keep an admin from removing their
+ * own account, and a fixture id could never match a real row, so that guard was inert.
  */
 function AdminRoute() {
+  const identity = useIdentity()
   return (
-    <ShellRoute identity={ADMIN_IDENTITY}>
-      <AdminConsole currentUserId={ADMIN_IDENTITY.userId} />
+    <ShellRoute>
+      <AdminConsole currentUserId={identity.userId} />
     </ShellRoute>
   )
 }

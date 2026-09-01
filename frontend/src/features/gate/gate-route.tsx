@@ -46,7 +46,12 @@ export function GateRoute() {
 }
 
 /**
- * FIXTURE SEAM -- TODO(#52).
+ * DEVICE SEAM -- **not** the identity seam, and re-marked as such on 2026-09-01 when the identity
+ * half of TODO(#52) was closed. This value is a property of the *installation*, not of whoever is
+ * signed in, so it is deliberately NOT replaced by `identity.activeFacilityId`: a planner covering
+ * a shift at another site must still see the booth's own facility, per `screens.md` section 1's
+ * "the device's facility, not the user's". What it still needs is a device-provisioning mechanism
+ * (a kiosk registration, an install-time config), which is a separate piece of work.
  *
  * The facility a kiosk is physically installed at. Server-derived in the real system: `gate.py`'s
  * writes already resolve scope from the caller's verified identity
@@ -54,9 +59,8 @@ export function GateRoute() {
  * the shift bar's "Facility: Jaipur (fixed)" line and nothing else. It is never sent as an argument
  * to any tool, which is M15's rule and is why a wrong value here cannot widen anyone's scope.
  *
- * Deliberately a local constant rather than an import from `features/gallery/fixtures`: `App.tsx`'s
- * own FIXTURE SEAM block states, verified by grep, that the fixtures module is imported by that
- * file and the states gallery only. Reaching into it from here would quietly falsify that.
+ * Deliberately a local constant rather than an import from `features/gallery/fixtures`, which is
+ * now a gallery-only module.
  *
  * `FAC-JAI-01` matches the facility every artboard in `mockup.html` renders.
  */

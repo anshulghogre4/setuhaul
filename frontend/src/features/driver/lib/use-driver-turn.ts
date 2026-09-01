@@ -1,7 +1,6 @@
 import { useAtom, useSetAtom } from 'jotai'
 import { useCallback, useEffect, useRef } from 'react'
 
-import { getSession } from '@/core/auth/supabase'
 import { streamChat } from '@/core/http/sse'
 import { useCountdownClock } from '@/shared/lib/countdown'
 import { copy } from './copy'
@@ -360,12 +359,11 @@ export function useDriverTurn(threadId: string) {
 
       let buffered = ''
       try {
-        const session = await getSession()
-        if (!session?.access_token) throw new Error('Not authenticated')
-
+        // The token is NOT resolved here any more (2026-09-01): `streamChat` reads it from
+        // supabase-js itself, so this surface goes through the same attach-on-request /
+        // central-401 path as every other call. See `core/http/api.ts`'s interceptor contract.
         for await (const frame of streamChat({
           url: `${apiBase}/api/v1/chat/stream`,
-          accessToken: session.access_token,
           body: {
             message: text,
             thread_id: threadId === NEW_THREAD ? null : threadId,

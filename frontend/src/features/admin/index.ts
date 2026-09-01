@@ -1,28 +1,23 @@
 /**
- * E5.6 (issue #41) — admin console. The two things `App.tsx` needs from this feature.
+ * E5.6 (issue #41) — admin console.
  *
- * A barrel exists here specifically because this build could not edit `App.tsx` (two other
- * surface builds were writing the same tree concurrently), so the coordinator wires the route in
- * one place afterwards. See the report accompanying this build for the exact JSX.
+ * `ADMIN_IDENTITY` was exported here until 2026-09-01 and is now **deleted**, which is what its own
+ * docstring said should happen: *"When #52 lands and the shell fetches a real identity, this
+ * constant is deleted."* `/admin` renders under the signed-in administrator's real identity from
+ * `core/auth/auth-context.tsx`, and `App.tsx`'s `AdminRoute` passes `identity.userId` as
+ * `currentUserId`.
  *
- * Expected wiring:
+ * That last part is correctness, not tidiness: `currentUserId` decides whether the Remove action
+ * appears on a row at all (`flows-and-states.md` Flow 4 point 3 — self-removal is Hidden, not
+ * Disabled), and the fixture's `USR-DEMO-ADMIN` could never match a real `public.users.user_id`,
+ * so that guard never actually fired for anyone.
  *
- *   import { ADMIN_IDENTITY, AdminConsole } from '@/features/admin'
- *   ...
- *   <Route path="/admin" element={<AdminRoute />} />
- *
- *   function AdminRoute() {
- *     return (
- *       <ShellRoute identity={ADMIN_IDENTITY}>
- *         <AdminConsole currentUserId={ADMIN_IDENTITY.userId} />
- *       </ShellRoute>
- *     )
- *   }
- *
- * `currentUserId` is threaded in rather than read from a module global because it decides one
- * real thing: whether the Remove action appears on a row at all (`flows-and-states.md` Flow 4
- * point 3 — self-removal is Hidden, not Disabled). When #52 lands and the shell fetches a real
- * identity, that value comes from the same place the shell's does, with no change here.
+ * ⚠ One observation the deleted fixture recorded and which is still open, carried here so it is not
+ * lost with the file: `hasFacilityScope('ADMIN')` returns `true` (`core/auth/identity.ts:137-139`)
+ * and would render a facility switcher, while `06-admin-console/screens.md` §1 says this surface has
+ * none. It stays harmless because a real admin's `facilities` array is empty (an `ADMIN` row has no
+ * `FACILITY` scope in `user_scopes`), so the switcher has nothing to switch between — the same
+ * honest encoding the fixture used. Whether `hasFacilityScope` should exclude `ADMIN` outright is
+ * an owner call on shared infrastructure.
  */
 export { AdminConsole } from './admin-console'
-export { ADMIN_IDENTITY } from './admin-identity'

@@ -2,6 +2,56 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 15:20 IST - Real auth shipped to the frontend tree + the 143-control click-sweep executed: 3 dead controls, 19 design gaps, carrier identity proven broken (#99-#102)
+
+**Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5) and one read-only inventory agent; independent spot-verification by the coordinator.
+
+### Real authentication and authorization (owner-found gap, closed same-day)
+
+The owner caught it on the live site: the sign-in screen was a placeholder (`onSubmit={() => navigate('/planner')}` -- any credentials "logged in"), no route was guarded, and the shell rendered a fixture identity. The data layer was never insecure (every request already carried the real bearer; the server verifies everything), but URL access and role gating were absent. Now in the tree, verified:
+
+- **Real login**: supabase-js password grant; failures surface in the screen's designed error affordance (anti-enumeration copy); success fetches `/auth/me` and routes by role.
+- **AuthProvider + RequireAuth on every surface route**; wrong-role users are redirected to THEIR OWN surface home, not a dead end. Guard matrix mirrors the backend's `require_roles` gates row for row (`core/auth/surface-access.ts`, each row citing its server gate). `_states` galleries stay open by decision (fixture artboards, zero live data).
+- **JWT interceptor (owner requirement)**: `core/http/api.ts` is the single choke point -- token read at send time via `getSession()` (supabase-js refresh, pinned + source-verified), central 401 = one sign-out path (guard does the redirect, in-flight work survives), 403 stays a screen state, SSE funnels into the same handler on both its auth-failure paths. Zero token reads outside `core/` (was 2 bypasses).
+- **Sign-out actually signs out** (it previously only navigated -- session survived).
+- **Real identity in the shell** (verified rendering the actual signed-in user, not the fixture); the #52 grants[] seam is now ONE commented expression. Chrome (notifications/search/pending) remains fixture-backed by decision, re-marked CHROME SEAM.
+- **Verified**: tsc clean x2, oxlint 0 new, vite build clean, new auth spec 7/7 (incl. wrong-password negative + DRIVER-at-/planner redirect), storage-state isolation 8/8, sign-out proven by localStorage inspection.
+- Found-not-fixed, recorded in code: TRANSPORT_MANAGER/CARRIER drift (now #101), `roleToPortal` superseded, facility-accent approximation, layering inversion (core importing two pure data tables from features), FACILITY_MANAGER/REGIONAL_OPERATIONS_HEAD have no UI surface (named signed-out error).
+
+### The click-sweep (owner-requested): every designed control, actually activated
+
+Ground truth built FROM THE DESIGN DOCS first (143 controls across six surfaces, including design-rejected affordances so absences read as decisions), then a Playwright sweep with real per-role sessions against the local stack + live DB: **32/32 tests, 143/143 classified, every test write reverted** (sandbox escalations driven terminal; the dock block ended in-test; no demo-cast or admin mutation).
+
+| Bucket | Count | Meaning |
+|---|---|---|
+| WORKING | 54 | real network/navigation/dialog effect observed |
+| WORKING-ON-FIXTURE | 4 | control real, data fixture (chrome seam) |
+| INACTIVE-LABELED | 16 | all six off-flags label themselves; zero unlabeled |
+| VERIFIED-TO-DIALOG | 6 | irreversible admin writes verified to their confirm step |
+| BLOCKED-ENV | 36 | named environmental preconditions (LLM-local, no planner row at GGN, no gate truck, no carrier identity, ...) |
+| **DEAD** | **3** | **#99**: facility switcher selection (ops+planner, `onFacilityChange={()=>{}}`), driver state-line tap; plus near-dead sign-out-everywhere commit |
+| **MISSING** | **24** | **#102** (19 actionable; 5 are #57's recorded co-pilot rescope) + **#100** (`endDockBlock` exported, zero call sites) |
+
+**Biggest catch -- #101:** the "latent" TRANSPORT_MANAGER/CARRIER drift is live: USR105 IS that account, no CARRIER role exists in `public.roles`, all five carrier reads 403 -- the carrier portal currently has no identity that can use it. Owner decision filed.
+
+### Chat questions answered (owner)
+
+Threads are created server-side per driver+shipment (assistant turn / `_ensure_thread` on ETA / incident report path) -- never assigned by facility or ops. "No LLM response" diagnosed as two independent causes: on the deployed site the placeholder login meant no token -> silent 401 (fixed by this auth work, ships with the frontend deploy); locally both dev servers were dead (restarted; local chat now returns the DESIGNED 503 typed refusal absent Vertex/ADC -- LLM leg verified against production, which answers 200 with live appointment data).
+
+**Files:** new `core/auth/{auth-context,auth-provider,identity-mapping,surface-access}`, `core/http/unauthorized.ts`, `components/auth/require-auth.tsx`, `tests/auth-guards.spec.ts`, `tests/sweep/*` (7 specs + support), `deploy/apply_96_dedupe_migration.py`, `deploy/hotfix_96_compat_shim.py`; modified App.tsx/providers/supabase.ts/api.ts/errors.ts/sse.ts/sign-in.tsx + three feature files; deleted the dead admin fixture. Sweep artifacts gitignored.
+
+**Open on the owner:** run the #96 compat shim (production escalation writes remain broken until then -- see the 14:35 incident entry), then backend deploy (ships #93/#96/#97), frontend deploy (ships this auth work), re-run the apply script to drop the shim.
+
+## 2026-09-01 14:35 IST - INCIDENT: #96 deploy-order analysis was inverted; production escalation writes broken since the 13:40 apply; shim written (owner-run), correction on #96
+
+**Agent/surface:** Claude Fable 5 (Claude Code). Never rewrite history: the 12:55 and 13:45 entries repeated the #96 agent's claim that migration-first was safe. **That was wrong**, and I relayed it without checking the direction of the asymmetry. Proven live (rolled-back EXPLAIN): old code's bare `ON CONFLICT (dedupe_key)` cannot infer against the new partial index -- so since 13:40 IST production's escalate route, driver-chat escalate tool, and planner capacity cascade fail on write. Ordinary chat verified UNAFFECTED live (200, tool-backed answer ~14:25). Mitigation: `deploy/hotfix_96_compat_shim.py` recreates the full unique index alongside the partial (provably safe -- duplicates cannot exist until new code deploys); owner runs it, then the backend deploy ships the batch, then re-running `deploy/apply_96_dedupe_migration.py` drops the shim by shape. Lesson recorded: a deploy-order claim is a directional claim -- EXPLAIN both configurations before applying, exactly like every other verified-not-assumed rule this repo already has.
+
+Also this window: local dev servers found dead and restarted (backend now runs the in-process assistant path -- chat locally returns the DESIGNED 503 typed refusal since Vertex/ADC is not configured on this machine; LLM leg verifies against production, which answers 200). The auth agent's race-2 '500' attributed to the stale pre-batch local server, not to the batch: current tree returns a typed refusal in-process.
+
+## 2026-09-01 13:45 IST - #96 migration APPLIED to production (owner-run); all four verifications PASS
+
+**Agent/surface:** owner ran deploy/apply_96_dedupe_migration.py (Claude Fable 5 wrote it; classifier gates agent DDL). Output: SET/BEGIN/CREATE INDEX/COMMENT/DO/COMMIT; verifications 4/4 PASS (partial unique index with correct predicate; old global UNIQUE gone; no full-table dedupe_key unique remains; zero live duplicates). Apply record added to the migration header; comment left on #96. Migration-first ordering satisfied: the next backend deploy can now ship the batch (#93/#96/#97 code) safely; current prod code keeps working against the new index in the interim.
+
 ## 2026-09-01 12:55 IST - Fix-all batch: #95/#96/#97 fixed (with #93 already in-tree); M5 tracker healed to 100%; proof suite 104/0; one new fork filed (#98)
 
 **Agent/surface:** Claude Fable 5 (Claude Code) + two `fullstack-engineer` subagents (Claude Opus 5), one per backend issue; coordinator did #95, the live evidence capture, the tracker sweep, and independent re-verification.

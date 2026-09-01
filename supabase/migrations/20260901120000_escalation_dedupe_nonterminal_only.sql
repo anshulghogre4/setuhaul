@@ -15,6 +15,12 @@
 --
 -- Backup: NOT taken by this file. See the apply plan at the foot of this migration.
 --
+-- APPLIED TO PRODUCTION: 2026-09-01 ~13:40 IST, owner-run via deploy/apply_96_dedupe_migration.py
+-- (agent classifier gates direct DDL). Output: SET/BEGIN/CREATE INDEX/COMMENT/DO/COMMIT, then all
+-- four read-only verifications PASS (new partial index present with correct predicate; old global
+-- UNIQUE gone; no full-table unique dedupe_key index remains; zero live duplicates). Table backup
+-- beforehand: C:/Users/ANSHUL/setuhaul-db-backups/pre_esc_dedupe_20260901_122115.dump (11,676 B).
+--
 -- =============================================================================================
 -- The defect
 -- =============================================================================================

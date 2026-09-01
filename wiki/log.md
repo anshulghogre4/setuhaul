@@ -1122,3 +1122,18 @@ last_updated: 2026-08-29
 - #96: partial unique index migration (terminal={RESOLVED,CANCELLED}, proven), 3 arbiter sites updated, 5 regression tests; LIVE APPLY PENDING owner run of deploy/apply_96_dedupe_migration.py; backup pre_esc_dedupe_20260901_122115.dump.
 - #97: canonical liveness predicate in occupancy.py; feasibility LATERAL join (4 round trips, EXPLAIN-verified index scan); lazy expiry on claim reusing sweeper audit helper; proof-of-bite recorded; counter_offer self-overlap fixed; #98 filed for the displacement-read fork.
 - Coordinator re-ran both suites independently on the combined tree. Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed to owner.
+
+## 2026-09-01 13:45 IST | deployment | #96 dedupe migration applied to production (owner-run), 4/4 verifications PASS
+
+- deploy/apply_96_dedupe_migration.py: apply OK; partial index verified; old uniqueness gone; zero live duplicates. Apply record in migration header; #96 commented. Migration-first deploy order satisfied for the coming backend deploy. Updated [[current-state]], root CHANGELOG.
+
+## 2026-09-01 14:35 IST | incident | #96 deploy-order inverted -- prod escalation writes 42P10 since 13:40; shim ready (owner-run)
+
+- Proven with rolled-back EXPLAIN: bare arbiter cannot infer partial index. Chat verified unaffected live (200). deploy/hotfix_96_compat_shim.py = safe unbreak (no duplicates can exist yet); deploy batch next; re-run apply script drops shim by shape. Correction on #96; CHANGELOG corrected forward, never rewritten. Local servers restarted (in-process assistant: designed 503 locally without Vertex ADC).
+
+## 2026-09-01 15:20 IST | verification | auth wired for real; 143-control click-sweep executed; #99-#102 filed
+
+- Auth: real login/guards/role-routing/central JWT interceptor; auth spec 7/7, isolation 8/8, tsc/oxlint/build clean; sign-out fixed; #52 grants seam reduced to one expression; guard matrix mirrors backend require_roles.
+- Sweep (32/32 tests, writes reverted): 54 WORKING / 4 on-fixture / 16 inactive-all-labeled / 6 to-dialog / 36 blocked-env / 3 DEAD (#99) / 24 MISSING (#100 endDockBlock zero call sites; #102 19 gaps; 5 = #57 rescope). #101: carrier portal has NO working identity (no CARRIER role; TRANSPORT_MANAGER 403s) -- was "latent", proven live.
+- Chat: threads = server-created per driver+shipment; deployed-site silence = placeholder-login 401 (fixed by this work, needs frontend deploy); local = dead servers (restarted; designed 503 sans Vertex ADC; prod 200 verified).
+- Updated [[current-state]], [[handoff]], root CHANGELOG. Owner sequence: shim -> push -> backend deploy -> frontend deploy -> drop shim.

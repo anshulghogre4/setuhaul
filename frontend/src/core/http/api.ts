@@ -1,9 +1,39 @@
 import { getSession } from '../auth/supabase'
-import { apiErrorFromResponse, unauthenticatedError } from './errors'
+import { apiErrorFromResponse, readEnvelope, unauthenticatedError } from './errors'
 import type { ApiEnvelope } from './errors'
+import { notifyUnauthorized } from './unauthorized'
 
 /**
  * The shared HTTP layer. Every surface calls through here.
+ *
+ * ## THE INTERCEPTOR CONTRACT (one place, five rules)
+ *
+ * This module is the single choke point for authenticated traffic. Nothing under `features/**`
+ * calls `fetch` directly; the one deliberate exception is `core/http/sse.ts`, which needs a
+ * streaming POST that `fetch`-with-`unwrap` cannot express and which follows the identical rules
+ * below. Verified by grep, 2026-09-01: `fetch(` appears in `src/` in exactly **two modules** --
+ * this one (3 call sites: `apiGet`, `apiPost`, `apiGetBlob`) and `sse.ts` (1) -- and there is no
+ * `axios`, no `XMLHttpRequest` and no `new EventSource` anywhere. `getSession()` and the string
+ * `access_token` likewise appear nowhere outside `core/`, so no surface holds a token of its own.
+ *
+ *  1. **Attach on request.** Every call reads the access token from `getSession()` at send time
+ *     (`authHeaders` below). No module-level token cache exists anywhere in `src/` -- a cached
+ *     token is a token that goes stale silently, and this product's sessions are 1 hour long.
+ *  2. **Refresh belongs to supabase-js, not to us.** `createClient` runs with
+ *     `autoRefreshToken: true` (pinned explicitly in `core/auth/supabase.ts`), and
+ *     `getSession()` itself refreshes when the access token is inside the expiry margin
+ *     (`@supabase/auth-js@2.112.2`, `GoTrueClient.js:2526-2554`). So "read it fresh per request"
+ *     is not a nicety, it is the whole refresh strategy.
+ *  3. **401 is central.** A server 401 always means the token is missing/expired/invalid (see
+ *     `./unauthorized.ts` for the backend citations). It fires `notifyUnauthorized()` once, and
+ *     the auth provider clears the session; the route guard then redirects to `/signin`
+ *     preserving the attempted location. **No screen implements 401 handling.**
+ *  4. **403 is the caller's problem.** A scope or role refusal is a screen-level state -- the
+ *     carrier portal renders a different screen for `FORBIDDEN`, the planner branches on five
+ *     refusal codes. Signing someone out because they touched something outside their scope
+ *     would be wrong, and would also hide a real product bug.
+ *  5. **The server remains the authority.** Nothing here decides what a caller may see; it only
+ *     transports the decision the server already made (M15, `auth-and-scoping.md`).
  *
  * **All failures throw `ApiError`** (`./errors.ts`), which carries the envelope's `code`, its
  * `detail` (parsed as `data` when the server sent a JSON document), the HTTP `status` and the
@@ -36,11 +66,19 @@ export type MeProfile = {
 }
 
 async function authHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  // Rule 1 + 2 of the contract: read the token from supabase-js at SEND time, every time. This
+  // call is what makes refresh transparent -- `getSession()` refreshes when the token is inside
+  // the expiry margin rather than handing back a nearly-dead one.
   const session = await getSession()
   if (!session?.access_token) {
     // Code-bearing rather than a bare Error, so a caller can tell "no session" from a 403 the
     // server actually issued. `.message` is unchanged ('Not authenticated'), so the existing
     // `formatUserFriendlyError` match still fires.
+    //
+    // Deliberately does NOT fire `notifyUnauthorized()`: no server answered, so there is no
+    // verdict to act on. supabase-js already emits `SIGNED_OUT` when it drops a session whose
+    // refresh failed, and the auth provider listens for exactly that -- firing here as well would
+    // make the client's own missing-session state indistinguishable from a server revocation.
     throw unauthenticatedError()
   }
   return {
@@ -51,24 +89,19 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
 }
 
 /**
- * Parses the envelope defensively.
+ * Rule 3 of the contract above, in one function so there is exactly one place to change it.
  *
- * `Response.json()` **rejects with a `SyntaxError`** when the body is not valid JSON (MDN,
- * `Response.json()`, checked 2026-08-31). A proxy's HTML 502 page is exactly that case, and it is
- * still a real HTTP failure -- so a parse failure yields `null` here and the caller reports the
- * status, instead of a `SyntaxError` about an unexpected `<` masquerading as the problem.
+ * Called on every non-ok response before the error is thrown. Only 401 is intercepted; 403 and
+ * every refusal code fall straight through to the caller untouched.
  */
-async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
-  try {
-    return (await res.json()) as ApiEnvelope<T>
-  } catch {
-    return null
-  }
+function interceptResponseStatus(status: number): void {
+  if (status === 401) notifyUnauthorized()
 }
 
 async function unwrap<T>(res: Response): Promise<ApiEnvelope<T>> {
   const body = await readEnvelope<T>(res)
   if (!res.ok || !body?.success) {
+    interceptResponseStatus(res.status)
     throw apiErrorFromResponse(res, body)
   }
   return body
@@ -131,6 +164,7 @@ export async function apiGetBlob(
     signal: opts?.signal,
   })
   if (!res.ok) {
+    interceptResponseStatus(res.status)
     throw apiErrorFromResponse(res, await readEnvelope<unknown>(res))
   }
   return await res.blob()
