@@ -135,6 +135,27 @@ async def escalate_exception(
     day = now[:10]
     dedupe_key = f"{command.shipment_id}:{day}:{escalation_type}"
     escalation_id = new_id("ESC")
+    # Issue #96. The `WHERE escalation_status NOT IN (...)` below is an ON CONFLICT
+    # *index_predicate*, not a row filter, and it is load-bearing twice over:
+    #
+    # 1. **Semantics.** It matches the predicate of the partial unique index
+    #    `escalation_queue_dedupe_key_active_uidx` (migration 20260901120000), so the conflict is
+    #    only ever detected against a NON-TERMINAL row. A prior RESOLVED/CANCELLED case for the
+    #    same shipment/day/type is invisible here, and a driver's genuinely new problem opens a
+    #    fresh OPEN row instead of resurrecting a dead one. Terminal rows must not be resurrected:
+    #    this DO UPDATE never touched `escalation_status`, so before #96 the caller got the closed
+    #    row straight back and `get_escalation_queue` -- which filters terminal rows out -- never
+    #    showed it to anyone again. Found by E6.2's race suites 3/4 (issue #43), which pass alone
+    #    and failed in sequence.
+    # 2. **It is required for the statement to run at all.** PostgreSQL's index_predicate is what
+    #    "allows inference of partial unique indexes" (sql-insert, ON CONFLICT Clause). With the
+    #    old global UNIQUE dropped, a conflict target naming `(dedupe_key)` and nothing else can no
+    #    longer be matched to any index, and the statement raises 42P10, "there is no unique or
+    #    exclusion constraint matching the ON CONFLICT specification".
+    #
+    # Keep this predicate byte-identical to the index's, and change both together or neither.
+    # Behaviour against a live prior row is deliberately unchanged: same row, refreshed payload/
+    # severity/policy/recommendation, returned as before.
     row = (
         await session.execute(
             text(
@@ -148,7 +169,8 @@ async def escalate_exception(
                   'OPEN', :severity_code, :policy_version, :recommendation_id,
                   :payload_json, :dedupe_key, :created_at, :updated_at, NULL, NULL
                 )
-                ON CONFLICT (dedupe_key) DO UPDATE
+                ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')
+                DO UPDATE
                 SET payload_json = EXCLUDED.payload_json,
                     severity_code = EXCLUDED.severity_code,
                     policy_version = EXCLUDED.policy_version,

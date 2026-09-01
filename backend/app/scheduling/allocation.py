@@ -828,6 +828,8 @@ async def _claim_dock_occupancy(
     appointment_id: str,
     shipment_id: str,
     slot_id: str,
+    now: datetime,
+    actor_user_id: str,
 ) -> dict[str, Any] | None:
     """Write the D1 capacity claim for an appointment, inside the caller's transaction.
 
@@ -864,8 +866,28 @@ async def _claim_dock_occupancy(
     the IntegrityError re-raises untranslated. The column ships nullable precisely so this code
     can land first; a follow-up migration asserts NOT NULL once it has.
 
+    `now` and `actor_user_id` exist only for the lazy-expiry step below (issue #97). They are
+    required rather than defaulted so that a future fourth call site cannot quietly opt out of it
+    and reintroduce the defect: a caller that has an appointment to claim for always has both.
+
     Returns the claimed row, or None when this appointment already holds a claim.
     """
+    # Issue #97, the write half of the shared liveness predicate. The exclusion constraint's
+    # predicate carries no time term, so a `HELD` row whose TTL lapsed still refuses this INSERT
+    # even though §0.8 says a lapsed hold reserves nothing -- and with no sweeper running it can
+    # refuse it indefinitely. Flipping the dead rows first, in this same transaction, is what makes
+    # the table say what §0.8 means. `occupancy.py` carries the full argument; this call is a
+    # no-op (one indexed statement, zero rows) on every path where nothing has lapsed.
+    from app.scheduling import holds  # local: breaks the allocation <-> holds import cycle
+
+    if holds.hold_reads_enabled():
+        await holds.expire_lapsed_holds_on_interval(
+            session,
+            slot_id=slot_id,
+            shipment_id=shipment_id,
+            now=now,
+            actor_user_id=actor_user_id,
+        )
     row = (
         await session.execute(
             text(
@@ -1722,6 +1744,8 @@ async def request_slot(
             appointment_id=appointment_id,
             shipment_id=shipment_id,
             slot_id=slot_id,
+            now=now,
+            actor_user_id=ctx.user_id,
         )
         if claim is None:
             # Unreachable for a freshly minted appointment_id, and deliberately loud rather
@@ -2099,6 +2123,11 @@ async def reschedule_appointment(
                 appointment_id=command.appointment_id,
                 shipment_id=shipment_id,
                 slot_id=str(old["slot_id"]),
+                # A fresh instant, matching the restore UPDATE just above: this is happening now,
+                # not at the moment the reschedule was attempted, and issue #97's lazy expiry must
+                # judge liveness against the clock the restore is actually running on.
+                now=datetime.now(timezone.utc),
+                actor_user_id=ctx.user_id,
             )
         await store_idempotency(
             session, key=idempotency_key, user_id=ctx.user_id, route=route,
@@ -2322,7 +2351,19 @@ async def counter_offer(
     # section 7.5.1: "Revalidates the proposed interval through Stage 1 -- a planner may not hand
     # out an infeasible slot by hand." This is the full Stage-1 guard, facility rules and the
     # driver's own acceptable window included, not the reduced one `request_slot` runs.
-    eligibility = await explain_slot_eligibility(session, ctx, shipment_id, new_slot_id)
+    eligibility = await explain_slot_eligibility(
+        session,
+        ctx,
+        shipment_id,
+        new_slot_id,
+        # This runs BEFORE the release below, so the appointment's own claim overlaps the interval
+        # it is being moved onto whenever the move is a small shift on the same dock. Excluding it
+        # is the same self-overlap problem `reschedule_appointment` solves by releasing first --
+        # counter_offer cannot do that, because it must know the new interval is feasible before it
+        # gives up the one it holds (issue #97 made this visible by teaching the read path about
+        # dock_occupancy at all).
+        exclude_appointment_id=command.appointment_id,
+    )
     if not eligibility.eligible:
         raise _interval_unavailable_error(
             dock_id=command.dock_id,
@@ -2356,6 +2397,8 @@ async def counter_offer(
             appointment_id=command.appointment_id,
             shipment_id=shipment_id,
             slot_id=new_slot_id,
+            now=now,
+            actor_user_id=ctx.user_id,
         )
         if claim is None:
             raise AppError(

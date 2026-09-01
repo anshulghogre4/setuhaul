@@ -8,6 +8,15 @@ slot claim is released and audited correctly, not just deleted), then
 deletes escalation/audit/idempotency rows and finally the shipments, user,
 and driver rows themselves, in FK-safe order.
 
+Modernized 2026-09-01 (#95): eight tables now hold FKs onto shipments, and
+this script must clear ALL of them before the shipments delete or it dies
+partway on an FK violation -- which is exactly how it rotted. The newer legs
+it predated: dock_occupancy (D2's shipment_id FK; note cancel_appointment
+flips claims to CANCELLED and the sweeper expires holds IN PLACE, so rows
+persist and must be deleted here), chat_threads/chat_messages (#55's
+coordinator-reply work), plus driver_exceptions, eta_updates,
+facility_checkins, and operational_messages rows the race suites create.
+
 Never touches FAC-JAI-01, the demo cast (SHP-D16-*/CONTEND-*/RACE-*), or
 the reused vehicle ``D16-VEH-002``.
 
@@ -129,6 +138,24 @@ async def delete_rows(conn: Any, *, dry_run: bool) -> dict[str, int]:
         "idempotency_requests": await conn.fetchval(
             "SELECT count(*) FROM public.idempotency_requests WHERE idempotency_key LIKE 'seed-rs-%' OR idempotency_key LIKE 'rollback-rs-%'"
         ),
+        "dock_occupancy": await conn.fetchval(
+            "SELECT count(*) FROM public.dock_occupancy WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
+        "chat_threads": await conn.fetchval(
+            "SELECT count(*) FROM public.chat_threads WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
+        "driver_exceptions": await conn.fetchval(
+            "SELECT count(*) FROM public.driver_exceptions WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
+        "eta_updates": await conn.fetchval(
+            "SELECT count(*) FROM public.eta_updates WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
+        "facility_checkins": await conn.fetchval(
+            "SELECT count(*) FROM public.facility_checkins WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
+        "operational_messages": await conn.fetchval(
+            "SELECT count(*) FROM public.operational_messages WHERE shipment_id LIKE 'SHP-RS-%'"
+        ),
         "shipments": await conn.fetchval(
             "SELECT count(*) FROM public.shipments WHERE shipment_id LIKE 'SHP-RS-%'"
         ),
@@ -146,6 +173,58 @@ async def delete_rows(conn: Any, *, dry_run: bool) -> dict[str, int]:
     async with conn.transaction():
         await conn.execute(
             "DELETE FROM public.escalation_queue WHERE shipment_id LIKE 'SHP-RS-%'"
+        )
+        # driver_exceptions before chat_threads: exceptions carry a thread_id link.
+        # Keyed by shipment OR driver: assistant flows can create rows against the
+        # driver without an RS shipment id on them.
+        await conn.execute(
+            "DELETE FROM public.driver_exceptions WHERE shipment_id LIKE 'SHP-RS-%' OR driver_id = $1",
+            DRIVER_ID,
+        )
+        # chat_messages before chat_threads (message->thread FK), threads before shipments.
+        # Threads matched by shipment OR driver: a general chat turn opens a thread
+        # keyed to the driver alone.
+        await conn.execute(
+            """
+            DELETE FROM public.chat_messages
+            WHERE thread_id IN (
+              SELECT thread_id FROM public.chat_threads
+              WHERE shipment_id LIKE 'SHP-RS-%' OR driver_id = $1
+            )
+            """,
+            DRIVER_ID,
+        )
+        # api_logs FKs both chat_threads and users (found 2026-09-01 via pg_constraint,
+        # not assumed). Sandbox request logs go with the sandbox, same as audit_logs.
+        await conn.execute(
+            """
+            DELETE FROM public.api_logs
+            WHERE user_id = $1 OR thread_id IN (
+              SELECT thread_id FROM public.chat_threads
+              WHERE shipment_id LIKE 'SHP-RS-%' OR driver_id = $2
+            )
+            """,
+            USER_ID,
+            DRIVER_ID,
+        )
+        await conn.execute(
+            "DELETE FROM public.chat_threads WHERE shipment_id LIKE 'SHP-RS-%' OR driver_id = $1",
+            DRIVER_ID,
+        )
+        await conn.execute(
+            "DELETE FROM public.eta_updates WHERE shipment_id LIKE 'SHP-RS-%' OR reported_by_driver_id = $1",
+            DRIVER_ID,
+        )
+        await conn.execute(
+            "DELETE FROM public.facility_checkins WHERE shipment_id LIKE 'SHP-RS-%'"
+        )
+        await conn.execute(
+            "DELETE FROM public.operational_messages WHERE shipment_id LIKE 'SHP-RS-%'"
+        )
+        # dock_occupancy before appointments AND shipments: it FKs both. Includes
+        # EXPIRED/CANCELLED rows the sweeper/cancel path leaves in place for audit.
+        await conn.execute(
+            "DELETE FROM public.dock_occupancy WHERE shipment_id LIKE 'SHP-RS-%'"
         )
         # Clear self-FK links before deleting appointments (matches reset_demo_day.py pattern).
         await conn.execute(
@@ -181,6 +260,14 @@ async def delete_rows(conn: Any, *, dry_run: bool) -> dict[str, int]:
         )
         await conn.execute(
             "DELETE FROM public.shipments WHERE shipment_id LIKE 'SHP-RS-%'"
+        )
+        # users has more referencing tables than it did when this script was written
+        # (user_scopes, notifications, notification_preferences -- pg_constraint-verified
+        # 2026-09-01). Clear them before the users row or the delete dies on an FK.
+        await conn.execute("DELETE FROM public.user_scopes WHERE user_id = $1", USER_ID)
+        await conn.execute("DELETE FROM public.notifications WHERE user_id = $1", USER_ID)
+        await conn.execute(
+            "DELETE FROM public.notification_preferences WHERE user_id = $1", USER_ID
         )
         await conn.execute("DELETE FROM public.users WHERE user_id = $1", USER_ID)
         await conn.execute("DELETE FROM public.drivers WHERE driver_id = $1", DRIVER_ID)

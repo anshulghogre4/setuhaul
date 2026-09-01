@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -559,9 +560,18 @@ async def test_reschedule_releases_then_restores_the_dock_claim(monkeypatch):
 
     assert result.code == "SLOT_OPTIONS_STALE"
     release.assert_awaited_once_with(session, "APT-OLD")
-    claim.assert_awaited_once_with(
-        session, appointment_id="APT-OLD", shipment_id="SHP1", slot_id="SLT-OLD"
-    )
+    # `now`/`actor_user_id` came with issue #97's lazy expiry and are asserted by kind rather than
+    # by value: the restore deliberately takes a *fresh* instant (it is putting the claim back now,
+    # not at the moment the reschedule was attempted), so pinning an exact datetime here would be
+    # pinning the test's own runtime.
+    claim.assert_awaited_once()
+    call = claim.await_args
+    assert call.args == (session,)
+    assert {
+        k: v for k, v in call.kwargs.items() if k not in {"now", "actor_user_id"}
+    } == {"appointment_id": "APT-OLD", "shipment_id": "SHP1", "slot_id": "SLT-OLD"}
+    assert isinstance(call.kwargs["now"], datetime)
+    assert call.kwargs["actor_user_id"] == "USR001"
 
 
 @pytest.mark.asyncio
@@ -660,15 +670,36 @@ async def _captured_claim_sql() -> tuple[str, dict]:
         "dock_id": "DOCK-JAI-D1",
         "window": "[2026-08-16 13:30+00,2026-08-16 14:10+00)",
     }
+    # Issue #97: the function now also runs a lazy-expiry UPDATE before the INSERT. An empty result
+    # is the overwhelmingly common real answer (nothing lapsed) and is what keeps this test about
+    # the claim itself.
+    session.execute.return_value.mappings.return_value.all.return_value = []
     claim = await allocation._claim_dock_occupancy(
-        session, appointment_id="APT-NEW", shipment_id="SHP1", slot_id="SLT1"
+        session,
+        appointment_id="APT-NEW",
+        shipment_id="SHP1",
+        slot_id="SLT1",
+        now=datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc),
+        actor_user_id="USR001",
     )
     assert claim == {
         "dock_id": "DOCK-JAI-D1",
         "window": "[2026-08-16 13:30+00,2026-08-16 14:10+00)",
     }
-    call = session.execute.await_args
-    return str(call.args[0]), call.args[1]
+    # Selected by content, not by position: this helper is about the claim INSERT, and indexing
+    # into the call list would silently start describing a different statement the next time one is
+    # added ahead of it -- which is exactly what issue #97 did to it.
+    return _sole_statement_containing(session, "INSERT INTO public.dock_occupancy")
+
+
+def _sole_statement_containing(session: AsyncMock, needle: str) -> tuple[str, dict]:
+    matches = [
+        (str(call.args[0]), call.args[1])
+        for call in session.execute.await_args_list
+        if needle in str(call.args[0])
+    ]
+    assert len(matches) == 1, f"expected exactly one statement containing {needle!r}, got {len(matches)}"
+    return matches[0]
 
 
 @pytest.mark.asyncio

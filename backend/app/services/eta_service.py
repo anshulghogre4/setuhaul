@@ -425,7 +425,14 @@ async def record_eta_update(
                 """
                 SELECT exception_id FROM public.driver_exceptions
                 WHERE driver_id = :driver_id AND shipment_id = :shipment_id
-                  AND exception_status NOT IN ('CLOSED', 'RESOLVED')
+                  -- Terminal statuses must never be reopened by an ordinary ETA update:
+                  -- the UPDATE below flips the picked row to OPEN and overwrites its
+                  -- dedupe_key, so selecting a DUPLICATE here resurrects a retry row and
+                  -- destroys the retry->original link (#93, section 9.2 duplicate_retry).
+                  -- ESCALATED is deliberately still selectable: it is non-terminal and a
+                  -- fresh driver ETA legitimately updates it (escalation_queue row is
+                  -- separate and unaffected).
+                  AND exception_status NOT IN ('RESOLVED', 'DUPLICATE', 'CANCELLED')
                 ORDER BY reported_at DESC LIMIT 1
                 """
             ),

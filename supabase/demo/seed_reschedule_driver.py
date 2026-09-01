@@ -4,10 +4,18 @@
 Creates driver ``DRV-RS-01``, users row ``USR-RS-01`` (DRIVER role,
 FAC-GGN-01), and four shipments:
 
-  SHP-RS-PENDING   -> booked via request_slot()      -> PENDING_CONFIRMATION
-  SHP-RS-CONFIRMED -> booked, then confirm_appointment() -> CONFIRMED
+  SHP-RS-PENDING   -> request_slot() [+ confirm_held_slot() when two-phase
+                      holds are enabled]                -> PENDING_CONFIRMATION
+  SHP-RS-CONFIRMED -> same, then confirm_appointment()  -> CONFIRMED
   SHP-RS-OPEN      -> no appointment; has feasible options
   SHP-RS-NOSLOT    -> no appointment; HEAVY dock type, GGN has none -> escalation
+
+Two-phase aware (#95, 2026-09-01): with TWO_PHASE_HOLD_ENABLED on,
+``request_slot`` returns a 90-second HELD (no appointment row) -- a seed that
+stopped there landed its "booked" fixtures as transient holds that expired to
+nothing. The booking step now follows SLOT_HELD with ``confirm_held_slot``,
+and still handles the flag-off SLOT_REQUESTED path, so the script works under
+either setting.
 
 All appointment/audit writes go through the production services
 (``app.scheduling.allocation.request_slot`` / ``confirm_appointment``,
@@ -54,6 +62,13 @@ VEHICLE_ID = "D16-VEH-002"  # existing 32FT_SXL / 15,000 kg / CAR002 — reused,
 CARRIER_ID = "CAR002"
 ETA_TS = "2026-08-16T09:00:00+05:30"
 CREATED_AT = "2026-08-16T08:00:00+05:30"
+
+# Idempotency keys carry a per-run token (#95): the fixed keys this script used
+# originally began colliding across reseeds once two-phase holds changed the
+# command payload -- the idempotency store then refuses with "belongs to a
+# different command scope". Re-run safety comes from the current_active_appointment
+# check, not from replaying stored responses, so fresh keys per run are correct.
+RUN_TOKEN = datetime.now().strftime("%Y%m%d%H%M%S")
 
 SHP_PENDING = "SHP-RS-PENDING"
 SHP_CONFIRMED = "SHP-RS-CONFIRMED"
@@ -164,6 +179,21 @@ async def seed_rows(conn: Any, *, dry_run: bool) -> None:
             FACILITY_ID,
             CREATED_AT,
         )
+        # user_scopes grew under E2.3 after this script was written (#95): deps.py reads
+        # scopes from user_scopes, not from columns on users, so a seeded driver without
+        # these rows authenticates but resolves no scope. Mirrors the E2.3 backfill shape.
+        for scope_type, scope_value in (("FACILITY", FACILITY_ID), ("DRIVER", DRIVER_ID)):
+            await conn.execute(
+                """
+                INSERT INTO public.user_scopes (scope_id, user_id, scope_type, scope_value, created_at)
+                VALUES ($1, $2, $3, $4, now())
+                ON CONFLICT DO NOTHING
+                """,
+                f"SCP-{scope_type[:3]}-{USER_ID}",
+                USER_ID,
+                scope_type,
+                scope_value,
+            )
         for ordinal, spec in enumerate(SHIPMENT_SPECS, start=1):
             await conn.execute(
                 """
@@ -219,6 +249,8 @@ async def book_and_confirm(*, dry_run: bool) -> list[dict[str, Any]]:
         request_slot,
     )
     from app.scheduling.feasibility import find_feasible_slots
+    from app.scheduling.holds import confirm_held_slot
+    from app.scheduling.snapshot import load_appointment_snapshot
 
     driver_ctx = ExecutionContext(
         request_id="seed-rs-driver",
@@ -268,14 +300,39 @@ async def book_and_confirm(*, dry_run: bool) -> list[dict[str, Any]]:
                     # already booked this shipment. Re-issuing request_slot here
                     # would either violate ACTIVE_APPOINTMENT_EXISTS or replay a
                     # stale idempotency response for a slot that has since moved.
+                    active = options.current_active_appointment
                     outcomes.append(
                         {
                             "shipment_id": shipment_id,
                             "action": "already_active",
-                            "appointment_id": options.current_active_appointment["appointment_id"],
-                            "slot_id": options.current_active_appointment["slot_id"],
+                            "appointment_id": active["appointment_id"],
+                            "slot_id": active["slot_id"],
                         }
                     )
+                    # A prior run may have stopped between booking and confirming
+                    # (#95): finish the confirm leg so the fixture reaches its
+                    # designed CONFIRMED state instead of parking at PENDING.
+                    if spec["confirm"] and active.get("appointment_status") == "PENDING_CONFIRMATION":
+                        snap = await load_appointment_snapshot(session, active["appointment_id"])
+                        if snap is not None:
+                            confirmed = await confirm_appointment(
+                                session,
+                                admin_ctx,
+                                shipment_id=shipment_id,
+                                command=ConfirmAppointmentCommand(
+                                    appointment_id=active["appointment_id"],
+                                    snapshot_hash=snap["snapshot_hash"],
+                                    warehouse_confirmation_ref=f"WH-RS-{shipment_id}",
+                                ),
+                                idempotency_key=f"seed-rs-{shipment_id}-confirm-{RUN_TOKEN}",
+                            )
+                            outcomes.append(
+                                {
+                                    "shipment_id": shipment_id,
+                                    "action": "confirmed",
+                                    "code": confirmed.code,
+                                }
+                            )
                     continue
                 if not options.options:
                     outcomes.append(
@@ -293,27 +350,58 @@ async def book_and_confirm(*, dry_run: bool) -> list[dict[str, Any]]:
                         displayed_policy_version=options.policy_version,
                         displayed_recommendation_id=options.recommendation_id,
                     ),
-                    idempotency_key=f"seed-rs-{shipment_id}-book",
+                    idempotency_key=f"seed-rs-{shipment_id}-book-{RUN_TOKEN}",
                 )
+                appointment_id = booked.appointment_id
                 outcomes.append(
                     {
                         "shipment_id": shipment_id,
                         "action": "booked",
                         "code": booked.code,
-                        "appointment_id": booked.appointment_id,
+                        "appointment_id": appointment_id,
                         "slot_id": slot_id,
                     }
                 )
-                if spec["confirm"] and booked.code == "SLOT_REQUESTED" and booked.appointment_id:
+                if booked.code == "SLOT_HELD" and booked.hold_id:
+                    # Two-phase path: the request produced only a 90s hold. Convert it
+                    # to the real PENDING_CONFIRMATION appointment the fixture promises;
+                    # leaving it HELD means the fixture silently expires to nothing.
+                    held = await confirm_held_slot(
+                        session,
+                        driver_ctx,
+                        hold_id=booked.hold_id,
+                        idempotency_key=f"seed-rs-{shipment_id}-hold-confirm-{RUN_TOKEN}",
+                        note="Reschedule-sandbox seed hold confirm",
+                    )
+                    appointment_id = held.appointment_id
+                    outcomes.append(
+                        {
+                            "shipment_id": shipment_id,
+                            "action": "hold_confirmed",
+                            "code": held.code,
+                            "appointment_id": appointment_id,
+                        }
+                    )
+                if spec["confirm"] and appointment_id:
+                    # ConfirmAppointmentCommand requires snapshot_hash (#84's optimistic
+                    # concurrency, section 7.5 principle 3). Read it the way the planner
+                    # console does -- recomputed live -- rather than inventing one.
+                    snap = await load_appointment_snapshot(session, appointment_id)
+                    if snap is None:
+                        outcomes.append(
+                            {"shipment_id": shipment_id, "action": "confirm_failed_no_snapshot"}
+                        )
+                        continue
                     confirmed = await confirm_appointment(
                         session,
                         admin_ctx,
                         shipment_id=shipment_id,
                         command=ConfirmAppointmentCommand(
-                            appointment_id=booked.appointment_id,
+                            appointment_id=appointment_id,
+                            snapshot_hash=snap["snapshot_hash"],
                             warehouse_confirmation_ref=f"WH-RS-{shipment_id}",
                         ),
-                        idempotency_key=f"seed-rs-{shipment_id}-confirm",
+                        idempotency_key=f"seed-rs-{shipment_id}-confirm-{RUN_TOKEN}",
                     )
                     outcomes.append(
                         {

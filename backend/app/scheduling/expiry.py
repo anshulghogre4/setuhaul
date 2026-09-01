@@ -326,7 +326,7 @@ async def _expire_one_pending(
     # pending appointment nobody actioned before its TTL is an escalation-worthy event in its
     # own right, not just a status change nobody sees. Same table, same reasoning as E1.2's
     # REQUIRES_TIME_RESOLUTION/REQUIRES_DOCK_REASSIGNMENT reuse -- one durable, planner-facing
-    # queue, not a second mechanism to keep in sync. `ON CONFLICT (dedupe_key) DO NOTHING`
+    # queue, not a second mechanism to keep in sync. The `DO NOTHING` upsert below
     # makes this safe under the same EventBridge-retry story as the rest of this function: a
     # replayed sweep finds the appointment no longer PENDING_CONFIRMATION and never reaches
     # this insert at all, so the dedupe key is a second, belt-and-braces guard, not the only one.
@@ -340,7 +340,17 @@ async def _expire_one_pending(
               :escalation_id, :shipment_id, :facility_id, 'PENDING_EXPIRED_UNACTIONED', 'OPEN',
               'HIGH', :payload_json, :dedupe_key, :created_at, :updated_at
             )
-            ON CONFLICT (dedupe_key) DO NOTHING
+            -- Issue #96: the predicate is an ON CONFLICT index_predicate and must stay
+            -- byte-identical to `escalation_queue_dedupe_key_active_uidx`'s (migration
+            -- 20260901120000). Without it PostgreSQL cannot infer the now-partial unique index
+            -- and every sweep raises 42P10 -- a silent, total break of the M8 escalate leg, not a
+            -- degraded one. Behaviourally: if this appointment's earlier
+            -- PENDING_EXPIRED_UNACTIONED case was already resolved, a later sweep opens a new one
+            -- instead of being swallowed. That is the intended #96 semantics and is unreachable
+            -- in practice anyway -- the guard above means a replayed sweep finds the appointment
+            -- no longer PENDING_CONFIRMATION and never gets here.
+            ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')
+            DO NOTHING
             """
         ),
         {

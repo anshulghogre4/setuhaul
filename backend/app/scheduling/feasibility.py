@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
+from app.core.settings import get_settings
 from app.repositories.scope import assert_shipment_visible
 from app.scheduling.constraints import load_scheduling_constraints
+from app.scheduling.occupancy import claim_window_sql, live_blocking_occupancy_sql
 
 ACTIVE_APPOINTMENT_STATUSES = frozenset({"PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS"})
 CANCELLED_SHIPMENT_STATUSES = frozenset({"COMPLETED", "CANCELLED"})
@@ -110,6 +112,75 @@ NO_WAITING_MAX_MINUTES = 15
 # the other penalties already use (`wait_after_eta_per_minute: -6`,
 # `compatible_but_not_exact_dock_penalty: -25`). It ships at 0.
 WEIGHT_FAIRNESS = "w_fairness"
+
+
+# ---------------------------------------------------------------------------
+# The D1/D2 capacity anti-join (issue #97)
+# ---------------------------------------------------------------------------
+# Before this, both candidate scans in this module derived availability from `appointment_slots`
+# LEFT JOINed to `appointments` and nothing else. Two intervals that are genuinely taken were
+# therefore invisible to them:
+#
+#   1. A live D2 hold. §4: "Held != booked: no `appointments` row exists yet" -- a hold is a
+#      `dock_occupancy` row and *only* that, so an appointments join cannot see one at all.
+#   2. A booking whose real interval overruns its published slot. The appointments join matches on
+#      `slot_id`; D1's claim is a dock + tstzrange, so a 75-minute unload booked at 11:00 blocks
+#      the 12:00 slot without ever appearing on that slot's row (§6.2 #1).
+#
+# Both are things `request_slot` refuses via the exclusion constraint, which is what made
+# `find_feasible_slots` offer slots `request_slot` then refused (issue #97). The predicate itself
+# lives in `occupancy.py`; this is the join that consumes it.
+#
+# LATERAL with `LIMIT 1` rather than a plain LEFT JOIN: a plain join would multiply the candidate
+# row when two claims overlap the interval, and the answer needed here is boolean ("is anything
+# blocking"), not a list. One row per candidate keeps the scan's `LIMIT 500` meaning what it says.
+#
+# Round-trip cost: zero. This rides inside the existing candidate scan rather than adding a fifth
+# sequential trip to the four COMPARISON-latency F16 already flags, which is what keeps NFR-003's
+# <50 ms budget intact. See `live_blocking_occupancy_sql` for the index-matching argument.
+
+
+def _blocking_occupancy_join(*, enabled: bool, exclude_appointment: bool = False) -> str:
+    """The LATERAL fragment, or nothing when the D2 columns may not exist.
+
+    `exclude_appointment` adds `:exclude_appointment_id` to the predicate and exists for exactly
+    one caller: `allocation.counter_offer` asks this question *before* releasing the appointment's
+    current claim, so without it a planner moving a booking 11:00 -> 11:30 on the same dock would
+    be refused by the appointment's own overlapping claim. `reschedule_appointment` documents the
+    same hazard from the other side ("moving 11:00 -> 11:30 on the same dock overlaps itself") and
+    solves it by releasing first; counter_offer cannot, because it must know the interval is
+    feasible before it gives up the one it has.
+
+    `enabled` is `TWO_PHASE_HOLD_ENABLED`, and the gate is not stylistic: `dock_occupancy.state`
+    and `.expires_at` are added by `20260829134929_d2_held_state_dock_occupancy.sql`, and
+    PostgreSQL resolves column references at *parse* time -- a statement naming them fails outright
+    with `UndefinedColumn` on an unmigrated database rather than returning nothing. `holds.py`
+    documents the same reasoning for the read paths there, and uses the same flag as the honest
+    proxy for "these columns exist".
+
+    With the flag off there is nothing to lose by omitting the join: no `HELD` row can exist,
+    `request_slot` commits straight to `PENDING_CONFIRMATION`, and the appointments join already
+    sees those. The overrun case (2) above goes unseen, exactly as it did before this change --
+    that is the pre-existing behaviour, not a regression introduced by the gate.
+    """
+    if not enabled:
+        return ""
+    own_claim = (
+        "\n                    AND o.appointment_id IS DISTINCT FROM :exclude_appointment_id"
+        if exclude_appointment
+        else ""
+    )
+    return f"""
+                LEFT JOIN LATERAL (
+                  SELECT o.occupancy_id, o.state, o.shipment_id
+                  FROM public.dock_occupancy o
+                  WHERE o.dock_id = sl.dock_id
+                    AND o."window" && {claim_window_sql(
+                        start_expr="sl.slot_start_ts", unload_min_expr=":unload_min"
+                    )}
+                    AND {live_blocking_occupancy_sql(alias="o", now_param="now")}{own_claim}
+                  LIMIT 1
+                ) occ ON TRUE"""
 
 
 class FeasibleSlotOption(BaseModel):
@@ -654,6 +725,29 @@ def evaluate_candidate_slot(
             failure_code="SLOT_CAPACITY_UNAVAILABLE",
             message="An active appointment already occupies this slot.",
         )
+    # Issue #97's read half. Absent (None) for every caller that does not supply it, which is
+    # deliberate and matches how `active_appointment_id` is already treated:
+    #
+    #   * `holds.confirm_held_slot` passes None because the only claim on that interval is the
+    #     caller's *own* hold -- declaring it would make Stage 1 refuse the interval it reserved.
+    #   * `allocation.request_slot`'s revalidation passes None because the exclusion constraint a
+    #     few lines later is the real decision there, not this pre-check, and buying a second
+    #     round trip to reach the same refusal one step earlier is not worth it.
+    #
+    # Reuses `SLOT_CAPACITY_UNAVAILABLE` rather than minting a code: to a driver this is the same
+    # fact as the line above it -- somebody else has this interval -- and `request_slot`'s own
+    # refusal already lands on that vocabulary. The *message* distinguishes them, because "held by
+    # another shipment" and "already booked" are different things to an operator reading a log.
+    if candidate.get("blocking_occupancy_id"):
+        blocking_state = str(candidate.get("blocking_occupancy_state") or "a live claim")
+        return None, InfeasibleSlotReason(
+            slot_id=slot_id,
+            failure_code="SLOT_CAPACITY_UNAVAILABLE",
+            message=(
+                f"Dock capacity for this interval is already taken ({blocking_state}). "
+                "The dock interval a booking here would occupy overlaps an existing claim."
+            ),
+        )
     if candidate.get("active_dock_event_id"):
         return None, InfeasibleSlotReason(
             slot_id=slot_id,
@@ -813,7 +907,20 @@ async def find_feasible_slots(
     *,
     limit: int = 5,
     horizon_hours: int = SEARCH_HORIZON_HOURS,
+    now: datetime | None = None,
 ) -> FeasibleSlotsResult:
+    """Stage 0-2. `now` governs **only** D2 hold liveness (issue #97), nothing else.
+
+    §9.1 wants the clock injected rather than read; this is the seam for it, and the default keeps
+    every existing caller unchanged. It is deliberately *not* used for the search horizon, which
+    stays anchored to the effective ETA -- that is what makes the proof harness's year-2099
+    fixtures reproducible on any day, and folding wall-clock time into it would undo that.
+
+    Whether a `HELD` row has lapsed is a genuine question about the present moment, so it is the
+    one thing here that needs an instant at all. Passing a `FrozenClock`'s value makes
+    "was this interval offered while the hold was live" a deterministic assertion instead of a
+    race against the test's own runtime.
+    """
     constraints = load_scheduling_constraints()
     checked_constraints = sorted(constraints.hard_constraint_ids())
 
@@ -976,15 +1083,28 @@ async def find_feasible_slots(
             str(row["local_date"]): int(row["held_count"]) for row in concentration_rows
         }
 
+    capacity_join = _blocking_occupancy_join(enabled=get_settings().two_phase_hold_enabled)
+    candidate_params: dict[str, Any] = {
+        "facility_id": shipment_data["destination_facility_id"],
+        "eta_ts": eta_dt,
+        "horizon_end_ts": horizon_end,
+    }
+    if capacity_join:
+        # Only bound when the fragment that names them is present: SQLAlchemy's `text()` raises on
+        # a parameter the statement does not mention.
+        candidate_params["unload_min"] = int(shipment_data["expected_unload_min"])
+        candidate_params["now"] = now or datetime.now(timezone.utc)
     candidates = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT sl.slot_id, sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
                        sl.slot_status, sl.block_reason, d.dock_code, d.dock_type,
                        d.supports_refrigerated, d.max_vehicle_weight_kg, d.dock_status,
                        a.appointment_id AS active_appointment_id,
                        de.dock_event_id AS active_dock_event_id
+                       {", occ.occupancy_id AS blocking_occupancy_id,"
+                          " occ.state AS blocking_occupancy_state" if capacity_join else ""}
                 FROM public.appointment_slots sl
                 JOIN public.docks d ON d.dock_id = sl.dock_id
                 LEFT JOIN public.appointments a
@@ -993,7 +1113,7 @@ async def find_feasible_slots(
                 LEFT JOIN public.dock_status_events de
                   ON de.dock_id = sl.dock_id
                  AND de.event_start_ts < sl.slot_end_ts
-                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts)
+                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts){capacity_join}
                 WHERE sl.facility_id = :facility_id
                   AND sl.slot_end_ts > :eta_ts
                   AND sl.slot_start_ts < :horizon_end_ts
@@ -1013,11 +1133,7 @@ async def find_feasible_slots(
             # LIMIT is 500 rather than 200 because Stage 0 now needs the horizon's next-day
             # capacity to be visible in the same scan; 200 truncated inside a single day at
             # the busiest facility, which would have made NO_SAME_DAY_SLOT unreachable.
-            {
-                "facility_id": shipment_data["destination_facility_id"],
-                "eta_ts": eta_dt,
-                "horizon_end_ts": horizon_end,
-            },
+            candidate_params,
         )
     ).mappings().all()
 
@@ -1131,6 +1247,9 @@ async def explain_slot_eligibility(
     ctx: ExecutionContext,
     shipment_id: str,
     slot_id: str,
+    *,
+    now: datetime | None = None,
+    exclude_appointment_id: str | None = None,
 ) -> SlotEligibilityResult:
     """FR-DRV-006: answer "is this specific slot eligible, and why" without creating an
     appointment or an exception -- browse-only, per the requirement's own wording.
@@ -1185,15 +1304,35 @@ async def explain_slot_eligibility(
         shipment_facility_id=str(shipment_data["destination_facility_id"]),
     )
 
+    # Same capacity anti-join as `find_feasible_slots`, and for the sharper reason: this tool's
+    # whole job (FR-DRV-006) is to answer "why can't I book this slot". Left blind to
+    # `dock_occupancy` it would answer "nothing is wrong with it" about an interval a live hold has
+    # taken -- the worst possible answer, because the driver then tries to book it and is refused
+    # by something the explanation never mentioned.
+    capacity_join = _blocking_occupancy_join(
+        enabled=get_settings().two_phase_hold_enabled,
+        exclude_appointment=exclude_appointment_id is not None,
+    )
+    candidate_params: dict[str, Any] = {
+        "slot_id": slot_id,
+        "facility_id": shipment_data["destination_facility_id"],
+    }
+    if capacity_join:
+        candidate_params["unload_min"] = int(shipment_data["expected_unload_min"])
+        candidate_params["now"] = now or datetime.now(timezone.utc)
+        if exclude_appointment_id is not None:
+            candidate_params["exclude_appointment_id"] = exclude_appointment_id
     candidate = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT sl.slot_id, sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
                        sl.slot_status, sl.block_reason, d.dock_code, d.dock_type,
                        d.supports_refrigerated, d.max_vehicle_weight_kg, d.dock_status,
                        a.appointment_id AS active_appointment_id,
                        de.dock_event_id AS active_dock_event_id
+                       {", occ.occupancy_id AS blocking_occupancy_id,"
+                          " occ.state AS blocking_occupancy_state" if capacity_join else ""}
                 FROM public.appointment_slots sl
                 JOIN public.docks d ON d.dock_id = sl.dock_id
                 LEFT JOIN public.appointments a
@@ -1202,11 +1341,11 @@ async def explain_slot_eligibility(
                 LEFT JOIN public.dock_status_events de
                   ON de.dock_id = sl.dock_id
                  AND de.event_start_ts < sl.slot_end_ts
-                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts)
+                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts){capacity_join}
                 WHERE sl.slot_id = :slot_id AND sl.facility_id = :facility_id
                 """
             ),
-            {"slot_id": slot_id, "facility_id": shipment_data["destination_facility_id"]},
+            candidate_params,
         )
     ).mappings().first()
     if candidate is None:

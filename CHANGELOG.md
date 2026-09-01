@@ -2,6 +2,50 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 12:55 IST - Fix-all batch: #95/#96/#97 fixed (with #93 already in-tree); M5 tracker healed to 100%; proof suite 104/0; one new fork filed (#98)
+
+**Agent/surface:** Claude Fable 5 (Claude Code) + two `fullstack-engineer` subagents (Claude Opus 5), one per backend issue; coordinator did #95, the live evidence capture, the tracker sweep, and independent re-verification.
+
+### M5 "14% complete" answered and fixed
+
+The owner asked why M5 still showed open. **Tracker staleness, not missing work**: the M5 delivery commits never carried closing keywords. All six built epics (#36-#41) closed with the evidence-comment-then-close pattern (build commits fddbb12/7d1031c/ab37b30, decision sweep 879e5bd, live click-through 2026-09-01), each naming what remains flag-gated on which *backend* issue. **M5 milestone: 7/7 closed.** The one genuinely open M6 item is #42 (E6.1 Locust race scenarios) -- real remaining work, flagged to the owner, not started.
+
+### #95 -- demo tooling modernized, proven by running it
+
+The rot ran deeper than filed: beyond the four known points (str binds -- already hot-fixed; rollback FKs; single-phase booking; fixed idempotency keys), running the scripts surfaced **three more**: `api_logs`->chat_threads FK, `user_scopes`/`notifications`/`notification_preferences`->users FKs (13 FK legs onto users/drivers total, pg_constraint-enumerated, not guessed), and `ConfirmAppointmentCommand` now requiring `snapshot_hash` (#84's contract -- the seed now reads it via `load_appointment_snapshot`, the same recomputed-live read the planner console does, never inventing one). The seed also recreates the E2.3 `user_scopes` rows (a seeded driver without them authenticates but resolves no scope) and finishes an interrupted confirm leg idempotently. **Verified end to end: ROLLBACK_OK -> SEED_OK -> all four fixtures in designed states** (CONFIRMED w/ occupancy claim, PENDING_CONFIRMATION, open-with-5-options, escalation); occupancy staying PENDING_CONFIRMATION under a CONFIRMED appointment confirmed deliberate per allocation.py:1251.
+
+### #96 -- terminal escalations no longer dedupe targets (option b, owner-accepted)
+
+Terminal set proven = exactly {RESOLVED, CANCELLED} (CHECK constraint + section 7.4 + FR-OPS-006). New migration `20260901120000_escalation_dedupe_nonterminal_only.sql`: partial unique index on dedupe_key WHERE non-terminal, create-then-drop ordering, old uniqueness dropped **by shape not name**. **The load-bearing catch: THREE `ON CONFLICT (dedupe_key)` sites**, not one -- escalation_service, planner_service's capacity cascade, and expiry.py's sweeper leg all now carry the index_predicate arbiter; missing the latter two would have 42P10'd every expiry sweep. Five regression tests incl. a static scan asserting every arbiter carries the predicate, and an acknowledge-then-escalate guard against option (a) sneaking back. **Live apply: PENDING OWNER RUN** -- classifier gates production DDL for the agent; `deploy/apply_96_dedupe_migration.py` applies + verifies (4 read-only checks); escalation_queue backup taken (pre_esc_dedupe_20260901_122115.dump). Deploy order: migration BEFORE (or with) the code -- old code + new index = 42P10; new code + old index = fine. Rollback: reverse DDL in the migration header; honestly noted it FAILS once a resolve-then-re-escalate has created a legal duplicate, needing owner-decided consolidation.
+
+### #97 -- one liveness predicate for reads and writes; dead holds lazily expired
+
+Root cause (coordinator-captured live BEFORE the reseed destroyed the evidence): feasibility never consulted `dock_occupancy` at all, while request_slot's authority is the exclusion constraint -- which counts lapsed-but-unswept HELD rows because a constraint cannot see time (rows 758/759, DOCK-GGN-D1, past-TTL HELD, live-verified). Fix: new leaf module `occupancy.py` defines the canonical live-blocking predicate ONCE (constraint's four states minus lapsed holds); `CAPACITY_CONSUMING_STATES`' three hand-maintained copies collapsed to `is`-identical re-exports pinned by a test. Read side: LATERAL join inside the existing candidate scan -- **round trips stay at 4, measured**; EXPLAIN-verified plain index scan on the GiST constraint index (the naive OR-form degrades to a BitmapOr reading every live hold per candidate -- measured, docstring states the fact). Write side: `expire_lapsed_holds_on_interval` flips colliding dead holds in-transaction before the claim, reusing the sweeper's own audit helper (actor LAZY_EXPIRY_ON_CLAIM vs EXPIRY_SWEEPER; sweeper idempotency over EXPIRED rows verified, `expired=0` after lazy pass). Proof of bite recorded: 4 tests fail pre-fix in both divergence directions. Bonus fix exposed by the new read path: `counter_offer` refused its own same-dock move -- `exclude_appointment_id` added. **Follow-up fork filed as #98**: planner displacement reads are now the third disagreeing party (they intentionally omit the time filter per #84) -- a dead hold can DISPLACEMENT_DETECT a planner indefinitely; owner decision, not a silent change.
+
+### Verification (coordinator-independent, combined tree)
+
+**Proof suite 104 passed / 0 failed / 3 skipped / 2 xfailed, 16 migrations replayed** (baseline 89 + 10 #97 + 5 #96). **Unit suite 834 passed / 8 skipped / 0 failed** (floor 824). Sandbox fixture states verified by direct query. M5/M6 tracker states verified via gh.
+
+**Rollback note (D1-path change):** #97 touches allocation/feasibility/holds/snapshot -- no schema change; revert = revert the commit. #96's DDL rollback is in its migration header with the duplicate-consolidation caveat. Re-check after any revert: proof suite Parts 1/3 and an expiry-sweeper pass.
+
+**Deploy note:** production still runs pre-batch code; migration-first, then the next backend deploy carries #93+#96+#97 together.
+
+## 2026-09-01 12:40 IST - #93 fixed: terminal driver_exceptions can no longer be resurrected by an ordinary ETA update; section-10 proof suite fully green (89/0)
+
+**Agent/surface:** Claude Fable 5 (Claude Code), worked UPIV directly (no subagent).
+
+**Understand:** premise re-verified against current code before touching anything -- `eta_service.py:428`'s `open_exc` filter excluded the phantom `'CLOSED'` plus `RESOLVED` while admitting `DUPLICATE` and `CANCELLED`, and `ORDER BY reported_at DESC` made the retry row win by construction whenever it coexisted with the original.
+
+**The fix (one predicate):** the filter now excludes the three real terminal statuses -- `NOT IN ('RESOLVED', 'DUPLICATE', 'CANCELLED')` -- with an in-code comment stating the constraint (the UPDATE below flips the picked row to OPEN and overwrites `dedupe_key`, so selecting a terminal row resurrects it and destroys the retry->original link). **`ESCALATED` stays selectable on purpose**: it is non-terminal and a fresh driver ETA legitimately updates it; the escalation_queue row is separate and unaffected. With terminal rows out of the candidate set, the `DESC`-ordering half of the defect evaporates -- among live rows, most-recent is the right pick.
+
+**Verify:** the regression test already existed (that was the point of leaving it hard-failing) -- proof suite now **89 passed / 0 failed / 3 skipped / 2 xfailed**, i.e. `duplicate_retry` yields exactly 1 exception per section 9.2 and EXC009 stays DUPLICATE with its dedupe_key intact. Full unit suite unchanged at **824 passed / 8 skipped** (the 41 eta/exception unit tests are DB-marked skips locally; the proof suite is the live-SQL coverage for this path).
+
+**Files:** `backend/app/services/eta_service.py` (one SQL predicate + comment).
+
+**Deploy note:** production still runs the pre-fix code; this rides the next backend deploy (wrapper + ECS script) rather than forcing one for a single predicate -- batch with the #95/#97 fixes.
+
+**With this, the section-10 exit gate's own bar ("done when section 10 passes") is met: 0 hard failures, the 3 skips and 2 xfails all named and documented. Striking the M6 gate remains the owner's call.**
+
 ## 2026-09-01 12:05 IST - M6 delivered: both verification suites built and RUN; five real defects surfaced (#93-#97); the section-10 exit gate is one product fix from green
 
 **Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5); per-suite detail below and on #43/#44.

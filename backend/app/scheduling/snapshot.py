@@ -64,6 +64,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import get_settings
+from app.scheduling.occupancy import (
+    CAPACITY_CONSUMING_STATES as _CAPACITY_CONSUMING_STATES,
+)
 
 # Mirrors `planner_service.SNAPSHOT_ALGORITHM`, which the queue response already advertises.
 SNAPSHOT_ALGORITHM = "sha256/planner-queue-v1"
@@ -89,10 +92,12 @@ CLAIM_SOURCE_APPOINTMENT = "appointments"
 CLAIM_SOURCE_HOLD = "dock_occupancy_hold"
 
 # Mirrors the D2 migration's exclusion-constraint predicate
-# (`20260829134929_d2_held_state_dock_occupancy.sql` step 5) and `holds.CAPACITY_CONSUMING_STATES`.
-# Declared here rather than imported for the same import-cycle reason the module docstring gives for
-# `ACTIVE_APPOINTMENT_STATUSES`: `holds` imports `allocation`, and `allocation` imports this module.
-CAPACITY_CONSUMING_STATES = ("HELD", "PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+# (`20260829134929_d2_held_state_dock_occupancy.sql` step 5). Imported rather than re-declared since
+# issue #97: the cycle this comment used to describe (`holds` imports `allocation`, `allocation`
+# imports this module) is real, which is why the literal now lives in `occupancy.py` -- a leaf that
+# imports nothing from this package, so every layer can depend on it. Re-exported under this name
+# because `test_held_read_paths.py`'s drift guard reads it from here.
+CAPACITY_CONSUMING_STATES = _CAPACITY_CONSUMING_STATES
 
 
 def claim_id(claim: dict[str, Any]) -> str:

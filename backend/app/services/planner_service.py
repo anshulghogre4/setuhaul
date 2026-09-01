@@ -949,7 +949,16 @@ async def _open_capacity_cascade(
                   'OPEN', 'HIGH', NULL, NULL,
                   :payload_json, :dedupe_key, :created_at, :updated_at, NULL, NULL
                 )
-                ON CONFLICT (dedupe_key) DO UPDATE
+                -- Issue #96: index_predicate, not a row filter. It must match
+                -- `escalation_queue_dedupe_key_active_uidx` (migration 20260901120000) exactly or
+                -- PostgreSQL cannot infer the now-partial unique index and this INSERT raises
+                -- 42P10 ("no unique or exclusion constraint matching the ON CONFLICT
+                -- specification"). Semantically it also means a cascade whose escalation a
+                -- coordinator has already resolved opens a fresh case rather than silently
+                -- overwriting the closed one's payload -- the same rule #96 established for
+                -- escalate_exception, applied to the one other DO UPDATE on this table.
+                ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')
+                DO UPDATE
                 SET payload_json = EXCLUDED.payload_json, updated_at = EXCLUDED.updated_at
                 RETURNING escalation_id
                 """

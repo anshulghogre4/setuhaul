@@ -466,6 +466,23 @@ async def test_confirm_audits_the_transition_naming_the_hold_it_came_from():
 # --------------------------------------------------------------------------------------
 
 
+def _dock_occupancy_insert(session) -> tuple[str, dict]:
+    """The one `INSERT INTO public.dock_occupancy` statement a mocked session was handed.
+
+    Selected by content rather than by list position. These tests used to index `[0]`, which was
+    correct until issue #97 added a lazy-expiry UPDATE ahead of the INSERT -- at which point the
+    assertions silently began describing a different statement. Matching on what the statement
+    *is* cannot rot that way.
+    """
+    matches = [
+        (str(call.args[0]), call.args[1])
+        for call in session.execute.await_args_list
+        if "INSERT INTO public.dock_occupancy" in str(call.args[0])
+    ]
+    assert len(matches) == 1, f"expected exactly one dock_occupancy INSERT, got {len(matches)}"
+    return matches[0]
+
+
 @pytest.mark.asyncio
 async def test_create_hold_writes_no_appointment_and_stamps_the_ttl():
     session = AsyncMock()
@@ -476,6 +493,8 @@ async def test_create_hold_writes_no_appointment_and_stamps_the_ttl():
         "window": None,
         "expires_at": SNAPSHOT + timedelta(seconds=90),
     }
+    # Issue #97 put a lazy-expiry UPDATE ahead of the INSERT; nothing lapsed is the common case.
+    result.mappings.return_value.all.return_value = []
     session.execute.return_value = result
 
     await holds.create_hold(
@@ -488,14 +507,14 @@ async def test_create_hold_writes_no_appointment_and_stamps_the_ttl():
         actor_user_id="USR001",
     )
 
-    insert_sql = str(session.execute.await_args_list[0].args[0])
+    # By content rather than by position -- see `_dock_occupancy_insert`.
+    insert_sql, params = _dock_occupancy_insert(session)
     assert "INSERT INTO public.dock_occupancy" in insert_sql
     assert "'HELD'" in insert_sql
     # The NULL is section 4 expressed in SQL. A hold that carried an appointment_id would be a
     # booking wearing a different state name.
     assert "NULL" in insert_sql
 
-    params = session.execute.await_args_list[0].args[1]
     assert params["expires_at"] == SNAPSHOT + timedelta(seconds=90)
     # asyncpg encodes timestamptz with its datetime codec and raises DataError on a str.
     assert isinstance(params["expires_at"], datetime)
@@ -517,29 +536,46 @@ async def test_create_hold_uses_the_same_interval_expression_as_the_booking_clai
         assert match, "interval expression not found"
         return re.sub(r"\s+", " ", match.group(1)).strip()
 
-    hold_sql = holds.create_hold.__doc__ and None  # documented; the SQL is read below
     session = AsyncMock()
     result = MagicMock()
     result.mappings.return_value.first.return_value = {
         "occupancy_id": 1, "dock_id": "D", "window": None, "expires_at": SNAPSHOT,
     }
+    result.mappings.return_value.all.return_value = []
     session.execute.return_value = result
     await holds.create_hold(
         session, shipment_id="S", slot_id="L", policy_version="P",
         ttl_seconds=90, now=SNAPSHOT, actor_user_id="U",
     )
-    hold_sql = str(session.execute.await_args_list[0].args[0])
+    hold_sql, _ = _dock_occupancy_insert(session)
 
     claim_session = AsyncMock()
     claim_result = MagicMock()
     claim_result.mappings.return_value.first.return_value = None
+    claim_result.mappings.return_value.all.return_value = []
     claim_session.execute.return_value = claim_result
     await allocation._claim_dock_occupancy(
-        claim_session, appointment_id="A", shipment_id="S", slot_id="L"
+        claim_session,
+        appointment_id="A",
+        shipment_id="S",
+        slot_id="L",
+        now=SNAPSHOT,
+        actor_user_id="U",
     )
-    claim_sql = str(claim_session.execute.await_args_list[0].args[0])
+    claim_sql, _ = _dock_occupancy_insert(claim_session)
 
     assert _interval(hold_sql) == _interval(claim_sql)
+
+    # Issue #97's third copy of the same expression. The lazy-expiry UPDATE both paths now run
+    # first has to ask about *the interval the INSERT below it would take*, or it would clear the
+    # wrong rows -- so it is pinned to the same expression here rather than trusted to stay in step.
+    for owner in (session, claim_session):
+        lazy_sql = next(
+            str(call.args[0])
+            for call in owner.execute.await_args_list
+            if "UPDATE public.dock_occupancy o" in str(call.args[0])
+        )
+        assert _interval(lazy_sql) == _interval(hold_sql)
 
 
 # --------------------------------------------------------------------------------------

@@ -89,6 +89,7 @@ from app.core.settings import get_settings
 from app.scheduling import allocation
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import evaluate_candidate_slot
+from app.scheduling.occupancy import CAPACITY_CONSUMING_STATES, claim_window_sql
 from app.services.idempotency import lookup_idempotency, payload_hash
 from app.services.ids import new_id
 
@@ -98,11 +99,12 @@ AUDIT_ACTION_CREATE_HOLD = "CREATE_HOLD"
 AUDIT_ACTION_CONFIRM_HOLD = "CONFIRM_HELD_SLOT"
 AUDIT_ACTION_EXPIRE_HOLD = "EXPIRE_HOLD"
 
-# Section 0.8: "one truck per dock per instant, across every state that occupies capacity."
-# Mirrors the migration's exclusion-constraint predicate exactly
-# (20260829134929_d2_held_state_dock_occupancy.sql step 5). If the two ever drifted, this module
-# would reason about capacity the database does not actually reserve.
-CAPACITY_CONSUMING_STATES = ("HELD", "PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
+# `CAPACITY_CONSUMING_STATES` is imported above rather than defined here (issue #97). The literal
+# now lives in `occupancy.py` beside the liveness predicate built from it, because this module,
+# `snapshot.py` and the read paths all need the same tuple, and three hand-maintained copies of a
+# value whose entire job is to mean the same thing everywhere was two too many. It stays a
+# module-level name here because `planner_service` and the unit drift guard import it from this
+# module.
 
 
 class HoldResult(BaseModel):
@@ -257,7 +259,23 @@ async def create_hold(
     `appointment_id` is left NULL: section 4, "Held != booked: no `appointments` row exists yet."
     The `dock_occupancy_held_shape_check` constraint added by this feature's migration enforces
     that from the database side, so a future caller cannot quietly attach one.
+
+    Issue #97 added the `expire_lapsed_holds_on_interval` call below. It is not a pre-check and it
+    does not weaken the INSERT's role as the concurrency decision: it only removes rows §0.8
+    already considers dead from the set the constraint can refuse against. See that function and
+    `occupancy.py` for why the write side has to *make* the predicate true rather than filter on
+    it the way the read side does.
     """
+    # Same transaction as the INSERT, and necessarily before it: a lapsed-but-unswept hold on this
+    # dock interval would otherwise fire the exclusion constraint and refuse a hold that §0.8 says
+    # nothing is holding. This is the write half of the shared liveness predicate.
+    await expire_lapsed_holds_on_interval(
+        session,
+        slot_id=slot_id,
+        shipment_id=shipment_id,
+        now=now,
+        actor_user_id=actor_user_id,
+    )
     expires_at = now + timedelta(seconds=ttl_seconds)
     row = (
         await session.execute(
@@ -963,6 +981,171 @@ async def _expire_hold_row(
 
 HELD_EXPIRY_REASON = "HELD reservation lapsed unconfirmed (D2, 90-second TTL)"
 
+# Issue #97's lazy leg. Same transition, different discoverer: the sweeper finds a lapsed hold on a
+# schedule, this finds one because it is standing in the way of a claim right now.
+LAZY_EXPIRY_REASON = (
+    "HELD reservation lapsed unconfirmed (D2, 90-second TTL); expired lazily by a competing claim "
+    "on the same dock interval because the sweeper had not reached it"
+)
+ACTOR_EXPIRY_SWEEPER = "EXPIRY_SWEEPER"
+ACTOR_LAZY_CLAIM = "LAZY_EXPIRY_ON_CLAIM"
+
+
+async def _audit_hold_expiries(
+    session: AsyncSession,
+    rows: list[dict[str, Any]],
+    *,
+    actor_user_id: str,
+    now: datetime,
+    reason: str,
+    actor: str,
+) -> None:
+    """One `EXPIRE_HOLD` audit row per hold flipped, for whichever path did the flipping.
+
+    Extracted from `sweep_held_holds` so the sweeper and `expire_lapsed_holds_on_interval` cannot
+    drift in what they record. M14 wants every state change reconstructable, and "who noticed the
+    hold was dead" is part of reconstructing it -- hence `actor`, which is the only field that
+    differs between the two callers.
+
+    `EXPIRE_HOLD` deliberately serves both. It is already in `audit_logs_action_type_check` (that
+    CHECK admitted only thirteen non-hold action types until the D2 migration extended it, and a
+    fourteenth value invented here would need a migration this change does not have); and the
+    transition really is the same one, so giving it a second name would make an audit reader
+    reconcile two vocabularies for one event.
+    """
+    for row in rows:
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.audit_logs (
+                  audit_id, user_id, action_type, entity_name, entity_id,
+                  old_value_json, new_value_json, ip_address, user_agent, created_at
+                ) VALUES (
+                  :audit_id, :user_id, :action_type, 'dock_occupancy', :entity_id,
+                  :old_value_json, :new_value_json, NULL, NULL, :created_at
+                )
+                """
+            ),
+            {
+                "audit_id": new_id("AUD"),
+                "user_id": actor_user_id,
+                "action_type": AUDIT_ACTION_EXPIRE_HOLD,
+                "entity_id": str(row["occupancy_id"]),
+                "old_value_json": json.dumps({"state": "HELD"}),
+                "new_value_json": json.dumps(
+                    {
+                        "state": "EXPIRED",
+                        "reason": reason,
+                        "actor": actor,
+                        "dock_id": row["dock_id"],
+                        "shipment_id": row["shipment_id"],
+                    }
+                ),
+                # `audit_logs.created_at` is still `text` (never converted by E1.1), so it takes the
+                # ISO string -- see `create_hold`'s bind-type note.
+                "created_at": now.isoformat(),
+            },
+        )
+
+
+async def expire_lapsed_holds_on_interval(
+    session: AsyncSession,
+    *,
+    slot_id: str,
+    shipment_id: str,
+    now: datetime,
+    actor_user_id: str,
+) -> list[int]:
+    """Flip every lapsed HELD row that would collide with a claim on this slot. Caller commits.
+
+    **This is the write half of issue #97's shared predicate** -- see `occupancy.py` for the whole
+    argument. In one sentence: the exclusion constraint's predicate has no time term and cannot
+    have one, so a `HELD` row whose TTL passed goes on refusing overlapping inserts until something
+    writes to it. §0.8 says a lapsed hold is not a live promise; the constraint says it is. This
+    makes the table agree with §0.8 immediately before the claim, inside the claiming transaction,
+    instead of waiting for a sweeper that may be hours away or (as of 2026-09-01) not running at
+    all -- the EventBridge wiring is still open on issue #20.
+
+    ## Why this cannot steal a hold somebody could still have used
+
+    The `expires_at <= :now` predicate is the same line `confirm_held_slot` already draws.
+    `_locked_hold` requires `expires_at > :now`, so any row this function is able to touch was
+    *already* unconfirmable by its owner before this ran -- §0.8's lazy-expiry rule, which this
+    module's docstring calls the first line of defence. Expiring it changes what PostgreSQL will
+    admit; it does not change any promise anybody still held.
+
+    ## Why the minimal flip is the complete flip
+
+    Checked against `sweep_held_holds` below rather than assumed. The sweeper's HELD leg does
+    exactly three things: `state='EXPIRED'`, `expires_at=NULL`, and one `EXPIRE_HOLD` audit row per
+    row. It deliberately raises **no** escalation (a hold lapsing is the designed outcome of a
+    driver not choosing in time, not an operational failure -- see its own closing comment) and
+    releases nothing else, because under §4 a hold *is* a `dock_occupancy` row and nothing else:
+    no appointment, no slot mutation, no notification. So there is no fourth thing for this path to
+    mirror, and it reuses `_audit_hold_expiries` for the third rather than re-writing it.
+
+    `expires_at = NULL` is not tidiness: `dock_occupancy_held_shape_check` is
+    `(state='HELD' AND expires_at IS NOT NULL AND appointment_id IS NULL) OR (state<>'HELD' AND
+    expires_at IS NULL)`, so flipping the state while leaving the deadline behind violates the
+    CHECK and aborts the claiming transaction.
+
+    The sweeper stays correct after this runs, and idempotently so: its inner SELECT carries
+    `state = 'HELD'`, so a row this function already expired no longer matches, is not returned,
+    and produces no second audit row. Same guard that makes an EventBridge retry a no-op.
+
+    ## Concurrency
+
+    No `SKIP LOCKED`, unlike the sweeper -- this is a user-facing path and the asymmetry is the one
+    `expiry.py` documents for the D9 pair. Two claimants racing for the same dead hold both try to
+    lock it; the loser blocks, then re-evaluates `state = 'HELD'` against the committed version
+    (READ COMMITTED, PostgreSQL "Transaction Isolation" 13.2.1) and updates zero rows. Both then
+    reach the INSERT and the exclusion constraint admits exactly one, which is M6's guarantee
+    unchanged -- this function widens what may be claimed, never who wins.
+
+    Returns the `occupancy_id`s flipped, so the caller can log or assert on them. An empty list is
+    the overwhelmingly common case and costs one indexed statement.
+    """
+    rows = (
+        await session.execute(
+            text(
+                f"""
+                UPDATE public.dock_occupancy o
+                SET state = 'EXPIRED', expires_at = NULL
+                FROM public.appointment_slots sl
+                JOIN public.shipments s ON s.shipment_id = :shipment_id
+                WHERE sl.slot_id = :slot_id
+                  AND o.dock_id = sl.dock_id
+                  AND o.state = 'HELD'
+                  AND o.expires_at <= :now
+                  AND o."window" && {claim_window_sql(
+                      start_expr="sl.slot_start_ts",
+                      unload_min_expr="s.expected_unload_min",
+                  )}
+                RETURNING o.occupancy_id, o.dock_id, o.shipment_id
+                """
+            ),
+            {"slot_id": slot_id, "shipment_id": shipment_id, "now": now},
+        )
+    ).mappings().all()
+    if not rows:
+        return []
+    flipped = [dict(row) for row in rows]
+    await _audit_hold_expiries(
+        session,
+        flipped,
+        actor_user_id=actor_user_id,
+        now=now,
+        reason=LAZY_EXPIRY_REASON,
+        actor=ACTOR_LAZY_CLAIM,
+    )
+    logger.info(
+        "lazily expired %d lapsed hold(s) blocking slot %s: %s",
+        len(flipped),
+        slot_id,
+        [row["occupancy_id"] for row in flipped],
+    )
+    return [int(row["occupancy_id"]) for row in flipped]
+
 
 async def sweep_held_holds(
     session: AsyncSession,
@@ -1032,37 +1215,16 @@ async def sweep_held_holds(
         )
         for row in rows
     ]
-    for row in rows:
-        await session.execute(
-            text(
-                """
-                INSERT INTO public.audit_logs (
-                  audit_id, user_id, action_type, entity_name, entity_id,
-                  old_value_json, new_value_json, ip_address, user_agent, created_at
-                ) VALUES (
-                  :audit_id, :user_id, :action_type, 'dock_occupancy', :entity_id,
-                  :old_value_json, :new_value_json, NULL, NULL, :created_at
-                )
-                """
-            ),
-            {
-                "audit_id": new_id("AUD"),
-                "user_id": actor_user_id,
-                "action_type": AUDIT_ACTION_EXPIRE_HOLD,
-                "entity_id": str(row["occupancy_id"]),
-                "old_value_json": json.dumps({"state": "HELD"}),
-                "new_value_json": json.dumps(
-                    {
-                        "state": "EXPIRED",
-                        "reason": HELD_EXPIRY_REASON,
-                        "actor": "EXPIRY_SWEEPER",
-                        "dock_id": row["dock_id"],
-                        "shipment_id": row["shipment_id"],
-                    }
-                ),
-                "created_at": now.isoformat(),
-            },
-        )
+    # Shared with `expire_lapsed_holds_on_interval` (issue #97) so the scheduled and the lazy
+    # discoverer of a lapsed hold record the identical transition, differing only in `actor`.
+    await _audit_hold_expiries(
+        session,
+        [dict(row) for row in rows],
+        actor_user_id=actor_user_id,
+        now=now,
+        reason=HELD_EXPIRY_REASON,
+        actor=ACTOR_EXPIRY_SWEEPER,
+    )
 
     # Deliberately no escalation_queue row per lapsed hold, unlike the D9 leg's
     # PENDING_EXPIRED_UNACTIONED. A hold lapsing is the *designed* outcome of a driver not choosing

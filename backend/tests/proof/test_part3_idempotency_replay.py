@@ -35,6 +35,8 @@ below actually counts; the outbox-specific half is a named skip rather than a si
 
 from __future__ import annotations
 
+from datetime import timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -43,9 +45,18 @@ from sqlalchemy import text
 from app.core.execution_context import ExecutionContext, RoleName
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.constraints import load_scheduling_constraints
+from app.services import escalation_service
+from app.services.escalation_service import (
+    EscalateExceptionCommand,
+    acknowledge_escalation,
+    cancel_escalation,
+    escalate_exception,
+    resolve_escalation,
+)
 from app.services.eta_service import EtaUpdateCommand, record_eta_update
+from tests.proof import harness
 from tests.proof.evidence import record_evidence
-from tests.proof.harness import seed_race
+from tests.proof.harness import Contender, seed_race
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -423,6 +434,439 @@ async def test_a_replayed_request_slot_makes_exactly_one_booking_attempt(work_se
     )
     assert int(claims) == 1, f"one booking attempt produced {claims} capacity claims"
     assert int(stored) == 1
+
+
+# ----------------------------------------------------------------------------------------------
+# 3. Issue #96 -- the daily dedupe must not hand back a TERMINAL escalation
+# ----------------------------------------------------------------------------------------------
+#
+# Same family as everything above (a dedupe key deciding whether a second event is "the same
+# event"), and the same failure shape as the eta_service defect asserted at line 314: a row the
+# system had already finished with gets resurrected by the next ordinary write.
+#
+# `escalate_exception` keys on `<shipment>:<calendar-day>:<type>` and its `ON CONFLICT DO UPDATE`
+# never touched `escalation_status`. With a GLOBAL unique index on `dedupe_key`
+# (20260812010000:69) the conflict fired against the prior row whatever state it was in -- so once
+# a coordinator resolved or cancelled today's case, the driver's next genuinely new problem of the
+# same type returned that dead row, which `get_escalation_queue` filters out by design. Nobody ever
+# saw it. Found 2026-09-01 by E6.2's race suites 3/4 (issue #43), which pass alone and failed in
+# sequence; the suites work around it by rotating the nine escalation types, the product cannot.
+#
+# Fix (owner-decided option (b), migration 20260901120000): uniqueness is scoped to NON-TERMINAL
+# rows via a partial unique index, so a terminal row is simply not a conflict candidate any more.
+# Terminal = {RESOLVED, CANCELLED} and nothing else -- SOLUTION_DESIGN.md section 7.4 ("OPEN ->
+# ACKNOWLEDGED -> IN_PROGRESS -> RESOLVED (plus CANCELLED)"), REQUIREMENTS.md FR-OPS-006 ("two
+# terminal states"), and the CHECK constraint at 20260823100000:49-52 which permits no other value.
+#
+# These run against the real cluster on purpose. Every assertion below is about what PostgreSQL's
+# index inference does, which no mocked session can answer -- and the partial index only exists
+# here because the orchestrator replays the migration chain, so a green run IS the migration's
+# dry run.
+
+ESCALATION_SOURCE_ROOT = Path(escalation_service.__file__).resolve().parents[1]
+# Must stay byte-identical to `escalation_queue_dedupe_key_active_uidx`'s predicate. Asserted
+# against the live catalog below, not just against the source strings.
+ARBITER_PREDICATE = "ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')"
+TERMINAL_STATUSES = ("RESOLVED", "CANCELLED")
+
+
+def _ops_ctx(*, user_id: str, request_id: str) -> ExecutionContext:
+    """A facility-scoped coordinator for `harness.FACILITY_ID`.
+
+    `user_id` is a REAL row from `seed_race`'s fixture rather than a synthetic string: only
+    `acknowledge_escalation` needs it (it writes `owner_user_id`, which carries an FK to
+    `public.users` since 20260825210000), but reusing one identity across all four tools keeps the
+    `resolved_by_user_id` values meaningful too. That column has no FK, checked in the migrations,
+    so this is for readability rather than to satisfy the database.
+    """
+    return ExecutionContext(
+        request_id=request_id,
+        auth_subject=request_id,
+        user_id=user_id,
+        email="proof.ops.96@proof.invalid",
+        full_name="Proof Coordinator",
+        role_id="ROL002",
+        role_name=RoleName.OPERATIONS_EXECUTIVE,
+        facility_id=harness.FACILITY_ID,
+    )
+
+
+async def _escalate(session_factory, ctx, shipment_id: str, *, reason: str, severity: str = "HIGH"):
+    async with session_factory() as session:
+        return await escalate_exception(
+            session,
+            ctx,
+            EscalateExceptionCommand(
+                shipment_id=shipment_id,
+                # LOW_CONFIDENCE_ETA rather than NO_FEASIBLE_SLOT so nothing here can be confused
+                # with the escalations the determinism and scenario parts assert on.
+                escalation_type="LOW_CONFIDENCE_ETA",
+                payload={"reason": reason},
+                severity_code=severity,
+            ),
+        )
+
+
+async def _row(session_factory, escalation_id: str) -> dict:
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                text("SELECT * FROM public.escalation_queue WHERE escalation_id = :eid"),
+                {"eid": escalation_id},
+            )
+        ).mappings().first()
+    assert row is not None, f"{escalation_id} vanished from escalation_queue"
+    return dict(row)
+
+
+async def _fixture_shipment(work_sessionmaker, *, tag: str) -> Contender:
+    """One private driver/user/shipment for an escalation test. No slots, deliberately.
+
+    *Why not a seeded shipment.* `resolve_escalation` also sweeps `driver_exceptions` for the same
+    shipment, so pointing these tests at SHP1006 would silently mutate the rows the four tests
+    above assert on.
+
+    *Why not `harness.seed_race`.* It also inserts an OPEN `appointment_slots` row on
+    `DOCK-JAI-D1`, and every other 2099 fixture in this suite runs `find_feasible_slots` over a
+    rolling horizon on that same dock -- three spare open slots would silently change the option
+    counts parts 1, 5 and 6 record as evidence. These tests never book anything, so the slot is
+    pure contamination. The driver/user/shipment triple below is the subset that is actually
+    needed: `escalate_exception` reads `shipments`, and `acknowledge_escalation` writes
+    `owner_user_id`, which carries an FK to `public.users`.
+    """
+    suffix = f"{tag}{uuid4().hex[:8].upper()}"
+    contender = Contender(
+        index=0,
+        user_id=f"USR-96-{suffix}",
+        driver_id=f"DRV-96-{suffix}",
+        shipment_id=f"SHP-96-{suffix}",
+    )
+    # The ETA sits in 2099 for the same reason harness.py's does: nothing here can ever collide
+    # with the shipped seed's 2026-08-04 fixtures, which parts 2, 4 and 5 assert on to the row.
+    eta = harness.CONTESTED_START
+    async with work_sessionmaker() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.drivers (
+                  driver_id, carrier_id, driver_name, phone, licence_number,
+                  home_base_city, driver_status
+                ) VALUES (
+                  :driver_id, :carrier_id, :name, :phone, :licence, 'Jaipur', 'ACTIVE'
+                )
+                """
+            ),
+            {
+                "driver_id": contender.driver_id,
+                "carrier_id": harness.CARRIER_ID,
+                "name": f"Proof 96 {suffix}",
+                "phone": f"+91-96{suffix}",
+                "licence": f"LIC-96-{suffix}",
+            },
+        )
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.users (
+                  user_id, role_id, employee_code, full_name, email, phone_number,
+                  password_hash, driver_id, facility_id, is_active
+                ) VALUES (
+                  :user_id, :role_id, :employee_code, :full_name, :email, NULL,
+                  'proof-suite-no-login', :driver_id, :facility_id, 1
+                )
+                """
+            ),
+            {
+                "user_id": contender.user_id,
+                "role_id": harness.DRIVER_ROLE_ID,
+                "employee_code": f"EMP-96-{suffix}",
+                "full_name": f"Proof 96 {suffix}",
+                "email": f"{contender.driver_id.lower()}@proof.invalid",
+                "driver_id": contender.driver_id,
+                "facility_id": harness.FACILITY_ID,
+            },
+        )
+        await session.execute(
+            text(
+                """
+                INSERT INTO public.shipments (
+                  shipment_id, order_reference, carrier_id, driver_id, vehicle_id,
+                  origin_name, origin_city, destination_facility_id, customer_name,
+                  product_category, load_weight_kg, pallet_count, required_dock_type,
+                  temperature_control_required, priority_code, planned_departure_ts,
+                  actual_departure_ts, original_eta_ts, latest_eta_ts,
+                  expected_unload_min, current_status, created_at, updated_at
+                ) VALUES (
+                  :shipment_id, :order_reference, :carrier_id, :driver_id, :vehicle_id,
+                  'Proof Origin', 'Jaipur', :facility_id, 'Proof Customer',
+                  'GENERAL', :load_weight_kg, 10, 'STANDARD',
+                  0, 'NORMAL', :departure, :departure, :eta, :eta,
+                  :unload_min, 'IN_TRANSIT', :created_at, :created_at
+                )
+                """
+            ),
+            {
+                "shipment_id": contender.shipment_id,
+                "order_reference": f"ORD-96-{suffix}",
+                "carrier_id": harness.CARRIER_ID,
+                "driver_id": contender.driver_id,
+                "vehicle_id": harness.VEHICLE_ID,
+                "facility_id": harness.FACILITY_ID,
+                "load_weight_kg": harness.LOAD_WEIGHT_KG,
+                "departure": eta - timedelta(hours=6),
+                "eta": eta,
+                "unload_min": harness.EXPECTED_UNLOAD_MIN,
+                "created_at": eta - timedelta(hours=6),
+            },
+        )
+        await session.commit()
+    return contender
+
+
+async def test_escalating_again_after_a_resolve_opens_a_new_case(work_sessionmaker):
+    """RESOLVED is terminal: the next same-day, same-type escalation is a NEW OPEN row.
+
+    The old row must come through completely untouched -- not merely "still RESOLVED", but every
+    column byte-for-byte what it was, `dedupe_key` and `resolved_at` included. Compared as whole
+    rows rather than field by field so a future change that quietly rewrites, say, `updated_at` or
+    `payload_json` on the closed case fails here instead of being discovered in production.
+    """
+    contender = await _fixture_shipment(work_sessionmaker, tag="R")
+    ctx = _ops_ctx(user_id=contender.user_id, request_id="proof-96-resolve")
+
+    first = await _escalate(work_sessionmaker, ctx, contender.shipment_id, reason="first problem")
+    assert first["escalation_status"] == "OPEN"
+
+    async with work_sessionmaker() as session:
+        resolved = await resolve_escalation(
+            session, ctx, first["escalation_id"], resolution_note="Handled at the gate",
+            reason_code="ISSUE_FIXED",
+        )
+    assert resolved["code"] == "RESOLVED"
+    closed_before = await _row(work_sessionmaker, first["escalation_id"])
+    assert closed_before["escalation_status"] == "RESOLVED"
+    assert closed_before["resolved_at"] is not None
+
+    second = await _escalate(
+        work_sessionmaker, ctx, contender.shipment_id, reason="a genuinely different problem"
+    )
+
+    assert second["dedupe_key"] == first["dedupe_key"], (
+        "the two escalations did not even share a dedupe key, so this test proved nothing -- "
+        "the UTC calendar day rolled over mid-test (escalate_exception reads the wall clock)"
+    )
+    assert second["escalation_id"] != first["escalation_id"], (
+        "issue #96: the resolved case was handed back instead of a new one being opened.\n"
+        f"  returned {second['escalation_id']} with status {second['escalation_status']!r}"
+    )
+    assert second["escalation_status"] == "OPEN"
+    assert second["payload"]["reason"] == "a genuinely different problem"
+
+    assert await _row(work_sessionmaker, first["escalation_id"]) == closed_before, (
+        "the resolved escalation was modified by a later escalate_exception call"
+    )
+    record_evidence(
+        "3. issue #96: escalate after RESOLVE",
+        f"{first['escalation_id']} stays RESOLVED, new {second['escalation_id']} OPEN, "
+        f"shared dedupe_key {second['dedupe_key']}",
+    )
+
+
+async def test_escalating_again_after_a_cancel_opens_a_new_case(work_sessionmaker):
+    """CANCELLED is the *other* terminal state (FR-OPS-006), and is asserted separately.
+
+    Not folded into the test above with a parametrize: `cancel_escalation` is a different code
+    path with a different reason-code vocabulary and a mandatory Idempotency-Key, and #96's whole
+    cause was one status being handled and another not.
+    """
+    contender = await _fixture_shipment(work_sessionmaker, tag="C")
+    ctx = _ops_ctx(user_id=contender.user_id, request_id="proof-96-cancel")
+
+    first = await _escalate(work_sessionmaker, ctx, contender.shipment_id, reason="raised in error")
+    async with work_sessionmaker() as session:
+        cancelled = await cancel_escalation(
+            session, ctx, first["escalation_id"], reason_code="CREATED_IN_ERROR",
+            idempotency_key=f"proof-96-cancel-{uuid4().hex[:10]}",
+        )
+    assert cancelled["code"] == "CANCELLED"
+    closed_before = await _row(work_sessionmaker, first["escalation_id"])
+    assert closed_before["escalation_status"] == "CANCELLED"
+
+    second = await _escalate(work_sessionmaker, ctx, contender.shipment_id, reason="real this time")
+
+    assert second["dedupe_key"] == first["dedupe_key"], "UTC day rolled over mid-test"
+    assert second["escalation_id"] != first["escalation_id"], (
+        "issue #96: the cancelled case was handed back instead of a new one being opened"
+    )
+    assert second["escalation_status"] == "OPEN"
+    assert await _row(work_sessionmaker, first["escalation_id"]) == closed_before, (
+        "the cancelled escalation was modified by a later escalate_exception call"
+    )
+    record_evidence(
+        "3. issue #96: escalate after CANCEL",
+        f"{first['escalation_id']} stays CANCELLED, new {second['escalation_id']} OPEN",
+    )
+
+
+async def test_a_non_terminal_escalation_is_still_refreshed_in_place(work_sessionmaker):
+    """The half of the behaviour that must NOT change, asserted as hard as the half that did.
+
+    While the prior case is live, a repeat escalation still collapses onto it: same row, refreshed
+    payload/severity, and exactly one non-terminal row per dedupe key -- enforced by the partial
+    unique index, not by application logic. The `ACKNOWLEDGED` leg is the guard against the
+    rejected option (a) sneaking back in: an owned, mid-lifecycle case must be refreshed, never
+    reset to `OPEN`, or a coordinator would silently lose a claim they had already made.
+    """
+    contender = await _fixture_shipment(work_sessionmaker, tag="L")
+    ctx = _ops_ctx(user_id=contender.user_id, request_id="proof-96-live")
+
+    first = await _escalate(
+        work_sessionmaker, ctx, contender.shipment_id, reason="first report", severity="HIGH"
+    )
+    second = await _escalate(
+        work_sessionmaker, ctx, contender.shipment_id, reason="more detail", severity="MEDIUM"
+    )
+
+    assert second["escalation_id"] == first["escalation_id"], (
+        "a live escalation was duplicated instead of refreshed -- the partial index predicate no "
+        "longer matches the ON CONFLICT arbiter"
+    )
+    assert second["escalation_status"] == "OPEN"
+    assert second["payload"]["reason"] == "more detail"
+    assert second["severity_code"] == "MEDIUM"
+
+    async with work_sessionmaker() as session:
+        acknowledged = await acknowledge_escalation(
+            session, ctx, first["escalation_id"], idempotency_key=f"proof-96-ack-{uuid4().hex[:10]}"
+        )
+    assert acknowledged["code"] == "ACKNOWLEDGED"
+
+    third = await _escalate(
+        work_sessionmaker, ctx, contender.shipment_id, reason="third report", severity="LOW"
+    )
+    assert third["escalation_id"] == first["escalation_id"]
+    assert third["escalation_status"] == "ACKNOWLEDGED", (
+        "an acknowledged escalation was reset to OPEN -- that is option (a), which was rejected"
+    )
+    assert third["payload"]["reason"] == "third report"
+
+    async with work_sessionmaker() as session:
+        live = int(
+            await session.scalar(
+                text(
+                    """
+                    SELECT count(*) FROM public.escalation_queue
+                    WHERE dedupe_key = :key AND escalation_status NOT IN ('RESOLVED', 'CANCELLED')
+                    """
+                ),
+                {"key": first["dedupe_key"]},
+            )
+        )
+    assert live == 1, f"{live} non-terminal escalations share one dedupe key; the index allows one"
+    record_evidence(
+        "3. issue #96: repeat escalation while live",
+        f"3 calls -> 1 row {first['escalation_id']}, status ACKNOWLEDGED preserved, "
+        f"{live} non-terminal row(s) per key",
+    )
+
+
+async def test_the_partial_index_that_makes_all_of_the_above_true_actually_exists(seed_session):
+    """A behavioural pass proves nothing if the index it rests on was never created.
+
+    Read from `pg_index`/`pg_get_expr` on the *pristine* seed database -- so this asserts what
+    migration 20260901120000 produces on a clean replay, not what the tests above happened to
+    leave behind. Two facts, and both matter: the partial index is present with the exact terminal
+    predicate, and the old global `UNIQUE (dedupe_key)` is gone. If the second were still there,
+    every assertion above would pass for the wrong reason (PostgreSQL would infer the full index
+    and dedupe globally again).
+    """
+    row = (
+        await seed_session.execute(
+            text(
+                """
+                SELECT ic.relname AS index_name,
+                       i.indisunique,
+                       pg_get_expr(i.indpred, i.indrelid) AS predicate
+                FROM pg_index i
+                JOIN pg_class ic ON ic.oid = i.indexrelid
+                WHERE i.indrelid = 'public.escalation_queue'::regclass
+                  AND ic.relname = 'escalation_queue_dedupe_key_active_uidx'
+                """
+            )
+        )
+    ).mappings().first()
+    assert row is not None, (
+        "escalation_queue_dedupe_key_active_uidx is missing -- migration 20260901120000 did not "
+        "replay, and every ON CONFLICT (dedupe_key) in backend/app would raise 42P10"
+    )
+    assert row["indisunique"] is True, "the index exists but is not UNIQUE, so it enforces nothing"
+    predicate = str(row["predicate"])
+    for status in TERMINAL_STATUSES:
+        assert status in predicate, f"{status} is not in the index predicate: {predicate}"
+    assert "OPEN" not in predicate and "ACKNOWLEDGED" not in predicate, (
+        f"the predicate names a non-terminal status, which inverts the rule: {predicate}"
+    )
+
+    leftovers = (
+        await seed_session.execute(
+            text(
+                """
+                SELECT ic.relname AS index_name
+                FROM pg_index i
+                JOIN pg_class ic ON ic.oid = i.indexrelid
+                WHERE i.indrelid = 'public.escalation_queue'::regclass
+                  AND i.indisunique
+                  AND i.indpred IS NULL
+                  AND i.indnkeyatts = 1
+                  AND i.indkey[0] = (
+                    SELECT a.attnum FROM pg_attribute a
+                    WHERE a.attrelid = 'public.escalation_queue'::regclass
+                      AND a.attname = 'dedupe_key' AND NOT a.attisdropped
+                  )
+                """
+            )
+        )
+    ).mappings().all()
+    assert leftovers == [], (
+        "a GLOBAL unique index on dedupe_key survived the migration "
+        f"({[r['index_name'] for r in leftovers]}) -- terminal rows are still conflict candidates"
+    )
+    record_evidence("3. issue #96: index predicate", f"{row['index_name']} WHERE {predicate}")
+
+
+async def test_no_bare_on_conflict_dedupe_key_is_left_anywhere_in_the_backend():
+    """Static guard: every arbiter on `dedupe_key` must repeat the index predicate.
+
+    Not a style rule. PostgreSQL's `index_predicate` is what "allows inference of partial unique
+    indexes" (postgresql.org/docs/current/sql-insert.html, ON CONFLICT Clause, checked 2026-09-01
+    against the PostgreSQL 18 the proof cluster runs); a bare `ON CONFLICT (dedupe_key)` no longer
+    matches any index on this table and raises 42P10 at runtime. Two of the three writers
+    (`planner_service._open_capacity_cascade`, `expiry.py`'s PENDING_EXPIRED_UNACTIONED insert) are
+    not on the escalate path at all, so nothing else in this suite would have caught them -- and
+    the expiry one fires from a scheduled sweep where a 42P10 is a silent, total outage of M8's
+    escalate leg.
+
+    Scoped to `ON CONFLICT (dedupe_key)`, which in `backend/app/` only ever targets
+    `escalation_queue`: `driver_exceptions` also has a `dedupe_key`, but it has never been
+    unique-indexed (20260807184700's own header note) and no code upserts on it.
+    """
+    offenders: list[str] = []
+    sites = 0
+    for path in sorted(ESCALATION_SOURCE_ROOT.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        start = 0
+        while (found := source.find("ON CONFLICT (dedupe_key)", start)) != -1:
+            sites += 1
+            start = found + 1
+            if not source.startswith(ARBITER_PREDICATE, found):
+                line = source.count("\n", 0, found) + 1
+                offenders.append(f"{path.relative_to(ESCALATION_SOURCE_ROOT)}:{line}")
+    assert sites > 0, "the scan found no ON CONFLICT (dedupe_key) at all -- it has stopped working"
+    assert offenders == [], (
+        "these ON CONFLICT (dedupe_key) arbiters do not carry the partial index's predicate and "
+        f"will raise 42P10 at runtime: {offenders}\n  expected: {ARBITER_PREDICATE}"
+    )
+    record_evidence("3. issue #96: arbiter sites carrying the predicate", f"{sites}/{sites}")
 
 
 @pytest.mark.skip(

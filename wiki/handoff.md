@@ -10,6 +10,12 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 12:55 IST: fix-all batch complete and re-verified (proof 104/0, unit 834/8); M5 milestone healed to 100%.** #93/#95/#96/#97 all fixed in-tree; #98 filed (displacement-read fork, owner call); #42 (E6.1 Locust) is the one genuinely open M6 item. **NEXT: (1) owner runs `python deploy/apply_96_dedupe_migration.py` (applies+verifies the #96 DDL; backup already taken), (2) owner commits/pushes the handed message (Fixes #93 #95 #96 #97), (3) next backend deploy carries the batch (migration-first order is satisfied by step 1), (4) then #42, #94, #98, #92, ROL010, M8/#49.** Local uvicorn:8000 + vite:5173 still running for the suites.
+
+
+- **2026-09-01 12:40 IST: #93 fixed; proof suite fully green (89/0/3/2); M6 gate bar met (owner strikes it).** One-predicate fix in `eta_service.py` with the reasoning commented in-code; ESCALATED deliberately kept selectable. Not yet deployed -- batch with upcoming fixes. **NEXT:** (1) #97 feasibility/request divergence (shared-predicate discipline, same class as #84); (2) #95 demo-tooling modernization + clean re-seed; (3) #96 dedupe-semantics decision (owner call); (4) then deploy the batch, apply ROL010 if wanted, M8/#49 or the issue-closure sweep. Uncommitted: this fix + writeback; commit message handed to owner.
+
+
 - **2026-09-01 12:05 IST: M6 delivered (#43 + #44 built and executed).** Proof suite 88/94 with its 1 hard failure being real bug #93; race suites 16/4/0 on real per-role JWTs. Five new issues #93-#97. **NEXT, in order of value:** (1) fix **#93** (small, well-specified, its regression test already exists and is failing) -- that greens the section-10 gate; (2) **#97** (feasibility-vs-request divergence -- same shared-predicate discipline as #84); (3) **#95** demo-tooling modernization + re-seed so the Phase-H reschedule demo works; (4) **#96** dedupe decision (owner call on the semantics); (5) apply ROL010 if a gate credential is wanted; then **M8/#49** or the issue-closure sweep. Local uvicorn:8000 + vite:5173 left running for the suites. Uncommitted: M6 work + this writeback; commit message handed to owner.
 
 

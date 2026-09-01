@@ -539,7 +539,17 @@ async def test_sweep_escalates_via_the_shared_worklist_not_a_second_mechanism(mo
         if "INSERT INTO public.escalation_queue" in str(call.args[0])
     )
     assert "PENDING_EXPIRED_UNACTIONED" in esc_sql
-    assert "ON CONFLICT (dedupe_key) DO NOTHING" in esc_sql
+    assert "DO NOTHING" in esc_sql
+    # Issue #96: the conflict target now carries the partial index's predicate. Asserted as its own
+    # line rather than folded into one literal string, because getting this exact predicate wrong
+    # is not a cosmetic mismatch -- PostgreSQL cannot infer
+    # `escalation_queue_dedupe_key_active_uidx` without it and every sweep would raise 42P10. This
+    # unit test runs against a mock session that never parses SQL, so the string IS the only guard
+    # at this level; the executable proof is in tests/proof/test_part3_idempotency_replay.py.
+    assert (
+        "ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')"
+        in esc_sql
+    )
 
 
 @pytest.mark.asyncio

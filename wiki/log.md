@@ -1108,3 +1108,17 @@ last_updated: 2026-08-29
 - Surfaced: #93 eta dedupe resurrection, #94 notification_outbox never migrated, #95 demo-tooling rot under D2 (seed binds hot-fixed; rollback FKs; single-phase booking; fixed keys), #96 escalate returns terminal rows, #97 feasibility/request divergence (state-dependent; pristine-seed contrast).
 - SOLUTION_DESIGN corrected in place: outage-invariant carve-out (3 deliberate seed overlaps, set-equality), 29->30 in two places.
 - Sandbox restored best-effort (OPEN/NOSLOT good; CONFIRMED/PENDING degraded pending #95). Unit suite unchanged 824/8. Updated [[current-state]], [[handoff]], root CHANGELOG. Nothing committed.
+
+## 2026-09-01 12:40 IST | fix | #93: terminal exceptions no longer resurrected; proof suite 89/0 -- section-10 gate bar met
+
+- UPIV: premise re-verified (filter excluded phantom CLOSED + RESOLVED, admitted DUPLICATE/CANCELLED; DESC ordering picked the retry). Fix: `NOT IN ('RESOLVED','DUPLICATE','CANCELLED')` with in-code constraint comment; ESCALATED deliberately still selectable (non-terminal; escalation_queue unaffected).
+- Verify: pre-existing regression assertion (proof Part 3) now green -- 89 passed / 0 failed / 3 skipped / 2 xfailed; unit suite unchanged 824/8. Deploy deferred: batch with #95/#97.
+- Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed to owner (Fixes #93).
+
+## 2026-09-01 12:55 IST | fix | #95/#96/#97 fixed + M5 tracker healed; proof 104/0, unit 834/8; #98 filed
+
+- M5 "14%" = tracker staleness: six epics closed with evidence comments (fddbb12/7d1031c/ab37b30/879e5bd + live click-through); milestone now 7/7. #42 genuinely open, flagged.
+- #95: scripts modernized, proven by running (7 rot points, 3 found only live: api_logs FK, user_scopes/notifications legs, snapshot_hash contract). Sandbox: all four fixtures in designed states.
+- #96: partial unique index migration (terminal={RESOLVED,CANCELLED}, proven), 3 arbiter sites updated, 5 regression tests; LIVE APPLY PENDING owner run of deploy/apply_96_dedupe_migration.py; backup pre_esc_dedupe_20260901_122115.dump.
+- #97: canonical liveness predicate in occupancy.py; feasibility LATERAL join (4 round trips, EXPLAIN-verified index scan); lazy expiry on claim reusing sweeper audit helper; proof-of-bite recorded; counter_offer self-overlap fixed; #98 filed for the displacement-read fork.
+- Coordinator re-ran both suites independently on the combined tree. Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed to owner.
