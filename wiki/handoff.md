@@ -10,6 +10,12 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 12:05 IST: M6 delivered (#43 + #44 built and executed).** Proof suite 88/94 with its 1 hard failure being real bug #93; race suites 16/4/0 on real per-role JWTs. Five new issues #93-#97. **NEXT, in order of value:** (1) fix **#93** (small, well-specified, its regression test already exists and is failing) -- that greens the section-10 gate; (2) **#97** (feasibility-vs-request divergence -- same shared-predicate discipline as #84); (3) **#95** demo-tooling modernization + re-seed so the Phase-H reschedule demo works; (4) **#96** dedupe decision (owner call on the semantics); (5) apply ROL010 if a gate credential is wanted; then **M8/#49** or the issue-closure sweep. Local uvicorn:8000 + vite:5173 left running for the suites. Uncommitted: M6 work + this writeback; commit message handed to owner.
+
+
+- **2026-09-01 10:55 IST: click-through GREEN; chat restored; #92 filed.** HELD lifecycle live-exercised by an authenticated driver (sandbox, cleaned up); chat 200 end to end after fixing two latent IAM defects (invoke policy region-pinned to the dead runtime; execution role's SSM grant wiped by the CFN redeploy -- full story on #92 and in the CHANGELOG). **NEXT: M6** (#43 Playwright race suites, #44 the SOLUTION_DESIGN section 10 proof suite) -- chosen over M8 to lock in correctness for everything just shipped; Playwright is installed and battle-proven. Also open: #92's IaC fix, the issue-closure review sweep, M8/#49 afterwards. Uncommitted: deploy scripts + this writeback; commit message handed to owner.
+
+
 - **2026-09-01 10:25 IST: M5 deployed to production and verified through CloudFront.** AgentCore v2 (wrapper, deployHash-proven), ECS stable on the M5 image, five new routes answering 401-not-404, health 200. **NEXT:** (1) optional: one authenticated chat turn + a real booking through the live app to see the HELD flow with human eyes; (2) the issue-closure review sweep (#36-#91 carry evidence, close on your review); (3) M6 (#43/#44 -- Playwright now installed and proven) or M8 (#49 Sequencer). Commit `deploy/deploy_m5_ecs.{sh,ps1}` with the deploy-record changelog entry.
 
 

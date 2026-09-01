@@ -2,6 +2,63 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 12:05 IST - M6 delivered: both verification suites built and RUN; five real defects surfaced (#93-#97); the section-10 exit gate is one product fix from green
+
+**Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5); per-suite detail below and on #43/#44.
+
+### E6.3 -- the SOLUTION_DESIGN section 10 proof suite (#44)
+
+`backend/tests/proof/` (13 files) + `docs/scripts/run_proof_suite.py`, one self-contained process owning a throwaway cluster's whole lifetime (initdb -> replay baseline+seed+15 migrations -> template DBs -> pytest -> teardown; stale-run reaper; production unreachable by construction -- the orchestrator blanks every real credential AND conftest independently refuses non-loopback URLs, verified by pointing it at a Supabase host).
+
+**Result: 94 tests -- 88 passed, 1 failed, 3 named skips, 2 strict xfails. Independently re-run by the coordinator: identical.** The numbers that matter: N=50 concurrency -> **exactly 1 HELD / 49 SLOT_CONFLICT_REFRESH_REQUIRED / 0 5xx / 0 orphaned holds** (TTL crossed by advancing the injected clock, hold EXPIRED in place, interval proven re-acquirable); invariants return **exactly** section 6.2 #7's two weight violations and nothing else; determinism **byte-identical** over five runs with only `as_of` paths varying (found by recursive diff, not pre-stripped); chaos-lite proves an ETA written to Postgres **during** a Redis outage appears on the next turn -- freshness from the database, not cache.
+
+**The 1 failure is the suite catching a real product bug, left hard-failing on purpose -- filed as #93:** `eta_service.record_eta_update`'s open-exception lookup excludes a phantom status ('CLOSED', not even CHECK-permitted) while admitting 'DUPLICATE' and 'CANCELLED', and `ORDER BY reported_at DESC` picks a retry preferentially -- so an ordinary ETA update **resurrects a DUPLICATE row to OPEN and overwrites its dedupe_key**, violating section 9.2's duplicate_retry guarantee.
+
+Also from this suite: **#94** (notification_outbox designed in section 6.1, never migrated -- and the three notification artifacts don't connect); two SOLUTION_DESIGN contradictions **corrected in place with dated notes** (section 10.2's outage invariant gains the known-violations carve-out its own seed requires -- 3 deliberate overlaps asserted as set equality; "29 seeded cases" corrected to the guide's mechanically-counted 30 in two places).
+
+### E6.2 -- the seven Playwright UI race suites (#43)
+
+`frontend/tests/` + `playwright.config.ts`. **The #52 fixture-seam question resolved with evidence**: the app reads its token solely from supabase-js, so real per-role JWTs are minted by password grant and injected as `storageState` -- key derivation, JSON persistence and session validation all verified in the pinned supabase-js source, and the approach proven by all five surfaces rendering real per-identity data. **storageState isolation proven at five levels** (through to the server resolving each token to a distinct user_id, plus a negative control), because a shared state file silently produces false negatives -- the documented pitfall this issue existed to avoid.
+
+**Result: 16 passed / 4 skipped / 0 failed**, races 1-5 genuinely racing real simultaneous writes on the isolated sandbox; race 5 observed resolving in BOTH directions across runs, which is what proves it races. Skips carry named in-file reasons; three initially-vacuous passes were caught and converted to honest skips ("at most one winner" holds trivially when zero writers succeeded).
+
+**Found by running it:** **#96** (escalate's daily dedupe returns terminal rows -- ON CONFLICT never resets status, so a new same-day problem attaches to a RESOLVED/CANCELLED row); **#97** (find_feasible_slots offers slots request_slot refuses, single-request, state-dependent -- pristine-seed contrast from #44 proves it is data-dependent, same class as #84/#88); no GATE_OFFICER credential is provisioned (#79's ROL010 migration remains unapplied).
+
+### The sandbox incident, disclosed and resolved
+
+E6.2's cleanup was once too broad and, with the races' own writes, consumed the reschedule-sandbox fixtures (the demo cast was never touched -- guarded in code). Restoring it surfaced **systematic demo-tooling rot under this session's own schema evolution, filed as #95**: the seed script bound ISO strings against now-timestamptz columns (hot-fixed with a dated comment), the rollback script dies on TWO FKs it predates (D2's shipment_id FK with expire-in-place rows; #55's chat_threads), the booking step speaks single-phase and lands its CONFIRMED fixture as a 90s HELD, and fixed idempotency keys collide across reseeds once two-phase changed the command scope. Sandbox now: OPEN and NOSLOT fixtures correct; CONFIRMED/PENDING degraded until #95. The lesson recorded: **demo/ops scripts are schema consumers too** -- the D2 sweep checked every production read path and never looked at supabase/demo/.
+
+**Gates:** unit suite unchanged at 824 passed / 8 skipped; `tsc -b` clean (src and tests separately), oxlint 8 pre-existing / 0 new, `vite build` clean. Local dev servers (uvicorn :8000, vite :5173) left running for continued suite use. Nothing committed.
+
+**M6 status: both epics delivered and executed.** The section-10 gate's own bar ("done when section 10 passes") is one product fix away: #93 green-lights Part 3, and the two xfails are documentation now corrected. Striking the M6 gate is the owner's call after #93.
+
+## 2026-09-01 10:55 IST - Live click-through GREEN end to end; two latent IAM defects found and fixed; chat restored (#92 filed for the durable fix)
+
+**Agent/surface:** Claude Fable 5 (Claude Code) + owner (one classifier-gated IAM command). Full evidence on #92.
+
+**The authenticated HELD click-through ran against production** (CloudFront -> ECS -> DB), using the isolated sandbox driver at FAC-GGN-01 (never touches the demo cast):
+
+| Step | Result |
+|---|---|
+| Password-grant login | 200 |
+| `/driver/context` | 200, **`promise_state` + `current_hold` live** (#86 verified on the deployed stack) |
+| Feasible slots | 200, 5 options |
+| `request_slot` | **200, status=HELD, hold_id=662, 90s TTL** |
+| `confirm_held_slot` | **200, PENDING_CONFIRMATION, APT-30A49E391A2E** |
+| Cleanup cancel | 200, CANCELLED -- sandbox left exactly as found |
+
+D2's two-phase promise, exercised live by a real authenticated driver for the first time. Two 422s along the way were the probe's own request bodies (`extra="forbid"` models refusing unknown keys -- working as designed) and were fixed by reading the routers, not the deploy.
+
+**Chat was down, and the diagnosis peeled two layers** (503 -> 502 -> 200 as each landed):
+1. **503**: `setuhaul-bff-task-role`'s invoke policy was **region-pinned to the retired us-east-1 runtime** -- E7.1 moved the runtime, nobody re-pointed the grant. Fixed: policy now lists both regions (us-east-1 retained as rollback).
+2. **502 "Database is not configured"**: the runtime's own boot logs showed `ssm hydrate miss` + AccessDenied on all 8 `/setuhaul/*` parameters -- **the wrapper's CloudFormation deploy recreated the execution role, wiping E7.1's hand-attached SSM grant.** Fixed (owner-run, classifier-gated): `ssm:GetParameter/GetParameters` on `parameter/setuhaul/*`. A half-hydrated warm container kept 502ing ("No LLM API key") until a fresh session; a different user's session proved the fix immediately.
+
+**Chat verified live: 200 with a real tool-backed answer** (Ravi's APT1017/SHP1017/SLOT-JAI-005 from the live database) through CloudFront -> ECS -> AgentCore v2 -> LLM -> typed tools -> Postgres. **Every layer of the product now runs M5 and answers.**
+
+**The durable lesson, filed as #92:** hand-patched IAM on an IaC-managed role is a time bomb -- the next stack update reverts it silently, which is precisely what happened between 2026-08-26 (chat verified) and the v2 deploy. The grants belong in `agentcore/cdk` and the ECS task-role definition; the wrapper should gain a post-deploy invoke smoke that would have caught this at deploy time.
+
+Operational notes recorded on #92: thrice-expiring `aws login` grants; `MSYS_NO_PATHCONV=1` for leading-slash AWS args in Git Bash; AgentCore warm-container SSM hydration semantics.
+
 ## 2026-09-01 10:25 IST - M5 DEPLOYED: production is coherent end to end for the first time since the overhaul began
 
 **Agent/surface:** Claude Fable 5 (Claude Code) + owner (image push). Region `ap-south-1` throughout.

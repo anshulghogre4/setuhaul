@@ -33,7 +33,7 @@ contract, observability, and a phased roadmap with provable acceptance criteria.
 | D5 | **Sequencer proposes; a planner applies** | No automatic re-promising. Sequencer output is a reviewable artifact (`scheduling_runs`), never a silent write. |
 | D6 | **Human planner always confirms** PENDING → CONFIRMED | No rules-based auto-confirm, no LLM confirm. Makes the planner console the throughput-critical surface (see below). |
 | D7 | **Allocation policy = the scored formula as specified**, no fairness term | Accepted trade-off, monitored rather than mitigated (see below). |
-| D8 | **Generate to brief scale** — 6 facilities, 24–32 docks, 600–1000 shipments, 2000–3000 slots, **across a seven-day window** (full volumes in §9.1) | All 29 seeded edge cases preserved verbatim; volume layered on top. The seven days are what make Stage 0's next-day path testable rather than theoretical. |
+| D8 | **Generate to brief scale** — 6 facilities, 24–32 docks, 600–1000 shipments, 2000–3000 slots, **across a seven-day window** (full volumes in §9.1) | All 30 seeded edge cases preserved verbatim (29 corrected to 30 on 2026-09-01: the guide's section 6 table has 30 rows, counted mechanically by the #44 proof suite); volume layered on top. The seven days are what make Stage 0's next-day path testable rather than theoretical. |
 
 | D9 | **Pending TTL = 15 min**, then release + escalate | Unactioned requests reach the escalation queue, not the bin. Driver is notified on release either way. |
 | D10 | **Changeover buffer = 15 min fixed** | Occupancy window = `expected_unload_min + 15`. Absorbs small overruns instead of cascading them. |
@@ -1775,7 +1775,13 @@ This is §12.1 Q13 and the thing a reviewer will actually push on.
    - **No two `dock_occupancy` rows for one dock overlap** in a capacity-consuming state. This is the
      headline invariant; the GiST constraint should make it unfalsifiable, and the query proves it.
    - No shipment has >1 current active appointment.
-   - No confirmed appointment overlaps a `dock_status_events` outage window.
+   - No confirmed appointment overlaps a `dock_status_events` outage window, **except the three
+     violations the seed plants deliberately** (corrected 2026-09-01, found by this section's own
+     proof suite, #44): `APT1002`/`DEVT003` and `APT1004`/`DEVT003` (the guide's "Unload overrun"
+     fixture) and `APT1005`/`DEVT001` (which section 6.2 #9 names explicitly). The suite asserts
+     these three as a set equality -- extra AND missing both fail -- the same carve-out shape the
+     weight invariant below already has. The previous unqualified wording contradicted the seed
+     this document also specifies.
    - No appointment starts after `LAST_NEW_START_TIME` without a recorded approval — **at facilities that
      define the rule**; FAC-GGN-01 does not, and an absent rule is unrestricted (§5 Stage 1).
    - Every reefer load sits on a `supports_refrigerated` dock; every load above a dock's
@@ -1783,7 +1789,7 @@ This is §12.1 Q13 and the thing a reviewer will actually push on.
      two known violations of §6.2 #7 and nothing else.
 3. **Idempotency replay.** Replay the seeded duplicate (`THR001`/`THR009`, same `dedupe_key`) →
    exactly one exception, one booking attempt, one notification.
-4. **Scenario replay suite.** Each of the 29 seeded cases in the database guide §6 becomes a named
+4. **Scenario replay suite.** Each of the 30 seeded cases in the database guide §6 becomes a named
    test with an expected outcome — including the ones that must escalate (SHP1015 reefer, OM004
    failed email, contradictory warehouse reply). Coverage is asserted mechanically: a case with no
    named test fails the suite, so the mapping cannot silently rot.

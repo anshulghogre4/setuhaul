@@ -32,6 +32,7 @@ Safety:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import asyncio
 import os
 import re
@@ -192,9 +193,13 @@ async def seed_rows(conn: Any, *, dry_run: bool) -> None:
                 spec["load_weight_kg"],
                 spec["required_dock_type"],
                 spec["priority_code"],
-                "2026-08-16T04:00:00+05:30",
-                ETA_TS,
-                CREATED_AT,
+                # Parsed to datetime (2026-09-01): the D1 migration 20260823060000 converted these
+                # columns from TEXT to timestamptz, and asyncpg refuses a str bind against
+                # timestamptz -- same bind-type class the D2 work documented for bigint/str.
+                # This script predates the conversion and rotted silently until the next reseed.
+                datetime.fromisoformat("2026-08-16T04:00:00+05:30"),
+                datetime.fromisoformat(ETA_TS) if isinstance(ETA_TS, str) else ETA_TS,
+                datetime.fromisoformat(CREATED_AT) if isinstance(CREATED_AT, str) else CREATED_AT,
             )
 
 

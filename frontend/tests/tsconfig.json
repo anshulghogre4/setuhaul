@@ -1,0 +1,27 @@
+{
+  "//": [
+    "Type-checks the E6.2 race suites. Deliberately NOT added to the root tsconfig.json's",
+    "`references` array: `tsc -b` currently builds exactly `tsconfig.app.json` (src) and",
+    "`tsconfig.node.json` (vite.config.ts), and this issue owns `frontend/tests/**` plus",
+    "`playwright.config.*` -- not the root tsconfig. Wiring it in is a one-line follow-up for",
+    "whoever owns that file; until then run `npx tsc -p tests` (npm run test:e2e:types).",
+    "Playwright compiles these files itself at run time via its own transform, so this config is",
+    "an editor/CI checking aid rather than something the runner depends on."
+  ],
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["."]
+}

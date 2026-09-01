@@ -1092,3 +1092,19 @@ last_updated: 2026-08-29
 - CloudFront proof: /health/live 200; five M5-only routes 401-not-404. Production frontend/backend/runtime/database coherent for the first time.
 - Own-goal fixed: deploy_m5_ecs.ps1 reported COMPLETE over three failed steps (unguarded native commands); every aws step now $LASTEXITCODE-guarded with the incident documented inline.
 - Updated [[current-state]], [[handoff]], root CHANGELOG. deploy scripts uncommitted; commit message handed to owner.
+
+## 2026-09-01 10:55 IST | deployment | click-through green end to end; chat restored; #92 filed
+
+- Live authenticated HELD lifecycle on production via the FAC-GGN-01 sandbox: HELD (hold 662, 90s TTL) -> PENDING_CONFIRMATION (APT-30A49E391A2E) -> CANCELLED cleanup. /driver/context carries promise_state/current_hold live (#86 verified deployed).
+- Chat 503 -> 502 -> 200: (1) BFF invoke policy was region-pinned to the retired us-east-1 runtime -- re-pointed, both regions listed; (2) the wrapper's CFN deploy recreated the execution role and wiped its hand-attached SSM grant -- restored (owner-run, classifier-gated), all 8 /setuhaul/* params confirmed present in ap-south-1. Warm-container half-hydration masked the fix until a fresh session.
+- Chat verified: 200, real tool-backed answer (APT1017) through CloudFront -> ECS -> AgentCore v2 -> LLM -> tools -> Postgres.
+- #92 filed: both grants belong in IaC; wrapper should gain a post-deploy invoke smoke. Ops notes recorded (thrice-expired aws login; MSYS_NO_PATHCONV; hydration semantics).
+- Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed to owner.
+
+## 2026-09-01 12:05 IST | verification | M6 delivered: proof suite 88/94 (1 real bug), race suites 16/4/0; #93-#97 filed
+
+- #44 proof suite: throwaway-cluster orchestrator + 13 test files; concurrency 1/49/0/0 exact; invariants exactly the two known violations; determinism byte-identical x5; chaos-lite Postgres-freshness proven. Coordinator re-ran independently: identical numbers. The 1 hard failure = #93 (eta_service resurrects DUPLICATEs), left failing per the issue's own bar.
+- #43 race suites: real per-role JWTs injected as storageState (pinned-source-verified derivation; isolation proven at 5 levels incl. server-side and a negative control); 7 races, real writes, honest skips; 3 vacuous passes caught and converted.
+- Surfaced: #93 eta dedupe resurrection, #94 notification_outbox never migrated, #95 demo-tooling rot under D2 (seed binds hot-fixed; rollback FKs; single-phase booking; fixed keys), #96 escalate returns terminal rows, #97 feasibility/request divergence (state-dependent; pristine-seed contrast).
+- SOLUTION_DESIGN corrected in place: outage-invariant carve-out (3 deliberate seed overlaps, set-equality), 29->30 in two places.
+- Sandbox restored best-effort (OPEN/NOSLOT good; CONFIRMED/PENDING degraded pending #95). Unit suite unchanged 824/8. Updated [[current-state]], [[handoff]], root CHANGELOG. Nothing committed.
