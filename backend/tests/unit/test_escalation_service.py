@@ -142,7 +142,13 @@ async def test_escalate_exception_requires_confirmation_before_write():
 
 @pytest.mark.asyncio
 async def test_get_pending_confirmations_forbids_cross_facility_operator():
-    from unittest.mock import AsyncMock
+    """M15: an operator naming someone else's facility is refused.
+
+    The session answers the issue-#106 `user_scopes` probe with **no** grant row, explicitly. A
+    bare `AsyncMock` would answer `.first()` with a truthy mock and this test would pass against a
+    resolver that had stopped refusing altogether -- the mock, not the rule, would be under test.
+    """
+    from unittest.mock import AsyncMock, MagicMock
     from app.services.escalation_service import get_pending_confirmations
     from app.core.execution_context import ExecutionContext, RoleName
     from app.core.errors import AppError
@@ -157,11 +163,125 @@ async def test_get_pending_confirmations_forbids_cross_facility_operator():
         role_name=RoleName.OPERATIONS_EXECUTIVE,
         facility_id="FAC-GGN-01",
     )
+    no_grant = MagicMock()
+    no_grant.first.return_value = None
     mock_session = AsyncMock()
+    mock_session.execute.return_value = no_grant
 
     with pytest.raises(AppError) as exc_info:
         await get_pending_confirmations(mock_session, ctx, "FAC-JAI-01")
     assert exc_info.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_get_pending_confirmations_serves_every_facility_when_none_is_named():
+    """Issue #107. §7.5.5: omitting `facility_id` for a cross-facility role means all facilities.
+
+    This shipped as a 403 -- `require_facility=True` against SQL that bound `:facility_id`
+    unconditionally -- so an ADMIN whose `users.facility_id` is NULL (USR997, the live roster's
+    admin) was refused on the ops reads unless they named a facility explicitly. Reproduced live
+    read-only 2026-09-01: 403 with no parameter, 200 with `?facility_id=FAC-JAI-01`, 200 with
+    `?facility_id=FAC-GGN-01`.
+
+    Both halves are asserted, because "no 403" alone would also be satisfied by a query that
+    quietly kept filtering: the statement must carry **no** facility predicate and **no**
+    `facility_id` parameter.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import get_pending_confirmations
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR997",
+        email="admin@setuhaul.com",
+        full_name="Admin",
+        role_id="ROL008",
+        role_name=RoleName.ADMIN,
+        facility_id=None,
+    )
+    mock_rows = MagicMock()
+    mock_rows.mappings.return_value.all.return_value = [_pending_row()]
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_rows
+
+    res = await get_pending_confirmations(mock_session, ctx, None)
+
+    assert res["facility_id"] is None
+    assert len(res["items"]) == 1
+    statement, params = mock_session.execute.call_args.args
+    assert params == {}
+    # The *predicate*, not the column -- `sl.facility_id` is still selected, and should be: an
+    # unscoped answer has to tell the client which facility each row belongs to.
+    assert "AND sl.facility_id =" not in str(statement)
+
+
+@pytest.mark.asyncio
+async def test_dock_status_and_queue_status_also_serve_every_facility_when_none_is_named():
+    """The other two reads #107 named. All three shipped the same `require_facility=True` shape."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import get_dock_status, get_queue_status
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR997",
+        email="admin@setuhaul.com",
+        full_name="Admin",
+        role_id="ROL008",
+        role_name=RoleName.ADMIN,
+        facility_id=None,
+    )
+
+    docks = MagicMock()
+    docks.mappings.return_value.all.return_value = []
+    dock_session = AsyncMock()
+    dock_session.execute.return_value = docks
+    dock_result = await get_dock_status(dock_session, ctx, None)
+    assert dock_result["facility_id"] is None
+    assert dock_session.execute.call_args.args[1] == {}
+
+    counts = MagicMock()
+    counts.scalar_one.return_value = 3
+    queue_session = AsyncMock()
+    queue_session.execute.return_value = counts
+    queue_result = await get_queue_status(queue_session, ctx, None)
+    assert queue_result["facility_id"] is None
+    assert queue_result["pending_appointments"] == 3
+    assert queue_result["open_escalations"] == 3
+    # Both counts must be resolved against the same scope decision, not one each.
+    assert [call.args[1] for call in queue_session.execute.await_args_list] == [{}, {}]
+
+
+@pytest.mark.asyncio
+async def test_an_operator_is_still_scoped_when_they_name_no_facility():
+    """#107 must not over-correct: omission means "all facilities *in scope*", and a facility-scoped
+    operator's scope is exactly one facility. Only the global tier gets the unfiltered read."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.escalation_service import get_queue_status
+    from app.core.execution_context import ExecutionContext, RoleName
+
+    ctx = ExecutionContext(
+        request_id="r",
+        auth_subject="sub",
+        user_id="USR-OPS-TEST",
+        email="ops@setuhaul.com",
+        full_name="Ops User",
+        role_id="ROL002",
+        role_name=RoleName.OPERATIONS_EXECUTIVE,
+        facility_id="FAC-GGN-01",
+    )
+    counts = MagicMock()
+    counts.scalar_one.return_value = 0
+    session = AsyncMock()
+    session.execute.return_value = counts
+
+    res = await get_queue_status(session, ctx, None)
+
+    assert res["facility_id"] == "FAC-GGN-01"
+    assert session.execute.call_args.args[1] == {"facility_id": "FAC-GGN-01"}
 
 
 @pytest.mark.asyncio

@@ -93,13 +93,22 @@ def _gemini_settings(**kwargs) -> Settings:
     return _settings(**base)
 
 
-def test_auto_prefers_gemini_when_present():
+def test_auto_never_selects_vertex_even_when_fully_configured():
+    """Owner ruling 2026-09-02: AUTO's Gemini leg is the free API key ONLY. A host carrying
+    full Vertex credentials but no key falls through to openai -- this is also the regression
+    guard for the real local failure where leftover gcloud ADC + GCP_PROJECT auto-selected
+    vertex_adc and died on the asia-south1 3.7 rollout 404 (#31)."""
     s = _gemini_settings(openai_api_key="sk-openai", openrouter_api_key="sk-or")
+    r = resolve_llm(s)
+    assert r.provider == "openai"
+
+
+def test_auto_prefers_the_free_gemini_key_when_present():
+    s = _settings(google_api_key="gk-test", openai_api_key="sk-openai", openrouter_api_key="sk-or")
     r = resolve_llm(s)
     assert r.provider == "gemini"
     assert r.model == "gemini-3.7-flash"
-    assert r.gcp_project == "proj-x"
-    assert r.gcp_location == DESIGNED_GCP_VERTEX_LOCATION
+    assert r.gemini_backend == GEMINI_AI_STUDIO
 
 
 def test_auto_falls_back_to_openai_when_gemini_not_configured():
@@ -329,10 +338,10 @@ def test_api_key_only_resolves_gemini_ahead_of_openai():
     assert r.provider == "gemini"
     assert r.model == "gemini-3.7-flash"
     assert r.api_key == "gk-test"
-    # Express mode: Vertex-served, but project/location must stay unset or the SDK discards the
-    # key and demands ADC instead.
-    assert r.gemini_backend == GEMINI_VERTEX_EXPRESS
-    assert r.vertex is True
+    # Owner ruling 2026-09-02: the free AI Studio endpoint is the key path's default (not
+    # Vertex-served express mode, which bills as Vertex); express is GEMINI_KEY_BACKEND opt-in.
+    assert r.gemini_backend == GEMINI_AI_STUDIO
+    assert r.vertex is False
     assert r.gcp_project is None
     assert r.gcp_location is None
 
@@ -354,9 +363,9 @@ def test_express_mode_is_also_skipped_for_a_stray_cloud_location(monkeypatch):
 
 
 def test_vertex_adc_is_preferred_over_every_key_shape():
-    """Residency decision, made once here rather than left to key precedence -- the same silent
-    ordering bug AUTO_ORDER's own comment records. Full Vertex is the only in-region shape."""
-    s = _gemini_settings(google_api_key="gk-test", openai_api_key="sk-openai")
+    """Under EXPLICIT LLM_PROVIDER=gemini only (owner ruling 2026-09-02 removed Vertex from
+    AUTO): an operator who names the provider and provisions Vertex gets the in-region shape."""
+    s = _gemini_settings(llm_provider="gemini", google_api_key="gk-test", openai_api_key="sk-openai")
     r = resolve_llm(s)
     assert r.provider == "gemini"
     assert r.gemini_backend == GEMINI_VERTEX_ADC
@@ -374,7 +383,7 @@ def test_neither_gemini_shape_falls_through_to_openai():
 def test_explicit_gemini_with_only_an_api_key_does_not_raise():
     r = resolve_llm(_settings(llm_provider="gemini", google_api_key="gk-test"))
     assert r.provider == "gemini"
-    assert r.gemini_backend == GEMINI_VERTEX_EXPRESS
+    assert r.gemini_backend == GEMINI_AI_STUDIO  # owner ruling 2026-09-02: free-key default
 
 
 def test_explicit_gemini_error_names_both_credential_shapes():
@@ -385,10 +394,14 @@ def test_explicit_gemini_error_names_both_credential_shapes():
     assert "GCP_PROJECT" in message
 
 
-def test_build_chat_model_express_shape_is_vertex_with_no_project_or_location():
+def test_build_chat_model_express_shape_is_vertex_with_no_project_or_location(monkeypatch):
     """The load-bearing assertion of the express path. Passing project or location makes
     google-genai discard the key and demand ADC -- reproduced live on 2026-09-01 as
-    "Could not resolve project using application default credentials"."""
+    "Could not resolve project using application default credentials".
+
+    Since the 2026-09-02 owner ruling, express is explicit opt-in -- which this test now
+    exercises, doubling as the opt-in's regression test."""
+    monkeypatch.setenv("GEMINI_KEY_BACKEND", "vertex_express")
     chat = build_chat_model(_settings(llm_provider="gemini", google_api_key="gk-test"))
     assert isinstance(chat, ChatGoogleGenerativeAI)
     assert chat.google_api_key.get_secret_value() == "gk-test"

@@ -25,6 +25,7 @@ from app.repositories.scope import (
     assert_gate_write_scope,
     assert_shipment_visible,
     resolve_facility_scope,
+    resolve_facility_scope_with_user_scopes,
 )
 
 OWN_FACILITY = "FAC-GGN-01"
@@ -376,3 +377,128 @@ def test_driver_sees_only_their_own_shipment():
     with pytest.raises(AppError) as exc:
         assert_shipment_visible(ctx, shipment_driver_id=OTHER_DRIVER, shipment_facility_id=OTHER_FACILITY)
     assert exc.value.code == "FORBIDDEN"
+
+
+# =================================================================================================
+# Issue #106 -- `resolve_facility_scope_with_user_scopes`
+# =================================================================================================
+#
+# The gap: `user_scopes` is the identity model's source of truth for scope (E2.3) and #72 ships an
+# admin write that grants a user two facilities, but scope resolution compared only against the
+# single `users.facility_id` mirror the token carries. So a coordinator granted Jaipur *and*
+# Gurugram could select the second in #99's switcher and every read answered 403.
+#
+# What these assert, beyond "the second facility works": that nothing else widened. A grant must be
+# the *only* thing that admits a facility, and the probe must not fire on paths that were already
+# correct -- an unconditional read here would be a real extra round trip on every scoped read in
+# the product, since `deps.py` builds one `ExecutionContext` per request and caches nothing.
+
+
+class _ProbeSession:
+    """Counts `user_scopes` probes and answers them from a fixed grant set.
+
+    Not an `AsyncMock`: a bare mock answers `.first()` with a truthy mock, so a resolver that had
+    stopped consulting the grants at all would still pass. This answers `None` unless the requested
+    facility is genuinely in `granted`.
+    """
+
+    def __init__(self, granted: set[str] | None = None) -> None:
+        self.granted = granted or set()
+        self.probes: list[str] = []
+
+    async def execute(self, _statement, params=None):
+        facility_id = (params or {}).get("facility_id")
+        self.probes.append(facility_id)
+
+        class _Result:
+            def __init__(self, hit: bool) -> None:
+                self._hit = hit
+
+            def first(self):
+                return (1,) if self._hit else None
+
+        return _Result(facility_id in self.granted)
+
+
+@pytest.mark.asyncio
+async def test_a_granted_second_facility_is_accepted():
+    session = _ProbeSession(granted={OTHER_FACILITY})
+    ctx = _ctx(RoleName.OPERATIONS_EXECUTIVE, facility_id=OWN_FACILITY)
+
+    scope = await resolve_facility_scope_with_user_scopes(
+        session, ctx, OTHER_FACILITY, require_facility=True
+    )
+
+    assert scope == OTHER_FACILITY
+    assert session.probes == [OTHER_FACILITY]
+
+
+@pytest.mark.asyncio
+async def test_an_ungranted_facility_is_still_refused_with_the_same_code():
+    """The refusal must be indistinguishable from the pure resolver's -- same code, same status.
+
+    Otherwise this function would have introduced a second refusal vocabulary for one rule, and a
+    client could tell "no grant" apart from "not your facility" by response shape alone.
+    """
+    session = _ProbeSession(granted={"FAC-SOMEWHERE-ELSE"})
+    ctx = _ctx(RoleName.OPERATIONS_EXECUTIVE, facility_id=OWN_FACILITY)
+
+    with pytest.raises(AppError) as exc:
+        await resolve_facility_scope_with_user_scopes(
+            session, ctx, OTHER_FACILITY, require_facility=True
+        )
+
+    assert exc.value.code == "FORBIDDEN"
+    assert exc.value.status_code == 403
+    with pytest.raises(AppError) as pure:
+        resolve_facility_scope(ctx, OTHER_FACILITY, require_facility=True)
+    assert exc.value.message == pure.value.message
+
+
+@pytest.mark.asyncio
+async def test_an_unmapped_identity_keeps_its_own_error_code():
+    """A caller with no facility at all and no grant still reports the *unmapped* code, not
+    FORBIDDEN -- the operations surface distinguishes SCOPE_MISSING from "not your facility"."""
+    session = _ProbeSession()
+    ctx = _ctx(RoleName.OPERATIONS_EXECUTIVE, facility_id=None)
+
+    with pytest.raises(AppError) as exc:
+        await resolve_facility_scope_with_user_scopes(
+            session, ctx, OTHER_FACILITY, unmapped_code="SCOPE_MISSING"
+        )
+
+    assert exc.value.code == "SCOPE_MISSING"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "ctx, requested",
+    [
+        # A global-read persona: the parameter already narrows, grants are irrelevant.
+        (_ctx(RoleName.ADMIN), OTHER_FACILITY),
+        # Nothing requested: nothing to validate.
+        (_ctx(RoleName.OPERATIONS_EXECUTIVE, facility_id=OWN_FACILITY), None),
+        # The caller's own facility: the pure rule already allows it.
+        (_ctx(RoleName.OPERATIONS_EXECUTIVE, facility_id=OWN_FACILITY), OWN_FACILITY),
+    ],
+)
+async def test_the_grant_probe_does_not_fire_on_paths_that_were_already_correct(ctx, requested):
+    """NFR-003's round-trip budget. One extra query only in the case that was a wrong 403."""
+    session = _ProbeSession()
+
+    await resolve_facility_scope_with_user_scopes(session, ctx, requested)
+
+    assert session.probes == []
+
+
+@pytest.mark.asyncio
+async def test_a_grant_does_not_widen_a_global_personas_unscoped_read():
+    """`None` still means "every facility" for a global-read persona, grants or not (§7.5.5)."""
+    session = _ProbeSession(granted={OWN_FACILITY, OTHER_FACILITY})
+
+    scope = await resolve_facility_scope_with_user_scopes(
+        session, _ctx(RoleName.ADMIN), None
+    )
+
+    assert scope is None
+    assert session.probes == []

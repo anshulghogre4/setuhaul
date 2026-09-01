@@ -239,6 +239,62 @@ export type PostMessageResult = {
   idempotent_replay?: boolean
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * Escalate (the detail pane's overflow entry) -- `POST /api/v1/operations/escalate`
+ * -------------------------------------------------------------------------------------------- */
+
+/**
+ * `escalate_exception`'s `confirmed=false` branch (`escalation_service.py:128-141`).
+ *
+ * The service returns this **before** it touches the database at all -- it is a preview, not a
+ * refusal, and the `note` it carries is the server's own wording for what confirming would do.
+ * Rendering that string rather than a locally-written one is the point: the sentence a coordinator
+ * agrees to is the sentence the service authored for this exact call.
+ */
+export type EscalatePreview = {
+  status: 'CONFIRMATION_REQUIRED'
+  code: 'CONFIRMATION_REQUIRED'
+  shipment_id: string
+  escalation_type: string
+  reason: string | null
+  requires_confirmation: true
+  note: string
+}
+
+/**
+ * `escalate_exception`'s `confirmed=true` branch -- the `escalation_queue` row it INSERTed or, on
+ * a `(shipment, day, type)` dedupe hit against a non-terminal row, the existing row with a
+ * refreshed payload (`escalation_service.py:175-219`, issue #96's partial-index predicate).
+ *
+ * There is no `code` field on this branch, which is how a caller tells the two apart.
+ */
+export type EscalateCreated = {
+  escalation_id: string
+  shipment_id: string
+  facility_id: string
+  driver_id: string | null
+  escalation_type: string
+  escalation_status: EscalationStatus
+  severity_code: string
+  policy_version: string | null
+  recommendation_id: string | null
+  payload: Record<string, unknown>
+  dedupe_key: string
+  created_at: string
+  updated_at: string
+}
+
+export type EscalateResult = EscalatePreview | EscalateCreated
+
+export function isEscalatePreview(result: EscalateResult): result is EscalatePreview {
+  return (result as EscalatePreview).code === 'CONFIRMATION_REQUIRED'
+}
+
+/** `EscalateExceptionCommand.severity_code` -- a free `str(max_length=30)` server-side, but
+ *  `SLA_BUDGET_MIN` only has budgets for these three, and anything else silently falls to
+ *  `DEFAULT_SLA_BUDGET_MIN`. Offering the three that have a real budget is the honest set. */
+export const ESCALATE_SEVERITY_CODES = ['HIGH', 'MEDIUM', 'LOW'] as const
+
 /** Flow 6 -- resolve_escalation / cancel_escalation's `reason_code`
  *  (`Source: assumption, untested`, escalation_service.py RESOLVE/CANCEL_REASON_CODES). */
 export const RESOLVE_REASON_CODES = ['ISSUE_FIXED'] as const

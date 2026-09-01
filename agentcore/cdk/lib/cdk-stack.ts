@@ -69,6 +69,40 @@ function toCdkId(name: string): string {
 }
 
 /**
+ * SetuHaul, issue #92 — the SSM hydration grant, expressed once, in IaC.
+ *
+ * The runtime hydrates its own environment at cold start by reading the `/setuhaul/*` parameters
+ * listed in `backend/app/assistant/agentcore_main.py::_SSM_ENV`. Without that read it has no
+ * `DATABASE_URL` and no LLM credential, so it boots, accepts an invoke, and answers
+ * `"Database is not configured on the Runtime."` — a 502 to the caller.
+ *
+ * The grant is on the PATH, not on an enumerated list of names, deliberately: `_SSM_ENV` grows
+ * (it gained `/setuhaul/gcp-project` and `/setuhaul/gcp-sa-key` for #103), and a name-by-name
+ * grant would need editing in lockstep with application code or produce this same outage in
+ * miniature, one parameter at a time.
+ *
+ * Which regions, and why two:
+ *   • `ap-south-1` is the region the runtime actually reads. `_hydrate_ssm_into_env` resolves
+ *     `AWS_REGION || AWS_DEFAULT_REGION || DESIGNED_AWS_REGION`; `agentcore/agentcore.json` pins
+ *     `AWS_REGION=ap-south-1` as a runtime env var and `settings.DESIGNED_AWS_REGION` is the same
+ *     string, so all three paths resolve there. Confirmed empirically, not just by reading: the
+ *     2026-09-01 hot-fix that restored chat granted exactly this ARN.
+ *   • `us-east-1` is granted alongside it because E7.1's migration is genuinely unfinished — the
+ *     same eight parameters still exist there, the retired `us-east-1` runtime is still the
+ *     recorded rollback target, and `docs/scripts/put_hosting_ssm.py` still writes to `us-east-1`
+ *     ONLY (a live divergence, tracked separately). Remove the `us-east-1` entry when E7.1's
+ *     decommission item (#45) closes — not before, or a rollback loses its secrets exactly the
+ *     way this incident did.
+ *
+ * Both entries are the same parameter path in the same account, so the second region widens the
+ * blast radius by nothing an operator could not already reach.
+ */
+const SETUHAUL_SSM_HYDRATE_REGIONS = ['ap-south-1', 'us-east-1'];
+
+/** Matches `_SSM_ENV`'s shared prefix. Every name it reads is `/setuhaul/<key>`, one level deep. */
+const SETUHAUL_SSM_PARAMETER_PREFIX = 'setuhaul/*';
+
+/**
  * Decide whether a deployed runtime should receive payment env vars + IAM grants.
  * Payments today only ships a runtime shim for Python HTTP runtimes; injecting
  * AGENTCORE_PAYMENT_* env vars into TypeScript / MCP / A2A / AGUI runtimes
@@ -112,6 +146,75 @@ export class AgentCoreStack extends Stack {
       appProps.credentials = credentials;
     }
     this.application = new AgentCoreApplication(this, 'Application', appProps as any);
+
+    // === SetuHaul, issue #92 — SSM hydration grant. DO NOT re-apply this by hand. ===
+    //
+    // Incident, 2026-09-01: THIS stack's own deploy recreated the runtime execution role and
+    // silently wiped an `ssm:GetParameter` policy that had been attached by hand during the E7.1
+    // region migration. `agentcore deploy` reported success; the runtime came up; every
+    // `/setuhaul/*` lookup logged `ssm hydrate miss` + AccessDenied; chat 502'd with "Database is
+    // not configured on the Runtime." Nothing errored at deploy time. That is the whole point of
+    // moving the grant here: a hand-patched policy on an IaC-managed role is a time bomb whose
+    // fuse is the next `agentcore deploy`.
+    //
+    // Confirmed read-only on 2026-09-02, before writing this: the CDK-managed DefaultPolicy on the
+    // live execution role contains no SSM action of any kind, and the hand-applied
+    // `SetuHaulSsmHydrate` inline policy is still the only thing granting the read. Once a deploy
+    // carries this block, delete that orphan — deploy/README.md has the ordered steps.
+    //
+    // See SETUHAUL_SSM_HYDRATE_REGIONS above for the region determination and why us-east-1 is
+    // still listed. Grant shape is deliberately read-only and path-scoped: this role must never
+    // be able to write a secret, only read the ones it hydrates.
+    for (const env of this.application.environments.values()) {
+      // `runtime.addToPolicy` rather than `runtime.role.addToPrincipalPolicy` (which the payments
+      // block below uses): for an *imported*, immutable execution role the vendor construct emits
+      // a synth-time warning naming the grants that must already be present, instead of dropping
+      // them silently. A silently dropped grant is precisely the failure this block exists to
+      // prevent, so the noisier API is the correct one here.
+      env.runtime.addToPolicy(
+        new iam.PolicyStatement({
+          sid: 'SetuHaulSsmHydrateRead',
+          actions: ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParametersByPath'],
+          resources: SETUHAUL_SSM_HYDRATE_REGIONS.map(region =>
+            this.formatArn({
+              service: 'ssm',
+              region,
+              resource: 'parameter',
+              resourceName: SETUHAUL_SSM_PARAMETER_PREFIX,
+            })
+          ),
+        })
+      );
+
+      // kms:Decrypt is a no-op today, and is included on purpose.
+      //
+      // Verified against current AWS documentation (KMS developer guide, "Setting permissions to
+      // encrypt and decrypt parameter values"), not from memory: SecureStrings encrypted under the
+      // default AWS-managed `aws/ssm` key are decryptable by every principal in the account, and
+      // you cannot write an access-control policy for that key at all. Confirmed live read-only on
+      // 2026-09-02: every `/setuhaul/*` parameter is `Type=SecureString` with `KeyId=alias/aws/ssm`
+      // — which is precisely why the 2026-09-01 hot-fix worked with SSM actions alone despite all
+      // of them being encrypted.
+      //
+      // The moment any of them is re-keyed to a customer-managed key — `/setuhaul/gcp-sa-key`
+      // being the obvious first candidate — `GetParameter(WithDecryption=True)` starts requiring
+      // kms:Decrypt on that key, and #92's exact failure mode returns: a successful deploy, a
+      // booting container, and AccessDenied on every hydrate. The `kms:ViaService` condition keeps
+      // this from being a general decrypt grant: the key is usable only through SSM, in the two
+      // regions the runtime ever reads from.
+      env.runtime.addToPolicy(
+        new iam.PolicyStatement({
+          sid: 'SetuHaulSsmHydrateDecrypt',
+          actions: ['kms:Decrypt'],
+          resources: ['*'],
+          conditions: {
+            StringEquals: {
+              'kms:ViaService': SETUHAUL_SSM_HYDRATE_REGIONS.map(region => `ssm.${region}.amazonaws.com`),
+            },
+          },
+        })
+      );
+    }
 
     // Create AgentCoreMcp if there are gateways configured
     if (mcpSpec?.agentCoreGateways && mcpSpec.agentCoreGateways.length > 0) {

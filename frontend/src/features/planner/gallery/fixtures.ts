@@ -1,4 +1,9 @@
-import type { BulkConfirmOutcome, DockBoard, PlannerQueueRow } from '../lib/types'
+import type {
+  BulkConfirmOutcome,
+  DockBoard,
+  FeasibleSlotOption,
+  PlannerQueueRow,
+} from '../lib/types'
 
 /**
  * Fixture rows for `/planner/_states` ONLY.
@@ -47,7 +52,7 @@ const BASE: PlannerQueueRow = {
   latest_acceptable_ts: '2026-08-29T08:00:00+00:00',
   latest_acceptable_exception_id: null,
   latest_acceptable_breached: false,
-  ttl: { deadline_ts: '2026-08-29T06:15:00+00:00', remaining_seconds: 134, expired: false },
+  ttl: { deadline_ts: '2026-08-29T06:15:00+00:00', remaining_seconds: 134, expired: false, hold_used: false },
   gate: { queue_state: null, queue_position: null, gate_in_ts: null, physically_waiting: false },
   urgency: { score: 4600, priority_score: 4000, ttl_pressure: 600, waiting_bonus: 0 },
   snapshot_hash: 'f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f',
@@ -76,6 +81,7 @@ export const ROW_CONFLICTED: PlannerQueueRow = {
     status: 'CONFLICT',
     conflicts: [
       {
+        conflict_type: 'INTERVAL_CONFLICT',
         claim_id: 'APT-OTHER-77',
         claim_source: 'appointments',
         appointment_id: 'APT-OTHER-77',
@@ -90,7 +96,7 @@ export const ROW_CONFLICTED: PlannerQueueRow = {
   },
   eta: { effective_eta_ts: '2026-08-29T09:30:00+00:00', confidence: 'LOW', source: 'SYSTEM' },
   latest_acceptable_breached: true,
-  ttl: { deadline_ts: '2026-08-29T06:09:00+00:00', remaining_seconds: 252, expired: false },
+  ttl: { deadline_ts: '2026-08-29T06:09:00+00:00', remaining_seconds: 252, expired: false, hold_used: false },
   urgency: { score: 2400, priority_score: 2000, ttl_pressure: 400, waiting_bonus: 0 },
   snapshot_hash: '11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff',
 }
@@ -115,9 +121,33 @@ export const ROW_DERIVED: PlannerQueueRow = {
     dock_match: 'exact',
     text: 'HIGH · 20 min late · exact dock · 5 min wait',
   },
-  ttl: { deadline_ts: '2026-08-29T06:14:00+00:00', remaining_seconds: 640, expired: false },
+  ttl: { deadline_ts: '2026-08-29T06:14:00+00:00', remaining_seconds: 640, expired: false, hold_used: false },
   urgency: { score: 3200, priority_score: 3000, ttl_pressure: 200, waiting_bonus: 0 },
   snapshot_hash: 'aabbccddeeff00112233445566778899aabbccddeeff001122334455667788990',
+}
+
+/**
+ * **States 7 / 14 / 15 -- a request whose one D9 extension has been spent** (issue #64).
+ *
+ * `ttl.hold_used` is the server's own `appointments.expires_at IS NOT NULL`, and `deadline_ts` is
+ * the *extended* deadline rather than the original -- which is exactly why the row still shows a
+ * running number. Everything the plate needs to prove is on this one row: the held countdown
+ * treatment, and the Hold affordance disabled with its reason (the one-shot cap prevented rather
+ * than handled, `edge-cases.md` #6).
+ */
+export const ROW_HELD: PlannerQueueRow = {
+  ...BASE,
+  appointment_id: 'APT-GALLERY-0005',
+  shipment_id: 'SHP1027',
+  driver_name: 'Sunil M.',
+  carrier_name: 'Alwar Carriers',
+  dock_code: 'D4',
+  ttl: {
+    deadline_ts: '2026-08-29T06:30:00+00:00',
+    remaining_seconds: 900,
+    expired: false,
+    hold_used: true,
+  },
 }
 
 /** One `bulk_confirm` per-id outcome, for the skipped-row plate. */
@@ -213,3 +243,117 @@ export const BOARD: DockBoard = {
 /** The empty variant: same lanes, no bars. `stitch-prompts.md` section 8 is explicit that this is
  *  the lanes plus one line of text, never a blank panel. */
 export const BOARD_EMPTY: DockBoard = { ...BOARD, bars: [], blocks: [] }
+
+/**
+ * **Issue #88's second displacement leg: a blocked dock.**
+ *
+ * The regression guard for a real defect. `describeDisplacement` used to map `c.shipment_id` over
+ * every conflict, and a `DOCK_BLOCKED` entry carries none -- so this row rendered
+ * *"Confirming this displaces undefined."* in the column section 7.3 calls "the single most
+ * important field". The fixture carries **both** legs at once, because the two must render as two
+ * distinct sentences rather than one merged list: one names a shipment that would be displaced,
+ * the other names an outage that displaces nobody.
+ *
+ * Field set copied from the producing SQL (`scheduling/snapshot.py:323-327`), not invented: a
+ * DOCK_BLOCKED entry has `dock_event_id` / `dock_id` / `event_type` / `reason` and nothing else.
+ */
+export const ROW_DOCK_BLOCKED: PlannerQueueRow = {
+  ...BASE,
+  appointment_id: 'APT-GALLERY-0004',
+  shipment_id: 'SHP1044',
+  driver_name: 'Imran S.',
+  carrier_name: 'Jaipur Freight',
+  dock_code: 'D5',
+  displacement: {
+    status: 'CONFLICT',
+    conflicts: [
+      {
+        conflict_type: 'INTERVAL_CONFLICT',
+        claim_id: 'APT-OTHER-91',
+        claim_source: 'appointments',
+        appointment_id: 'APT-OTHER-91',
+        shipment_id: 'SHP1051',
+        order_reference: null,
+        appointment_status: 'CONFIRMED',
+        hold_expires_at: null,
+        window_start: '2026-08-29T07:00:00+00:00',
+        window_end: '2026-08-29T08:00:00+00:00',
+      },
+      {
+        conflict_type: 'DOCK_BLOCKED',
+        dock_event_id: 'DEVT002',
+        dock_id: 'D5',
+        event_type: 'MAINTENANCE',
+        reason: 'Leveller failure',
+      },
+    ],
+  },
+}
+
+/* ==============================================================================================
+ * Counter-offer board picker (U103, `screens.md` section 4) -- states 3 / 24 / 25.
+ *
+ * Shaped like a real `find_feasible_slots` answer for ONE shipment against `BOARD` above, chosen
+ * so the plate exercises all three of the picker's renderings at once:
+ *
+ *   - **D1 and D2 eligible** -- two clickable intervals, one of them overlapping an existing bar's
+ *     lane so the plate shows an offer drawn above occupancy rather than beside it.
+ *   - **D3, D4 and D5 ineligible** -- no option lands on them, so those lanes dim. D5 additionally
+ *     carries the DEVT002 outage hatch, which is the case worth looking at: an ineligible lane and
+ *     a blocked lane are different facts with different encodings, and the plate proves they do
+ *     not collapse into one grey.
+ *   - **One option outside the horizon** (`BOARD_END` is 09:30Z; this one starts 10:15Z), which
+ *     `placeOnTrack` cannot position. It must be COUNTED in the banner and DRAWN nowhere -- the
+ *     boundary `lib/flags.ts::plannerBoardPickerEnabled` commits to stating rather than hiding.
+ * ============================================================================================ */
+
+export const PICKER_ROW: PlannerQueueRow = {
+  ...BASE,
+  appointment_id: 'APT-GALLERY-PICK',
+  shipment_id: 'SHP1014',
+  driver_name: 'Ravi K.',
+  carrier_name: 'Rajasthan Roadlines',
+}
+
+export const PICKER_OPTIONS: FeasibleSlotOption[] = [
+  {
+    slot_id: 'SLOT-G1',
+    facility_id: 'FAC-JAI-01',
+    dock_id: 'D1',
+    dock_code: 'D1',
+    dock_type: 'STANDARD',
+    slot_start_ts: '2026-08-29T07:15:00+00:00',
+    slot_end_ts: '2026-08-29T08:00:00+00:00',
+    slot_local_date: '2026-08-29',
+    is_same_day: true,
+    differentiator: 'Earliest available',
+    ranking_explanation: [],
+  },
+  {
+    slot_id: 'SLOT-G2',
+    facility_id: 'FAC-JAI-01',
+    dock_id: 'D2',
+    dock_code: 'D2',
+    dock_type: 'REEFER',
+    slot_start_ts: '2026-08-29T06:30:00+00:00',
+    slot_end_ts: '2026-08-29T07:15:00+00:00',
+    slot_local_date: '2026-08-29',
+    is_same_day: true,
+    differentiator: '',
+    ranking_explanation: [],
+  },
+  {
+    // Beyond `BOARD_END`. Deliberately unplottable -- see the block comment above.
+    slot_id: 'SLOT-G3',
+    facility_id: 'FAC-JAI-01',
+    dock_id: 'D1',
+    dock_code: 'D1',
+    dock_type: 'STANDARD',
+    slot_start_ts: '2026-08-29T10:15:00+00:00',
+    slot_end_ts: '2026-08-29T11:00:00+00:00',
+    slot_local_date: '2026-08-29',
+    is_same_day: true,
+    differentiator: 'Latest available',
+    ranking_explanation: [],
+  },
+]

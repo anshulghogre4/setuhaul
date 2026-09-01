@@ -9,6 +9,7 @@ import type {
   DockBlockResult,
   DockBoard,
   FeasibleSlotsResult,
+  HoldForInformationResult,
   PlannerQueue,
 } from './types'
 import type { RejectReasonCode } from './reasons'
@@ -232,6 +233,34 @@ export function counterOffer(args: {
       snapshot_hash: args.snapshotHash,
       note: args.note ?? null,
     },
+    args.idempotencyKey,
+  )
+}
+
+/**
+ * `hold_for_information` -- section 7.5.1, FR-PLN-004. Issue #64.
+ *
+ * **One argument, and the two that are absent are the contract.** The body carries `question` and
+ * nothing else: no `snapshot_hash` (this consumes no capacity, so section 7.5's principle-3 guard
+ * does not attach) and **no duration** -- a client cannot choose how much time the hold buys, which
+ * is what stops it becoming the unbounded sit-on-capacity the catalog's own one-shot cap exists to
+ * prevent. The extension is D9's own TTL, resolved server-side.
+ *
+ * One-shot by construction: a second call on the same appointment answers 409 `HOLD_ALREADY_USED`.
+ * The UI's job is to make that 409 unreachable (`edge-cases.md` #6 -- prevention, not error
+ * handling) by disabling the affordance off `ttl.hold_used`; the refusal is still classified and
+ * rendered, because "unreachable" is a claim about this client and not about the other planner who
+ * held the same row a second ago.
+ */
+export function holdForInformation(args: {
+  shipmentId: string
+  appointmentId: string
+  question: string
+  idempotencyKey: string
+}): Promise<HoldForInformationResult> {
+  return plannerPost<HoldForInformationResult>(
+    `/api/v1/shipments/${encodeURIComponent(args.shipmentId)}/appointments/${encodeURIComponent(args.appointmentId)}/hold-for-information`,
+    { question: args.question },
     args.idempotencyKey,
   )
 }

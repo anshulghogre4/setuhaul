@@ -84,6 +84,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.services import notification_outbox
 from app.core.execution_context import ExecutionContext
 from app.core.settings import get_settings
 from app.scheduling import allocation
@@ -1357,6 +1358,16 @@ async def sweep_held_holds(
         reason=HELD_EXPIRY_REASON,
         actor=ACTOR_EXPIRY_SWEEPER,
     )
+
+    # #94: the "that hold lapsed, here are current options" message section 0.8 promises --
+    # one outbox row per lapsed hold, same transaction as the flip. A HELD row has no
+    # appointment (section 4), so the shipment is the routing key.
+    for row in rows:
+        await notification_outbox.enqueue_notification(
+            session,
+            event_type=notification_outbox.HOLD_LAPSED,
+            shipment_id=str(row["shipment_id"]) if row.get("shipment_id") else None,
+        )
 
     # Deliberately no escalation_queue row per lapsed hold, unlike the D9 leg's
     # PENDING_EXPIRED_UNACTIONED. A hold lapsing is the *designed* outcome of a driver not choosing

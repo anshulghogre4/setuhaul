@@ -69,6 +69,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import Clock, resolve_clock
 from app.core.errors import AppError
 from app.scheduling import allocation
+from app.services import notification_outbox
 from app.scheduling.holds import HeldSweepResult, sweep_held_holds
 
 __all__ = [
@@ -88,13 +89,18 @@ logger = logging.getLogger(__name__)
 # D9: "Pending TTL = 15 min, then release + escalate" (SOLUTION_DESIGN.md section 0 locked
 # decisions). The deadline is ordinarily *derived* as `booked_at + ttl` rather than stored.
 #
-# Issue #64 changed half of that: `public.appointments` now has an `expires_at` column
+# Issue #64 changed half of that: `public.appointments` has an `expires_at` column
 # (20260829134929_d2_held_state_dock_occupancy.sql step 7) so that section 7.5.1's
 # `hold_for_information` ("pauses the D9 clock exactly once", returning a `new_deadline`) has
 # somewhere honest to record an extension -- previously there was nowhere, and faking it by
-# touching `booked_at` would have corrupted the request's own history. The *tool* is still not
-# built; the column and this sweeper's handling of it are, so that the first writer of it inherits
-# correct expiry behaviour instead of a column the sweeper silently ignores.
+# touching `booked_at` would have corrupted the request's own history.
+#
+# **The tool now exists** (`allocation.hold_for_information`, issue #64 closed 2026-09-02), so this
+# is no longer a column wired up ahead of its writer: a held request really does arrive here with a
+# non-NULL `expires_at`, and the CASE below is the only thing that makes its extension mean
+# anything. That writer sets `expires_at = now + one further D9 TTL` exactly once per request --
+# see its docstring for why a bounded extension rather than a literal indefinite pause, and why
+# `expires_at IS NOT NULL` is simultaneously the new deadline and the spent-extension marker.
 #
 # The precedence rule, stated once here because it is the whole semantics of the column:
 # `expires_at IS NOT NULL` overrides the derived deadline; NULL means the derived deadline applies.
@@ -186,10 +192,19 @@ async def _pending_candidates(
     Two deadlines, one predicate (issue #64). A request whose `expires_at` a planner extended
     through `hold_for_information` is due at *that* instant; every other request is due at
     `booked_at + ttl`. The CASE picks per row rather than the caller picking per sweep, because a
-    single batch will routinely contain both kinds. Today no code writes `expires_at`, so the ELSE
-    branch is taken for 100% of rows and this scan is behaviourally identical to the pre-#64 one --
-    the column is wired up before its writer exists specifically so that it is not a trap for
-    whoever builds that writer.
+    single batch will routinely contain both kinds -- which, since `allocation.hold_for_information`
+    shipped, it genuinely can: the THEN branch is live, not dormant. A held request is therefore
+    swept when its *extended* deadline passes and not a minute before, which is the entire
+    behavioural content of "pauses the D9 clock".
+
+    The ORDER BY term is `COALESCE(expires_at, booked_at)` and is deliberately *not* the same
+    expression as the predicate. Stated honestly rather than dressed up: the two branches are on
+    different scales (an extended row's key is its deadline, an ordinary row's key is its deadline
+    minus the TTL), so mixing them is an approximate "oldest first", not a strict most-overdue-first
+    ordering. That is acceptable because ordering here only decides which rows make the LIMIT-N
+    batch, every row in the batch is already past its own deadline, and anything deferred is picked
+    up by the next cycle a minute later. Making it exact would mean repeating the CASE in the
+    ORDER BY for a distinction no operator can observe at this scale.
     """
     rows = (
         await session.execute(
@@ -369,6 +384,13 @@ async def _expire_one_pending(
             "created_at": now_iso,
             "updated_at": now_iso,
         },
+    )
+    # #94: FR-SYS-008's "notifies the driver" leg -- the half this sweeper never had. Same
+    # transaction as the expiry + escalation writes; the caller commits.
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.PENDING_EXPIRED,
+        appointment_id=appointment_id,
     )
     return released
 

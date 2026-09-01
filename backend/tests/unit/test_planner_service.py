@@ -73,6 +73,25 @@ def _session_with(*results) -> AsyncMock:
     return session
 
 
+def _scope_probe_session(*, grants: bool) -> AsyncMock:
+    """A session whose only statement is `scope.user_holds_facility_scope`'s probe (issue #106).
+
+    Needed because that probe reads `.first()` off the raw result rather than `.mappings()`, and a
+    bare `AsyncMock()` answers *every* attribute with a truthy mock -- so a session that mocked
+    nothing would silently report "yes, this user is granted that facility" and turn the M15
+    refusal tests below green against a resolver that had stopped refusing. `grants=False` is the
+    honest "no `user_scopes` row" answer; `grants=True` is the multi-facility coordinator #72 can
+    now create.
+    """
+    result = MagicMock()
+    result.first.return_value = (1,) if grants else None
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    return session
+
+
 def _dock_row(*, dock_id: str = DOCK, facility_id: str = FACILITY) -> dict:
     return {"dock_id": dock_id, "facility_id": facility_id, "dock_code": "D1", "dock_status": "ACTIVE"}
 
@@ -133,7 +152,17 @@ async def test_dock_block_impact_rejects_a_window_that_does_not_advance_time():
 
 
 @pytest.mark.asyncio
-async def test_block_dock_blocks_and_opens_one_cascade_escalation_for_the_affected_set():
+async def test_block_dock_blocks_and_opens_one_cascade_escalation_for_the_affected_set(
+    monkeypatch,
+):
+    # #94 wired a real notification producer into the cascade (P6); its context lookups
+    # would consume this test's scripted mock results. The producer's own behaviour is
+    # proof-suite-covered (part 3b); here it is stubbed so the cascade assertions stay
+    # about the cascade.
+    from app.services import notification_outbox
+    async def _noop_enqueue(session, **kwargs):
+        return 0
+    monkeypatch.setattr(notification_outbox, 'enqueue_option_withdrawn', _noop_enqueue)
     start = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
     end = start + timedelta(hours=2)
     affected = [
@@ -414,9 +443,17 @@ def queue_repo(monkeypatch):
     against a real cluster in `tests/proof/`, which is the only place it can be) but its arguments
     are recorded, so `test_queue_expires_lapsed_holds_before_reading_displacement` can assert both
     that it ran and that it ran first.
+
+    Issue #88 added a fourth -- `snapshot.load_dock_block_conflicts`, the dock-block leg of the
+    displacement column. Stubbed for the same reason and patched on `planner_service` rather than
+    on `snapshot`, because the import there is a `from ... import` binding: patching the source
+    module would leave this module's own reference pointing at the real coroutine. Its SQL is a
+    shared literal with the write path's, so the thing worth proving about it is what it *is*
+    (`tests/unit/test_planner_write_tools.py` asserts the fragment is one object, `tests/proof/`
+    runs it against a real cluster), not what a stub returns.
     """
-    calls: dict[str, list] = {"rows": [], "occupancy": [], "expiry": []}
-    state: dict[str, list] = {"rows": [], "occupancy": []}
+    calls: dict[str, list] = {"rows": [], "occupancy": [], "expiry": [], "blocks": []}
+    state: dict[str, list | dict] = {"rows": [], "occupancy": [], "blocks": {}}
     order: list[str] = []
 
     async def _rows(session, **kwargs):
@@ -434,11 +471,17 @@ def queue_repo(monkeypatch):
         order.append("expiry")
         return []
 
+    async def _blocks(session, appointment_ids):
+        calls["blocks"].append(list(appointment_ids))
+        order.append("blocks")
+        return state["blocks"]
+
     monkeypatch.setattr(planner_service.operations_repo, "list_planner_queue_rows", _rows)
     monkeypatch.setattr(planner_service.operations_repo, "list_live_dock_occupancy", _occupancy)
     monkeypatch.setattr(
         planner_service.holds, "expire_lapsed_holds_for_appointments", _expiry
     )
+    monkeypatch.setattr(planner_service, "load_dock_block_conflicts", _blocks)
     return {"calls": calls, "state": state, "order": order}
 
 
@@ -539,6 +582,166 @@ async def test_queue_does_not_treat_an_abutting_interval_as_a_displacement(queue
     queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
 
     assert queue.items[0].displacement.status == "NONE"
+
+
+# =================================================================================================
+# Issue #88 -- the dock-block leg of the displacement column
+# =================================================================================================
+#
+# The defect: `DISPLACEMENT_DETECTED` (raised by `confirm_request` via
+# `snapshot.displacement_conflicts`) counted overlapping claims **plus** dock blocks, while the
+# queue row's own displacement column counted only the first. A planner could be refused for a dock
+# taken offline under them that their screen had said nothing about. Section 7.3 calls this column
+# "the single most important field", so a preview that under-reports it is not a cosmetic gap.
+
+
+def _dock_block(dock_event_id: str = "DEVT-1", *, reason: str | None = "Forklift down") -> dict:
+    """One `DOCK_BLOCKED` entry in the shape `snapshot._DOCK_BLOCK_CONFLICTS_SQL` emits."""
+    return {
+        "conflict_type": "DOCK_BLOCKED",
+        "dock_event_id": dock_event_id,
+        "dock_id": DOCK,
+        "event_type": "MANUAL_BLOCK",
+        "reason": reason,
+    }
+
+
+@pytest.mark.asyncio
+async def test_queue_reports_a_dock_block_as_a_displacement(queue_repo):
+    """The row now warns about the dock the write path would refuse it for.
+
+    No overlapping claim at all here: `occupancy` is empty, so pre-#88 this row rendered
+    `displacement: NONE` while `confirm_request` refused it `DISPLACEMENT_DETECTED`.
+    """
+    queue_repo["state"]["rows"] = [_queue_row(appointment_id="APT-BLOCKED", occupancy=False)]
+    queue_repo["state"]["blocks"] = {"APT-BLOCKED": [_dock_block()]}
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    row = queue.items[0]
+    assert row.displacement.status == "CONFLICT"
+    assert [c["conflict_type"] for c in row.displacement.conflicts] == ["DOCK_BLOCKED"]
+    assert row.displacement.conflicts[0]["dock_event_id"] == "DEVT-1"
+
+
+@pytest.mark.asyncio
+async def test_a_dock_block_does_not_change_the_snapshot_hash(queue_repo):
+    """The hash-exclusion sub-item of #88, and the subtle one.
+
+    Dock blocks are rendered and do refuse, but must stay **out** of the digest. If they were in
+    it, blocking one dock would change the `snapshot_hash` of every outstanding row on that dock
+    and mass-refuse in-flight confirms with `SNAPSHOT_STALE` -- converting a targeted refusal into
+    a facility-wide one, and hiding the specific `DISPLACEMENT_DETECTED` the planner needs to read
+    (the write path checks displacement *first* precisely so that code keeps its meaning).
+
+    The identical row is rendered twice, differing only in the block, and the digests must match.
+    """
+    def _render():
+        queue_repo["state"]["rows"] = [_queue_row(appointment_id="APT-BLOCKED", occupancy=False)]
+        return planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    queue_repo["state"]["blocks"] = {}
+    clean = (await _render()).items[0]
+    queue_repo["state"]["blocks"] = {"APT-BLOCKED": [_dock_block()]}
+    blocked = (await _render()).items[0]
+
+    assert blocked.displacement.status == "CONFLICT"
+    assert clean.displacement.status == "NONE"
+    assert blocked.snapshot_hash == clean.snapshot_hash, (
+        "a dock block changed the snapshot_hash -- blocking one dock would now make every "
+        "outstanding row on it SNAPSHOT_STALE instead of DISPLACEMENT_DETECTED"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_overlapping_claim_still_changes_the_snapshot_hash(queue_repo):
+    """The other side of the exclusion, so the test above cannot pass by the hash ignoring
+    conflicts altogether."""
+    start = NOW + timedelta(hours=1)
+
+    def _render():
+        queue_repo["state"]["rows"] = [
+            _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+        ]
+        return planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    queue_repo["state"]["occupancy"] = []
+    clean = (await _render()).items[0]
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-OTHER",
+            start=start + timedelta(minutes=30),
+            end=start + timedelta(minutes=90),
+        )
+    ]
+    contested = (await _render()).items[0]
+
+    assert contested.snapshot_hash != clean.snapshot_hash
+
+
+@pytest.mark.asyncio
+async def test_both_conflict_legs_are_carried_and_told_apart(queue_repo):
+    """A row can be both displaced and blocked, and the two are different harms.
+
+    `INTERVAL_CONFLICT` is "another truck is booked here" -- a displacement the planner may still
+    choose to cause. `DOCK_BLOCKED` is "there is no dock" -- nothing to choose. One untyped list
+    would have made the row say the same sentence for both.
+    """
+    start = NOW + timedelta(hours=1)
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-UNCLAIMED", occupancy=False, interval_start=start)
+    ]
+    queue_repo["state"]["occupancy"] = [
+        _occupancy_row(
+            appointment_id="APT-OTHER",
+            start=start + timedelta(minutes=30),
+            end=start + timedelta(minutes=90),
+        )
+    ]
+    queue_repo["state"]["blocks"] = {"APT-UNCLAIMED": [_dock_block("DEVT-2")]}
+
+    row = (
+        await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+    ).items[0]
+
+    assert [c["conflict_type"] for c in row.displacement.conflicts] == [
+        "INTERVAL_CONFLICT",
+        "DOCK_BLOCKED",
+    ]
+    # The claim leg keeps every field it carried before the discriminator was added.
+    assert row.displacement.conflicts[0]["shipment_id"] == "SHP-APT-OTHER"
+    # And the block leg names no shipment at all -- nobody is displaced, the dock is gone.
+    assert "shipment_id" not in row.displacement.conflicts[1]
+
+
+@pytest.mark.asyncio
+async def test_the_dock_block_query_is_asked_about_exactly_the_queued_appointments(queue_repo):
+    """The shared predicate is only as good as the ids it is asked about.
+
+    `load_dock_block_conflicts` re-derives each appointment's interval through `snapshot.py`'s own
+    `_TARGET_CTE`, so the caller passes ids and never windows -- passing a window here would be the
+    second interval derivation the shared CTE exists to prevent.
+    """
+    queue_repo["state"]["rows"] = [
+        _queue_row(appointment_id="APT-A", occupancy=False),
+        _queue_row(appointment_id="APT-B", shipment_id="SHP2", occupancy=False),
+    ]
+
+    await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue_repo["calls"]["blocks"] == [["APT-A", "APT-B"]]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_queue_asks_no_dock_block_question(queue_repo):
+    """One query for an empty queue, still -- the common case for four of the five coordinators."""
+    queue_repo["state"]["rows"] = []
+
+    queue = await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
+
+    assert queue.count == 0
+    assert queue_repo["calls"]["blocks"] == []
+    assert queue_repo["order"] == ["rows"]
 
 
 @pytest.mark.asyncio
@@ -743,7 +946,10 @@ async def test_queue_expires_lapsed_holds_before_reading_displacement(
 
     await planner_service.get_planner_queue(AsyncMock(), _planner_ctx(), clock=CLOCK)
 
-    assert queue_repo["order"] == ["rows", "expiry", "occupancy"]
+    # `blocks` (issue #88's dock-block leg) runs last and is deliberately outside this ordering
+    # constraint: it reads `dock_status_events`, which has no hold lifecycle for the expiry to
+    # touch, so nothing about it can be poisoned by a lapsed hold.
+    assert queue_repo["order"] == ["rows", "expiry", "occupancy", "blocks"]
     call = queue_repo["calls"]["expiry"][0]
     # The same appointment ids the displacement check is about to be computed for -- not a
     # facility-wide sweep, and not a subset.
@@ -774,7 +980,12 @@ async def test_queue_horizon_is_translated_to_an_absolute_bound(queue_repo):
 
 @pytest.mark.asyncio
 async def test_queue_derives_scope_from_the_token_and_refuses_another_facility(queue_repo):
-    """M15: the `facility_id` argument narrows within scope; it never decides it."""
+    """M15: the `facility_id` argument narrows within scope; it never decides it.
+
+    Since issue #106 "within scope" also covers a `user_scopes` FACILITY grant, so the refusal is
+    asserted against a session that explicitly reports **no** such grant -- otherwise this would be
+    testing the mock rather than the rule.
+    """
     await planner_service.get_planner_queue(
         AsyncMock(), _planner_ctx(facility_id=FACILITY), facility_id=None, clock=CLOCK
     )
@@ -782,12 +993,31 @@ async def test_queue_derives_scope_from_the_token_and_refuses_another_facility(q
 
     with pytest.raises(AppError) as exc:
         await planner_service.get_planner_queue(
-            AsyncMock(),
+            _scope_probe_session(grants=False),
             _planner_ctx(facility_id=FACILITY),
             facility_id=OTHER_FACILITY,
             clock=CLOCK,
         )
     assert exc.value.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_queue_accepts_a_second_facility_the_callers_user_scopes_grant(queue_repo):
+    """Issue #106. A non-global coordinator granted two facilities may read the second.
+
+    Latent when filed -- no roster account holds two FACILITY rows -- but `#72`'s admin console
+    ships the write that creates one, and before this the moment anyone used it their second
+    facility answered 403 on every surface. The grant is the server's own row for this verified
+    `user_id`, so `facility_id` is still a request the server validates, never an assertion it
+    trusts (M15/NFR-019).
+    """
+    await planner_service.get_planner_queue(
+        _scope_probe_session(grants=True),
+        _planner_ctx(facility_id=FACILITY),
+        facility_id=OTHER_FACILITY,
+        clock=CLOCK,
+    )
+    assert queue_repo["calls"]["rows"][0]["facility_id"] == OTHER_FACILITY
 
 
 @pytest.mark.asyncio
@@ -943,7 +1173,11 @@ async def test_board_derives_scope_from_the_token_and_refuses_another_facility(b
 
     with pytest.raises(AppError) as exc:
         await planner_service.get_dock_board(
-            AsyncMock(), _planner_ctx(), facility_id=OTHER_FACILITY, clock=CLOCK
+            # Explicitly "no user_scopes grant" -- see `_scope_probe_session` (issue #106).
+            _scope_probe_session(grants=False),
+            _planner_ctx(),
+            facility_id=OTHER_FACILITY,
+            clock=CLOCK,
         )
     assert exc.value.code == "FORBIDDEN"
 

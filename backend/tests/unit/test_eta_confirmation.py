@@ -1,4 +1,5 @@
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -151,3 +152,70 @@ async def test_record_eta_update_binds_datetimes_and_strings_to_the_right_column
     # chat_messages x2, driver_exceptions x2 (the INSERT branch -- this fixture has no open
     # exception, so the UPDATE branch is not exercised here), audit_logs x1.
     assert checked == 9
+
+
+@pytest.mark.asyncio
+async def test_the_eta_audit_payload_is_valid_json(monkeypatch):
+    """`audit_logs.*_json` has to *be* JSON -- the column names say so and every reader assumes it.
+
+    **Regression test for a real defect, found 2026-09-02 by issue #104's proof-suite work.** This
+    function used to bind `str({...})` into `old_value_json`/`new_value_json`: a Python dict repr,
+    single-quoted with `None` for null, which is not JSON. Two consequences, both real: M14's
+    "every state change reconstructable" was false for every ETA update ever recorded (nothing
+    could parse the payload back), and a `new_value_json::jsonb` cast raises `invalid input syntax
+    for type json` for the *whole statement*, so the admin Audit tab's new event filter would have
+    500'd on any database where an ETA had ever been reported. The writer is fixed; the filter
+    keeps its `pg_input_is_valid` guard because rows written before the fix are still malformed
+    (`admin_governance_service.AUDIT_EVENT_EXPR`).
+
+    Deliberately a unit test rather than a proof-suite assertion: PostgreSQL accepted the malformed
+    string happily -- the column is `TEXT` -- so the database was never where this was visible.
+    What was wrong is the shape of the bind, which is exactly what a mocked session can see.
+    """
+    session = AsyncMock()
+    session.execute.return_value = MagicMock()
+    session.execute.return_value.mappings.return_value.first.return_value = None
+
+    monkeypatch.setattr(eta_service, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(eta_service, "store_idempotency", AsyncMock())
+    monkeypatch.setattr(
+        eta_service,
+        "_assert_driver_owns_shipment",
+        # `latest_eta_ts` is a real `datetime` here, not None, and that is the whole point of the
+        # fixture: `shipments.latest_eta_ts` is `timestamptz` after E1.1, so the value this
+        # function reads off the row is a datetime object. A `None` fixture would let a bare
+        # `json.dumps(...)` pass here while raising `TypeError: Object of type datetime is not
+        # JSON serializable` on every real call -- which is exactly what happened on 2026-09-02
+        # and took proof parts 3 and 6 down. The payload needs `default=str`.
+        AsyncMock(return_value={"shipment_id": "SHP1017", "driver_id": "DRV001",
+                                "destination_facility_id": "FAC-JAI-01",
+                                "latest_eta_ts": datetime(2026, 8, 7, 15, 30, tzinfo=timezone.utc),
+                                "original_eta_ts": None}),
+    )
+    monkeypatch.setattr(eta_service, "_ensure_thread", AsyncMock(return_value="THR001"))
+    monkeypatch.setattr(eta_service, "_reread", AsyncMock(return_value={"status": "PERSISTED"}))
+
+    await record_eta_update(
+        session,
+        ctx=_driver_ctx(),
+        shipment_id="SHP1017",
+        command=EtaUpdateCommand(
+            declared_eta_ts="2026-08-07T21:00:00+05:30",
+            confirmed=True,
+            confirmation_eta_ts="2026-08-07T21:00:00+05:30",
+        ),
+        idempotency_key="eta-audit-json-key",
+    )
+
+    payloads = [
+        call.args[1][column]
+        for call in session.execute.await_args_list
+        if len(call.args) > 1
+        and isinstance(call.args[1], dict)
+        and "INSERT INTO public.audit_logs" in str(call.args[0])
+        for column in ("old_value_json", "new_value_json")
+        if call.args[1].get(column) is not None
+    ]
+    assert payloads, "record_eta_update wrote no audit payload at all"
+    for payload in payloads:
+        json.loads(payload)

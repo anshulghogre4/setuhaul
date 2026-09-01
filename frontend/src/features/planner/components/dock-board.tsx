@@ -1,5 +1,5 @@
 import { Truck } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { RegionError } from '@/components/states/region-states'
@@ -7,7 +7,10 @@ import { formatUserFriendlyError } from '@/core/http/api'
 import { useCountdownClock } from '@/shared/lib/countdown'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/utils'
-import { endDockBlock, fetchDockBoard } from '../lib/api'
+import { counterOffer, endDockBlock, fetchDockBoard, fetchFeasibleSlots } from '../lib/api'
+import { classifyRefusal, withNothingChanged } from '../lib/refusals'
+import type { RejectReasonCode } from '../lib/reasons'
+import { BoardPickerBanner } from './board-picker'
 import {
   LEGEND_STATES,
   barTreatment,
@@ -17,7 +20,14 @@ import {
 } from '../lib/board'
 import { formatDate, formatTime } from '../lib/format'
 import { BoardSkeleton } from './board-skeleton'
-import type { BoardBar, BoardBlock, BoardDock, DockBoard as DockBoardPayload } from '../lib/types'
+import type {
+  BoardBar,
+  BoardBlock,
+  BoardDock,
+  DockBoard as DockBoardPayload,
+  FeasibleSlotOption,
+  PlannerQueueRow,
+} from '../lib/types'
 
 /**
  * The Board tab at rest -- `03-planner-dock-board/screens.md` section 3, `stitch-prompts.md`
@@ -73,14 +83,75 @@ export function DockBoardPanel({
    * which is precisely the case it exists for.
    */
   externalReloadToken = 0,
+  picking = null,
+  onPickerCancel = () => {},
+  onPickerDone = () => {},
 }: {
   facilityId: string | null
   externalReloadToken?: number
+  /** U103: the queue row a planner pressed Counter-offer on, or `null` at rest. Owned by
+   *  `PlannerConsole` because entering the picker also switches tab, which is the console's job. */
+  picking?: PlannerQueueRow | null
+  onPickerCancel?: () => void
+  onPickerDone?: (outcome: { ok: boolean; message: string }) => void
 }) {
   const [board, setBoard] = useState<DockBoardPayload | null>(null)
   const [failed, setFailed] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const { now, offsetMs, setServerTime } = useCountdownClock()
+
+  // --- counter-offer picker (U103, `screens.md` section 4) -------------------------------------
+  const [options, setOptions] = useState<FeasibleSlotOption[] | null>(null)
+  const [optionsToken, setOptionsToken] = useState(0)
+  const [chosen, setChosen] = useState<FeasibleSlotOption | null>(null)
+  const [reason, setReason] = useState<RejectReasonCode | null>(null)
+  const [note, setNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [pickerError, setPickerError] = useState<string | null>(null)
+
+  /** One key per *press*, reused across a retry of that press -- U70, and the same mechanism
+   *  `queue-tab.tsx` uses. Keyed by appointment AND slot, so picking a different interval after a
+   *  refusal is a genuinely new decision with its own key rather than a replay of the first. */
+  const keys = useRef<Map<string, string>>(new Map())
+  const keyFor = useCallback((slot: string) => {
+    const existing = keys.current.get(slot)
+    if (existing) return existing
+    const next = crypto.randomUUID()
+    keys.current.set(slot, next)
+    return next
+  }, [])
+
+  const pickingShipment = picking?.shipment_id ?? null
+
+  useEffect(() => {
+    // Entering the picker (or re-fetching after INTERVAL_UNAVAILABLE) reloads Stage 1's answer.
+    // Leaving it drops everything: a half-chosen interval surviving into the next request would be
+    // the worst possible carry-over on this surface.
+    setChosen(null)
+    setReason(null)
+    setNote('')
+    setPickerError(null)
+    if (!pickingShipment) {
+      setOptions(null)
+      return
+    }
+    let ignore = false
+    setOptions(null)
+    fetchFeasibleSlots(pickingShipment)
+      .then((res) => {
+        if (!ignore) setOptions(res.options)
+      })
+      .catch((err: unknown) => {
+        if (ignore) return
+        setOptions([])
+        setPickerError(
+          `Couldn't load feasible intervals. ${err instanceof Error ? err.message : ''}`.trim(),
+        )
+      })
+    return () => {
+      ignore = true
+    }
+  }, [pickingShipment, optionsToken])
 
   useEffect(() => {
     let ignore = false
@@ -103,6 +174,65 @@ export function DockBoardPanel({
 
   const retry = useCallback(() => setReloadToken((n) => n + 1), [])
 
+  /**
+   * `screens.md` section 4's commit step.
+   *
+   * > *"Clicking an open interval **revalidates through Stage 1 before offering** — a planner
+   * > cannot hand out an infeasible slot by hand. A refusal (`INTERVAL_UNAVAILABLE`) re-renders the
+   * > board with that interval now shown occupied, never a dead click."*
+   *
+   * The revalidation is genuinely server-side: `counter_offer` resolves `(dock_id, start_ts)` to a
+   * real `appointment_slots` row and runs `explain_slot_eligibility` before reserving. What the
+   * board contributes is that the planner can only ever *click* an interval Stage 1 already
+   * returned, so the refusal is a rare race rather than the normal outcome -- the exact property
+   * `lib/api.ts::fetchFeasibleSlots` says a typed-timestamp form would have destroyed.
+   */
+  const sendCounterOffer = useCallback(async () => {
+    if (!picking || !chosen || reason === null || sending) return
+    const slot = `counter:${picking.appointment_id}:${chosen.slot_id}`
+    setSending(true)
+    setPickerError(null)
+    try {
+      await counterOffer({
+        shipmentId: picking.shipment_id,
+        appointmentId: picking.appointment_id,
+        dockId: chosen.dock_id,
+        startTs: chosen.slot_start_ts,
+        reasonCode: reason,
+        // Round-tripped verbatim from the queue row. Never recomputed here -- `lib/api.ts`'s
+        // snapshot rule applies to this call site exactly as it does to the dialog's.
+        snapshotHash: picking.snapshot_hash,
+        note: note.trim() === '' ? null : note.trim(),
+        idempotencyKey: keyFor(slot),
+      })
+      keys.current.delete(slot)
+      onPickerDone({
+        ok: true,
+        message: `Counter-offered ${picking.shipment_id} · ${chosen.dock_code}. Awaiting the driver.`,
+      })
+    } catch (err) {
+      const refusal = classifyRefusal(err)
+      // A refusal is a decided outcome, not a transport hiccup: the key must not be reused,
+      // because a retry would be a genuinely new decision against re-read data.
+      keys.current.delete(slot)
+      if (refusal.kind === 'INTERVAL_UNAVAILABLE') {
+        // Section 4's own answer: stay in the picker, drop the choice, and re-read BOTH the
+        // feasible set and the board so the interval that was taken renders occupied.
+        setChosen(null)
+        setPickerError(`${refusal.message} Pick another interval.`)
+        setOptionsToken((n) => n + 1)
+        retry()
+      } else {
+        // Everything else (ALREADY_ACTIONED, SNAPSHOT_STALE, DISPLACEMENT_DETECTED) closes the
+        // picker and reports on the row, where the planner can see it in the queue's own context
+        // -- the same split `counter-offer-dialog.tsx` documents for the interim form.
+        onPickerDone({ ok: false, message: withNothingChanged(refusal.message) })
+      }
+    } finally {
+      setSending(false)
+    }
+  }, [picking, chosen, reason, note, sending, keyFor, onPickerDone, retry])
+
   if (failed) {
     // State 23. Scoped to this region -- the Queue tab stays usable, per the prompt's own error
     // variant ("never a whole-app error screen").
@@ -112,15 +242,73 @@ export function DockBoardPanel({
 
   return (
     <>
-      <Board board={board} nowMs={now + offsetMs} />
+      {picking ? (
+        <BoardPickerBanner
+          row={picking}
+          chosen={chosen}
+          reason={reason}
+          note={note}
+          optionCount={options?.length ?? 0}
+          outOfHorizonCount={countOutOfHorizon(options, board)}
+          loading={options === null}
+          busy={sending}
+          error={pickerError}
+          onReasonChange={setReason}
+          onNoteChange={setNote}
+          onClearChoice={() => setChosen(null)}
+          onCancel={onPickerCancel}
+          onSubmit={() => void sendCounterOffer()}
+        />
+      ) : null}
+
+      <Board
+        board={board}
+        nowMs={now + offsetMs}
+        pickable={picking ? (options ?? []) : null}
+        chosenSlotId={chosen?.slot_id ?? null}
+        onPickInterval={(option) => {
+          setPickerError(null)
+          setChosen(option)
+        }}
+      />
+
       {/* Flow 8's second stated entry point. Rendered here rather than inside `Board` so
           `BoardPlate` (the `/planner/_states` gallery) keeps rendering the board and nothing that
           writes -- a gallery artboard with a live `end_dock_block` button would be a fixture page
           that can change production capacity. `retry` is the same reload token the fetch above
-          uses, so ending a block re-reads the board rather than mutating a local copy of it. */}
-      <ActiveBlocks board={board} onEnded={retry} />
+          uses, so ending a block re-reads the board rather than mutating a local copy of it.
+
+          Hidden while picking: `screens.md` section 4's board carries exactly one action, and
+          leaving a capacity-mutating control live underneath the picker invites a planner to block
+          the very dock they are mid-way through offering. */}
+      {picking ? null : <ActiveBlocks board={board} onEnded={retry} />}
     </>
   )
+}
+
+/**
+ * How many of Stage 1's feasible intervals cannot be drawn on this board.
+ *
+ * The board's horizon is server-computed as "four hours, or until closing time, whichever comes
+ * sooner", while `find_feasible_slots` searches its own, longer horizon -- so a genuinely feasible
+ * interval can simply be off the right-hand edge, or on a dock outside this facility's board.
+ * `placeOnTrack` already returns `null` for the first case (that is how a bar outside the horizon
+ * is correctly not drawn); this counts the same condition so the banner can *say* the number
+ * rather than the planner discovering that four of six options never appeared.
+ */
+function countOutOfHorizon(
+  options: FeasibleSlotOption[] | null,
+  board: DockBoardPayload,
+): number {
+  if (options === null) return 0
+  const startMs = Date.parse(board.horizon_start)
+  const endMs = Date.parse(board.horizon_end)
+  const dockIds = new Set(board.docks.map((d) => d.dock_id))
+  return options.filter(
+    (o) =>
+      !dockIds.has(o.dock_id) ||
+      placeOnTrack(o.slot_start_ts, o.slot_end_ts, startMs, endMs) === null,
+  ).length
 }
 
 /**
@@ -288,12 +476,47 @@ function ActiveBlocks({
  * The now-line still comes from the shared clock, so on a fixture whose horizon is in the past the
  * line is correctly absent rather than pinned to an edge.
  */
-export function BoardPlate({ board }: { board: DockBoardPayload }) {
+export function BoardPlate({
+  board,
+  pickable = null,
+  chosenSlotId = null,
+  onPickInterval,
+}: {
+  board: DockBoardPayload
+  /** Lets the gallery mount the picker's own rendering (states 3/24/25) through the SAME `Board`
+   *  the live route uses. Still writes nothing: the plate supplies a no-op `onPickInterval`, and
+   *  the counter-offer call lives in `DockBoardPanel`, which the gallery never mounts. */
+  pickable?: FeasibleSlotOption[] | null
+  chosenSlotId?: string | null
+  onPickInterval?: (option: FeasibleSlotOption) => void
+}) {
   const { now, offsetMs } = useCountdownClock()
-  return <Board board={board} nowMs={now + offsetMs} />
+  return (
+    <Board
+      board={board}
+      nowMs={now + offsetMs}
+      pickable={pickable}
+      chosenSlotId={chosenSlotId}
+      onPickInterval={onPickInterval}
+    />
+  )
 }
 
-function Board({ board, nowMs }: { board: DockBoardPayload; nowMs: number }) {
+function Board({
+  board,
+  nowMs,
+  pickable = null,
+  chosenSlotId = null,
+  onPickInterval,
+}: {
+  board: DockBoardPayload
+  nowMs: number
+  /** `null` = at rest. A non-null array (even empty) means the counter-offer picker is active, and
+   *  is what switches every lane into eligible/ineligible rendering. */
+  pickable?: FeasibleSlotOption[] | null
+  chosenSlotId?: string | null
+  onPickInterval?: (option: FeasibleSlotOption) => void
+}) {
   const horizonStartMs = useMemo(() => Date.parse(board.horizon_start), [board.horizon_start])
   const horizonEndMs = useMemo(() => Date.parse(board.horizon_end), [board.horizon_end])
 
@@ -371,6 +594,13 @@ function Board({ board, nowMs }: { board: DockBoardPayload; nowMs: number }) {
               horizonStartMs={horizonStartMs}
               horizonEndMs={horizonEndMs}
               ticks={ticks}
+              picking={pickable !== null}
+              // Eligibility is Stage 1's own answer, projected onto this lane -- never recomputed
+              // client-side from dock_type/weight, which would be a second implementation of a
+              // constraint the engine already owns.
+              laneOptions={pickable?.filter((o) => o.dock_id === dock.dock_id) ?? []}
+              chosenSlotId={chosenSlotId}
+              onPickInterval={onPickInterval}
             />
           ))}
 
@@ -414,6 +644,10 @@ function Lane({
   horizonStartMs,
   horizonEndMs,
   ticks,
+  picking = false,
+  laneOptions = [],
+  chosenSlotId = null,
+  onPickInterval,
 }: {
   dock: BoardDock
   bars: BoardBar[]
@@ -421,18 +655,46 @@ function Lane({
   horizonStartMs: number
   horizonEndMs: number
   ticks: number[]
+  picking?: boolean
+  laneOptions?: FeasibleSlotOption[]
+  chosenSlotId?: string | null
+  onPickInterval?: (option: FeasibleSlotOption) => void
 }) {
+  /**
+   * `screens.md` section 4: *"Ineligible docks dim and become unclickable (`components.md` §18's
+   * **Disabled**, not Inactive — this is a temporary, prerequisite-driven unavailability specific
+   * to *this* shipment, not a permission or scope question)."*
+   *
+   * Disabled is the right tier and it is why there is nothing to activate here: an Inactive control
+   * explains itself on press, but "this dock cannot take this shipment" has no further explanation
+   * this client possesses (no read returns per-dock constraint failures), so a press that said
+   * nothing new would be worse than a lane that is plainly out of play. The `title` carries the one
+   * true sentence, and the lane keeps its label and its bars so the planner can still *read* it.
+   */
+  const ineligible = picking && laneOptions.length === 0
+
   return (
-    <div role="listitem" className="flex items-center border-b border-border">
+    <div
+      role="listitem"
+      className="flex items-center border-b border-border"
+      data-ineligible={ineligible ? 'true' : undefined}
+    >
       <span
         className={cn(
           LABEL_W,
-          'shrink-0 truncate py-1 pr-2 font-mono text-supporting text-muted-foreground',
+          'shrink-0 truncate py-1 pr-2 font-mono text-supporting',
+          // Issue #90's ruling: dim with the muted/disabled TOKENS, never an opacity multiplier --
+          // opacity on a lane would drag its bars' contrast below the floor they were measured at.
+          ineligible ? 'text-disabled-foreground' : 'text-muted-foreground',
         )}
       >
         {dock.dock_code}
       </span>
-      <div className={cn('relative flex-1 rounded-sm bg-hover', LANE_H)}>
+      <div
+        className={cn('relative flex-1 rounded-sm', LANE_H, ineligible ? 'bg-disabled' : 'bg-hover')}
+        aria-disabled={ineligible || undefined}
+        title={ineligible ? `${dock.dock_code}: no feasible interval for this shipment` : undefined}
+      >
         {/* One 1px hour tick, and nothing else -- every other gridline decoration is excluded. */}
         {ticks.map((t) => (
           <span
@@ -465,8 +727,92 @@ function Lane({
             horizonEndMs={horizonEndMs}
           />
         ))}
+
+        {/* Drawn LAST so a pickable interval sits above the occupancy bars it is offered against --
+            the one case on this board where something must be on top of a booking, because it is
+            the thing the planner is being asked to click. */}
+        {laneOptions.map((option) => (
+          <PickableInterval
+            key={option.slot_id}
+            option={option}
+            dock={dock}
+            chosen={chosenSlotId === option.slot_id}
+            horizonStartMs={horizonStartMs}
+            horizonEndMs={horizonEndMs}
+            onPick={() => onPickInterval?.(option)}
+          />
+        ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * One clickable open interval in the counter-offer picker (`screens.md` section 4's
+ * *"▒ click here ▒"*).
+ *
+ * A real `<button>`, so it is keyboard-reachable and gets focus-visible for free -- the same
+ * reasoning `Bar` gives for being a button that does nothing. Unlike `Bar`, this one does act, and
+ * it is the **only** interactive element the board ever adds. Nothing here is draggable and no
+ * range-select exists: U25's rule survives the picker intact, which is exactly why the design
+ * specifies "click an open interval" rather than "drag out a window".
+ *
+ * The accessible name carries dock, dated interval and the differentiator, because a screen-reader
+ * user cannot see which lane the button sits in.
+ */
+function PickableInterval({
+  option,
+  dock,
+  chosen,
+  horizonStartMs,
+  horizonEndMs,
+  onPick,
+}: {
+  option: FeasibleSlotOption
+  dock: BoardDock
+  chosen: boolean
+  horizonStartMs: number
+  horizonEndMs: number
+  onPick: () => void
+}) {
+  const place = placeOnTrack(
+    option.slot_start_ts,
+    option.slot_end_ts,
+    horizonStartMs,
+    horizonEndMs,
+  )
+  // Outside the drawn horizon. Not an error -- the banner counts these and says so.
+  if (place === null) return null
+
+  const label = `Offer ${dock.dock_code} · ${formatDate(option.slot_start_ts)} · ${formatTime(
+    option.slot_start_ts,
+  )}–${formatTime(option.slot_end_ts)}${option.differentiator ? ` · ${option.differentiator}` : ''}`
+
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      aria-pressed={chosen}
+      title={label}
+      aria-label={label}
+      className={cn(
+        'absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-sm',
+        'border-2 border-dashed text-micro font-semibold whitespace-nowrap',
+        'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1',
+        // Deliberately NOT a promise-state token: this is an offer being considered, not a claim
+        // on the dock, and reusing a state colour would say the slot is already held. The primary
+        // ring is the product's "you may act here" signal everywhere else too.
+        chosen
+          ? 'border-solid border-primary bg-primary text-primary-foreground'
+          : 'border-primary bg-card text-primary hover:bg-hover',
+      )}
+      style={{ left: `${place.leftPct}%`, width: `${place.widthPct}%` }}
+    >
+      <span aria-hidden="true" className="truncate px-1">
+        {chosen ? '✓ ' : ''}
+        {formatTime(option.slot_start_ts)}
+      </span>
+    </button>
   )
 }
 

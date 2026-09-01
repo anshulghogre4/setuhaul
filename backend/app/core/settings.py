@@ -190,6 +190,27 @@ class Settings(BaseSettings):
     # Starlette regex; allows Vercel preview/prod *.vercel.app without knowing the URL yet.
     cors_origin_regex: str = r"https://.*\.vercel\.app"
 
+    # E7.2 (issue #46), DEPLOYMENT.md section 8 decision D-3: Sentry owns *unhandled exceptions with
+    # stack traces*, the one job neither CloudWatch (rates and infra metrics) nor LangSmith (inside
+    # a turn) does. Blank by default and that default is load-bearing, not timidity: `init_sentry`
+    # never imports or initialises the SDK while this is empty, so the feature ships genuinely dark
+    # -- zero network egress, zero request-path cost, and no behaviour to roll back. It arrives in
+    # production as SSM SecureString `/setuhaul/sentry-dsn` -> env `SENTRY_DSN`.
+    #
+    # A DSN is not strictly a secret (it is embedded in every frontend bundle by design) but it is
+    # an unauthenticated write credential for the project's event stream, so it is stored the same
+    # way as the other `/setuhaul/*` values rather than as a plain String.
+    sentry_dsn: str = ""
+    # 10% of transactions. Deliberately small and deliberately non-zero: DEPLOYMENT.md section 8
+    # gives *tracing* to LangSmith, so Sentry performance data is a cross-check on the REST
+    # surfaces LangSmith never sees, not a second tracing system. Set to 0.0 to make Sentry
+    # errors-only without touching code.
+    sentry_traces_sample_rate: float = 0.1
+    # Stamped onto every event so a stack trace can be tied to the commit that produced it. Blank
+    # is honest rather than harmful -- Sentry simply groups without a release. The deploy scripts
+    # are the natural place to set this to a git SHA later; nothing reads it if it stays blank.
+    sentry_release: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -314,6 +335,17 @@ class Settings(BaseSettings):
     @property
     def ready_upstash(self) -> bool:
         return bool(self.upstash_redis_rest_url and self.upstash_redis_rest_token)
+
+    @property
+    def sentry_enabled(self) -> bool:
+        """True only when a real DSN is configured (E7.2 / issue #46).
+
+        Named the same way as the `ready_*` predicates above so the readiness surfaces can report
+        it without re-deriving the rule. `.strip()` matters: SSM parameters routinely arrive with a
+        trailing newline, and an all-whitespace DSN would otherwise pass a truthiness check and
+        then make `sentry_sdk.init` raise on a malformed URL at startup.
+        """
+        return bool((self.sentry_dsn or "").strip())
 
 
 @lru_cache

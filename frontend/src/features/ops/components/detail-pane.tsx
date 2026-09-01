@@ -8,7 +8,9 @@ import { REASON_META } from '../lib/reasons'
 import { sendAsOperationsEnabled } from '../lib/flags'
 import type { EscalationChange } from '../lib/live-queue'
 import type { CancelReasonCode, EscalationQueueItem, ResolveReasonCode, ThreadMessage } from '../lib/types'
+import { EscalateDialog } from './escalate-dialog'
 import { EscalationStepper } from './escalation-stepper'
+import { DetailOverflowMenu, REASSIGN_BLOCKED_REASON } from './overflow-menu'
 import { OwnerControl } from './owner-control'
 import { CancelDialog, ResolveDialog } from './reason-picker-dialog'
 import { ThreadComposer } from './thread-composer'
@@ -40,6 +42,8 @@ export function DetailPane({
   liveChange = null,
   onDismissLiveChange = () => {},
   onAcknowledge,
+  onStartWork = () => {},
+  onEscalated = () => {},
   onResolve,
   onCancel,
   busy,
@@ -69,6 +73,10 @@ export function DetailPane({
   liveChange?: EscalationChange | null
   onDismissLiveChange?: () => void
   onAcknowledge: () => void
+  /** Flow 1 step 4 -- `ACKNOWLEDGED -> IN_PROGRESS`, set explicitly once real work has started. */
+  onStartWork?: () => void
+  /** A new case was opened on this shipment from the overflow's Escalate entry. */
+  onEscalated?: (escalationId: string) => void
   onResolve: (reasonCode: ResolveReasonCode) => void
   onCancel: (reasonCode: CancelReasonCode) => void
   busy?: boolean
@@ -99,6 +107,7 @@ export function DetailPane({
 }) {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [escalateOpen, setEscalateOpen] = useState(false)
   const fallbackHeadingId = useId()
   const headingId = headingIdProp ?? fallbackHeadingId
 
@@ -154,6 +163,12 @@ export function DetailPane({
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <OwnerControl ownerName={item.owner_name} onAcknowledge={onAcknowledge} busy={busy} />
+            <StartWorkControl
+              item={item}
+              currentUserId={currentUserId}
+              busy={busy}
+              onStartWork={onStartWork}
+            />
             {sendAsOperationsEnabled ? (
               <TakeoverControl
                 item={item}
@@ -164,6 +179,18 @@ export function DetailPane({
             ) : (
               <UnwiredTakeoverNote />
             )}
+            {/* `screens.md` section 3: the overflow appears "once acknowledged", and it is pushed
+                to the trailing edge because prompt 7 draws it opposite the primary action rather
+                than beside it. */}
+            {item.owner_name !== null ? (
+              <div className="ml-auto">
+                <DetailOverflowMenu
+                  busy={busy}
+                  onEscalate={() => setEscalateOpen(true)}
+                  reassignBlockedReason={REASSIGN_BLOCKED_REASON}
+                />
+              </div>
+            ) : null}
           </div>
           {/* Full width, below the row -- several lines of copy plus, for the recoverable
               hand-back refusal, its own action button. Inside the flex row above it would be
@@ -240,6 +267,13 @@ export function DetailPane({
         />
       )}
 
+      <EscalateDialog
+        item={item}
+        open={escalateOpen}
+        onOpenChange={setEscalateOpen}
+        onEscalated={onEscalated}
+      />
+
       <ResolveDialog
         open={resolveOpen}
         onOpenChange={setResolveOpen}
@@ -259,6 +293,83 @@ export function DetailPane({
         busy={busy}
       />
     </div>
+  )
+}
+
+/**
+ * **Advance to `IN_PROGRESS`** -- `flows-and-states.md` Flow 1 step 4: *"Advancing to
+ * `IN_PROGRESS` is a status the coordinator sets explicitly once real work has started, not an
+ * automatic side effect of acknowledging."*
+ *
+ * ## Why this button did not exist until now, and where the design does and does not place it
+ *
+ * `POST /operations/escalations/{id}/start` (issue #56) and `lib/api.ts::startEscalationWork` have
+ * both shipped since E5.2, but the only call site was the hand-back recovery banner in
+ * `takeover-control.tsx` -- so the middle stepper dot was reachable only as a side effect of a
+ * *failed* hand-back, or of a takeover (which advances the status server-side in the same
+ * transaction). A coordinator working a reason that never involves a thread at all
+ * (`NOTIFICATION_FAILED`, `WAREHOUSE_REPLY_CONFLICT`) had no way to say they had started.
+ *
+ * **The design specifies the transition but never draws the control.** `flows-and-states.md`
+ * Flow 1 requires it, `components.md` section 5 depends on it (hand-back "requires the escalation
+ * to be in `IN_PROGRESS` or later"), and `escalation-stepper.tsx` has always drawn the position --
+ * but `screens.md` section 3 and `stitch-prompts.md` prompt 7 both draw only `[ Acknowledge ]`
+ * and `[ ⋯ ]`. This build puts it in the same lifecycle action row, immediately after Acknowledge,
+ * because that row *is* the pane's lifecycle sequence and the transition is the next step in it.
+ * Flagged for the owner rather than treated as a settled placement.
+ *
+ * **Not a primary button.** Prompt 7 is explicit that "only one primary action exists in this
+ * view" and names Acknowledge and Take over as the two decisions the pane foregrounds, so this is
+ * `neutral`.
+ *
+ * ## Three visibility rules, each from a server behaviour rather than a taste
+ *
+ *  - **Hidden while unowned.** `start_escalation_work` answers `NOT_ACKNOWLEDGED`; the pane
+ *    already shows `[ Acknowledge ]`, which is the one thing that makes this reachable.
+ *  - **Hidden once past `ACKNOWLEDGED`.** At `IN_PROGRESS` the stepper says so and a second press
+ *    would only return `ALREADY_IN_PROGRESS`.
+ *  - **Inactive, not hidden, when somebody else owns it** (`components.md` foundations section 18):
+ *    the endpoint answers `NOT_OWNER`, and a coordinator looking at a colleague's escalation should
+ *    be told that rather than shown a control that fails on press. `currentUserId === null` (the
+ *    `/auth/me` read failed, which this console treats as non-fatal) falls back to offering it --
+ *    the server is the authority either way, and hiding a legitimate action on a failed read is the
+ *    worse of the two errors.
+ */
+function StartWorkControl({
+  item,
+  currentUserId,
+  busy,
+  onStartWork,
+}: {
+  item: EscalationQueueItem
+  currentUserId: string | null
+  busy?: boolean
+  onStartWork: () => void
+}) {
+  const explainId = useId()
+  if (item.escalation_status !== 'ACKNOWLEDGED') return null
+
+  const someoneElseOwnsIt =
+    currentUserId !== null && item.owner_user_id !== null && item.owner_user_id !== currentUserId
+
+  if (someoneElseOwnsIt) {
+    return (
+      <>
+        <Button variant="neutral" aria-disabled aria-describedby={explainId} onClick={(e) => e.preventDefault()}>
+          Mark in progress
+        </Button>
+        <span id={explainId} className="text-supporting text-muted-foreground">
+          {item.owner_name ?? 'Another coordinator'} owns this — only the owner can start work on
+          it.
+        </span>
+      </>
+    )
+  }
+
+  return (
+    <Button variant="neutral" onClick={onStartWork} disabled={busy}>
+      Mark in progress
+    </Button>
   )
 }
 

@@ -2457,6 +2457,19 @@ wheels = [
 ]
 
 [[package]]
+name = "sentry-sdk"
+version = "2.68.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9a/e7/c504a4bd2d95df2e0ab73714a9161ff1cf6ff1486922685e5f46dfd9eba8/sentry_sdk-2.68.1.tar.gz", hash = "sha256:6a97895230b04bc35d4d8d2e51e3b9e21902dfb0086ccf1f131a80c15c7b997a", size = 1019262, upload-time = "2026-08-24T13:09:38.108Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2b/28/465ad9382be98f2172e691f5836cf87f936773913ad7ab85ba1ba1d6706e/sentry_sdk-2.68.1-py3-none-any.whl", hash = "sha256:775b78871783a0ffd758276ad01b3bb2b1ebcdad8f9d2f0a7723f76b73c99b65", size = 520851, upload-time = "2026-08-24T13:09:36.186Z" },
+]
+
+[[package]]
 name = "setuhaul-backend"
 version = "0.1.0"
 source = { virtual = "." }
@@ -2469,12 +2482,14 @@ dependencies = [
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
+    { name = "opentelemetry-api" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "pytest-asyncio" },
     { name = "python-multipart" },
     { name = "redis" },
+    { name = "sentry-sdk" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "truststore" },
     { name = "tzdata" },
@@ -2488,6 +2503,11 @@ agentcore = [
     { name = "opentelemetry-instrumentation-langchain" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "opentelemetry-sdk" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0,<1.0.0" },
@@ -2499,6 +2519,7 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=1.0.0,<2.0.0" },
     { name = "langchain-google-genai", specifier = ">=4.0.0,<5.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.0,<2.0.0" },
+    { name = "opentelemetry-api", specifier = ">=1.44.0,<2.0.0" },
     { name = "opentelemetry-instrumentation-langchain", marker = "extra == 'agentcore'", specifier = ">=0.40.0" },
     { name = "pydantic", specifier = ">=2.9.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0,<3.0.0" },
@@ -2506,6 +2527,7 @@ requires-dist = [
     { name = "pytest-asyncio", specifier = ">=1.3.0,<2.0.0" },
     { name = "python-multipart", specifier = ">=0.0.17,<1.0.0" },
     { name = "redis", specifier = ">=5.0.0,<6.0.0" },
+    { name = "sentry-sdk", specifier = ">=2.68.0,<3.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36,<3.0.0" },
     { name = "truststore", specifier = ">=0.10.0,<1.0.0" },
     { name = "tzdata", specifier = ">=2024.1" },
@@ -2513,6 +2535,9 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0,<1.0.0" },
 ]
 provides-extras = ["agentcore"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "opentelemetry-sdk", specifier = ">=1.44.0,<2.0.0" }]
 
 [[package]]
 name = "six"

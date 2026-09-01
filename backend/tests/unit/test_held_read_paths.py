@@ -85,6 +85,21 @@ def no_lapsed_holds(monkeypatch):
 
 
 @pytest.fixture
+def no_dock_blocks(monkeypatch):
+    """Stub issue #88's dock-block leg out of `get_planner_queue`, same reason as above.
+
+    These tests are about the *hold* half of the displacement column (#84) and hand the service a
+    bare `AsyncMock()` session, so the real `snapshot.load_dock_block_conflicts` statement has
+    nothing to run against. "No blocks" is also the case they mean -- nothing here takes a dock
+    offline. Patched on `planner_service`, not on `snapshot`: the import there is a `from ...
+    import` binding, so patching the source module would leave the caller's reference untouched.
+    """
+    monkeypatch.setattr(
+        planner_service, "load_dock_block_conflicts", AsyncMock(return_value={})
+    )
+
+
+@pytest.fixture
 def flag_off(monkeypatch):
     monkeypatch.setenv("TWO_PHASE_HOLD_ENABLED", "false")
     get_settings.cache_clear()
@@ -209,7 +224,7 @@ def _hold_occupancy(occupancy_id=77, dock_id="DOCK-JAI-D1"):
 
 @pytest.mark.asyncio
 async def test_displacement_names_a_hold_that_would_refuse_the_confirm(
-    flag_on, no_lapsed_holds, monkeypatch
+    flag_on, no_lapsed_holds, no_dock_blocks, monkeypatch
 ):
     """#84 end to end through the service: the preview must stop lying.
 
@@ -236,7 +251,9 @@ async def test_displacement_names_a_hold_that_would_refuse_the_confirm(
 
 
 @pytest.mark.asyncio
-async def test_a_hold_never_self_excludes_a_queue_row(flag_on, no_lapsed_holds, monkeypatch):
+async def test_a_hold_never_self_excludes_a_queue_row(
+    flag_on, no_lapsed_holds, no_dock_blocks, monkeypatch
+):
     """`_conflicts_for`'s self-exclusion compares appointment ids, and a hold has none.
 
     Guards the `str(None) == str(appointment_id)` shape: it happened to be a never-match, but only

@@ -19,14 +19,20 @@ import type { QueueConflict } from './types'
  * its own body (`snapshot.py::describe_snapshot_drift`), so recovery is a re-read of what the
  * server already sent, not a second round trip and never a locally-derived hash.
  *
- * **`DISPLACEMENT_DETECTED` is deliberately a superset of what the row displayed**, and this
- * module does not pretend otherwise. `snapshot.py::displacement_conflicts` returns
- * `conflicts + dock_blocks`; the queue row's own `displacement` column comes from
- * `planner_service._conflicts_for`, which carries the overlapping-claim half only. A planner can
- * therefore be refused for a reason their screen never showed -- a dock taken offline under them
- * since render. The fix for that is server-side and is filed; what this file guarantees is that
- * the refusal renders **whatever the server actually returned**, never the row's stale idea of
- * the conflict set. See `components/queue-row.tsx`'s refusal block.
+ * **`DISPLACEMENT_DETECTED` used to be a superset of what the row displayed. Issue #88 closed
+ * that** (2026-09-02). The write path counts `snapshot.py::displacement_conflicts`
+ * (`conflicts + dock_blocks`); the queue row's `displacement` column used to come from
+ * `planner_service._conflicts_for`, the overlapping-claim half only, so a planner could be refused
+ * for a dock taken offline under them since render -- a reason their screen never showed. The row
+ * now carries **both** legs, each tagged with a `conflict_type` (`INTERVAL_CONFLICT` |
+ * `DOCK_BLOCKED`), so the two paths count the same set.
+ *
+ * The guarantee this file provides is unchanged and is now the *only* thing standing between the
+ * two: the refusal renders **whatever the server actually returned**, never the row's idea of the
+ * conflict set. That still matters, because a row rendered a minute ago is stale by definition --
+ * what is gone is the structural asymmetry, not the race. `conflicts` here is the same
+ * discriminated union the row uses (`lib/types.ts`), so a `DOCK_BLOCKED` entry cannot be read as a
+ * displaced shipment on this path either. See `components/queue-row.tsx`'s refusal block.
  */
 
 export type SnapshotStaleDrift = {
@@ -58,6 +64,17 @@ export type PlannerRefusal =
   | { kind: 'INTERVAL_UNAVAILABLE'; message: string; failureCode: string | null }
   /** Reject / counter-offer: the reason code is outside the frozen five (issue #66's 422). */
   | { kind: 'INVALID_REASON_CODE'; message: string; supported: string | null }
+  /**
+   * Hold only (issue #64): this request's single D9 extension is already spent.
+   *
+   * **The UI is meant to make this unreachable**, by disabling Hold off the row's own
+   * `ttl.hold_used` (`edge-cases.md` #6: "prevention over error handling ... there should be no
+   * error to handle if the UI does its job"). It is classified anyway, because unreachable-from-
+   * this-client is not unreachable: another planner can hold the same row between this row's
+   * render and this planner's press. `currentDeadline` is the server's own extended deadline, so
+   * the row can correct itself from the refusal without a second read.
+   */
+  | { kind: 'HOLD_ALREADY_USED'; message: string; currentDeadline: string | null }
   /** Anything else, including transport failure. Never silently swallowed. */
   | { kind: 'OTHER'; message: string; code: string }
 
@@ -88,6 +105,17 @@ export function classifyRefusal(err: unknown): PlannerRefusal {
         kind: 'DISPLACEMENT_DETECTED',
         message: err.envelopeMessage,
         conflicts: Array.isArray(body?.conflicts) ? (body.conflicts as QueueConflict[]) : [],
+      }
+
+    case 'HOLD_ALREADY_USED':
+      return {
+        kind: 'HOLD_ALREADY_USED',
+        message: err.envelopeMessage,
+        // `allocation.py` puts a JSON document in `detail` carrying `current_deadline`, spelled
+        // with `.isoformat()` so it agrees with the success response's spelling of the same
+        // instant (that file's own comment on why `str(datetime)` was not used).
+        currentDeadline:
+          typeof err.data?.current_deadline === 'string' ? err.data.current_deadline : null,
       }
 
     case 'INTERVAL_UNAVAILABLE':

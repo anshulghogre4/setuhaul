@@ -23,6 +23,7 @@ from app.scheduling.allocation import (
     ConfirmAppointmentCommand,
     CounterOfferCommand,
     ExpireAppointmentCommand,
+    HoldForInformationCommand,
     RejectAppointmentCommand,
     RequestSlotCommand,
     RescheduleAppointmentCommand,
@@ -32,6 +33,7 @@ from app.scheduling.allocation import (
     counter_offer,
     expire_appointment,
     get_appointment_request_status,
+    hold_for_information,
     reject_appointment,
     request_slot,
     reschedule_appointment,
@@ -122,6 +124,21 @@ class ExpireAppointmentBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expire_reason: str = Field(min_length=1, max_length=500)
+
+
+class HoldForInformationBody(BaseModel):
+    """section 7.5.1 `hold_for_information` (issue #64). `appointment_id` comes from the path.
+
+    One field, and the two that are absent are the point: no `snapshot_hash` (this consumes no
+    capacity, so section 7.5's principle-3 guard does not attach -- see the command model), and no
+    deadline or duration argument. **A client cannot choose how much time the hold buys.** Letting
+    it would hand the caller the unbounded sit-on-capacity the catalog's own cap exists to prevent;
+    the extension is D9's own TTL, resolved server-side.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=500)
 
 
 @router.get("/shipments/{shipment_id}/slots/feasible")
@@ -391,6 +408,53 @@ async def counter_offer_shipment_appointment(
         result.model_dump(),
         get_request_id(request),
         message="Counter-offer recorded; the proposed interval is now held for this shipment.",
+    )
+
+
+@router.post("/shipments/{shipment_id}/appointments/{appointment_id}/hold-for-information")
+async def hold_shipment_appointment_for_information(
+    shipment_id: str,
+    appointment_id: str,
+    body: HoldForInformationBody,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    """section 7.5.1 `hold_for_information` / `FR-PLN-004` (issue #64).
+
+    **REST only, deliberately not an LLM tool.** Checked against the design rather than assumed:
+    section 7.5.4 enumerates the driver allowlist in full -- twelve tools, `hold_for_information`
+    not among them -- and it is a *planner console* affordance (section 7.5.1,
+    `03-planner-dock-board/flows-and-states.md` Flow 4, keyboard `H`), not something a driver's
+    assistant may invoke on its own request. `app/assistant/tools.py` builds only the driver
+    allowlist, so it is left untouched.
+
+    Role gate is `OPS_PORTAL_ROLES`, matching the confirm/reject/counter-offer routes it sits beside
+    and inheriting the same recorded owner fork about narrowing them to `WAREHOUSE_PLANNER` +
+    `ADMIN` (see `counter_offer_shipment_appointment`). `allocation._assert_ops_scope` does the real
+    facility check off the shipment read server-side; no scope id is accepted from the caller (M15).
+    """
+    if not idempotency_key or not idempotency_key.strip():
+        raise AppError(
+            "Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400
+        )
+    try:
+        result = await hold_for_information(
+            session, ctx, shipment_id=shipment_id,
+            command=HoldForInformationCommand(appointment_id=appointment_id, **body.model_dump()),
+            idempotency_key=idempotency_key.strip(),
+        )
+    except Exception:
+        await session.rollback()
+        raise
+    return ok(
+        result.model_dump(),
+        get_request_id(request),
+        message=(
+            "Held for information; the request's deadline now runs to "
+            f"{result.new_deadline}."
+        ),
     )
 
 

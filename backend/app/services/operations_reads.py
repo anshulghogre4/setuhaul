@@ -22,7 +22,7 @@ from app.core.execution_context import ExecutionContext
 from app.repositories import chat_threads as chat_repo
 from app.repositories import facilities as facilities_repo
 from app.repositories import operations as operations_repo
-from app.repositories.scope import assert_facility_visible, resolve_facility_scope
+from app.repositories.scope import assert_facility_visible, resolve_facility_scope_with_user_scopes
 
 # The operations REST surface reports a broken facility mapping as SCOPE_MISSING rather than
 # FORBIDDEN, distinguishing "your identity has no facility" from "that is not your facility".
@@ -35,14 +35,21 @@ def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _scope(ctx: ExecutionContext, facility_id: str | None) -> str | None:
-    return resolve_facility_scope(ctx, facility_id, unmapped_code=_UNMAPPED_CODE)
+async def _scope(
+    session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
+) -> str | None:
+    # Grants-aware since #106 (2026-09-02): a caller may narrow to any facility their
+    # user_scopes rows grant, not only the users.facility_id mirror. Costs a query only
+    # in the case that was previously a wrong 403 (see repositories/scope.py).
+    return await resolve_facility_scope_with_user_scopes(
+        session, ctx, facility_id, unmapped_code=_UNMAPPED_CODE
+    )
 
 
 async def get_dashboard_summary(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope_facility = _scope(ctx, facility_id)
+    scope_facility = await _scope(session, ctx, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
@@ -60,7 +67,7 @@ async def get_dashboard_summary(
 async def list_exceptions(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope_facility = _scope(ctx, facility_id)
+    scope_facility = await _scope(session, ctx, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
@@ -73,7 +80,7 @@ async def list_exceptions(
 async def get_appointment_schedule(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope_facility = _scope(ctx, facility_id)
+    scope_facility = await _scope(session, ctx, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
@@ -87,7 +94,7 @@ async def get_appointment_schedule(
 async def get_dock_snapshot(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope_facility = _scope(ctx, facility_id)
+    scope_facility = await _scope(session, ctx, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",
@@ -102,7 +109,7 @@ async def get_dock_snapshot(
 async def get_facility_constraints(
     session: AsyncSession, ctx: ExecutionContext, facility_id: str | None
 ) -> dict[str, Any]:
-    scope_facility = _scope(ctx, facility_id)
+    scope_facility = await _scope(session, ctx, facility_id)
     return {
         "as_of": _as_of(),
         "source": "postgresql",

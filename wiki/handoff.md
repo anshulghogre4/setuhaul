@@ -10,6 +10,12 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-02 03:35 IST: goal wave done; commit message handed (owner commits/pushes).** 14 issues in-tree; suite 3 ALL PASS on re-run (exactly one audited winner, no 5xx both sides, race resolved both directions across the two runs; first run caught the savepoint defect); sandbox reseeded post-runs. **NEXT: (1) owner: apply_94_outbox_migration.py + apply_79_gate_officer.py + push; (2) deploy (AgentCore wrapper now self-smokes; ECS script; Vercel auto) -- ships everything incl. the LLM free-key ruling + #108; (3) the last build: #49 sequencer (unblocks #54/#69, last 2 flags); (4) #45 console checklist.** Owner forks queued: U67 pause-vs-extension copy, ops-gear/undo rulings, #104 index timing, Sentry DSN provisioning, OpenRouter key.
+
+
+- **2026-09-02 00:05 IST: everything shipped and verified.** Chat = gemini-3.7-flash on Vertex express (wire-proof, #103 closed); carrier portal live (#101); section-7.3 ordering live (#82); DEAD controls 0. Uncommitted: this writeback only; message handed. **NEXT session picks from:** #42 (M6 gate, owner go-ahead), #49/M8 (sequencer -- unblocks #54+#69+2 flags), #64, #88 (+#61's dedupe note), #92 (IaC time bomb -- do before many more deploys), #94, #52, #79 ruling, #104/#106/#107 (scope/audit family -- one pass), #45/#46/#51, #102 triage. Watch LangSmith P50 vs the 7.2s baseline.
+
+
 - **2026-09-01 23:15 IST: fix-everything round complete; commit message handed (owner commits/pushes).** In-tree awaiting deploy: #80/#82/#98/#99/#100/#101/#103 + the #99 canSelectAllFacilities correctness fix. **NEXT: (1) owner pushes; (2) backend deploy via the wrapper + ECS script (ships the batch AND flips production chat to gemini-3.7-flash on Vertex express -- verify in LangSmith: provider=gemini; if it says AI Studio instead, something set GOOGLE_CLOUD_PROJECT/LOCATION in the container); (3) Vercel auto-ships the frontend on push; (4) then the short board: #42 (M6's last item, needs owner go-ahead), #49/M8, #64, #88, #92, #94, #52, #79 ruling, #104/#106 decisions, M7 (#45/#46/#51).** Owner forks recorded: queue-GET-that-writes (#98, in-code), 2.5-in-region vs 3.7-express residency (#103), thinking_budget for 2.5 (#103).
 
 

@@ -13,6 +13,7 @@ import {
   confirmRequest,
   counterOffer,
   fetchPlannerQueue,
+  holdForInformation,
   rejectRequest,
 } from '../lib/api'
 import { batchHashAvailable, batchSnapshotHash } from '../lib/batch-hash'
@@ -20,6 +21,7 @@ import {
   plannerBulkConfirmEnabled,
   plannerConfirmEnabled,
   plannerCounterOfferEnabled,
+  plannerHoldEnabled,
   plannerLiveArrivalsEnabled,
 } from '../lib/flags'
 import {
@@ -32,6 +34,14 @@ import {
   removeRowsFromState,
   type LiveQueueState,
 } from '../lib/live-queue'
+import {
+  EMPTY_QUEUE_FILTER,
+  describeQueueFilter,
+  filterQueueRows,
+  isQueueFilterActive,
+  type QueueFilter,
+} from '../lib/queue-filter'
+import { formatTime } from '../lib/format'
 import { classifyRefusal, withNothingChanged, type PlannerRefusal } from '../lib/refusals'
 import type { RejectReasonCode } from '../lib/reasons'
 import type {
@@ -41,7 +51,14 @@ import type {
   PlannerQueueRow,
 } from '../lib/types'
 import { CounterOfferDialog } from './counter-offer-dialog'
-import { QueueEmptyCaughtUp, QueueSearchEmpty, QueueSkeleton } from './queue-region-states'
+import { HoldDialog } from './hold-dialog'
+import { QueueFilterControl } from './queue-filter'
+import {
+  QueueEmptyCaughtUp,
+  QueueFilterEmpty,
+  QueueSearchEmpty,
+  QueueSkeleton,
+} from './queue-region-states'
 import { QueueRow } from './queue-row'
 import { RejectDialog } from './reject-dialog'
 
@@ -97,13 +114,37 @@ import { RejectDialog } from './reject-dialog'
  * `R` back to re-sort. Recommendation is (a).
  */
 
-type PendingAction = { kind: 'confirm' | 'reject' | 'counter-offer'; appointmentId: string }
+type PendingAction = {
+  kind: 'confirm' | 'reject' | 'counter-offer' | 'hold'
+  appointmentId: string
+}
 
-export function QueueTab({ facilityId }: { facilityId: string | null }) {
+export function QueueTab({
+  facilityId,
+  externalReloadToken = 0,
+  onPickOnBoard,
+}: {
+  facilityId: string | null
+  /** Bumped by `PlannerConsole` after a board-picker counter-offer resolves, so this tab re-reads
+   *  the row's new interval and its fresh `snapshot_hash` instead of rendering the pre-offer one. */
+  externalReloadToken?: number
+  /**
+   * U103's board picker. When supplied (i.e. `plannerBoardPickerEnabled`), Counter-offer hands the
+   * row to the console, which switches to the Board tab pinned to it -- `screens.md` section 3's
+   * one sanctioned automatic tab switch. When absent, the interim dialog opens instead, which is
+   * what makes the flag a genuine one-line revert.
+   */
+  onPickOnBoard?: (row: PlannerQueueRow) => void
+}) {
   const [live, setLive] = useState<LiveQueueState>(emptyLiveQueueState)
   const [loadFailed, setLoadFailed] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [search, setSearch] = useState('')
+  /** `screens.md` section 2 -- priority / ETA confidence, membership only. Client-side over the
+   *  already-fetched page, exactly like ops's own queue filter: `get_planner_queue` takes no
+   *  priority or confidence parameter, and adding one would be a server change this control does
+   *  not need (the page is 15-35 rows by section 7.3's own load arithmetic). */
+  const [filter, setFilter] = useState<QueueFilter>(EMPTY_QUEUE_FILTER)
   /** True while any element inside the table has DOM focus. Tracked from `focusin`/`focusout`
    *  (React's bubbling `onFocus`/`onBlur`) rather than from `focusedId`, which is the roving-
    *  tabindex anchor and survives blur -- a planner who clicked one row once would otherwise
@@ -120,6 +161,8 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
 
   const [rejectFor, setRejectFor] = useState<PlannerQueueRow | null>(null)
   const [rejectError, setRejectError] = useState<string | null>(null)
+  const [holdFor, setHoldFor] = useState<PlannerQueueRow | null>(null)
+  const [holdError, setHoldError] = useState<string | null>(null)
   const [counterFor, setCounterFor] = useState<PlannerQueueRow | null>(null)
   const [counterError, setCounterError] = useState<string | null>(null)
   const [counterRefresh, setCounterRefresh] = useState(0)
@@ -168,7 +211,7 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
     return () => {
       ignore = true
     }
-  }, [facilityId, reloadToken, setServerTime])
+  }, [facilityId, reloadToken, externalReloadToken, setServerTime])
 
   const reload = useCallback(() => {
     setRefusals({})
@@ -191,7 +234,12 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
    */
   const writeInFlight = pending !== null || batchBusy
   const frozen =
-    rowFocusWithin || selected.size > 0 || writeInFlight || rejectFor !== null || counterFor !== null
+    rowFocusWithin ||
+    selected.size > 0 ||
+    writeInFlight ||
+    rejectFor !== null ||
+    counterFor !== null ||
+    holdFor !== null
 
   // Read at RESPONSE time, not request time: a planner who focuses a row during the round trip
   // must still get the frozen merge, not the one that was correct when the request left.
@@ -219,17 +267,25 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
     onError: () => {},
   })
 
+  /**
+   * Filter first, then search. Both narrow membership only and neither reorders, so the composition
+   * order does not change the result set -- it is fixed this way because the *counts* differ: the
+   * toolbar's "N shown" describes the filter, and deriving it from a set the search had already
+   * narrowed would report a number that moves as the planner types.
+   */
+  const filtered = useMemo(() => filterQueueRows(rows, filter), [rows, filter])
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (q === '') return rows
-    return rows.filter(
+    if (q === '') return filtered
+    return filtered.filter(
       (r) =>
         r.shipment_id.toLowerCase().includes(q) ||
         (r.driver_name ?? '').toLowerCase().includes(q) ||
         (r.carrier_name ?? '').toLowerCase().includes(q) ||
         (r.order_reference ?? '').toLowerCase().includes(q),
     )
-  }, [rows, search])
+  }, [filtered, search])
 
   const eligibility = useMemo(() => {
     const map = new Map<string, { eligible: boolean; caveat: string | null }>()
@@ -453,11 +509,82 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
     }
   }, [batchBusy, rows, selected, keyFor])
 
-  const openCounterOffer = useCallback((row: PlannerQueueRow) => {
-    if (!plannerCounterOfferEnabled) return
-    setCounterError(null)
-    setCounterFor(row)
+  /**
+   * Counter-offer's entry point, and the one place the board picker replaces the interim dialog.
+   *
+   * `plannerCounterOfferEnabled` still gates the capability itself; `onPickOnBoard`'s presence
+   * (i.e. `plannerBoardPickerEnabled`) only decides *which* picker opens. Keeping the two flags
+   * separate is what makes reverting to the dialog a one-line change rather than a rebuild -- see
+   * `lib/flags.ts`, and `counter-offer-dialog.tsx`'s own header for what the interim keeps.
+   */
+  /**
+   * Flow 4 -- hold for information (issue #64).
+   *
+   * `HOLD_ALREADY_USED` is treated as a **row fact, not a failure**: the dialog closes and the
+   * refusal is attached to the row, because the honest response to "somebody already held this" is
+   * to show the row's real state rather than keep a form open over it. `edge-cases.md` #6 wants
+   * this path to be unreachable from a correctly-rendered row -- the Hold button is already
+   * disabled off `ttl.hold_used` -- so reaching it means the row was stale, and a re-read is the
+   * cure.
+   */
+  const doHold = useCallback(
+    async (row: PlannerQueueRow, question: string) => {
+      const slot = `hold:${row.appointment_id}`
+      setPending({ kind: 'hold', appointmentId: row.appointment_id })
+      setHoldError(null)
+      try {
+        const result = await holdForInformation({
+          shipmentId: row.shipment_id,
+          appointmentId: row.appointment_id,
+          question,
+          idempotencyKey: keyFor(slot),
+        })
+        keys.current.delete(slot)
+        setHoldFor(null)
+        toast.success(
+          `Held ${row.shipment_id} — the deadline moved to ${formatTime(result.new_deadline)}. This request cannot be held again.`,
+        )
+        // Re-read rather than patch: `ttl.hold_used`, the new `deadline_ts` and the row's place in
+        // the composite-urgency order are all server facts, and the last of those cannot be
+        // derived here at all.
+        reload()
+      } catch (err) {
+        const refusal = classifyRefusal(err)
+        if (refusal.kind === 'HOLD_ALREADY_USED' || refusal.kind === 'ALREADY_ACTIONED') {
+          keys.current.delete(slot)
+          setHoldFor(null)
+          setRefusals((prev) => ({ ...prev, [row.appointment_id]: refusal }))
+          reload()
+        } else {
+          // The dialog stays open with the question intact -- the planner should not have to
+          // retype it because the network dropped once.
+          setHoldError(withNothingChanged(refusal.message))
+        }
+      } finally {
+        setPending(null)
+      }
+    },
+    [keyFor, reload],
+  )
+
+  const openHold = useCallback((row: PlannerQueueRow) => {
+    if (!plannerHoldEnabled || row.ttl.hold_used) return
+    setHoldError(null)
+    setHoldFor(row)
   }, [])
+
+  const openCounterOffer = useCallback(
+    (row: PlannerQueueRow) => {
+      if (!plannerCounterOfferEnabled) return
+      if (onPickOnBoard) {
+        onPickOnBoard(row)
+        return
+      }
+      setCounterError(null)
+      setCounterFor(row)
+    },
+    [onPickOnBoard],
+  )
 
   const newCount = live.staged.length
 
@@ -562,17 +689,23 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
           e.preventDefault()
           openCounterOffer(row)
           break
-        // `h` (Hold) and `e` (Escalate) are deliberately unbound rather than bound to a no-op:
-        // a key that visibly does nothing reads as a broken shortcut, where an unbound key reads
-        // as a feature that is not here yet -- which is the truth (issues #64 and the missing
-        // `escalate_request` shape).
+        case 'h':
+          // Bound as of issue #64. `openHold` is itself a no-op on a row whose hold is already
+          // spent, so the key cannot do what the disabled button refuses to.
+          e.preventDefault()
+          openHold(row)
+          break
+        // `e` (Escalate) stays deliberately unbound rather than bound to a no-op: a key that
+        // visibly does nothing reads as a broken shortcut, where an unbound key reads as a
+        // feature that is not here yet -- which is the truth (section 7.5.1's
+        // `escalate_request` shape does not exist).
         default:
           break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visible, focusedId, doConfirm, openCounterOffer, doResort])
+  }, [visible, focusedId, doConfirm, openCounterOffer, openHold, doResort])
 
   if (loadFailed) {
     return <RegionError regionName="queue" onRetry={reload} />
@@ -583,6 +716,8 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
 
   const ttlTotalMs = queue.ttl_minutes * 60_000
   const selectedCount = selected.size
+  // Counts the FILTERED set, not the searched one -- see the `filtered` memo's note on why.
+  const filterSummary = describeQueueFilter(filter, filtered.length)
   const bulkAvailable = plannerBulkConfirmEnabled && batchHashAvailable()
 
   return (
@@ -603,6 +738,18 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
             Select all eligible ({eligibleIds.length})
           </Button>
         ) : null}
+        <QueueFilterControl filter={filter} onChange={setFilter} />
+
+        {/* The design's own affordance in place of chips: "the active filter is visible directly in
+            the toolbar text (`Filter: CRITICAL · 6 shown`)". `role="status"` so a narrowing that
+            changes the visible count is announced politely -- it is a consequence of the planner's
+            own action, never an interruption. */}
+        {filterSummary ? (
+          <span role="status" className="font-semibold text-foreground">
+            {filterSummary}
+          </span>
+        ) : null}
+
         <label className="flex items-center gap-2">
           <span className="text-subtle-foreground">Search</span>
           <input
@@ -685,6 +832,14 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
         // `count === 0` -- it stays in the gallery, unreachable, until the read grows the flag
         // (`implementation-spec.md` section 6 Fork C).
         <QueueEmptyCaughtUp />
+      ) : filtered.length === 0 && isQueueFilterActive(filter) ? (
+        // Checked BEFORE the search-empty branch: when both are active the filter is the coarser
+        // cause, and offering "Clear search" against a filter that excluded every row would be a
+        // recovery that does not recover.
+        <QueueFilterEmpty
+          description={filterSummary ?? ''}
+          onClear={() => setFilter(EMPTY_QUEUE_FILTER)}
+        />
       ) : visible.length === 0 ? (
         <QueueSearchEmpty query={search} onClear={() => setSearch('')} />
       ) : (
@@ -769,6 +924,7 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
                     setRejectFor(row)
                   }}
                   onCounterOffer={() => openCounterOffer(row)}
+                  onHold={() => openHold(row)}
                 />
               ))}
             </tbody>
@@ -784,6 +940,17 @@ export function QueueTab({ facilityId }: { facilityId: string | null }) {
         error={rejectError}
         onSubmit={(reasonCode, note) => {
           if (rejectFor) void doReject(rejectFor, reasonCode, note)
+        }}
+      />
+
+      <HoldDialog
+        row={holdFor}
+        open={holdFor !== null}
+        onOpenChange={(next) => !next && setHoldFor(null)}
+        busy={pending?.kind === 'hold'}
+        error={holdError}
+        onSubmit={(question) => {
+          if (holdFor) void doHold(holdFor, question)
         }}
       />
 

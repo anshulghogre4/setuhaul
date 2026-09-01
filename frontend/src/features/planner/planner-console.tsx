@@ -7,7 +7,8 @@ import { NarrowViewportGuard } from './components/narrow-viewport'
 import { NotYetAvailable } from './components/not-yet-available'
 import { QueueTab } from './components/queue-tab'
 import { ReviewProposalButton } from './components/review-proposal-button'
-import { dockBoardEnabled, plannerQueueLiveEnabled } from './lib/flags'
+import { dockBoardEnabled, plannerBoardPickerEnabled, plannerQueueLiveEnabled } from './lib/flags'
+import type { PlannerQueueRow } from './lib/types'
 import { Button } from '@/shared/ui/button'
 
 type Tab = 'queue' | 'board'
@@ -36,6 +37,20 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
    *  immediately. The dialog and the board are siblings, so the console owns the signal between
    *  them; `DockBoardPanel` folds this into its own fetch effect. */
   const [boardReloadToken, setBoardReloadToken] = useState(0)
+  /**
+   * U103's picker context, owned here because entering it is a **tab switch**:
+   *
+   * > `screens.md` section 3: *"Selecting **Counter-offer** on a queue row switches to Board
+   * > automatically, pinned to that request (U103). Everything else about tab-switching is a plain,
+   * > explicit click — the surface never silently changes tabs on its own."*
+   *
+   * This is the one sanctioned automatic switch, and it is the reason this state cannot live in
+   * `QueueTab` (which has no say over the tab) or in `DockBoardPanel` (which never sees a row).
+   */
+  const [picking, setPicking] = useState<PlannerQueueRow | null>(null)
+  /** Bumped after a counter-offer commits, so the Queue tab re-reads rather than showing the row's
+   *  pre-offer interval and a now-stale `snapshot_hash`. */
+  const [queueReloadToken, setQueueReloadToken] = useState(0)
 
   const queueTabRef = useRef<HTMLButtonElement | null>(null)
   const boardTabRef = useRef<HTMLButtonElement | null>(null)
@@ -106,7 +121,21 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
           hidden={tab !== 'queue'}
           className="min-h-0 flex-1 overflow-auto pt-4"
         >
-          <QueueTabRegion facilityId={facilityId} />
+          <QueueTabRegion
+            facilityId={facilityId}
+            externalReloadToken={queueReloadToken}
+            onPickOnBoard={
+              plannerBoardPickerEnabled
+                ? (row) => {
+                    setPicking(row)
+                    setTab('board')
+                    // Focus follows the switch, or a keyboard planner is left with focus on a row
+                    // in a panel that is now `hidden`.
+                    requestAnimationFrame(() => boardTabRef.current?.focus())
+                  }
+                : undefined
+            }
+          />
         </div>
 
         <div
@@ -135,6 +164,28 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
               <DockBoardPanel
                 facilityId={facilityId || null}
                 externalReloadToken={boardReloadToken}
+                picking={picking}
+                // Section 4: "a clean way out without committing anything". Returning to the Queue
+                // undoes the automatic switch that brought them here, rather than leaving a planner
+                // on a tab they never chose.
+                onPickerCancel={() => {
+                  setPicking(null)
+                  setTab('queue')
+                  requestAnimationFrame(() => queueTabRef.current?.focus())
+                }}
+                onPickerDone={(outcome) => {
+                  setPicking(null)
+                  setTab('queue')
+                  if (outcome.ok) toast.success(outcome.message)
+                  else toast.error(outcome.message)
+                  // Section 4: "the surface returns to the Queue tab with the row updated to
+                  // reflect the new proposed interval". A re-read is the only way to get that and
+                  // the fresh snapshot_hash -- there is no local edit that could produce a correct
+                  // hash. Bumped on refusals too: ALREADY_ACTIONED and SNAPSHOT_STALE both mean the
+                  // row on screen is out of date, which is the whole reason they fired.
+                  setQueueReloadToken((n) => n + 1)
+                  requestAnimationFrame(() => queueTabRef.current?.focus())
+                }}
               />
             ) : (
               <NotYetAvailable
@@ -169,7 +220,15 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
  * not claim to know anything. `QueueTab` now owns its own fetch, so its empty state can only ever
  * be reached *after* a successful read that genuinely returned nothing.
  */
-function QueueTabRegion({ facilityId }: { facilityId: string }) {
+function QueueTabRegion({
+  facilityId,
+  externalReloadToken,
+  onPickOnBoard,
+}: {
+  facilityId: string
+  externalReloadToken?: number
+  onPickOnBoard?: (row: PlannerQueueRow) => void
+}) {
   if (!plannerQueueLiveEnabled) {
     return (
       <NotYetAvailable
@@ -178,7 +237,13 @@ function QueueTabRegion({ facilityId }: { facilityId: string }) {
       />
     )
   }
-  return <QueueTab facilityId={facilityId || null} />
+  return (
+    <QueueTab
+      facilityId={facilityId || null}
+      externalReloadToken={externalReloadToken}
+      onPickOnBoard={onPickOnBoard}
+    />
+  )
 }
 
 const TabButton = ({

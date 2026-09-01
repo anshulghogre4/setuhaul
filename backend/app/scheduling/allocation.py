@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +40,7 @@ from app.scheduling.snapshot import (
     load_appointment_snapshot,
     load_appointment_snapshots,
 )
+from app.services import notification_outbox
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 from app.services.redis_memory import ConversationMemory
@@ -59,6 +60,20 @@ AUDIT_ACTION_EXPIRE_APPOINTMENT = "EXPIRE_APPOINTMENT"
 # section 7.3's "reject-with-counter-offer vs reject-flat" metric answerable today.
 AUDIT_ACTION_COUNTER_OFFER = AUDIT_ACTION_RESCHEDULE_APPOINTMENT
 AUDIT_TRANSITION_COUNTER_OFFERED = "COUNTER_OFFERED"
+# Issue #64 / section 7.5.1 `hold_for_information`. Same "generic action_type, specific payload"
+# shape as the counter-offer above, and for the identical reason: `audit_logs_action_type_check`
+# admits a closed sixteen-value set (last set by migration 20260829134929, lines 290-296) and none
+# of them is hold-for-information. The generic verb is `UPDATE` -- the transition really is an
+# update of one column on an existing row, not a new lifecycle event -- and the discriminator lives
+# in `new_value_json.transition`.
+#
+# `transition` rather than `event`: this module already established `transition` for the
+# counter-offer, while `gate_yard_service`/`planner_service`/the admin console use `event`. Two
+# names for one idea across the codebase is real (reported on #104 rather than fixed here, since
+# converging them means touching four services' write paths); adding a *third* spelling, or writing
+# both keys on this one row, would make it worse rather than better.
+AUDIT_ACTION_HOLD_FOR_INFORMATION = "UPDATE"
+AUDIT_TRANSITION_HELD_FOR_INFO = "HELD_FOR_INFO"
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
 
 # section 7.5.1's controlled vocabulary for `reject_request`, verbatim: *"`reason_code` is an enum
@@ -284,6 +299,71 @@ class ExpireAppointmentCommand(BaseModel):
 
     appointment_id: str = Field(min_length=1, max_length=100)
     expire_reason: str = Field(min_length=1, max_length=500)
+
+
+class HoldForInformationCommand(BaseModel):
+    """section 7.5.1 `hold_for_information` -- `appointment_id`, `question`, `Idempotency-Key`.
+
+    Issue #64, `FR-PLN-004`, `03-planner-dock-board/flows-and-states.md` Flow 4.
+
+    **The catalog's argument list is taken literally, and the two absences are the interesting
+    part.** There is no `snapshot_hash` here, unlike `confirm_request`/`counter_offer`/
+    `bulk_confirm`: section 7.5's principle 3 attaches that guard to *"anything that consumes
+    capacity"*, and this tool consumes none -- the interval is already claimed by the
+    `PENDING_CONFIRMATION` row and stays claimed either way. Adding one would have refused a
+    planner whose queue row had merely re-rendered, for an action that cannot hurt a third party.
+    There is likewise no `facility_id`: M15, and the shipment's facility is read server-side.
+
+    `question` is mandatory (Flow 4 step 1: *"mandatory question field"*) and is deliberately free
+    text rather than an enum, unlike `reject_request`'s `reason_code`. The distinction the design
+    draws is about what reaches the driver as an unreviewed customer-facing string: a rejection's
+    reason is *rendered* to the driver from a controlled vocabulary, whereas the whole point of a
+    hold is that the planner has an actual question nobody enumerated in advance.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    appointment_id: str = Field(min_length=1, max_length=100)
+    question: str = Field(min_length=1, max_length=500)
+
+
+class HoldForInformationResult(BaseModel):
+    """Typed outcome for `hold_for_information` -- `HELD_FOR_INFO` + `new_deadline`.
+
+    Separate from `AppointmentTransitionResult` because this transition changes no
+    `appointment_status`: the row stays `PENDING_CONFIRMATION` throughout (section 4's promise
+    lifecycle has no paused state, and inventing one would need a migration and a widened
+    `appointments_appointment_status_check`). What changes is the deadline, so the deadline is what
+    the result is shaped around.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str
+    source: str = "postgresql"
+    freshness: str = "live"
+    # Unchanged by construction, returned so a caller never has to infer it: a held request is
+    # still a pending request.
+    status: str = "PENDING_CONFIRMATION"
+    code: str = "HELD_FOR_INFO"
+    shipment_id: str
+    appointment_id: str
+    question: str
+    # section 7.5.1's named return value.
+    new_deadline: str
+    # What the deadline was before the extension, so the UI can show what the hold actually bought
+    # and an audit reader can reconstruct it without recomputing `booked_at + ttl` themselves.
+    previous_deadline: str
+    extension_minutes: int
+    # The one-shot cap, made explicit in the success response rather than only in the refusal: a
+    # planner who just used the hold needs the Hold affordance to go Disabled immediately
+    # (`components.md` section 1's rule, `edge-cases.md` #6 -- prevention over error handling), and
+    # a client that has to infer "used" from the presence of `new_deadline` would be guessing.
+    hold_used: bool = True
+    appointment: dict[str, Any] | None = None
+    idempotency_key: str
+    idempotent_replay: bool = False
+    appointment_writes: int = 1
 
 
 class AppointmentTransitionResult(BaseModel):
@@ -690,6 +770,20 @@ async def _locked_appointment(
     shipment_id: str,
     appointment_id: str,
 ) -> dict[str, Any] | None:
+    """Lock one appointment row for a transition. No status predicate, deliberately.
+
+    `expiry.py`'s docstring explains why the predicate is absent: when the D9 sweeper commits first,
+    this must still lock and return the *updated* row so `confirm_appointment` can refuse with
+    `ALREADY_ACTIONED` naming the winning transition, rather than finding nothing and 404-ing.
+
+    `expires_at` joined the projection with issue #64. It is the one-shot marker for
+    `hold_for_information` -- the migration that added it says so in its own words
+    (`20260829134929_d2_held_state_dock_occupancy.sql:252-256`: *"`expires_at IS NOT NULL` **is**
+    the HOLD_ALREADY_USED marker. No separate boolean, no counter"*) -- and reading it here rather
+    than in a second statement is what makes the cap race-proof: it arrives under the same
+    `FOR UPDATE` as the status, so two planners pressing Hold at once serialise on the row lock and
+    the loser re-reads a non-NULL value. A separate unlocked read could let both through.
+    """
     row = (
         await session.execute(
             text(
@@ -697,7 +791,7 @@ async def _locked_appointment(
                 SELECT appointment_id, shipment_id, slot_id, appointment_status,
                        booking_source, is_current, booked_at, confirmed_at,
                        cancelled_at, cancellation_reason, replaced_appointment_id,
-                       warehouse_confirmation_ref, updated_at
+                       warehouse_confirmation_ref, updated_at, expires_at
                 FROM public.appointments
                 WHERE shipment_id = :shipment_id
                   AND appointment_id = :appointment_id
@@ -1046,12 +1140,26 @@ async def _validate_displayed_recommendation(
             )
         return None
     refreshed = await find_feasible_slots(session, ctx, shipment_id, limit=5)
-    if redis_stale or refreshed.recommendation_id != displayed_recommendation_id:
+    if refreshed.recommendation_id != displayed_recommendation_id:
         return await _stale_recommendation_result(
             session, ctx, shipment_id=shipment_id, slot_id=slot_id,
             policy_version=constraints.policy_version, idempotency_key=idempotency_key,
             message="Displayed slot options are stale; use the refreshed recommendation.",
         )
+    if redis_stale:
+        # #108: the displayed id MATCHES the recommendation recomputed this instant, so the
+        # reply is provably from the current list -- the Redis flag (set by an ETA update)
+        # has served its purpose and must clear here, not refuse. Refusing on the flag alone
+        # was section 9.2 race 4's "re-presented" promise failing on its second half: with
+        # two-phase holds on, the only clearing site was unreachable and one ETA update
+        # locked the shipment out of booking for the key's 24h TTL. The no-id branch above
+        # still refuses on the flag: without an id there is no proof of which list was seen.
+        try:
+            ConversationMemory(get_settings()).clear_recommendation_stale(
+                user_id=ctx.user_id, shipment_id=shipment_id
+            )
+        except Exception:  # noqa: BLE001
+            pass
     return None
 
 
@@ -1226,6 +1334,12 @@ async def cancel_appointment(
         appointment=updated,
         idempotency_key=idempotency_key,
     )
+    # #94: cancellation notifies the driver, enqueued in the same transaction (section 4).
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.APPOINTMENT_CANCELLED,
+        appointment_id=command.appointment_id,
+    )
     await store_idempotency(
         session,
         key=idempotency_key,
@@ -1313,6 +1427,15 @@ async def _apply_confirmation(
             # Deliberately still a string: audit_logs.created_at was never converted by E1.1.
             "created_at": now_iso,
         },
+    )
+
+    # #94: the confirmed-appointment notification, enqueued in the SAME transaction as the
+    # status write and its audit row -- one seam covers confirm_request AND bulk_confirm,
+    # which both converge here. Never raises, never commits (see notification_outbox).
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.APPOINTMENT_CONFIRMED,
+        appointment_id=appointment_id,
     )
 
 
@@ -1504,6 +1627,18 @@ async def _request_slot_as_hold(
         request_hash=req_hash, response=result.model_dump(), status_code=200,
     )
     result.idempotent_replay = False
+    # #108: the two-phase success path must clear the Redis stale flag exactly as the
+    # single-phase site below does -- this was the ONLY clearing call's unreachable twin,
+    # and without it one ETA update left every later request_slot refusing
+    # SLOT_OPTIONS_STALE for the key's 24h TTL (section 9.2 race 4's re-present promise,
+    # broken on its second half). A successful claim from the re-presented list is
+    # precisely the moment staleness has served its purpose.
+    try:
+        ConversationMemory(get_settings()).clear_recommendation_stale(
+            user_id=ctx.user_id, shipment_id=shipment_id
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return result
 
 
@@ -1957,6 +2092,15 @@ async def _ops_pending_transition(
             "created_at": now_iso,
         },
     )
+    # #94: REJECTED/EXPIRED both notify the driver from this one seam; the status->event
+    # map lives in notification_outbox so no vocabulary leaks into allocation.
+    await notification_outbox.enqueue_for_transition(
+        session,
+        target_status=target_status,
+        appointment_id=appointment_id,
+        shipment_id=shipment_id,
+        reason=reason,
+    )
     result = AppointmentTransitionResult(
         as_of=_as_of(), status=target_status, code=f"APPOINTMENT_{target_status}",
         shipment_id=shipment_id, appointment_id=appointment_id,
@@ -2274,10 +2418,14 @@ async def counter_offer(
 
     **The D9 clock is deliberately not reset.** `booked_at` is the anchor `expiry.py` measures the
     15-minute TTL from, and rewriting it would both hand the planner an unbounded way to sit on
-    capacity and corrupt the request's own history -- the same reasoning `expiry.py:77-81` gives for
-    refusing to fake `hold_for_information`. A counter-offer therefore inherits whatever TTL
-    remains. **Owner fork:** if a counter-offer should buy the driver fresh time, that is
-    `appointments.expires_at` (issue #64's half of the same unapplied migration), not this tool.
+    capacity and corrupt the request's own history. A counter-offer therefore inherits whatever TTL
+    remains. **Owner fork, still open and now sharper:** if a counter-offer should buy the driver
+    fresh time, `appointments.expires_at` is where that happens -- and since issue #64 shipped,
+    `hold_for_information` already writes that column and treats `expires_at IS NOT NULL` as the
+    marker that the one permitted extension is spent. So resolving this fork by having
+    `counter_offer` write the same column is *not* a one-line change: the two writers would need a
+    real discriminator first (see `hold_for_information`'s docstring). Left untouched here rather
+    than half-resolved.
 
     ## Round trips, counted rather than assumed
 
@@ -2496,6 +2644,263 @@ async def counter_offer(
         idempotency_key=idempotency_key,
         appointment_writes=1,
         snapshot_hash=refreshed["snapshot_hash"] if refreshed else None,
+    )
+    await store_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route,
+        request_hash=req_hash, response=result.model_dump(),
+    )
+    await session.commit()
+    result.appointment = await _reread_appointment(session, command.appointment_id)
+    return result
+
+
+# =================================================================================================
+# hold_for_information -- section 7.5.1 / FR-PLN-004 / Flow 4 (issue #64)
+# =================================================================================================
+
+
+def _derived_pending_deadline(booked_at: Any, *, ttl_minutes: int) -> datetime | None:
+    """The D9 deadline a request has when nothing has extended it: `booked_at + ttl`.
+
+    Computed here rather than read from a column because that is exactly what the schema says:
+    *"NULL means the ordinary derived deadline (booked_at + PENDING_CONFIRMATION_TTL_MINUTES)
+    applies"* (`COMMENT ON COLUMN public.appointments.expires_at`,
+    `20260829134929_d2_held_state_dock_occupancy.sql:266-269`). `expiry.py::_pending_candidates`
+    implements the same rule in SQL; this is the Python half of one rule, not a second rule.
+
+    Returns None for a row with no `booked_at` at all, which the caller reports rather than
+    guessing a deadline for -- an appointment with no booking instant has no D9 clock to pause.
+    """
+    if booked_at is None:
+        return None
+    if isinstance(booked_at, datetime):
+        anchor = booked_at
+    else:
+        try:
+            anchor = datetime.fromisoformat(str(booked_at))
+        except ValueError:
+            return None
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=timezone.utc)
+    return anchor + timedelta(minutes=ttl_minutes)
+
+
+async def hold_for_information(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    *,
+    shipment_id: str,
+    command: HoldForInformationCommand,
+    idempotency_key: str,
+) -> HoldForInformationResult:
+    """section 7.5.1 `hold_for_information` -- buy the driver time to answer, exactly once.
+
+    The catalog row, in full: *"`HELD_FOR_INFO` + `new_deadline`. **Pauses the D9 clock exactly
+    once** per request; a second call returns `HOLD_ALREADY_USED`. Without that cap, 'hold for info'
+    becomes an unbounded way to sit on capacity."*
+
+    ## "Pauses the clock" is implemented as one bounded extension, and that is a decision
+
+    A literal pause -- stop the clock, resume it when the driver replies -- is not representable
+    against this schema and, more importantly, is the thing the catalog's own second sentence
+    forbids. There is one column (`appointments.expires_at`) and it holds a deadline, not a
+    remaining duration; and the sweeper's precedence rule is that NULL means *"the derived
+    `booked_at + ttl` deadline applies"* (`expiry.py`), so NULL cannot be overloaded to mean
+    "paused" -- a paused row would read as one whose original 15 minutes had already lapsed. An
+    indefinite pause is also exactly the unbounded sit-on-capacity the design names as the reason
+    the cap exists.
+
+    So: **`new_deadline = now + one further D9 TTL`**, and the one-shot cap is what bounds the total.
+    The extension is not a new invented number -- it is `pending_confirmation_ttl_minutes`, D9's own
+    15 minutes, read from settings so the two cannot drift. Worst case for a held request is
+    therefore two D9 windows rather than one, which is bounded, explainable to a planner ("this buys
+    another fifteen minutes"), and sourced.
+
+    The alternative considered and rejected: `new_deadline = now + whatever remained`. It is a truer
+    "pause" of the instant, but it makes the tool useless precisely when it matters -- a planner who
+    holds a request with 40 seconds left buys the driver 40 seconds to answer a question. Recorded
+    here rather than silently chosen, in the same posture as `COUNTER_OFFER_REASON_CODES` above.
+
+    ## The one-shot cap, and why it needs no new column
+
+    `expires_at IS NOT NULL` **is** the marker, which is the migration's own stated design
+    (`20260829134929...sql:252-256`). It is read under the same `SELECT ... FOR UPDATE` as the
+    status (`_locked_appointment`), so the cap survives two planners pressing Hold simultaneously:
+    they serialise on the row lock, and under READ COMMITTED the loser re-evaluates against the
+    committed version and sees a non-NULL deadline (PostgreSQL "Transaction Isolation" 13.2.1).
+
+    **Coupling worth naming:** if the owner ever resolves the #63/#64 fork by letting `counter_offer`
+    buy fresh time through this same column, `expires_at IS NOT NULL` stops meaning "the hold was
+    used" and this guard has to become a real discriminator (an audit-trail probe for
+    `transition = 'HELD_FOR_INFO'`, or a column). Today nothing else writes it -- verified by grep
+    across `app/` -- so the marker is unambiguous.
+
+    ## What this does *not* do, stated plainly
+
+    The `question` reaches the audit trail and nothing else. Flow 4 step 4 has the driver answering
+    in `01-driver-chat/`, and there is no path from here to the driver: no writer for
+    `operational_messages` or `notifications` exists anywhere in this codebase (grepped
+    2026-09-02 -- `notification_service` reads only), and `reject_request`'s own *"+ driver
+    notification"* is equally unimplemented today. Holding a request therefore pauses the clock and
+    records the question for a human to relay; it does not deliver it. Recorded as a real gap rather
+    than papered over with an invented delivery.
+
+    Likewise, the queue row's Paused rendering (`components.md` section 3) needs `expires_at` to
+    reach `get_planner_queue`, which lives in `planner_service.py` -- not this pass's file. The data
+    is in the row and in this result; the read that surfaces it to the board is a follow-up.
+
+    ## Round trips
+
+    Idempotency lookup, shipment read, locking read, update, audit insert, re-read, idempotency
+    store. Seven, for an action section 7.3 puts at a handful per planner per hour.
+    """
+    route = (
+        f"POST /api/v1/shipments/{shipment_id}/appointments/"
+        f"{command.appointment_id}/hold-for-information"
+    )
+    req_hash = payload_hash({"shipment_id": shipment_id, **command.model_dump()})
+    replay = await lookup_idempotency(
+        session, key=idempotency_key, user_id=ctx.user_id, route=route, request_hash=req_hash
+    )
+    if replay is not None:
+        # M9. Unlike `confirm_request`'s replay branch there is nothing to re-check: the extension
+        # is single-use by construction, so a genuine re-run could only produce HOLD_ALREADY_USED.
+        # Returning the stored success is the honest answer to "the same call, twice".
+        return HoldForInformationResult.model_validate(
+            {**replay["response"], "idempotent_replay": True}
+        )
+
+    shipment = await _shipment_for_status(session, shipment_id)
+    if shipment is None:
+        raise AppError("Shipment not found.", code="NOT_FOUND", status_code=404)
+    _assert_ops_scope(ctx, shipment)
+
+    appointment = await _locked_appointment(
+        session, shipment_id=shipment_id, appointment_id=command.appointment_id
+    )
+    if appointment is None:
+        raise AppError("Appointment not found.", code="APPOINTMENT_NOT_FOUND", status_code=404)
+    if str(appointment["appointment_status"]) != "PENDING_CONFIRMATION":
+        # Same race, same answer as confirm/reject/expire: the D9 sweeper may have taken this row
+        # while the planner was typing the question.
+        raise _already_actioned_error(appointment, attempted="hold for information")
+
+    existing_deadline = appointment.get("expires_at")
+    if existing_deadline is not None:
+        raise AppError(
+            "This request has already been held for information once; the D9 clock can only be "
+            "paused once per request.",
+            code="HOLD_ALREADY_USED",
+            status_code=409,
+            detail=json.dumps(
+                {
+                    "reason_code": "HOLD_ALREADY_USED",
+                    "appointment_id": command.appointment_id,
+                    # `.isoformat()`, never `default=str`: `str(datetime)` emits a space where
+                    # ISO-8601 wants a `T`, so a refusal and the success response that preceded it
+                    # would disagree on the spelling of the same instant. Every timestamp this tool
+                    # emits -- response, audit row, refusal -- goes through isoformat for that
+                    # reason.
+                    "current_deadline": (
+                        existing_deadline.isoformat()
+                        if isinstance(existing_deadline, datetime)
+                        else str(existing_deadline)
+                    ),
+                }
+            ),
+        )
+
+    ttl_minutes = get_settings().pending_confirmation_ttl_minutes
+    previous_deadline = _derived_pending_deadline(
+        appointment.get("booked_at"), ttl_minutes=ttl_minutes
+    )
+    if previous_deadline is None:
+        # A PENDING row with no readable `booked_at` has no D9 clock, so there is nothing to pause
+        # and nothing honest to report as `previous_deadline`. Refusing beats inventing one.
+        raise AppError(
+            "This request has no booking instant, so it has no D9 deadline to pause.",
+            code="NO_PENDING_DEADLINE",
+            status_code=409,
+        )
+
+    now = datetime.now(timezone.utc)
+    new_deadline = now + timedelta(minutes=ttl_minutes)
+    now_iso = now.isoformat()
+
+    await session.execute(
+        text(
+            """
+            UPDATE public.appointments
+            SET expires_at = :expires_at, updated_at = :updated_at
+            WHERE appointment_id = :appointment_id
+              AND appointment_status = 'PENDING_CONFIRMATION'
+              AND expires_at IS NULL
+            """
+        ),
+        # The two extra predicates are belt-and-braces under a lock we already hold, and they are
+        # the invariant written down where PostgreSQL will enforce it: this statement can never
+        # extend a request that stopped being pending, nor spend a second extension.
+        {
+            "expires_at": new_deadline,
+            "updated_at": now,
+            "appointment_id": command.appointment_id,
+        },
+    )
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, :action_type, 'appointments', :entity_id,
+              :old_value_json, :new_value_json, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": new_id("AUD"),
+            "user_id": ctx.user_id,
+            "action_type": AUDIT_ACTION_HOLD_FOR_INFORMATION,
+            "entity_id": command.appointment_id,
+            "old_value_json": json.dumps(
+                {
+                    "status": "PENDING_CONFIRMATION",
+                    # NULL before, which is the whole of the one-shot marker's before-state.
+                    "expires_at": None,
+                    "derived_deadline": previous_deadline.isoformat(),
+                }
+            ),
+            # M14: reconstructable from this row alone -- who paused it, what they asked, what the
+            # deadline was before and after, and that the one permitted extension is now spent.
+            # Timestamps are `.isoformat()` rather than `default=str`, so the audit row spells an
+            # instant exactly the way the API response does (`str(datetime)` uses a space instead
+            # of the ISO `T`, which would make the two disagree textually about one moment).
+            "new_value_json": json.dumps(
+                {
+                    "transition": AUDIT_TRANSITION_HELD_FOR_INFO,
+                    "status": "PENDING_CONFIRMATION",
+                    "question": command.question,
+                    "previous_deadline": previous_deadline.isoformat(),
+                    "new_deadline": new_deadline.isoformat(),
+                    "extension_minutes": ttl_minutes,
+                    "hold_used": True,
+                }
+            ),
+            "created_at": now_iso,
+        },
+    )
+
+    result = HoldForInformationResult(
+        as_of=_as_of(),
+        shipment_id=shipment_id,
+        appointment_id=command.appointment_id,
+        question=command.question,
+        new_deadline=new_deadline.isoformat(),
+        previous_deadline=previous_deadline.isoformat(),
+        extension_minutes=ttl_minutes,
+        appointment=await _reread_appointment(session, command.appointment_id),
+        idempotency_key=idempotency_key,
     )
     await store_idempotency(
         session, key=idempotency_key, user_id=ctx.user_id, route=route,

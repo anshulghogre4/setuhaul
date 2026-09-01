@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db_session, get_request_id, get_settings_dep
 from app.core.envelope import ok
 from app.core.errors import AppError
+from app.services import notification_outbox
 from app.core.settings import Settings
 from app.scheduling.expiry import sweep_expired_appointments
 
@@ -84,6 +85,24 @@ def require_job_token(
             status_code=401,
         )
     return settings
+
+
+@router.post("/jobs/notification-drain")
+async def run_notification_drain(
+    request: Request,
+    settings: Annotated[Settings, Depends(require_job_token)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """One outbox drain cycle (#94): pending notification_outbox rows -> in-app feed.
+
+    TECH_STACK section 6: same mechanism as section 5's sweeper -- EventBridge Scheduler ->
+    this FastAPI route, behind the same job token. Commits per row (drain_outbox's own
+    contract), so a mid-batch failure loses nothing already delivered.
+    """
+    result = await notification_outbox.drain_outbox(
+        session, limit=settings.expiry_sweep_batch_limit
+    )
+    return ok(result.model_dump(), get_request_id(request))
 
 
 @router.post("/jobs/expiry-sweep")

@@ -38,10 +38,11 @@ import { copy } from '../lib/copy'
  * pushed either. This is stated in the design as an accepted limitation and it is not
  * work-aroundable here.
  *
- * Note also `pushSubscriptionEnabled` in `flags.ts`: the permission works today, but **nothing
- * server-side writes a `notifications` row yet** (no producer wired on any write path, E3.5's
- * own documented gap), so subscribing would create a channel with no sender. The permission
- * request is real; the subscription is flagged off.
+ * Note also `pushSubscriptionEnabled` in `flags.ts`: the permission works today, and since
+ * #94 (2026-09-02) the server DOES write `notifications` rows (the outbox drain feeds the
+ * in-app bell) — what is still missing is the WEB_PUSH delivery leg itself: no VAPID keys,
+ * no subscription store, no service-worker `push` listener. Subscribing would still create
+ * a channel with no sender. The permission request is real; the subscription is flagged off.
  */
 export function DriverPushPriming({ onDone }: { onDone?: () => void }) {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() =>

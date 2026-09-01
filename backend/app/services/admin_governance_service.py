@@ -1039,14 +1039,134 @@ async def _policy_version_conflict(
 # --------------------------------------------------------------------------------------
 
 
-def _audit_filters(actor: str | None, event_type: str | None, date_from: str | None, date_to: str | None, resource: str | None) -> tuple[str, dict[str, Any]]:
+# --------------------------------------------------------------------------------------------
+# Issue #104, option (b): the specific-event filter, with no migration.
+#
+# `action_type` is deliberately a generic CRUD verb for all ten admin-console writes (see
+# `_write_audit_entry`'s docstring and `audit_logs_action_type_check`'s sixteen values), so
+# `event_type` -- which filters on it -- cannot express "show me every policy publish". The
+# specific event lives in `new_value_json.event`, which is what `screens.md` section 5's Event
+# column renders ("Policy published", "User removed", "Rule updated").
+#
+# Option (a) -- widening the CHECK by migration to admit the specific vocabulary -- was the other
+# candidate on #104 and was **not** taken: it would put two vocabularies in `action_type` (generic
+# for the ten admin writes, specific for everything else) and require every existing row to be
+# re-interpreted. This arm reads the value where it already is.
+#
+# The set is transcribed from every `_write_audit_entry` call site, verified by grep 2026-09-02:
+# **nine call sites, ten events**. Six in `admin_user_service` (676 INVITE_USER, 806 UPDATE_USER,
+# 879 REACTIVATE_USER-or-DEACTIVATE_USER, 1040 REMOVE_USER, 1135 RESEND_INVITE, 1203
+# REVOKE_INVITE) and three in this module (271 CREATE_FACILITY_RULE, 339 UPDATE_FACILITY_RULE,
+# 969 PUBLISH_POLICY_VERSION). The count differs from the call-site count because `_set_active`
+# is one call site that writes either of two events depending on its `active` argument -- worth
+# stating, because "ten writes" in issue #80 and "ten events" here are the same ten by
+# coincidence of arithmetic, not by one-to-one correspondence.
+#
+# It is enumerated rather than free text because a free-text filter would let the Audit tab
+# silently return an empty list for a typo instead of saying what is supported. (The value reaches
+# SQL as a bind parameter either way -- validation is about the answer being honest, not about
+# injection, which parameterisation already rules out.)
+#
+# Deliberately NOT included: `event` values written by `gate_yard_service` (GATE_IN, DOCK_IN,
+# UNLOAD_START/END, GATE_OUT, QUEUE_STATE, DOCK_IN_REFUSED) and `planner_service`
+# (BLOCK_DOCK, END_DOCK_BLOCK). Those go through a different writer (`_write_audit`), belong to
+# other surfaces, and #104 is scoped to the admin console's own Audit tab. Widening the
+# vocabulary to them is a one-line change to this frozenset when a surface asks for it.
+AUDIT_EVENT_VOCABULARY = frozenset(
+    {
+        # admin_user_service -- FR-ADM-001..004, FR-ADM-010
+        "INVITE_USER",
+        "RESEND_INVITE",
+        "REVOKE_INVITE",
+        "UPDATE_USER",
+        "DEACTIVATE_USER",
+        "REACTIVATE_USER",
+        "REMOVE_USER",
+        # this module -- FR-ADM-005, FR-ADM-006/007
+        "CREATE_FACILITY_RULE",
+        "UPDATE_FACILITY_RULE",
+        "PUBLISH_POLICY_VERSION",
+    }
+)
+
+# `audit_logs.new_value_json` is `TEXT` (baseline migration line 375), not `jsonb`, so the arm has
+# to cast -- and the cast is **guarded**, which was not the original intention. Every writer in this
+# codebase serialises through `json.dumps` -- **but one did not, and that was a real defect this
+# change found rather than assumed away.**
+#
+# `services/eta_service.record_eta_update` wrote `str({...})` -- a Python dict repr, single-quoted
+# with `None` for null -- into both `old_value_json` and `new_value_json`. That is not JSON, so an
+# unguarded `::jsonb` cast raises `invalid input syntax for type json` on the *whole statement*, not
+# on one row: the Audit tab would 500 outright on any database where an ETA has ever been reported,
+# which is every real one. Found by the proof suite on a live cluster (`part8`, 2026-09-02),
+# invisible to every mocked test. The writer has since been fixed, and
+# `test_the_eta_audit_payload_is_valid_json` is its regression guard.
+#
+# **The guard below stays regardless**, because fixing the writer does not repair the rows already
+# written: every ETA audit entry made before that fix is still a Python dict repr sitting in a TEXT
+# column, and this read has to survive them. A row whose payload is not JSON projects `event = NULL`
+# and is simply not selected by the filter, instead of taking the tab down with it.
+#
+# `pg_input_is_valid` is PostgreSQL 16+ (production Supabase is 17.6, the proof cluster 18.3) and is
+# the documented way to ask "would this cast succeed" without aborting the transaction -- PostgreSQL
+# "Information Functions": *"Tests whether the given string is valid input for the specified data
+# type, returning true or false."* `CASE` rather than an `AND`-chain because AND operand evaluation
+# order is not guaranteed, while a CASE's is.
+#
+# **No index now, deliberately.** At POC scale (`audit_logs` holds four seeded rows plus whatever a
+# demo writes; §7.3's own load arithmetic puts the whole console at a handful of writes an hour) the
+# LIMIT-200 sequential scan is cheaper than an index to maintain. When the table does grow, the
+# index note has a precondition worth stating with it: an expression index over `::jsonb` **cannot
+# be built at all** while a single malformed row exists (the build performs the cast), so a one-off
+# repair of the pre-fix ETA rows is a prerequisite, not a nicety. After that:
+#
+#     CREATE INDEX CONCURRENTLY ix_audit_logs_event_created_at
+#       ON public.audit_logs (((new_value_json::jsonb) ->> 'event'), created_at DESC);
+#
+# ...together with dropping the `CASE` guard below, because an index is only usable by the planner
+# when the query's expression matches the indexed one exactly, and `pg_input_is_valid` is `stable`
+# rather than `immutable` (read out of `pg_proc.provolatile` in the proof suite, not assumed) so the
+# guarded form cannot itself be indexed.
+AUDIT_EVENT_EXPR = (
+    "CASE WHEN pg_input_is_valid(new_value_json, 'jsonb') "
+    "THEN (new_value_json::jsonb) ->> 'event' END"
+)
+
+
+def _assert_audit_event(event: str) -> str:
+    """Enforce the enumerated event vocabulary, naming the supported set in the refusal.
+
+    Same shape as `allocation._assert_reason_code` and `escalation_service`'s resolve/cancel
+    vocabularies -- 422 with the accepted values in `detail`, so the caller learns what to send
+    rather than getting an empty list back and guessing. This project already answers "how do we
+    refuse an unsupported controlled value" one way; this converges on it rather than adding a
+    third style.
+    """
+    normalised = event.strip().upper()
+    if normalised not in AUDIT_EVENT_VOCABULARY:
+        raise AppError(
+            f"Unsupported audit event '{event}'.",
+            code="INVALID_AUDIT_EVENT",
+            status_code=422,
+            detail=f"Supported: {', '.join(sorted(AUDIT_EVENT_VOCABULARY))}.",
+        )
+    return normalised
+
+
+def _audit_filters(actor: str | None, event_type: str | None, date_from: str | None, date_to: str | None, resource: str | None, event: str | None = None) -> tuple[str, dict[str, Any]]:
     clauses, params = [], {}
     if actor:
         clauses.append("user_id = :actor")
         params["actor"] = actor
     if event_type:
+        # Kept for back-compat (issue #104 adds `event`, it does not replace `event_type`): the
+        # generic-verb filter is still the only way to ask for "every DELETE", and the two
+        # compose -- `event_type=UPDATE&event=DEACTIVATE_USER` is a legitimate narrowing.
         clauses.append("action_type = :event_type")
         params["event_type"] = event_type.upper()
+    if event:
+        clauses.append(f"{AUDIT_EVENT_EXPR} = :event")
+        params["event"] = _assert_audit_event(event)
     if resource:
         clauses.append("entity_name = :resource")
         params["resource"] = resource
@@ -1062,18 +1182,30 @@ def _audit_filters(actor: str | None, event_type: str | None, date_from: str | N
 async def get_audit_log(
     session: AsyncSession, ctx: ExecutionContext,
     *, actor: str | None = None, event_type: str | None = None, date_from: str | None = None,
-    date_to: str | None = None, resource: str | None = None,
+    date_to: str | None = None, resource: str | None = None, event: str | None = None,
 ) -> dict[str, Any]:
-    """SS7.5.7 `get_audit_log` -- `actor?`, `event_type?`, `date_range?`, `resource?`."""
+    """SS7.5.7 `get_audit_log` -- `actor?`, `event_type?`, `date_range?`, `resource?`.
+
+    `event` is issue #104's addition and is not in section 7.5.7's argument list: it is the
+    specific-event filter that `event_type` cannot express, because `action_type` is a generic CRUD
+    verb for all ten admin writes. Flagged as an addition rather than folded in silently.
+
+    Each item also carries a projected `event` field. `screens.md` section 5's Event column
+    ("Policy published", "User removed") is otherwise only derivable by JSON-parsing
+    `new_value_json` in the browser -- U48's rule is that the interface renders receipts rather
+    than computing them, so the server does the extraction. Additive: `new_value_json` is still
+    returned unchanged beside it, so nothing that reads the old shape breaks.
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
-    filters, params = _audit_filters(actor, event_type, date_from, date_to, resource)
+    filters, params = _audit_filters(actor, event_type, date_from, date_to, resource, event)
     rows = (
         await session.execute(
             text(
                 f"""
                 SELECT audit_id, user_id, action_type, entity_name, entity_id,
-                       old_value_json, new_value_json, created_at
+                       old_value_json, new_value_json, created_at,
+                       {AUDIT_EVENT_EXPR} AS event
                 FROM public.audit_logs
                 WHERE 1=1 {filters}
                 ORDER BY created_at DESC
@@ -1089,18 +1221,25 @@ async def get_audit_log(
 async def export_audit_log(
     session: AsyncSession, ctx: ExecutionContext,
     *, actor: str | None = None, event_type: str | None = None, date_from: str | None = None,
-    date_to: str | None = None,
+    date_to: str | None = None, event: str | None = None,
 ) -> str:
     """SS7.5.7 `export_audit_log` -- CSV, same filters as the current view. Never a silent
-    full-table export ignoring whatever the admin was actually looking at."""
+    full-table export ignoring whatever the admin was actually looking at.
+
+    `event` is threaded through for exactly that reason (issue #104): the moment the Audit tab can
+    filter by specific event, an export that ignored it would be the silent full-table dump section
+    7.5.7 forbids. The column joins the CSV too, so an exported row says which event it was without
+    the reader re-deriving it.
+    """
     if not ctx.is_admin:
         raise AppError("Admin console access required.", code="FORBIDDEN", status_code=403)
-    filters, params = _audit_filters(actor, event_type, date_from, date_to, None)
+    filters, params = _audit_filters(actor, event_type, date_from, date_to, None, event)
     rows = (
         await session.execute(
             text(
                 f"""
-                SELECT audit_id, user_id, action_type, entity_name, entity_id, created_at
+                SELECT audit_id, user_id, action_type, entity_name, entity_id, created_at,
+                       {AUDIT_EVENT_EXPR} AS event
                 FROM public.audit_logs
                 WHERE 1=1 {filters}
                 ORDER BY created_at DESC
@@ -1113,7 +1252,7 @@ async def export_audit_log(
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["audit_id", "user_id", "action_type", "entity_name", "entity_id", "created_at"])
+    writer.writerow(["audit_id", "user_id", "action_type", "event", "entity_name", "entity_id", "created_at"])
     for row in rows:
-        writer.writerow([row["audit_id"], row["user_id"], row["action_type"], row["entity_name"], row["entity_id"], row["created_at"]])
+        writer.writerow([row["audit_id"], row["user_id"], row["action_type"], row["event"], row["entity_name"], row["entity_id"], row["created_at"]])
     return buf.getvalue()

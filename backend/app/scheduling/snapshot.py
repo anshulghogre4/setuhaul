@@ -18,12 +18,13 @@ shape that avoids it.
 
 ## The contract, stated once so both halves match
 
-**`planner_snapshot_hash` below is byte-identical to `planner_service._snapshot_hash`** and must
-stay that way: `tests/unit/test_planner_snapshot_hash.py` asserts the two produce the same digest
-for the same inputs, and fails the moment either drifts. The producer shipped first, so this is the
-copy that conforms -- not the other way round. **The follow-up the coordinator should file: delete
-`planner_service._snapshot_hash` and have it import this one.** Until then the drift guard is what
-keeps them honest.
+**`planner_snapshot_hash` below is now the only implementation.** It shipped as a byte-identical
+copy of `planner_service._snapshot_hash`, guarded by an equality test, because the producer landed
+first (#60) and the consumer (#61) had to conform to it. Issue #88 folded that duplication in:
+`planner_service._snapshot_hash` is an import alias for this function, so "byte-identical" is now
+an identity rather than a property a test has to re-prove every run. The guard survives as an
+`is`-assertion (`test_snapshot_hash_matches_the_planner_queue_producer_byte_for_byte`), which fails
+if anyone re-introduces a second copy.
 
 The digest is the SHA-256 hex of a canonical JSON object over:
 
@@ -144,7 +145,17 @@ def planner_snapshot_hash(
     interval_source: str,
     conflict_ids: list[str],
 ) -> str:
-    """The canonical `snapshot_hash`. Keep byte-identical to `planner_service._snapshot_hash`."""
+    """The canonical `snapshot_hash` -- the single implementation, imported by the queue producer.
+
+    Scope, deliberately: identity + lifecycle state + the authoritative interval + the
+    overlapping-claim displacement set. **Not** the TTL, the ETA, a dock block, or anything else
+    that moves without the capacity itself moving. A hash that changed every second would make
+    every confirm stale and turn `SNAPSHOT_STALE` into noise; a hash that carried dock blocks would
+    make blocking one dock invalidate every outstanding row on it (issue #88).
+
+    Not a security boundary and not signed: the server recomputes it from its own rows under the
+    row lock, so a forged value can only ever make a comparison fail, never pass.
+    """
     canonical = json.dumps(
         {
             "v": 1,
@@ -252,7 +263,14 @@ _INTERVAL_CONFLICTS_WITH_HOLDS_SQL = """
        ), '[]'::json)::text AS interval_conflicts_json,
 """
 
-_SNAPSHOT_SQL = """
+# The interval derivation, extracted so the queue read can share it verbatim (issue #88).
+#
+# `load_dock_block_conflicts` below answers the same question for the *read* side that
+# `_SNAPSHOT_SQL` answers for the write side, and it must answer it over exactly the same interval
+# -- a block that overlaps the refusal's window but not the preview's window would put the two back
+# into the disagreement #88 is about. Sharing the CTE rather than restating it is what makes that
+# structural rather than a comment someone has to maintain.
+_TARGET_CTE = """
 WITH target AS (
   SELECT a.appointment_id,
          a.shipment_id,
@@ -279,17 +297,27 @@ WITH target AS (
     ) occ ON true
    WHERE a.appointment_id = ANY(:appointment_ids)
 )
-SELECT t.appointment_id,
-       t.shipment_id,
-       t.slot_id,
-       t.appointment_status,
-       t.is_current,
-       t.facility_id,
-       t.dock_id,
-       t.occupancy_start,
-       t.interval_start,
-       t.interval_end,
-       {interval_conflicts}
+"""
+
+# The dock-block leg of the displacement set, defined **once** and consumed by two callers
+# (issue #88, the same "one predicate, two consumers" discipline #97/#98 established for the
+# liveness predicate).
+#
+#   * `_SNAPSHOT_SQL` -- the write path's recomputation under the row lock, which turns a non-empty
+#     result into `DISPLACEMENT_DETECTED`.
+#   * `load_dock_block_conflicts` -- `get_planner_queue`'s displacement preview, which renders it in
+#     the row's displacement column.
+#
+# Before this, only the first existed: the queue row carried `planner_service._conflicts_for`'s
+# overlapping-claim half alone, so a planner could be refused for a dock taken offline under them
+# that their screen never showed. Two copies of this fragment would reproduce that gap the first
+# time one of them was edited, which is why it is a shared literal rather than two similar queries.
+#
+# Half-open overlap on both edges (`event_start_ts < interval_end AND event_end_ts > interval_start`)
+# matching `planner_service._overlapping_block` and `scheduling/feasibility.py`, so "blocked" means
+# the same thing to the booking scan, the block preview, the queue row and the refusal.
+# `event_end_ts IS NULL` is an open-ended outage and overlaps everything after its start.
+_DOCK_BLOCK_CONFLICTS_SQL = """
        COALESCE((
            SELECT json_agg(json_build_object(
                       'conflict_type', 'DOCK_BLOCKED',
@@ -304,8 +332,42 @@ SELECT t.appointment_id,
               AND de.event_start_ts < t.interval_end
               AND (de.event_end_ts IS NULL OR de.event_end_ts > t.interval_start)
        ), '[]'::json)::text AS dock_block_conflicts_json
+"""
+
+_SNAPSHOT_SQL = (
+    _TARGET_CTE
+    + """
+SELECT t.appointment_id,
+       t.shipment_id,
+       t.slot_id,
+       t.appointment_status,
+       t.is_current,
+       t.facility_id,
+       t.dock_id,
+       t.occupancy_start,
+       t.interval_start,
+       t.interval_end,
+       {interval_conflicts}
+"""
+    + _DOCK_BLOCK_CONFLICTS_SQL
+    + """
   FROM target t
 """
+)
+
+# The read-side statement: the same `target` CTE and the same block predicate, without the
+# interval-conflict leg (the queue already has that half from `list_live_dock_occupancy`) and
+# therefore without the D2 flag branch `_INTERVAL_CONFLICTS_*` needs.
+_DOCK_BLOCKS_ONLY_SQL = (
+    _TARGET_CTE
+    + """
+SELECT t.appointment_id,
+"""
+    + _DOCK_BLOCK_CONFLICTS_SQL
+    + """
+  FROM target t
+"""
+)
 
 
 def _build_snapshot(row: dict[str, Any]) -> dict[str, Any]:
@@ -443,21 +505,65 @@ async def load_appointment_snapshot(
     return snapshots.get(appointment_id)
 
 
+async def load_dock_block_conflicts(
+    session: AsyncSession, appointment_ids: list[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """The dock-block half of the displacement set, for the *read* side (issue #88).
+
+    `get_planner_queue`'s third query. It exists so the queue row and the write path's
+    `DISPLACEMENT_DETECTED` are built from one predicate rather than two: this runs
+    `_DOCK_BLOCK_CONFLICTS_SQL` over `_TARGET_CTE`, which is literally the same fragment and the
+    same interval derivation `load_appointment_snapshots` recomputes under the row lock. A block
+    that would refuse a confirm therefore appears on the row that offers it, by construction.
+
+    **Deliberately not folded into the `snapshot_hash`.** The digest's `conflicts` leg carries the
+    overlapping-claim half only (see the module docstring's table and `_build_snapshot`), and that
+    is load-bearing rather than an oversight: blocking one dock would otherwise change the digest of
+    every outstanding row on it and mass-refuse in-flight confirms with `SNAPSHOT_STALE` -- turning
+    a targeted refusal into a facility-wide one. The block still refuses the confirm, through
+    `displacement_conflicts`, which is the check that runs *first*. The caller merges this into the
+    rendered conflict list and leaves `conflict_ids` alone.
+
+    Unlike `load_appointment_snapshots` this is a pure read: it takes no `actor_user_id` and runs no
+    lazy expiry, because `dock_status_events` has no hold lifecycle to expire -- #98's problem does
+    not exist on this leg. It also needs no `two_phase_hold_enabled` branch for the same reason: no
+    column it names was added by the D2 migration, so one statement works on either schema.
+    """
+    if not appointment_ids:
+        return {}
+    rows = (
+        await session.execute(
+            text(_DOCK_BLOCKS_ONLY_SQL),
+            {
+                "appointment_ids": list(appointment_ids),
+                "blocking_types": list(BLOCKING_EVENT_TYPES),
+            },
+        )
+    ).mappings().all()
+    return {
+        str(row["appointment_id"]): json.loads(row["dock_block_conflicts_json"] or "[]")
+        for row in rows
+    }
+
+
 def displacement_conflicts(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     """The full `DISPLACEMENT_DETECTED` set: overlapping live claims **plus** dock blocks.
 
-    Deliberately a *superset* of what `get_planner_queue` currently renders in its displacement
-    column, which only carries the overlapping-claim half (`planner_service._conflicts_for`). A
-    confirm can therefore be refused for a reason the row did not show -- a dock the planner (or a
-    breakdown) took out from under it since render.
+    Since issue #88 this is no longer a superset of what the planner was shown.
+    `get_planner_queue` renders the same two legs -- its own overlapping-claim half from
+    `planner_service._conflicts_for`, plus `load_dock_block_conflicts` above, which is this
+    function's block leg reached through the shared `_DOCK_BLOCK_CONFLICTS_SQL`. Both sides tag
+    every entry with `conflict_type` (`INTERVAL_CONFLICT` / `DOCK_BLOCKED`) so the row can say
+    *which* kind of harm it is warning about rather than implying every conflict is another truck.
 
-    That asymmetry is the safe direction and is stated rather than smuggled: refusing more than the
-    row warned about is recoverable (Flow 1 step 6 re-renders with the conflict named), whereas
-    confirming a truck onto a dock that `block_dock` took offline is not. `block_dock` deliberately
-    does **not** delete the `dock_occupancy` rows it strands -- that is how a
-    `CAPACITY_EVENT_CASCADE` begins (section 7.4) -- so nothing else in the confirm path would
-    catch it. **Owner fork: `_conflicts_for` should grow the same leg so the row and the refusal
-    agree.**
+    The asymmetry that used to live here mattered because `block_dock` deliberately does **not**
+    delete the `dock_occupancy` rows it strands -- that is how a `CAPACITY_EVENT_CASCADE` begins
+    (section 7.4) -- so nothing else in the confirm path would have caught it and the planner was
+    refused for a reason their screen never showed.
+
+    What remains asymmetric, deliberately, is the **hash**: a dock block is in this set but not in
+    `snapshot_hash`, so blocking a dock refuses the confirms it really conflicts with instead of
+    invalidating every outstanding snapshot in the facility. See `load_dock_block_conflicts`.
     """
     return [*snapshot.get("conflicts", []), *snapshot.get("dock_blocks", [])]
 

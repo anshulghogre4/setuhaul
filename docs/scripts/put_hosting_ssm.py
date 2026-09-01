@@ -21,6 +21,9 @@ MAP = (
     ("UPSTASH_REDIS_REST_URL", "/setuhaul/upstash-redis-rest-url"),
     ("UPSTASH_REDIS_REST_TOKEN", "/setuhaul/upstash-redis-rest-token"),
     ("LANGSMITH_API_KEY", "/setuhaul/langsmith-api-key"),
+    # #46: shipped dark until the owner provisions a Sentry project; the row exists so a
+    # rotation through this script does not silently drop the DSN once it is set.
+    ("SENTRY_DSN", "/setuhaul/sentry-dsn"),
     ("SUPABASE_URL", "/setuhaul/supabase-url"),
     ("SUPABASE_URL", "/setuhaul/supabase-jwks-issuer-base"),
 )
@@ -54,7 +57,13 @@ def database_url_kind(url: str) -> str:
     return "other"
 
 
-def put(name: str, value: str) -> str:
+# The runtime resolves its hydration region to ap-south-1 on every code path (issue #92's
+# verification); us-east-1 is written too, purely as the recorded rollback target until
+# issue #45's decommission ruling retires it. A rotation must reach the region that is READ.
+PUT_REGIONS = ("ap-south-1", "us-east-1")
+
+
+def put(name: str, value: str, region: str = "ap-south-1") -> str:
     completed = subprocess.run(
         [
             "aws",
@@ -68,7 +77,7 @@ def put(name: str, value: str) -> str:
             value,
             "--overwrite",
             "--region",
-            "us-east-1",
+            region,
         ],
         capture_output=True,
         text=True,
@@ -92,7 +101,8 @@ def main() -> int:
         if not value:
             results.append((name, f"skip:empty:{env_key}"))
             continue
-        results.append((name, put(name, value)))
+        for region in PUT_REGIONS:
+            results.append((f"{name}@{region}", put(name, value, region)))
 
     db = (os.environ.get("DATABASE_URL") or "").strip()
     db_name = "/setuhaul/database-url"
@@ -103,7 +113,8 @@ def main() -> int:
         if kind == "direct_5432":
             results.append((db_name, "skip:direct_5432_use_pooler"))
         else:
-            results.append((db_name, f"{put(db_name, db)}:{kind}"))
+            for region in PUT_REGIONS:
+                results.append((f"{db_name}@{region}", f"{put(db_name, db, region)}:{kind}"))
 
     for name, status in results:
         print(f"{name} {status}")

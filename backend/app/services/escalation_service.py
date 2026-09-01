@@ -10,9 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock, resolve_clock
 from app.core.errors import AppError
+from app.services import notification_outbox
 from app.core.execution_context import ExecutionContext
 from app.core.settings import Settings
-from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
+from app.repositories.scope import (
+    assert_facility_write_scope,
+    resolve_facility_scope_with_user_scopes,
+)
 from app.scheduling.constraints import load_scheduling_constraints
 
 # Issue #82: `get_pending_confirmations` adopts §7.3's composite ordering instead of the FIFO it
@@ -213,6 +217,14 @@ async def escalate_exception(
             },
         )
     ).mappings().one()
+    # #94: the event NFR-009/M9's "exactly 1 notification" counts -- enqueued in the same
+    # transaction as the escalation row; the outbox's dedupe_key makes the count a DB guarantee.
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.ESCALATION_OPENED,
+        escalation_id=str(row["escalation_id"]),
+        shipment_id=command.shipment_id,
+    )
     await session.commit()
     data = dict(row)
     data["payload"] = json.loads(data.pop("payload_json"))
@@ -281,9 +293,10 @@ async def get_exception_queue(
         )
     # Read path: the global tier is read scope, not write authority (see ExecutionContext.is_admin).
     # A global-read persona that names no facility gets scope=None here, which deliberately means
-    # "no facility filter" -- this query's WHERE clause is built conditionally, unlike the three
-    # below, which bind :facility_id unconditionally and therefore pass require_facility=True.
-    scope = resolve_facility_scope(ctx, facility_id)
+    # "no facility filter" -- §7.5.5 states it in this tool's own row ("omitted = all facilities in
+    # scope"). Since issue #107 the three reads below build their WHERE conditionally the same way;
+    # this one was already correct and is the shape they were converged onto.
+    scope = await resolve_facility_scope_with_user_scopes(session, ctx, facility_id)
     params: dict[str, Any] = {}
     facility_filter = ""
     if scope:
@@ -595,6 +608,13 @@ async def resolve_escalation(
 
     result = dict(row)
     result["code"] = "RESOLVED"
+    # #94: FR-OPS-006 -- "two terminal states, two driver consequences", first consequence.
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.ESCALATION_RESOLVED,
+        escalation_id=escalation_id,
+        reason=reason_code,
+    )
     if idempotency_key:
         await store_idempotency(
             session, key=idempotency_key, user_id=ctx.user_id, route=route,
@@ -687,6 +707,13 @@ async def cancel_escalation(
 
     result = dict(row)
     result["code"] = "CANCELLED"
+    # #94: FR-OPS-006's second terminal consequence.
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.ESCALATION_CANCELLED,
+        escalation_id=escalation_id,
+        reason=reason_code,
+    )
     await store_idempotency(
         session, key=idempotency_key, user_id=ctx.user_id, route=route,
         request_hash=req_hash, response=result,
@@ -954,6 +981,14 @@ async def take_over_thread(
         "stepper_position": STEPPER_POSITIONS["IN_PROGRESS"] if escalation is not None else None,
         "delivered": False, "delivery_reason": None,
     }
+    # #94: FR-OPS-002 -- the driver is told on the takeover transition; same transaction as
+    # the divider write. The Redis feed projection below is display; this is the durable record.
+    await notification_outbox.enqueue_notification(
+        session,
+        event_type=notification_outbox.THREAD_TAKEN_OVER,
+        shipment_id=thread["shipment_id"] if thread and thread.get("shipment_id") else None,
+        actor=(ctx.full_name or "").split(" ")[0] or None,
+    )
     await store_idempotency(
         session, key=idempotency_key, user_id=ctx.user_id, route=route,
         request_hash=req_hash, response=result,
@@ -1110,12 +1145,29 @@ async def get_pending_confirmations(
     Each item carries its own `urgency` block (score plus all three terms) rather than only the
     score, so the sort is inspectable rather than magic -- the same posture `PlannerQueueRow`
     takes, and the reason #60's ordering was reviewable in the first place.
+
+    **`facility_id` is optional for a global-read persona (issue #107, fixed 2026-09-01).** See the
+    comment on the resolve call below. Note what that means for the `LIMIT 100`: unscoped, the
+    truncation is across every facility, so `booked_at ASC` keeps the hundred rows closest to their
+    D9 deadline rather than the hundred belonging to any one facility -- which is the same property
+    the scoped case relies on, applied to a wider set. Unlike `get_planner_queue`, this read has no
+    per-facility arithmetic to break: it is a list, not §7.3's load model.
     """
-    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
+    # Issue #107. This shipped `require_facility=True` against SQL that bound `:facility_id`
+    # unconditionally, so a global-read persona with `users.facility_id` NULL (USR997/ADMIN) who
+    # omitted the parameter was refused 403 "Facility not in scope" -- while naming an explicit
+    # facility worked. §7.5.5 says the opposite: omission means "all facilities in scope", which is
+    # also what E2.3's migration means by "global scope is the absence of a facility constraint,
+    # not a row naming every facility". The filter is therefore conditional, exactly as
+    # `get_escalation_queue` above already built it, and `scope=None` reaches the query as "no
+    # filter" rather than as a refusal. An operator is unaffected: their scope is never None.
+    scope = await resolve_facility_scope_with_user_scopes(session, ctx, facility_id)
+    facility_filter = "AND sl.facility_id = :facility_id" if scope else ""
+    params: dict[str, Any] = {"facility_id": scope} if scope else {}
     rows = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT a.appointment_id, a.shipment_id, s.driver_id, s.order_reference,
                        sl.facility_id, sl.dock_id, sl.slot_start_ts, sl.slot_end_ts,
                        a.booked_at, s.priority_code, fc.queue_state
@@ -1125,12 +1177,12 @@ async def get_pending_confirmations(
                 LEFT JOIN public.facility_checkins fc ON fc.shipment_id = a.shipment_id
                 WHERE a.appointment_status = 'PENDING_CONFIRMATION'
                   AND a.is_current = 1
-                  AND sl.facility_id = :facility_id
+                  {facility_filter}
                 ORDER BY a.booked_at ASC
                 LIMIT 100
                 """
             ),
-            {"facility_id": scope},
+            params,
         )
     ).mappings().all()
 
@@ -1179,49 +1231,66 @@ async def get_pending_confirmations(
 
 
 async def get_dock_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
+    """Dock roster + open-slot counts. Issue #107: omitted `facility_id` means every facility.
+
+    `ORDER BY` grows `d.facility_id` in the unscoped case so a cross-facility answer is not an
+    arbitrary interleaving of two facilities' dock codes -- `DOCK-GGN-D1` and `DOCK-JAI-D1` sorting
+    next to each other would read as one facility's roster. Scoped, the extra key is a no-op.
+    """
+    scope = await resolve_facility_scope_with_user_scopes(session, ctx, facility_id)
+    facility_filter = "WHERE d.facility_id = :facility_id" if scope else ""
+    params: dict[str, Any] = {"facility_id": scope} if scope else {}
     rows = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT d.dock_id, d.dock_code, d.dock_type, d.dock_status,
                        count(sl.slot_id) FILTER (WHERE sl.slot_status = 'OPEN')::int AS open_slots
                 FROM public.docks d
                 LEFT JOIN public.appointment_slots sl ON sl.dock_id = d.dock_id
-                WHERE d.facility_id = :facility_id
-                GROUP BY d.dock_id, d.dock_code, d.dock_type, d.dock_status
-                ORDER BY d.dock_code
+                {facility_filter}
+                GROUP BY d.facility_id, d.dock_id, d.dock_code, d.dock_type, d.dock_status
+                ORDER BY d.facility_id, d.dock_code
                 """
             ),
-            {"facility_id": scope},
+            params,
         )
     ).mappings().all()
     return {"as_of": _as_of(), "source": "postgresql", "facility_id": scope, "docks": [dict(row) for row in rows]}
 
 
 async def get_queue_status(session: AsyncSession, ctx: ExecutionContext, facility_id: str | None) -> dict[str, Any]:
-    scope = resolve_facility_scope(ctx, facility_id, require_facility=True)
+    """Two counts. Issue #107: omitted `facility_id` means every facility, not a 403.
+
+    Both counts must use the *same* scope decision, which is why it is resolved once above them
+    rather than per query -- a version that scoped one and not the other would report a facility's
+    pending count against a global escalation count and read as a spike that was not there.
+    """
+    scope = await resolve_facility_scope_with_user_scopes(session, ctx, facility_id)
+    params: dict[str, Any] = {"facility_id": scope} if scope else {}
+    pending_filter = "AND sl.facility_id = :facility_id" if scope else ""
+    escalation_filter = "AND facility_id = :facility_id" if scope else ""
     pending = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT count(*)::int FROM public.appointments a
                 JOIN public.appointment_slots sl ON sl.slot_id = a.slot_id
-                WHERE sl.facility_id = :facility_id AND a.appointment_status = 'PENDING_CONFIRMATION'
+                WHERE a.appointment_status = 'PENDING_CONFIRMATION' {pending_filter}
                 """
             ),
-            {"facility_id": scope},
+            params,
         )
     ).scalar_one()
     open_escalations = (
         await session.execute(
             text(
-                """
+                f"""
                 SELECT count(*)::int FROM public.escalation_queue
-                WHERE facility_id = :facility_id AND escalation_status IN ('OPEN', 'IN_PROGRESS')
+                WHERE escalation_status IN ('OPEN', 'IN_PROGRESS') {escalation_filter}
                 """
             ),
-            {"facility_id": scope},
+            params,
         )
     ).scalar_one()
     return {

@@ -19,7 +19,7 @@ from app.api.v1.routers import (
     shared,
     shipments,
 )
-from app.assistant.observability import shutdown_telemetry
+from app.assistant.observability import init_sentry, shutdown_telemetry
 from app.core.errors import (
     AppError,
     app_error_handler,
@@ -48,6 +48,17 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # E7.2 (issue #46), DEPLOYMENT.md section 8 (D-3). Before FastAPI() rather than inside the
+    # lifespan, for two reasons: Sentry's FastAPI guide asks for init "as early as possible", and
+    # the Starlette/FastAPI integrations auto-enable off the installed packages when the SDK
+    # initialises -- doing it after the app object exists means the ASGI app is already built.
+    # No-op and zero-import while SENTRY_DSN is empty, which is every environment today.
+    #
+    # This still catches unhandled 500s despite the catch-all handler registered below: Starlette's
+    # ServerErrorMiddleware re-raises after its handler has produced the response, precisely so an
+    # outer layer can observe the error, and Sentry's middleware sits outside it. Asserted in
+    # tests/unit/test_sentry_init.py rather than assumed.
+    init_sentry(settings)
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     # CORS first so error responses still get ACAO headers for the browser.
     cors_kwargs: dict = {

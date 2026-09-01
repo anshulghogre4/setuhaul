@@ -133,12 +133,41 @@ test('planner: queue-tab controls', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Hold .* for information/ }).first()).toBeVisible({
     timeout: 30_000,
   })
-  const holdBtn = page.getByRole('button', { name: /Hold .* for information/ }).first()
+  // Scoped to the HELD plate (fixture `ttl.hold_used: true`), not `.first()`: since #64 the Hold
+  // button on an ordinary row is ENABLED, so the first match would report aria-disabled=null and
+  // read as a regression when it is the opposite.
+  const heldPlate = page.locator('figure').filter({ hasText: 'Hold for information — spent' })
+  const holdBtn = heldPlate.getByRole('button', { name: /Hold .* for information/ }).first()
   const escBtn = page.getByRole('button', { name: /Escalate /, exact: false }).first()
   const holdTitle = await holdBtn.getAttribute('title')
   const holdAria = await holdBtn.getAttribute('aria-disabled')
   const escTitle = await escBtn.getAttribute('title')
   const escAria = await escBtn.getAttribute('aria-disabled')
+
+  // ---- Issue #88: both displacement legs render, and neither prints "undefined" ------------------
+  //
+  // Driven on the gallery plate rather than live for the same structural reason as everything else
+  // in this test, but this one is a genuine REGRESSION guard rather than a stand-in: the row it
+  // renders carries an INTERVAL_CONFLICT and a DOCK_BLOCKED conflict at once, and DOCK_BLOCKED
+  // carries no shipment_id at all. Before the fix `describeDisplacement` mapped `c.shipment_id`
+  // over every entry, so this exact row rendered "Confirming this displaces undefined."
+  const blockedPlate = page.locator('figure').filter({ hasText: 'both displacement legs' })
+  await expect(blockedPlate).toBeVisible({ timeout: 30_000 })
+  const displacementText = (await blockedPlate.locator('tr[data-appointment] td').nth(4).innerText())
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  expect(displacementText, 'a blocked dock must never render as an undefined shipment').not.toContain(
+    'undefined',
+  )
+  expect(displacementText, 'the outage leg must be named as a block').toContain('blocked')
+
+  say(
+    'Displacement column — both #88 legs',
+    'WORKING-ON-FIXTURE',
+    `regression guard for issue #88's row-side change, fixed in features/planner this session. get_planner_queue's displacement.conflicts now carries BOTH legs the write path refuses on, each tagged with conflict_type (INTERVAL_CONFLICT | DOCK_BLOCKED, planner_service.py:200-217), and a DOCK_BLOCKED entry has NO shipment_id -- its field set is dock_event_id/dock_id/event_type/reason (scheduling/snapshot.py:323-327). lib/format.ts::describeDisplacement mapped c.shipment_id over every conflict, so a blocked dock rendered "Confirming this displaces undefined." in the column §7.3 calls "the single most important field". Now rendered as: "${displacementText}" -- two distinct sentences, because the two have different recoveries (a displacement is a harm the planner may still choose to cause; an outage is not something confirming can push through). lib/types.ts::QueueConflict is now a discriminated union, which caught a stale gallery fixture at compile time on the first build after the change. An absent conflict_type degrades to INTERVAL_CONFLICT, so an older backend renders as it did before rather than as undefined.`,
+  )
+
   await page.goBack()
 
   say('Row selection checkbox', 'BLOCKED-ENV', NO_ROW)
@@ -151,7 +180,11 @@ test('planner: queue-tab controls', async ({ page }) => {
   say('Confirm (click or C)', 'BLOCKED-ENV', NO_ROW)
   say('Reject (click or R)', 'BLOCKED-ENV', NO_ROW)
   say('Reject reason category / detail / preview / send', 'BLOCKED-ENV', NO_ROW)
-  say('Counter-offer (click or O)', 'BLOCKED-ENV', NO_ROW)
+  say(
+    'Counter-offer (click or O)',
+    'BLOCKED-ENV',
+    `${NO_ROW} CHANGED THIS SESSION: the control's destination is now U103's board picker rather than the interim dialog -- queue-tab.tsx's openCounterOffer delegates to the console, which switches to the Board tab pinned to the row (screens.md §3's one sanctioned automatic tab switch). The dialog is retained and reachable by setting plannerBoardPickerEnabled=false, which is what makes that a one-line revert. See "Click an open interval on a dock" below for the picker's own evidence.`,
+  )
   say(
     'Escalate (click or E)',
     'INACTIVE-LABELED',
@@ -159,8 +192,8 @@ test('planner: queue-tab controls', async ({ page }) => {
   )
   say(
     'Hold for information (click or H)',
-    'INACTIVE-LABELED',
-    `not activatable live (${NO_ROW}) but the built QueueRow rendered at /planner/_states shows the control present, focusable and labelled: aria-disabled=${holdAria}, title="${holdTitle}". This is plannerHoldEnabled=false -- one of the six deliberately-off flags -- and it carries its reason, so the honest gate holds.`,
+    'WORKING-ON-FIXTURE',
+    `BUILT AND FLIPPED ON this session (issue #64; plannerHoldEnabled=true). The affordance is now live rather than Inactive: it opens a dialog with a MANDATORY question field (flows-and-states.md Flow 4 step 1, "H or click Hold -> mandatory question field"), commits POST /api/v1/shipments/{id}/appointments/{id}/hold-for-information with an Idempotency-Key, and H is bound on the focused row for the first time. The one-shot cap is PREVENTED, not handled: the row's own ttl.hold_used (new on get_planner_queue, = appointments.expires_at IS NOT NULL) disables the control before a second attempt can be made, which is edge-cases.md #6's explicit requirement ("there should be no error to handle if the UI does its job"); the 409 HOLD_ALREADY_USED is still classified and rendered, because another planner can hold the same row between render and press. Verified on the built QueueRow at /planner/_states over a hold_used=true fixture: aria-disabled=${holdAria}, title="${holdTitle}". A DIVERGENCE FROM U67 IS DELIBERATE AND FLAGGED: components.md §3 specifies a PAUSE whose numeric value "freezes and hides", but the shipped tool grants ONE BOUNDED EXTENSION (expires_at = now + N) and time keeps elapsing against the new deadline -- nothing pauses and nothing resumes. The row therefore takes U67's visual language (pause icon, neutral colour off the urgency scale) but KEEPS the number, because hiding it would assert that time has stopped when it has not, inverting U67's own stated reason for hiding it. Owner fork: accept extension semantics and correct U67's copy, or build real pause/resume server-side. Live activation not exercised: ${NO_ROW}`,
   )
   say('Single-key shortcuts C / R / O / H / E', 'BLOCKED-ENV', NO_ROW)
 
@@ -168,17 +201,127 @@ test('planner: queue-tab controls', async ({ page }) => {
   say(
     'Undo (post-confirm toast, 5s)',
     'MISSING',
-    'deliberately not built, and stated as such in source: queue-tab.tsx\'s doConfirm carries the comment "No Undo affordance. U41\'s 5-second undo depends on the driver notification being QUEUED and dispatched only when the window closes ... a server-side mechanism that does not exist." The success toast offers no reversal.',
+    'deliberately not built, and stated as such in source: queue-tab.tsx\'s doConfirm carries the comment "No Undo affordance. U41\'s 5-second undo depends on the driver notification being QUEUED and dispatched only when the window closes ... a server-side mechanism that does not exist." The success toast offers no reversal. NOT BUILT THIS SESSION either, and it is not a frontend gap: U41\'s undo is a HOLD-BACK, not a reversal -- the window exists so the driver notification is never dispatched, and cancelling a dispatch that already happened is not something any client can do. Building a button that "undid" a committed confirm after the driver had been told would be a lie about capacity AND about what the driver knows. NEEDS A DESIGN/BACKEND RULING, one of: (a) confirm_request queues the driver notification with a deferred dispatch and exposes a cancel path, which is real backend work; (b) U41 is scoped to only those actions that notify nobody; or (c) U41 is withdrawn for confirm and the toast stays terminal.',
   )
 
   // ---- Filter by priority / ETA confidence -----------------------------------------------------
-  const toolbarText =
-    (await page.getByText(/composite urgency/).first().textContent()) ?? '(sort caption not found)'
+  //
+  // The control is live on /planner (it renders with an empty queue, since it sits in the toolbar
+  // above the rows), but its NARROWING cannot be proven against a queue of zero rows. So it is
+  // driven twice: once live for presence and wiring, and once at /planner/_states over fixture
+  // rows through the SAME component and the SAME predicate the route uses -- which is that
+  // gallery's stated reason for existing.
+  const liveFilter = page.getByRole('button', { name: 'Filter by priority or ETA confidence' })
+  await expect(liveFilter).toBeVisible()
+  await liveFilter.click()
+  const liveMenu = page.getByRole('menu')
+  await expect(liveMenu).toBeVisible()
+  const axes = await liveMenu.getByRole('menuitemradio').allTextContents()
+  await page.keyboard.press('Escape')
+
+  await page.goto('/planner/_states')
+  const plate = page.locator('figure').filter({ hasText: 'Filter by priority or ETA confidence' })
+  await expect(plate).toBeVisible({ timeout: 30_000 })
+  const rowsBefore = await plate.locator('tr[data-appointment]').count()
+
+  // "CRITICAL only" -- one of the design's own two stated use cases.
+  await plate.getByRole('button', { name: 'Filter by priority or ETA confidence' }).click()
+  await page.getByRole('menuitemradio', { name: 'CRITICAL' }).click()
+  await page.keyboard.press('Escape')
+  const rowsCritical = await plate.locator('tr[data-appointment]').count()
+  const summaryCritical = (await plate.getByText(/^Filter:/).textContent())?.trim() ?? ''
+
+  // "LOW confidence only" -- the other. Clearing priority first keeps the two axes independent.
+  await plate.getByRole('button', { name: 'Clear' }).click()
+  await plate.getByRole('button', { name: 'Filter by priority or ETA confidence' }).click()
+  await page.getByRole('menuitemradio', { name: 'LOW', exact: true }).last().click()
+  await page.keyboard.press('Escape')
+  const rowsLowConfidence = await plate.locator('tr[data-appointment]').count()
+  const summaryLow = (await plate.getByText(/^Filter:/).textContent())?.trim() ?? ''
+  await page.goBack()
+
   say(
     'Filter by priority or ETA confidence',
-    'MISSING',
-    `the Queue toolbar renders only a free-text Search box, a Refresh button and the sort caption ("${toolbarText.replace(/\s+/g, ' ').trim().slice(0, 120)}"). No priority or ETA-confidence filter exists anywhere in features/planner, and the design's "Filter: CRITICAL · 6 shown" toolbar text has no implementation. (Search is present but is not the designed control.)`,
+    'WORKING',
+    `built this session. LIVE on /planner: the toolbar now carries a Filter control (accessible name "Filter by priority or ETA confidence") offering ${axes.length} single-select options across two axes -- Any priority + LOW/NORMAL/HIGH/CRITICAL, Any confidence + LOW/MEDIUM/HIGH, both vocabularies copied from the schema's own CHECK constraints (setuhaul_baseline.sql:123 and :198), not from the artboards. Its narrowing cannot be exercised live for the structural reason stated at the top of this file (FAC-JAI-01 returns count 0), so it was driven at /planner/_states over fixture rows through the same QueueFilterControl and the same lib/queue-filter.ts predicate the route calls: ${rowsBefore} rows -> ${rowsCritical} on "CRITICAL only" ("${summaryCritical}") -> ${rowsLowConfidence} on "LOW ETA confidence only" ("${summaryLow}"). Both of the design's own stated use cases therefore narrow correctly. Faithful to screens.md §2 on three specifics: membership only and never the sort (a pure predicate over an already-ordered array -- it cannot reorder, because it never sees the comparator); NO chips, because §2 explicitly says none are needed at 15-35 rows and puts the state in the toolbar text instead ("Filter: CRITICAL · 6 shown", the exact format rendered above); and radiogroup rather than the ops queue's checkbox semantics, because a row has exactly one priority and at most one confidence. One judgement recorded in code: a row with confidence=null is EXCLUDED by an active confidence filter -- "no ETA on file" is not "its confidence is LOW".`,
   )
+})
+
+/**
+ * **Hold for information -- the CONTRACT, exercised at the API rather than through the UI.**
+ *
+ * The UI path genuinely cannot be driven by this suite: `/planner` scopes to the signed-in
+ * planner's own facility, `FAC-JAI-01`'s queue is empty, and the one pending appointment in the
+ * system (`APT-C805418B046D` / `SHP-RS-PENDING`) sits at `FAC-GGN-01` where no
+ * `WAREHOUSE_PLANNER` exists. So the button is proven on the gallery plate (above) and the two
+ * behaviours the button depends on are proven here directly: that a hold **extends** the deadline
+ * and marks it spent, and that a second attempt is **refused with a typed code** rather than
+ * silently granting a second extension.
+ *
+ * `hold_for_information` is `OPS_PORTAL_ROLES`, so `ops-ggn` -- the coordinator who owns that
+ * facility -- is the identity that can reach it, and is used here for that reason.
+ *
+ * ## Sandbox state, stated rather than hidden
+ *
+ * This write is **not reverted**: `expires_at` is the one-shot marker itself, so "undoing" it
+ * would mean handing the request a second extension, which is precisely the thing the cap exists
+ * to prevent and which no endpoint offers. `SHP-RS-PENDING` therefore carries a spent hold from
+ * the first run of this test onward. That is accepted sandbox state (owner-sanctioned), and the
+ * test is written to pass on every subsequent run by treating an already-spent hold as the
+ * expected path rather than a failure.
+ */
+test('planner: hold for information — extension granted once, second attempt typed-refused', async () => {
+  const SANDBOX_SHIPMENT = 'SHP-RS-PENDING'
+  const SANDBOX_APPOINTMENT = 'APT-C805418B046D'
+  const path = `/api/v1/shipments/${SANDBOX_SHIPMENT}/appointments/${SANDBOX_APPOINTMENT}/hold-for-information`
+
+  const first = await apiAs<Record<string, unknown>>('ops-ggn', 'POST', path,
+    { question: 'UI click-sweep probe — what is your revised ETA?' },
+    { 'Idempotency-Key': `sweep-hold-${Date.now()}` },
+  )
+
+  if (first.status === 200) {
+    const d = first.body?.data as Record<string, string> | undefined
+    const grew = Date.parse(String(d?.new_deadline)) > Date.parse(String(d?.previous_deadline))
+    expect(grew, 'the hold must move the deadline forward').toBe(true)
+    expect(d?.hold_used).toBe(true)
+
+    // The one-shot cap, proven rather than assumed.
+    const second = await apiAs<Record<string, unknown>>('ops-ggn', 'POST', path,
+      { question: 'UI click-sweep probe — second attempt, must be refused' },
+      { 'Idempotency-Key': `sweep-hold-2-${Date.now()}` },
+    )
+    const code = (second.body?.errors ?? [])[0]?.code
+    expect(second.status, 'a second hold must be refused').toBe(409)
+    expect(code).toBe('HOLD_ALREADY_USED')
+
+    say(
+      'Hold for information — backend contract',
+      'WORKING',
+      `driven against the live stack. First call: POST ${path} -> HTTP 200, previous_deadline=${d?.previous_deadline} -> new_deadline=${d?.new_deadline} (extension_minutes=${d?.extension_minutes}, hold_used=${d?.hold_used}) -- the deadline genuinely moved FORWARD, which is what makes the row's "held" treatment an extension rather than a pause. Second call: HTTP ${second.status} code=${code}, i.e. the one-shot cap is enforced server-side and typed, so the UI's disabled-Hold is a convenience over a real guarantee rather than the only thing preventing a double extension. SANDBOX STATE, not reverted and not revertible: expires_at IS the one-shot marker, so undoing it would grant a second extension -- ${SANDBOX_SHIPMENT} carries a spent hold from now on, which is accepted sandbox state.`,
+    )
+  } else if (first.status === 404) {
+    // The route exists in the tree (`routers/scheduling.py:414`) but not on the process answering
+    // :8000 -- confirmed by reading the live OpenAPI document, whose only `hold` path is
+    // `/api/v1/holds/{hold_id}/confirm`. That is a stale long-running uvicorn started before #64
+    // landed, not a contract failure, and restarting it is out of this suite's scope (other
+    // suites are holding sessions against it).
+    say(
+      'Hold for information — backend contract',
+      'BLOCKED-ENV',
+      `POST ${path} answered HTTP 404 because the RUNNING backend on :8000 predates issue #64: its live /openapi.json contains no hold-for-information path (only /api/v1/holds/{hold_id}/confirm). The route IS present in the tree at backend/app/api/v1/routers/scheduling.py:414 with allocation.hold_for_information behind it, and the frontend is wired to it. Re-run after the local backend is restarted; nothing was written.`,
+    )
+    return
+  } else {
+    const code = (first.body?.errors ?? [])[0]?.code
+    expect(first.status, 'the only expected non-200 here is the one-shot refusal').toBe(409)
+    expect(code).toBe('HOLD_ALREADY_USED')
+    say(
+      'Hold for information — backend contract',
+      'WORKING',
+      `driven against the live stack. ${SANDBOX_SHIPMENT}'s single extension was already spent by an earlier run of this test, so the FIRST call answered HTTP ${first.status} code=${code} -- which is itself the property under test: the cap is enforced server-side and typed, and it survives across sessions because it is the persisted expires_at marker rather than in-memory state. The grant path is proven by the run that first spent it.`,
+    )
+  }
 })
 
 test('planner: board tab — block a dock (written and reverted)', async ({ page }) => {
@@ -215,18 +358,69 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
   )
 
   // ---- Board interval click / picker cancel -------------------------------------------------------
+  //
+  // Same structural block as every other queue-row control: entering the picker requires pressing
+  // Counter-offer on a queue row, and this identity's queue has none. The picker's own rendering is
+  // therefore driven at /planner/_states, which mounts the real BoardPickerBanner and the real
+  // Board (via BoardPlate) over fixture options -- and CANNOT write, because the counterOffer call
+  // lives in DockBoardPanel, which the gallery never mounts.
   const lanes = page.getByRole('list', { name: /Dock occupancy/ })
   await expect(lanes).toBeVisible()
-  const clickableIntervals = await lanes.getByRole('button').count()
+  const atRestButtons = await lanes.getByRole('button').count()
+
+  await page.goto('/planner/_states')
+  const pickerPlate = page.locator('figure').filter({ hasText: 'Counter-offer board picker' })
+  await expect(pickerPlate).toBeVisible({ timeout: 30_000 })
+
+  const banner = pickerPlate.getByRole('region', { name: 'Counter-offer picker' })
+  await expect(banner).toBeVisible()
+  const bannerText = (await banner.innerText()).replace(/\s+/g, ' ').trim()
+
+  // Every clickable interval is a real button named "Offer <dock> · <date> · <interval>".
+  const offers = pickerPlate.getByRole('button', { name: /^Offer / })
+  const offerCount = await offers.count()
+  const offerNames = await offers.allTextContents()
+
+  // Ineligible lanes: dimmed via the muted/disabled TOKENS (issue #90's ruling -- never an opacity
+  // multiplier) and marked aria-disabled, read off the DOM rather than from a screenshot.
+  const ineligibleLanes = await pickerPlate
+    .locator('[role="listitem"][data-ineligible="true"]')
+    .count()
+  const totalLanes = await pickerPlate.locator('[role="listitem"]').count()
+
+  // Choosing an interval reveals the reason step -- counter_offer requires reason_code, which
+  // screens.md §4's sketch omits.
+  await offers.first().click()
+  const pressed = await offers.first().getAttribute('aria-pressed')
+  const reasonCount = await banner.getByRole('radio').count()
+  const sendGate = await banner
+    .getByRole('button', { name: /Send counter-offer/ })
+    .getAttribute('aria-disabled')
+
+  const cancel = banner.getByRole('button', { name: 'Cancel' })
+  await expect(cancel).toBeVisible()
+  await cancel.click()
+  const clearedAfterCancel = await offers.first().getAttribute('aria-pressed')
+
+  // Back to /planner, and RE-SELECT the Board tab. `goBack()` remounts `PlannerConsole`, whose
+  // default tab is Queue -- so without this the rest of this test (the block-dock form, which
+  // lives in the Board panel) would be looking for controls inside a `hidden` tabpanel.
+  await page.goBack()
+  await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible({ timeout: 30_000 })
+  const boardReread = page.waitForResponse((r) => r.url().includes('/api/v1/planner/board'))
+  await page.getByRole('tab', { name: 'Board' }).click()
+  await boardReread
+  await expect(page.getByRole('tab', { name: 'Board' })).toHaveAttribute('aria-selected', 'true')
+
   say(
     'Click an open interval on a dock (counter-offer picker)',
-    'MISSING',
-    `the board renders lanes but nothing on it is activatable as an interval picker: ${clickableIntervals} buttons inside the dock-occupancy list. dock-board.tsx has no counter-offer mode at all -- its own header says the interactive picker (states 3/24/25) "is not built", and plannerCounterOfferEnabled's interim entry point is a dialog instead (features/planner/lib/flags.ts).`,
+    'WORKING-ON-FIXTURE',
+    `built this session (plannerBoardPickerEnabled, features/planner/lib/flags.ts). The Board tab at rest still exposes ${atRestButtons} focusable bars and NO picker, which is correct -- the picker only exists while a row is being counter-offered. Driven at /planner/_states through the real components: the board renders ${offerCount} clickable open intervals as real buttons at their true lane positions [${offerNames.map((t) => t.trim()).join(' | ')}], each accessibly named "Offer <dock> · <date> · <interval>"; ${ineligibleLanes} of ${totalLanes} dock lanes carry data-ineligible="true" + aria-disabled and dim via the muted/disabled tokens (issue #90's ruling -- never an opacity multiplier, which would drag the bars' measured contrast below floor), which is screens.md §4's "ineligible docks dim and become unclickable" as components.md §18 Disabled rather than Inactive. Clicking an interval set aria-pressed=${pressed} and revealed the reason step (${reasonCount} controlled codes; Send gated aria-disabled=${sendGate} until one is chosen). U25 survives intact: nothing is draggable, there is no range-select, and these are the only interactive elements the board ever adds. HONEST BOUNDARIES, both stated in the banner rather than hidden: (1) lane eligibility is Stage 1's own answer projected onto lanes -- a lane is eligible exactly when find_feasible_slots returned an interval on it -- so the picker cannot say WHY an ineligible dock is ineligible (no read returns per-dock-per-shipment constraint failures); (2) the board's horizon is "four hours or to close", while Stage 1 searches further, so options beyond it cannot be plotted -- the banner COUNTS them ("1 of 3 feasible intervals fall outside this board's horizon") and points at the interim dialog, rather than silently dropping them. LIVE ACTIVATION NOT EXERCISED: ${NO_ROW}`,
   )
   say(
     'Cancel (picker banner)',
-    'MISSING',
-    'there is no picker banner on the Board tab, because the board picker itself is not built (see above). The interim counter-offer dialog carries its own dismissal, but that is a different control from the design\'s pinned banner.',
+    'WORKING-ON-FIXTURE',
+    `the pinned banner screens.md §4 requires is built and names the shipment it is picking for: "${bannerText.slice(0, 150)}…". Its Cancel is present in BOTH banner states (before and after an interval is chosen), which is the half of §4 that is not negotiable -- "must always have a clean way out without committing anything" -- and activating it cleared the chosen interval (aria-pressed ${pressed} -> ${clearedAfterCancel}). On the live route Cancel additionally drops the picking context and returns to the Queue tab, undoing the automatic switch that brought the planner to the Board (planner-console.tsx's onPickerCancel); that half needs a real queue row and is covered by the same block above.`,
   )
 
   // ---- "Block a dock" + the form -------------------------------------------------------------------

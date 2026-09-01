@@ -48,6 +48,38 @@ export function QueueSearchEmpty({ query, onClear }: { query: string; onClear: (
 }
 
 /**
+ * The priority / ETA-confidence filter emptied the view (`screens.md` section 2).
+ *
+ * Deliberately **not** `QueueSearchEmpty`. That component's title interpolates the search string,
+ * so a filter-only narrowing would render "No shipment matches ''" and its action would clear the
+ * wrong control. Two different causes of an empty table get two different sentences and two
+ * different recoveries -- the same rule `01-driver-chat` and the ops queue already follow, and the
+ * reason `QueueEmptyCaughtUp` is separate from both.
+ */
+export function QueueFilterEmpty({
+  description,
+  onClear,
+}: {
+  /** The active predicate in the toolbar's own words, so the empty state names what excluded
+   *  every row rather than saying "a filter" and leaving the planner to go and look. */
+  description: string
+  onClear: () => void
+}) {
+  return (
+    <EmptyState
+      icon={SearchX}
+      title="No pending request matches this filter."
+      body={description}
+      actions={
+        <Button variant="neutral" onClick={onClear}>
+          Clear filter
+        </Button>
+      }
+    />
+  )
+}
+
+/**
  * State 27. **Not a centred spinner.** The real 36px table rows hold their exact height and
  * column widths, shimmering rather than a layout jump when real data arrives
  * (`stitch-prompts.md` section 12, item 4). The shell -- rail, top bar, status bar -- already

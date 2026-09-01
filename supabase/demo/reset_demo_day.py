@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime
 import os
 import sys
 from dataclasses import dataclass, field
@@ -458,10 +459,13 @@ async def execute_cast(conn: Any, shipment_ids: Sequence[str], *, dry_run: bool)
                 WHERE shipment_id = $1
                 """,
                 shipment_id,
-                golden["latest_eta_ts"],
+                # Parsed to datetime (2026-09-02, #95's predicted third script): the D1
+                # migration made latest_eta_ts/updated_at timestamptz, and asyncpg refuses
+                # str binds -- the same rot class fixed in seed_reschedule_driver.py.
+                datetime.fromisoformat(golden["latest_eta_ts"]),
                 golden["expected_unload_min"],
                 golden["current_status"],
-                "2026-08-16T16:00:00+05:30",
+                datetime.fromisoformat("2026-08-16T16:00:00+05:30"),
             )
 
         await conn.execute(

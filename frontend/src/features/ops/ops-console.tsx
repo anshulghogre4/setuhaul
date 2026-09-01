@@ -367,6 +367,65 @@ export function OpsConsole({ facilityId = null }: { facilityId?: string | null }
   }
 
   /**
+   * Flow 1 step 4 -- the explicit `ACKNOWLEDGED -> IN_PROGRESS` transition, from the detail pane's
+   * own lifecycle row (`components/detail-pane.tsx`'s `StartWorkControl`).
+   *
+   * Every one of `start_escalation_work`'s five outcomes is an HTTP **200** typed result rather
+   * than an exception (`lib/types.ts::StartWorkResult`), so this branches on `code` and never on a
+   * parsed error string. `ALREADY_IN_PROGRESS` is deliberately quiet: the coordinator's intent has
+   * been met, and a re-read is the whole answer -- `edge-cases.md`'s rule that a background change
+   * to something they were not focused on does not interrupt them applies to their own duplicate
+   * press too.
+   *
+   * The refusals reuse `takeoverNotice`'s existing kinds rather than inventing a second notice
+   * channel in this pane: `not-owner` and `not-acknowledged` say exactly the same thing here as
+   * they do on the hand-back recovery path, and two banners saying one thing in two shapes is how
+   * copy drifts.
+   */
+  async function handleStartWork() {
+    if (!selected) return
+    const action = `startwork:${selected.escalation_id}`
+    setBusy(true)
+    setTakeoverNotice(null)
+    try {
+      const res = await startEscalationWork(selected.escalation_id, keyFor(action))
+      // Every branch below is a COMPLETED request against this key's request hash, refusals
+      // included -- so the key is dropped in all of them. Only a thrown transport error keeps it,
+      // which is the case the header's "reused verbatim on retry" rule exists for.
+      clearKey(action)
+
+      if (res.code === 'NOT_OWNER') {
+        setTakeoverNotice({ kind: 'not-owner', ownerName: selected.owner_name })
+      } else if (res.code === 'NOT_ACKNOWLEDGED') {
+        setTakeoverNotice({ kind: 'not-acknowledged' })
+      } else if (res.code === 'ALREADY_ACTIONED') {
+        setAlreadyActioned({ id: selected.escalation_id, winningOwnerName: null })
+      } else if (res.code === 'IN_PROGRESS') {
+        toast.success(`${selected.escalation_id} is now in progress.`)
+      }
+
+      // Unconditional: the stepper's middle dot is drawn from the server's `stepper_position`, so
+      // it only advances once the queue has been re-read.
+      await load()
+    } catch {
+      toast.error("That didn't save. Nothing has changed.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * The overflow's Escalate entry has opened (or, on a same-shipment/same-day/same-reason dedupe
+   * hit, refreshed) a second case. Re-read rather than splice it in locally: the new row needs a
+   * server-computed `sla_remaining_min` and `stepper_position`, and U95's sort decides where it
+   * lands -- both facts this client cannot produce.
+   */
+  async function handleEscalated(escalationId: string) {
+    toast.success(`Opened ${escalationId}. It is now in the queue, unowned.`)
+    await load()
+  }
+
+  /**
    * Flow 2 step 1-4. The backend refuses `NOT_ACKNOWLEDGED` on an unowned or unacknowledged
    * escalation and advances `ACKNOWLEDGED -> IN_PROGRESS` in the same transaction, so a success
    * here moves the stepper too -- hence the queue reload.
@@ -650,6 +709,8 @@ export function OpsConsole({ facilityId = null }: { facilityId?: string | null }
             setLiveChange(null)
           }}
           onAcknowledge={handleAcknowledge}
+          onStartWork={() => void handleStartWork()}
+          onEscalated={(id) => void handleEscalated(id)}
           onResolve={handleResolve}
           onCancel={handleCancel}
           busy={busy}

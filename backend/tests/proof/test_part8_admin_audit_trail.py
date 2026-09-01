@@ -521,3 +521,172 @@ async def test_a_write_cannot_survive_a_failed_audit_entry(work_session, fixture
         )
     ).scalar_one()
     assert is_active == 1, "the deactivation rolled back with its audit entry, not without it"
+
+
+# --------------------------------------------------------------------------------------------
+# Issue #104 -- the specific-event filter, against the real column type
+# --------------------------------------------------------------------------------------------
+
+
+async def test_no_writer_puts_non_json_into_the_audit_payload(work_session):
+    """Every `audit_logs` payload this suite's writers produce is parseable JSON.
+
+    `audit_logs.new_value_json` is `TEXT` (baseline migration line 375), so #104's event filter and
+    its projected `event` column both have to cast. One malformed row anywhere breaks the **whole**
+    Audit tab, not one row of it.
+
+    **This scan found a real one on 2026-09-02** -- `eta_service.record_eta_update` was binding
+    `str({...})`, a Python dict repr, so every ETA update ever reported left an unparseable audit
+    payload (M14's "every state change reconstructable" was false for all of them, and the Audit
+    tab would have 500'd outright on any database carrying one). That writer is now fixed and this
+    is the regression guard for the whole table rather than for one writer: PostgreSQL is happy to
+    store any string in a TEXT column, so nothing but a scan like this makes the class visible.
+    """
+    bad = (
+        await work_session.execute(
+            text(
+                """
+                SELECT audit_id, action_type, entity_name, left(new_value_json, 60) AS snippet
+                FROM public.audit_logs
+                WHERE new_value_json IS NOT NULL
+                  AND NOT pg_input_is_valid(new_value_json, 'jsonb')
+                ORDER BY audit_id
+                """
+            )
+        )
+    ).mappings().all()
+    record_evidence(
+        "8. #104: malformed new_value_json rows",
+        f"{len(bad)} row(s), action_type(s)={sorted({str(r['action_type']) for r in bad}) or 'none'}",
+    )
+    assert not bad, (
+        "a writer is putting non-JSON into audit_logs.new_value_json, which breaks the whole "
+        f"Audit tab rather than one row of it: {[dict(row) for row in bad]}"
+    )
+
+
+async def test_a_malformed_payload_cannot_take_the_whole_audit_tab_down(work_session):
+    """The guard, proven against the failure it exists for rather than reasoned about.
+
+    A row whose `new_value_json` is not JSON must project `event = NULL` and drop out of the event
+    filter -- it must not abort the statement. Without the `CASE WHEN pg_input_is_valid(...)` in
+    `AUDIT_EVENT_EXPR` this test fails with `invalid input syntax for type json`, which is the
+    production behaviour the ETA rows above would otherwise cause on every Audit tab load.
+
+    The row is written by hand and removed again: this is about what the *reader* survives, and
+    manufacturing it through `record_eta_update` would drag an ETA write and its exception into a
+    test about a SELECT.
+    """
+    audit_id = f"AUD-PART8-{uuid4().hex[:8].upper()}"
+    await work_session.execute(
+        text(
+            """
+            INSERT INTO public.audit_logs (
+              audit_id, user_id, action_type, entity_name, entity_id,
+              old_value_json, new_value_json, ip_address, user_agent, created_at
+            ) VALUES (
+              :audit_id, :user_id, 'UPDATE_ETA', 'shipments', 'SHP1006',
+              NULL, :payload, NULL, NULL, :created_at
+            )
+            """
+        ),
+        {
+            "audit_id": audit_id,
+            "user_id": ADMIN_USER_ID,
+            # Byte-for-byte the shape `eta_service` really writes: single quotes, Python `None`.
+            "payload": "{'latest_eta_ts': '2026-08-04T11:45:00+05:30', 'exception_id': None}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    await work_session.commit()
+    try:
+        listing = await admin_governance_service.get_audit_log(work_session, _admin_ctx())
+        mine = [item for item in listing["items"] if item["audit_id"] == audit_id]
+        assert len(mine) == 1, "the malformed row vanished from the tab instead of degrading"
+        assert mine[0]["event"] is None, "a non-JSON payload must project no event, not guess one"
+
+        # ...and it is simply not selected by an event filter, rather than exploding it.
+        filtered = await admin_governance_service.get_audit_log(
+            work_session, _admin_ctx(), event="PUBLISH_POLICY_VERSION"
+        )
+        assert all(item["audit_id"] != audit_id for item in filtered["items"])
+        record_evidence("8. #104: guard over a malformed payload", "tab degrades to event=NULL")
+    finally:
+        await work_session.execute(
+            text("DELETE FROM public.audit_logs WHERE audit_id = :id"), {"id": audit_id}
+        )
+        await work_session.commit()
+
+
+async def test_the_guard_expression_is_the_reason_the_index_note_says_drop_it_first(work_session):
+    """The volatility claim in `AUDIT_EVENT_EXPR`'s comment, read out of the catalog not remembered.
+
+    That comment tells a future maintainer to drop the `CASE` guard before building the expression
+    index, on the grounds that `pg_input_is_valid` is not `IMMUTABLE` and so cannot appear in an
+    index expression. If PostgreSQL ever marks it immutable, the advice becomes wrong and this
+    fails, pointing at the comment to correct.
+    """
+    volatility = (
+        await work_session.execute(
+            text("SELECT provolatile FROM pg_proc WHERE proname = 'pg_input_is_valid' LIMIT 1")
+        )
+    ).scalar_one()
+    assert volatility != "i", (
+        "pg_input_is_valid is now IMMUTABLE -- the guarded expression is indexable after all, so "
+        "AUDIT_EVENT_EXPR's index note should stop telling maintainers to drop the guard first"
+    )
+    record_evidence("8. #104: pg_input_is_valid volatility", f"provolatile={volatility!r}")
+
+
+async def test_the_event_filter_selects_by_specific_event_and_projects_it(work_session):
+    """Issue #104's whole point, end to end: the Audit tab can ask for one specific event.
+
+    Before this, `event_type` filtered `action_type`, which is `UPDATE` for a role change, a
+    deactivate, a reactivate, a rule edit **and** a policy publish -- so "show me every user
+    removal" was not expressible server-side and the Event column had to be derived by parsing JSON
+    in the browser. Both halves are asserted here against real rows rather than against the emitted
+    SQL, which is all a mocked session can see.
+    """
+    user_id = await _make_user(work_session)
+    try:
+        await admin_user_service.deactivate_user(work_session, _admin_ctx(), user_id)
+        await admin_user_service.reactivate_user(work_session, _admin_ctx(), user_id)
+
+        both = await admin_governance_service.get_audit_log(
+            work_session, _admin_ctx(), resource="users", event_type="UPDATE"
+        )
+        mine = [item for item in both["items"] if item["entity_id"] == user_id]
+        assert {item["event"] for item in mine} == {"DEACTIVATE_USER", "REACTIVATE_USER"}, (
+            "the generic action_type filter cannot tell the two apart -- which is issue #104"
+        )
+
+        only_deactivations = await admin_governance_service.get_audit_log(
+            work_session, _admin_ctx(), event="DEACTIVATE_USER"
+        )
+        rows = [item for item in only_deactivations["items"] if item["entity_id"] == user_id]
+        assert len(rows) == 1
+        assert rows[0]["event"] == "DEACTIVATE_USER"
+        # ...and the raw column is still there beside the projection, so the change is additive.
+        assert json.loads(rows[0]["new_value_json"])["event"] == "DEACTIVATE_USER"
+
+        csv_text = await admin_governance_service.export_audit_log(
+            work_session, _admin_ctx(), event="REACTIVATE_USER"
+        )
+        exported = [line for line in csv_text.splitlines() if user_id in line]
+        assert len(exported) == 1 and "REACTIVATE_USER" in exported[0], (
+            "the export ignored the filter the view applied -- SS7.5.7 forbids exactly that"
+        )
+        record_evidence("8. #104: event filter", "DEACTIVATE_USER/REACTIVATE_USER separable")
+    finally:
+        await _drop_user(work_session, user_id)
+
+
+async def test_an_unknown_event_is_refused_before_the_query_runs(work_session):
+    """A typo must not read as "no such events happened". Same 422-naming-the-set shape the ops and
+    planner vocabularies use."""
+    with pytest.raises(AppError) as exc:
+        await admin_governance_service.get_audit_log(
+            work_session, _admin_ctx(), event="USER_DEACTIVATED"
+        )
+    assert exc.value.code == "INVALID_AUDIT_EVENT"
+    assert "DEACTIVATE_USER" in (exc.value.detail or "")

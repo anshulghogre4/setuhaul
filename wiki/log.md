@@ -1155,3 +1155,14 @@ last_updated: 2026-08-29
 - Verification sweep over 47 open issues: 30 CLOSE on file:line+CHANGELOG evidence; #79 saved from a wrong close by a live query (ROL010 absent); #92 KEEP re-confirmed.
 - Five agents, disjoint files: shell handlers + end-block + NOT-IN-DESIGN reclassifications (sweep DEAD 3->0); carrier identity (code + live CAR002 scope row; issue evidence corrected -- ROL009 always existed); lapsed-hold expiry on both digest sides (GET-that-writes fork flagged); section-7.3 composite urgency shared by planner+ops; ten admin writes audited (PG17 self-join before-values; FK-failure coupling test); Gemini vertex_adc>vertex_express>ai_studio>openai with two SDK traps source-cited and live-verified.
 - Filed #104 (audit taxonomy), #105 (reaper concurrency), #106 (user_scopes narrowing). Coordinator re-verified everything independently on the settled tree. Commit message handed; deploy ships the batch + flips prod chat to Gemini.
+
+## 2026-09-02 00:05 IST | deployment | batch live: chat on gemini-3.7-flash via Vertex express (wire-proof); carrier portal + section-7.3 ordering verified; #107 filed
+
+- AgentCore v3->4, ECS COMPLETED (4fabe88a, full script green incl. new build step), Vercel auto-ship. #103 closed on the runtime's own wire log (aiplatform.googleapis.com/.../gemini-3.7-flash 200). #101: 178 CAR002 shipments for Sanjay. #82: ordering + urgency blocks live (3000=2000+1000+0). #107: omitted-facility 403 for global personas (pre-existing, section 7.5.5 violation). Updated [[current-state]], [[handoff]], root CHANGELOG.
+
+## 2026-09-02 03:35 IST | fix | goal wave: 14 issues (#42/#46/#51/#52/#64/#88/#92/#94/#102/#104-#108); Locust scenarios run; proof 155/0, unit 1047/0
+
+- Eight partitioned agents + coordinator: outbox (10 producers, RLS hole closed), grants[], IaC+deploy-smoke, scope family (bite-proven), audit events (jsonb-guard saved the tab), hold_for_information end to end (flag ON), #102 built/dispositioned (DOCK_BLOCKED union), Sentry dark + ADOT spans (crash was upstream-fixed -- dated proof), reaper PID-safe (os.kill(0) kills on Windows -- caught pre-ship).
+- Mutating Locust under the repo guard: cast reset (healed reset_demo_day's binds -- #95's third script), suite1 PASS leader-mode w/ real DB conflict at HTTP (RACE fixture structurally unraceable post-D1, documented), suite2 all legs, suite4 PASS after 3 honest suite fixes, suite3 ALL PASS on re-run (exactly one audited winner, no 5xx both sides, race resolved both directions across the two runs; first run caught the savepoint defect).
+- #108 found/fixed/re-proven in one night (match-current => clear, mismatch => refuse). LLM AUTO = free key -> openai -> openrouter (owner ruling; Vertex explicit-only; local chat finally works).
+- Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed.

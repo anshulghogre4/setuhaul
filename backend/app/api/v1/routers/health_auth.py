@@ -9,6 +9,7 @@ from app.core.envelope import ok
 from app.core.execution_context import ExecutionContext
 from app.core.settings import Settings, get_settings
 from app.db.session import db
+from app.services.auth_grants_service import resolve_grants
 
 router = APIRouter(tags=["health"])
 
@@ -44,16 +45,28 @@ async def ready(
 async def auth_me(
     request: Request,
     ctx: Annotated[ExecutionContext, Depends(get_execution_context)],
+    # Issue #52. The SAME session `get_execution_context` already used: FastAPI caches a
+    # dependency's result per request, and both depend on `get_db_session`, so this adds a query
+    # to an open session rather than a second connection. (That dependency released its own
+    # transaction before returning, so the grants read opens a fresh, short one.)
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
     data = {
         "user_id": ctx.user_id,
         "email": ctx.email,
         "full_name": ctx.full_name,
         "role_id": ctx.role_id,
+        # Issue #52 keeps this field. `grants` is ADDITIVE -- every pre-#52 consumer reads
+        # `role_name` and must keep working against a deployed frontend that predates the change,
+        # which is exactly what that issue's rollback note requires.
         "role_name": ctx.role_name,
         "driver_id": ctx.driver_id,
         "facility_id": ctx.facility_id,
         "permissions": ctx.permissions,
+        # One entry per (role x scope) the caller holds -- see `auth_grants_service` for why that
+        # is not "one entry per role" (users.role_id is a single FK; the schema cannot express a
+        # second role). Derived server-side from the verified token only; M15.
+        "grants": await resolve_grants(session, ctx),
         "scope": {
             "type": "global_read_only" if ctx.has_global_read_scope else ("facility" if ctx.facility_id else "self"),
             "facility_id": ctx.facility_id,

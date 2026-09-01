@@ -7,6 +7,7 @@ import logging
 import os
 from typing import Any
 
+from app.assistant.observability import init_sentry
 from app.assistant.run_assistant import run_assistant
 from app.core.execution_context import ExecutionContext
 from app.core.settings import DESIGNED_AWS_REGION, assert_region_alignment, get_settings
@@ -41,6 +42,12 @@ _SSM_ENV = (
     # and quietly invite someone to set it to one, which google-auth would then reject.
     ("/setuhaul/gcp-project", "GCP_PROJECT"),
     ("/setuhaul/gcp-sa-key", "GCP_SA_KEY_JSON"),
+    # E7.2 (issue #46), DEPLOYMENT.md section 8 (D-3). The parameter does not exist yet -- the
+    # owner creates the Sentry project and puts the backend DSN here. Until then `_hydrate_ssm_into_env`
+    # logs one "ssm hydrate miss" line and moves on, and `init_sentry` sees an empty DSN and never
+    # imports the SDK, so listing it early costs nothing and means enabling Sentry is a `put-parameter`
+    # plus a restart rather than a code change.
+    ("/setuhaul/sentry-dsn", "SENTRY_DSN"),
 )
 
 try:
@@ -90,6 +97,13 @@ def _ensure_db() -> None:
     # lifespan, so without this call the runtime is the one entrypoint that could drift
     # regions unnoticed — which is exactly what happened (live runtime ARN: us-east-1).
     assert_region_alignment(settings)
+    # E7.2 (issue #46). AgentCore never runs the FastAPI lifespan or `create_app`, so without this
+    # the SSM entry above would hydrate a DSN that nothing ever consumed and the *agent* process --
+    # where the LLM turn actually runs -- would be the one place Sentry could not see a crash.
+    # `init_sentry` is idempotent-safe to call on a warm container: it returns False immediately
+    # while the DSN is empty, and `sentry_sdk.init` replaces the client rather than stacking when
+    # it is not.
+    init_sentry(settings)
     if db.engine is None:
         db.configure(settings)
 

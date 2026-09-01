@@ -1037,11 +1037,109 @@ async def test_get_audit_log_applies_the_actor_filter():
 
 @pytest.mark.asyncio
 async def test_export_audit_log_returns_csv_with_a_header_row():
-    rows = [{"audit_id": "AUD1", "user_id": "USR1", "action_type": "CREATE", "entity_name": "users", "entity_id": "USR2", "created_at": "2026-08-25T00:00:00+00:00"}]
+    rows = [{"audit_id": "AUD1", "user_id": "USR1", "action_type": "CREATE", "event": "INVITE_USER", "entity_name": "users", "entity_id": "USR2", "created_at": "2026-08-25T00:00:00+00:00"}]
     session = _session_with(rows)
     csv_text = await admin_governance_service.export_audit_log(session, _admin_ctx())
-    assert csv_text.splitlines()[0] == "audit_id,user_id,action_type,entity_name,entity_id,created_at"
+    # `event` joined the header in issue #104 -- an exported row now says which specific event it
+    # was, rather than only the generic CRUD verb the reader would have to re-derive.
+    assert csv_text.splitlines()[0] == "audit_id,user_id,action_type,event,entity_name,entity_id,created_at"
     assert "AUD1" in csv_text
+    assert "INVITE_USER" in csv_text
+
+
+# ---------------------------------------------------------------------------------------------
+# Issue #104 -- the specific-event filter (option (b): a JSON-filter arm, no migration).
+# ---------------------------------------------------------------------------------------------
+
+
+def _audit_sql(session) -> str:
+    return str(session.execute.call_args.args[0])
+
+
+@pytest.mark.asyncio
+async def test_the_event_filter_binds_the_value_and_never_interpolates_it():
+    """The value reaches SQL as a bind parameter, and the JSON path is a fixed literal.
+
+    Asserted on the emitted statement rather than trusted: this is the one filter arm whose column
+    reference is an expression rather than a column name, so it is the arm where a future
+    "just f-string it in" refactor would be easiest and worst.
+    """
+    session = _session_with([])
+    await admin_governance_service.get_audit_log(
+        session, _admin_ctx(), event="publish_policy_version"
+    )
+    sql = _audit_sql(session)
+    params = session.execute.call_args.args[1]
+    assert f"{admin_governance_service.AUDIT_EVENT_EXPR} = :event" in sql
+    # The cast is guarded: `eta_service` writes a Python dict repr into this column, so an
+    # unguarded cast would take the whole tab down rather than skip one row (see AUDIT_EVENT_EXPR).
+    assert "pg_input_is_valid(new_value_json, 'jsonb')" in sql
+    # Normalised to the vocabulary's own casing, so a lower-case query still matches stored rows.
+    assert params["event"] == "PUBLISH_POLICY_VERSION"
+    assert "PUBLISH_POLICY_VERSION" not in sql
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_event_is_a_422_naming_the_vocabulary():
+    """`edge-cases`-style refusal, same shape as `allocation._assert_reason_code`: an empty result
+    set would be indistinguishable from "no such events happened", which is the wrong answer to a
+    typo."""
+    session = AsyncMock()
+    session.execute = AsyncMock()
+    with pytest.raises(AppError) as exc:
+        await admin_governance_service.get_audit_log(session, _admin_ctx(), event="POLICY_PUBLISHD")
+    assert exc.value.code == "INVALID_AUDIT_EVENT"
+    assert exc.value.status_code == 422
+    assert "PUBLISH_POLICY_VERSION" in (exc.value.detail or "")
+    # Refused before any query -- the 422 is a client mistake, not a database round trip.
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_vocabulary_is_exactly_the_ten_events_the_admin_writes_emit():
+    """Pinned as a set against the writers themselves, so a new admin write that forgets to join
+    the vocabulary fails here rather than being silently unfilterable -- which is the exact defect
+    issue #104 was filed for."""
+    assert admin_governance_service.AUDIT_EVENT_VOCABULARY == {
+        "INVITE_USER", "RESEND_INVITE", "REVOKE_INVITE", "UPDATE_USER",
+        "DEACTIVATE_USER", "REACTIVATE_USER", "REMOVE_USER",
+        "CREATE_FACILITY_RULE", "UPDATE_FACILITY_RULE", "PUBLISH_POLICY_VERSION",
+    }
+
+
+@pytest.mark.asyncio
+async def test_event_and_event_type_compose_rather_than_replace_each_other():
+    """Back-compat: `event_type` (the generic verb) is still the only way to ask for "every
+    DELETE", so #104 adds an arm rather than swapping one in."""
+    session = _session_with([])
+    await admin_governance_service.get_audit_log(
+        session, _admin_ctx(), event_type="update", event="DEACTIVATE_USER"
+    )
+    params = session.execute.call_args.args[1]
+    assert params["event_type"] == "UPDATE"
+    assert params["event"] == "DEACTIVATE_USER"
+    assert "action_type = :event_type" in _audit_sql(session)
+
+
+@pytest.mark.asyncio
+async def test_the_list_projects_the_event_so_the_frontend_never_parses_json():
+    """`screens.md` section 5's Event column, served rather than derived (U48)."""
+    session = _session_with([])
+    await admin_governance_service.get_audit_log(session, _admin_ctx())
+    assert f"{admin_governance_service.AUDIT_EVENT_EXPR} AS event" in _audit_sql(session)
+    # ...and the raw column is still returned beside it, so the change is additive.
+    assert "new_value_json," in _audit_sql(session)
+
+
+@pytest.mark.asyncio
+async def test_export_respects_the_event_filter_too():
+    """SS7.5.7: "same filters as the current view -- never a silent full-table export ignoring
+    whatever the admin was actually looking at". A filter the tab can apply and the export cannot
+    would break that clause the moment #104 landed."""
+    session = _session_with([])
+    await admin_governance_service.export_audit_log(session, _admin_ctx(), event="REMOVE_USER")
+    assert session.execute.call_args.args[1]["event"] == "REMOVE_USER"
+    assert f"{admin_governance_service.AUDIT_EVENT_EXPR} = :event" in _audit_sql(session)
 
 
 # ---------------------------------------------------------------------------------------------

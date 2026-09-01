@@ -2,7 +2,9 @@ import { apiGet, apiPost, type MeProfile } from '@/core/http/api'
 import type {
   AcknowledgeResult,
   CancelReasonCode,
+  EscalateResult,
   EscalationQueueResponse,
+  EscalationReason,
   HandBackResult,
   OwnerFilter,
   PostMessageResult,
@@ -89,6 +91,50 @@ export async function startEscalationWork(
     {},
     { idempotencyKey },
   )
+  return res.data
+}
+
+/**
+ * `POST /api/v1/operations/escalate` -- the detail pane's overflow **Escalate** entry
+ * (`screens.md` section 3: "Escalate, Reassign and Cancel live in an overflow menu once
+ * acknowledged").
+ *
+ * ## Two calls, not one, and the first one writes nothing
+ *
+ * `escalate_exception` returns a `CONFIRMATION_REQUIRED` preview when `confirmed=false` and only
+ * INSERTs on a second call with `confirmed=true` (`escalation_service.py:128-141`). Both halves
+ * go through this one function, because the *request* is identical apart from that flag -- a
+ * preview built client-side from the same fields would be a description of what we intend to send
+ * rather than of what the server intends to do, and the service's own `note` is the sentence the
+ * coordinator is agreeing to.
+ *
+ * ## Scope (M15/NFR-019)
+ *
+ * The body names a **shipment**, never a facility or a driver. `escalate_exception` reads the
+ * shipment's own row for `facility_id`/`driver_id` and then runs `assert_facility_write_scope`
+ * against the verified token (`escalation_service.py:143-148`), so there is deliberately no
+ * argument here by which this client could assert where the case belongs.
+ *
+ * No `Idempotency-Key`: the route takes none, and it does not need one -- the
+ * `(shipment_id, calendar day, escalation_type)` dedupe key with issue #96's non-terminal partial
+ * index means a double-submit updates the same row rather than opening a second case.
+ */
+export async function escalateException(args: {
+  shipmentId: string
+  escalationType: EscalationReason
+  severityCode: string
+  reason: string
+  confirmed: boolean
+}): Promise<EscalateResult> {
+  const res = await apiPost<EscalateResult>('/api/v1/operations/escalate', {
+    shipment_id: args.shipmentId,
+    escalation_type: args.escalationType,
+    severity_code: args.severityCode,
+    // `payload.reason` is what `detail-pane.tsx`'s ReasonSection renders for the generic reasons,
+    // so the coordinator's own sentence is what the next person to open this case reads.
+    payload: { reason: args.reason, opened_from: 'ops_console' },
+    confirmed: args.confirmed,
+  })
   return res.data
 }
 

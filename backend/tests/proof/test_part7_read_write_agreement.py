@@ -61,12 +61,14 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 
+from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
-from app.scheduling import allocation, holds
+from app.scheduling import allocation, holds, snapshot
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import find_feasible_slots
 from app.scheduling.occupancy import live_blocking_occupancy_sql
+from app.services import planner_service
 from app.services.planner_service import get_planner_queue
 from tests.proof.evidence import record_evidence
 from tests.proof.harness import CONTESTED_DOCK, FACILITY_ID, RaceFixture, seed_race
@@ -74,9 +76,13 @@ from tests.proof.harness import CONTESTED_DOCK, FACILITY_ID, RaceFixture, seed_r
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 # Offsets no other proof fixture uses (part 1 takes 0, part 3 takes 480, part 6 takes 960/1440/
-# 1920/2400). Whole multiples of 24 h so each lands at 10:00 facility-local -- inside FAC-JAI-01's
-# 06:00-22:00 window and below RULE005's 21:00 LAST_NEW_START_TIME, which the harness docstring
-# explains is a precondition for the fixture proving anything at all.
+# 1920/2400, part 11 takes 8640). Whole multiples of 24 h so each lands at 10:00 facility-local --
+# inside FAC-JAI-01's 06:00-22:00 window and below RULE005's 21:00 LAST_NEW_START_TIME, which the
+# harness docstring explains is a precondition for the fixture proving anything at all.
+#
+# This list is a real registry, not a comment: `appointment_slots` carries
+# `UNIQUE (dock_id, slot_start_ts, slot_end_ts)` and every fixture here seeds `CONTESTED_DOCK`, so a
+# duplicated offset is a UniqueViolation at fixture setup. Add to it when you add a fixture.
 OFFSET_LIVE_HOLD = 2880       # 2099-03-03 10:00 IST
 OFFSET_LAPSED_HOLD = 4320     # 2099-03-04 10:00 IST
 OFFSET_AGREEMENT = 5760       # 2099-03-05 10:00 IST
@@ -906,4 +912,253 @@ async def test_d_the_sweeper_still_finds_nothing_to_do_afterwards(
     record_evidence("7. #98: sweeper after a read-path expiry", f"expired={result.expired}")
     assert result.expired == 0, (
         f"the sweeper re-expired {result.expired} row(s) the displacement read had handled"
+    )
+
+
+# =================================================================================================
+# E. Issue #88 -- the queue row and the refusal must name the same conflict set
+# =================================================================================================
+#
+# The last member of the same family. #97/#98 were about the *interval* leg of "this dock time is
+# taken"; this is about the other leg the write path always counted and the read never did.
+#
+# `snapshot.displacement_conflicts` -- what `confirm_request` refuses on -- returns
+# `conflicts + dock_blocks`. `get_planner_queue`'s displacement column carried only the first half,
+# so a planner could be refused `DISPLACEMENT_DETECTED` for a dock taken offline under them that
+# their screen had said nothing about. Section 7.3 calls that column "the single most important
+# field" and builds the whole 30-second decision on it, so a preview that under-reports it is a
+# correctness gap, not a cosmetic one.
+#
+# The fix is the same shape as #97's: **one predicate, two consumers.** The block leg now lives in
+# `snapshot._DOCK_BLOCK_CONFLICTS_SQL` over `snapshot._TARGET_CTE`, and both the recomputation and
+# `snapshot.load_dock_block_conflicts` (which the queue read calls) are assembled from those two
+# literals. A test that spelled the predicate out again could agree with a broken implementation of
+# it, so the first test below asserts the *sharing* structurally and the rest exercise both
+# consumers against a real cluster.
+#
+# The hash assertion is the subtle one and the reason #88 was not a quick patch: the block must
+# stay OUT of `snapshot_hash`. In it, blocking one dock would change the digest of every
+# outstanding row on that dock and mass-refuse in-flight confirms with `SNAPSHOT_STALE` -- turning
+# a targeted refusal into a facility-wide one, and hiding the specific reason the planner needs to
+# read. Part 5's determinism assertions rest on the same property.
+
+# 2099-03-08 10:00 IST. **Not 8640** -- `test_part11_hold_for_information.py` claimed that
+# offset (its `START_OFFSET_MINUTES`) while this was being written, and `appointment_slots`
+# carries `UNIQUE (dock_id, slot_start_ts, slot_end_ts)`, so two fixtures on `DOCK-JAI-D1` at
+# the same instant is a UniqueViolation at setup rather than an interference nobody notices.
+# Each fixture in this suite owns a distinct day on the contested dock; keep it that way.
+OFFSET_DOCK_BLOCK = 10080  # 2099-03-08 10:00 IST
+
+
+async def test_e_the_block_predicate_is_one_literal_shared_by_both_consumers():
+    """Structural, and deliberately first: everything below is only meaningful if this holds.
+
+    Asserts the shared fragment is present verbatim in every statement that answers "is this dock
+    blocked", rather than three strings that happen to agree today. A future edit that copies the
+    predicate into one of them fails here, before the behavioural tests get a chance to pass by
+    coincidence.
+    """
+    fragment = snapshot._DOCK_BLOCK_CONFLICTS_SQL
+    assert fragment.strip(), "the shared dock-block fragment is empty"
+    for name, statement in (
+        ("write path", snapshot._snapshot_sql(include_holds=False)),
+        ("write path (holds)", snapshot._snapshot_sql(include_holds=True)),
+        ("queue read", snapshot._DOCK_BLOCKS_ONLY_SQL),
+    ):
+        assert fragment in statement, f"{name} no longer uses the shared dock-block fragment"
+    # And the same interval derivation, so the two consumers cannot disagree about *which* window a
+    # block has to overlap to count.
+    assert snapshot._TARGET_CTE in snapshot._DOCK_BLOCKS_ONLY_SQL
+    assert snapshot._TARGET_CTE in snapshot._snapshot_sql(include_holds=False)
+    record_evidence("7. #88: dock-block predicate", "one shared literal, three statements")
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def dock_block_case(work_sessionmaker):
+    """A PENDING_CONFIRMATION appointment whose dock is then taken offline across its interval.
+
+    Built through the production paths end to end -- `request_slot` then `confirm_held_slot` for the
+    request, then `planner_service.block_dock` for the outage -- rather than by inserting a
+    `dock_status_events` row by hand. That matters: `block_dock` is what a planner actually presses,
+    it writes the row *and* opens the `CAPACITY_EVENT_CASCADE`, and it deliberately does **not**
+    delete the `dock_occupancy` claims it strands (section 7.4). A hand-written row would have
+    proved the query and not the product.
+
+    The queue is rendered **before** the block as well, and that render is the precondition the hash
+    assertion rests on: without it, "the digest did not change" could not be told apart from "there
+    was never a digest to change".
+    """
+    run_id = f"B{uuid4().hex[:7].upper()}"
+    async with work_sessionmaker() as session:
+        fixture = await seed_race(
+            session,
+            run_id=run_id,
+            contenders=1,
+            start_offset_minutes=OFFSET_DOCK_BLOCK,
+            alternatives=0,
+        )
+
+    holder = fixture.contenders[0]
+    taken = await _take_hold(work_sessionmaker, fixture, holder, key=f"p7-block-hold-{run_id}")
+    assert taken.code == "SLOT_HELD", f"fixture setup failed: {taken.code}"
+    async with work_sessionmaker() as session:
+        confirmed = await holds.confirm_held_slot(
+            session,
+            holder.ctx(),
+            hold_id=str(taken.hold_id),
+            idempotency_key=f"p7-block-confirm-{run_id}",
+        )
+    assert confirmed.code == "SLOT_REQUESTED", f"fixture setup failed: {confirmed.code}"
+    appointment_id = str(confirmed.appointment_id)
+
+    # The pre-block render. Its digest is what the planner would have sent, and what the write path
+    # must still be able to reproduce after the dock goes down.
+    async with work_sessionmaker() as session:
+        before_queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    before = next(
+        (item for item in before_queue.items if item.appointment_id == appointment_id), None
+    )
+    assert before is not None, "the fixture's pending appointment is not in the planner queue"
+    assert before.displacement.status == "NONE", (
+        "the row is already conflicted before the dock was blocked: "
+        f"{before.displacement.conflicts}"
+    )
+
+    # The block itself, across the appointment's own interval, through the section 7.5.1 tool.
+    async with work_sessionmaker() as session:
+        blocked = await planner_service.block_dock(
+            session,
+            _planner_ctx(),
+            dock_id=CONTESTED_DOCK,
+            window_start=before.interval_start - timedelta(minutes=15),
+            window_end=before.interval_end + timedelta(minutes=15),
+            reason="issue #88 displacement preview",
+            idempotency_key=f"p7-block-{run_id}",
+        )
+    assert blocked.code == "BLOCKED", f"fixture setup failed: {blocked.code}"
+
+    return {
+        "fixture": fixture,
+        "appointment_id": appointment_id,
+        "shipment_id": holder.shipment_id,
+        "dock_event_id": blocked.dock_status_event_id,
+        "before": before,
+    }
+
+
+async def test_e_the_queue_row_shows_the_dock_block_the_confirm_would_refuse_on(
+    dock_block_case, work_sessionmaker
+):
+    """The defect, stated as the read a planner actually looks at.
+
+    Against pre-#88 code this row renders `displacement: NONE` -- there is no overlapping *claim*,
+    only an outage -- while `confirm_request` refuses it. The `conflict_type` is asserted because
+    "another truck is booked here" and "there is no dock" are different harms with different
+    recoveries, and an untyped list said the same sentence for both.
+    """
+    case = dock_block_case
+    async with work_sessionmaker() as session:
+        queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    row = next(
+        (item for item in queue.items if item.appointment_id == case["appointment_id"]), None
+    )
+    assert row is not None, "the fixture's pending appointment left the planner queue"
+    record_evidence(
+        "7. #88: queue row after block_dock",
+        f"{row.displacement.status} "
+        f"({[c.get('conflict_type') for c in row.displacement.conflicts]})",
+    )
+    assert row.displacement.status == "CONFLICT", (
+        "the dock under this request was taken offline and the row still says no displacement -- "
+        "issue #88's under-report"
+    )
+    blocks = [c for c in row.displacement.conflicts if c.get("conflict_type") == "DOCK_BLOCKED"]
+    assert blocks, f"no DOCK_BLOCKED conflict on the row: {row.displacement.conflicts}"
+    assert blocks[0]["dock_event_id"] == case["dock_event_id"]
+    assert blocks[0]["dock_id"] == CONTESTED_DOCK
+
+
+async def test_e_confirm_refuses_exactly_what_the_row_warned_about(
+    dock_block_case, work_sessionmaker
+):
+    """Agreement, in the direction that matters: the refusal names the same event the row did.
+
+    This is the property the whole family is about. Before #88 both halves of this test passed
+    individually -- the row said NONE and the confirm said DISPLACEMENT_DETECTED -- and it was
+    precisely their *disagreement* that nothing could see.
+    """
+    case = dock_block_case
+    async with work_sessionmaker() as session:
+        queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    rendered = next(
+        item for item in queue.items if item.appointment_id == case["appointment_id"]
+    )
+
+    async with work_sessionmaker() as session:
+        with pytest.raises(AppError) as exc:
+            await allocation.confirm_appointment(
+                session,
+                _planner_ctx(),
+                shipment_id=case["shipment_id"],
+                command=allocation.ConfirmAppointmentCommand(
+                    appointment_id=case["appointment_id"],
+                    snapshot_hash=rendered.snapshot_hash,
+                ),
+                idempotency_key="p7-block-refused-" + case["fixture"].run_id,
+            )
+    record_evidence("7. #88: confirm over a blocked dock", exc.value.code)
+    assert exc.value.code == "DISPLACEMENT_DETECTED", (
+        f"expected DISPLACEMENT_DETECTED, got {exc.value.code}"
+    )
+    refused = json.loads(str(exc.value.detail))["conflicts"]
+    refused_events = {c.get("dock_event_id") for c in refused if c.get("dock_event_id")}
+    shown_events = {
+        c.get("dock_event_id") for c in rendered.displacement.conflicts if c.get("dock_event_id")
+    }
+    assert refused_events and refused_events == shown_events, (
+        f"the refusal named {refused_events} and the row showed {shown_events} -- issue #88 is "
+        "exactly that these two sets were allowed to differ"
+    )
+
+
+async def test_e_blocking_a_dock_does_not_invalidate_the_outstanding_snapshot(
+    dock_block_case, work_sessionmaker
+):
+    """The hash-exclusion sub-item, against real rows rather than a constructed digest.
+
+    The same appointment rendered before and after `block_dock` must carry the **same**
+    `snapshot_hash`. If the block were inside the digest, the refusal above would arrive as
+    `SNAPSHOT_STALE` instead -- and because the write path checks displacement *first* precisely so
+    that cannot happen, every planner holding a row on that dock would be told "something moved"
+    rather than "this dock is down".
+
+    Both halves are asserted in one render so neither can pass for the wrong reason: an
+    implementation that dropped the block from the *column* as well would satisfy the hash equality
+    and fail the second assertion.
+    """
+    case = dock_block_case
+    before = case["before"]
+    async with work_sessionmaker() as session:
+        queue = await get_planner_queue(
+            session, _planner_ctx(), facility_id=FACILITY_ID, limit=200
+        )
+    after = next(item for item in queue.items if item.appointment_id == case["appointment_id"])
+
+    record_evidence(
+        "7. #88: snapshot_hash across a block",
+        "unchanged" if after.snapshot_hash == before.snapshot_hash else "CHANGED",
+    )
+    assert after.snapshot_hash == before.snapshot_hash, (
+        "block_dock changed this row's snapshot_hash -- every outstanding confirm on this dock "
+        "would now be refused SNAPSHOT_STALE instead of DISPLACEMENT_DETECTED"
+    )
+    assert before.displacement.status == "NONE" and after.displacement.status == "CONFLICT", (
+        "the displacement column did not change across the block, so the hash assertion above is "
+        "vacuous"
     )

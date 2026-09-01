@@ -72,11 +72,13 @@
 export const heldStateEnabled = true
 
 /**
- * Web push. Separate from the HELD flag because the four high-priority push events
- * (`flows-and-states.md` "Notifications") are only partly served: `notifications` /
- * `notification_preferences` tables exist (E3.5) but **nothing writes a row yet** — no
- * producer is wired on any write path. So the subscription plumbing is real and the feed is
- * honestly empty rather than broken.
+ * Web push. Blocker updated 2026-09-02 (#94): the old reason here — "nothing writes a row
+ * yet" — is RESOLVED; the notification_outbox producer/drain now feeds `notifications` for
+ * the in-app bell. What this flag actually gates is the WEB_PUSH delivery leg, and that
+ * still has none of its parts: no VAPID key pair, no subscription store (SOLUTION_DESIGN
+ * §6.1 specifies none — TECH_STACK §6 designs it but nothing is built), and no
+ * service-worker `push` listener (vite-plugin-pwa registers offline/update only). Flipping
+ * this would register browser subscriptions no server can ever send to.
  *
  * Screens 14A/14B (priming, denied) are built and shipped regardless: they are about the
  * browser permission, which works today, not about the delivery of a payload.

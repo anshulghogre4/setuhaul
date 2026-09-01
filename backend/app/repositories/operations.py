@@ -134,6 +134,12 @@ async def list_planner_queue_rows(
                 """
                 SELECT a.appointment_id, a.shipment_id, a.slot_id, a.appointment_status,
                        a.booking_source, a.is_current, a.booked_at,
+                       -- #64: expires_at is written only by hold_for_information (the one-shot
+                       -- D9 extension), so non-NULL doubles as the "hold already used" marker
+                       -- the UI needs to disable the Hold action (edge-cases.md #6: prevention,
+                       -- not error handling) and to render the paused countdown.
+                       a.expires_at,
+                       (a.expires_at IS NOT NULL) AS hold_used,
                        s.order_reference, s.driver_id, s.carrier_id, s.priority_code,
                        s.required_dock_type, s.expected_unload_min, s.original_eta_ts,
                        dr.driver_name, c.carrier_name,

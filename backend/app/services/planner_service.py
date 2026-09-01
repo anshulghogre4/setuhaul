@@ -32,7 +32,6 @@ M15). `dock_id` selects within the caller's scope and is validated against it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
@@ -44,11 +43,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock, resolve_clock
 from app.core.errors import AppError
+from app.services import notification_outbox
 from app.core.execution_context import ExecutionContext
 from app.core.settings import get_settings
 from app.repositories import facilities as facilities_repo
 from app.repositories import operations as operations_repo
-from app.repositories.scope import assert_facility_write_scope, resolve_facility_scope
+from app.repositories.scope import (
+    assert_facility_write_scope,
+    resolve_facility_scope_with_user_scopes,
+)
 from app.scheduling import holds
 from app.scheduling import urgency as _urgency_policy
 from app.scheduling.constraints import load_scheduling_constraints
@@ -60,7 +63,13 @@ from app.scheduling.urgency import QueueUrgency, composite_urgency, urgency_sort
 from app.scheduling.snapshot import (
     CAPACITY_CONSUMING_STATES,
     CLAIM_SOURCE_APPOINTMENT,
+    CONFLICT_INTERVAL,
     claim_id as _claim_id,
+    load_dock_block_conflicts,
+    # Issue #88 folds in the #61 duplicate: this module used to carry its own byte-identical copy
+    # of the digest, kept honest only by an equality test. The alias keeps the private name ~15
+    # call/patch sites already use while there is now exactly one implementation to drift from.
+    planner_snapshot_hash as _snapshot_hash,
 )
 
 # The D9 TTL is imported, never re-declared: `expiry.py` is what actually expires these rows, so a
@@ -192,7 +201,22 @@ class QueueReceipt(BaseModel):
 
 
 class QueueDisplacement(BaseModel):
-    """Section 7.3's "single most important field": would confirming this hurt a third party?"""
+    """Section 7.3's "single most important field": would confirming this hurt a third party?
+
+    Since issue #88 `conflicts` carries **both** legs the write path refuses on, each tagged with a
+    `conflict_type` (`INTERVAL_CONFLICT` | `DOCK_BLOCKED`):
+
+      * `INTERVAL_CONFLICT` -- another live claim overlaps this interval on this dock. Carries
+        `claim_id` / `claim_source` / `shipment_id` / the other claim's window.
+      * `DOCK_BLOCKED` -- a `dock_status_events` outage overlaps it. Carries `dock_event_id` /
+        `event_type` / `reason`, and **no shipment**: nobody is displaced, the dock is simply gone.
+
+    That second leg is what the write path's `DISPLACEMENT_DETECTED` always counted
+    (`snapshot.displacement_conflicts`) and the row previously did not, so a planner could be
+    refused for a reason their screen never showed. `status` is `CONFLICT` if either leg is
+    non-empty; the two are deliberately not two separate fields, because section 7.3's whole claim
+    for this column is that one glance answers "is this safe to confirm".
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -209,13 +233,20 @@ class QueueEta(BaseModel):
 
 
 class QueueTtl(BaseModel):
-    """The D9 clock, derived rather than stored (see `scheduling/expiry.py`'s own note)."""
+    """The D9 clock, derived rather than stored (see `scheduling/expiry.py`'s own note).
+
+    `hold_used` (#64): true when `appointments.expires_at` is set -- hold_for_information's
+    one-shot extension has been spent, `deadline_ts` IS that extension, and the UI should
+    render the paused-countdown treatment (components.md section 3) and disable the Hold
+    action rather than let it fail (edge-cases.md #6).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     deadline_ts: datetime
     remaining_seconds: int
     expired: bool
+    hold_used: bool = False
 
 
 class QueueGateState(BaseModel):
@@ -337,6 +368,13 @@ def _conflicts_for(
 ) -> list[dict[str, Any]]:
     """Other live claims this request's interval would collide with on the same dock.
 
+    **One of the two legs of the displacement column** since issue #88; the other is
+    `snapshot.load_dock_block_conflicts`, and every entry either produces carries a `conflict_type`
+    so the row can tell "another truck is booked here" apart from "this dock is offline". They are
+    different harms with different recoveries -- the first is a displacement the planner may still
+    choose to cause, the second is a dock nobody can be sent to -- and collapsing them into one
+    untyped list was what let the queue under-report the second.
+
     For a row that holds its own `dock_occupancy` claim this is always empty, and that is a
     guarantee rather than a coincidence: the exclusion constraint already refused any overlapping
     claim at booking time. The check earns its place on the rows that hold *no* claim -- the E1.1
@@ -364,6 +402,7 @@ def _conflicts_for(
             continue
         conflicts.append(
             {
+                "conflict_type": CONFLICT_INTERVAL,
                 "claim_id": _claim_id(occupancy),
                 "claim_source": occupancy.get("claim_source", CLAIM_SOURCE_APPOINTMENT),
                 "appointment_id": occupancy_appointment_id,
@@ -414,45 +453,9 @@ def _build_receipt(
     )
 
 
-def _snapshot_hash(
-    *,
-    appointment_id: str,
-    appointment_status: str,
-    is_current: Any,
-    dock_id: str,
-    interval_start: datetime,
-    interval_end: datetime,
-    interval_source: str,
-    conflict_ids: list[str],
-) -> str:
-    """A stable digest of exactly the facts a confirm must re-check before it commits.
-
-    Scope, deliberately: identity + lifecycle state + the authoritative interval + the
-    displacement set. **Not** the TTL, the ETA or anything else that moves on a wall clock -- a
-    hash that changed every second would make every confirm stale and turn issue #61's refusal
-    into noise. The point of a snapshot guard is "the capacity you looked at changed", not
-    "time passed".
-
-    Not a security boundary and not signed: the server recomputes this from its own rows on the
-    write path (when #61 builds that path), so a forged value can only ever cause a comparison to
-    fail, never to pass on data the server did not itself produce.
-    """
-    canonical = json.dumps(
-        {
-            "v": 1,
-            "appointment_id": appointment_id,
-            "appointment_status": appointment_status,
-            "is_current": int(is_current) if is_current is not None else None,
-            "dock_id": dock_id,
-            "interval_start": interval_start.isoformat(),
-            "interval_end": interval_end.isoformat(),
-            "interval_source": interval_source,
-            "conflicts": sorted(conflict_ids),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+# `_snapshot_hash` is `scheduling/snapshot.planner_snapshot_hash`, imported at the top of this
+# module rather than reimplemented here. It was a second, byte-identical copy from #60/#61 until
+# issue #88 removed it; see that import's comment and `snapshot.py`'s module docstring.
 
 
 # `scheduling/urgency.composite_urgency` under this module's own historical name (issue #82). Kept
@@ -474,21 +477,28 @@ async def get_planner_queue(
     """Section 7.5.1 `get_planner_queue` / FR-PLN-010 -- the read every other planner flow needs.
 
     `facility_id` is a *request*, never the answer (section 7.5 principle 1 / M15): it goes
-    through `resolve_facility_scope`, so an operator may only ever pass their own facility and a
-    global-read persona uses it to narrow. `require_facility=True` because this surface is
+    through `resolve_facility_scope_with_user_scopes`, so an operator may only ever pass a facility
+    the server itself grants them -- their own, or (issue #106) one their `user_scopes` FACILITY
+    rows name -- and a global-read persona uses it to narrow. `require_facility=True` because this
+    surface is
     deliberately single-facility -- `03-planner-dock-board/screens.md` section 1 states the
     switcher is one facility, "not 'All facilities'", since section 7.3's load arithmetic and D5's
     sequencer are both per-facility. An unscoped cross-facility queue would also silently break
     the composite ordering, which compares requests competing for the same docks.
 
-    Two queries, never N+1: the candidate rows, then every live claim in the facility across the
-    bounding window those rows span. The displacement check is then pure Python over that set.
+    Three queries, never N+1: the candidate rows; every live claim in the facility across the
+    bounding window those rows span (the overlapping-claim leg, checked in pure Python over that
+    set); and `snapshot.load_dock_block_conflicts` for the dock-block leg, which is one aggregate
+    over all candidates rather than one probe per row. The third is issue #88 -- before it, the
+    row's displacement column carried only the first leg while `confirm_request` refused on both.
 
     `clock` is section 9.1's injected clock, for the same reason `sweep_expired_appointments`
     takes one -- the TTL column is the whole point of this read and a test that could not pin
     `now` would be asserting against the wall clock.
     """
-    scope_facility = resolve_facility_scope(ctx, facility_id, require_facility=True)
+    scope_facility = await resolve_facility_scope_with_user_scopes(
+        session, ctx, facility_id, require_facility=True
+    )
     if scope_facility is None:  # pragma: no cover - require_facility=True already guarantees this
         # Not an `assert`: `python -O` strips those, and this is the only thing standing between
         # a mis-scoped identity and an unfiltered cross-facility read.
@@ -517,6 +527,7 @@ async def get_planner_queue(
     # empty -- an empty queue costs exactly one query, which is the common case for four of the
     # five coordinators at any given moment.
     live_occupancy: list[dict[str, Any]] = []
+    dock_blocks_by_appointment: dict[str, list[dict[str, Any]]] = {}
     if intervals:
         range_start = min(start for start, _ in intervals.values())
         range_end = max(end for _, end in intervals.values())
@@ -571,6 +582,22 @@ async def get_planner_queue(
             hold_states=list(CAPACITY_CONSUMING_STATES),
         )
 
+        # Issue #88's third query -- the dock-block leg of the displacement column.
+        #
+        # Not a query written here: it is `snapshot.py`'s own `_DOCK_BLOCK_CONFLICTS_SQL` over
+        # `snapshot.py`'s own `_TARGET_CTE`, the exact fragment and the exact interval derivation
+        # `load_appointment_snapshots` recomputes under the row lock to raise
+        # `DISPLACEMENT_DETECTED`. That is the whole point of the fix: the row and the refusal now
+        # disagree only if the data changed between them, never because two queries were written
+        # separately. Same discipline as #97/#98's shared liveness predicate.
+        #
+        # It runs unconditionally on the D2 flag, unlike the occupancy read above: no column it
+        # names came from the D2 migration, so there is no unmigrated-schema parse hazard here.
+        #
+        # Its result deliberately does **not** reach `conflict_ids` below -- see the hash-exclusion
+        # argument on `load_dock_block_conflicts`.
+        dock_blocks_by_appointment = await load_dock_block_conflicts(session, list(intervals))
+
     constraints = load_scheduling_constraints()
     priority_scores = constraints.ranking_policy.priority_scores
     ttl_total_seconds = DEFAULT_PENDING_TTL_MINUTES * 60
@@ -582,10 +609,23 @@ async def get_planner_queue(
         interval_source = (
             "dock_occupancy" if row.get("occupancy_start") is not None else "appointment_slot_derived"
         )
-        conflicts = _conflicts_for(row, interval_start, interval_end, live_occupancy)
+        # Two legs, one column (issue #88). `interval_conflicts` is the half that feeds the digest;
+        # `dock_blocks` is rendered but excluded from it, so taking a dock offline refuses the
+        # confirms it really conflicts with instead of making every outstanding row on that dock
+        # stale at once.
+        interval_conflicts = _conflicts_for(row, interval_start, interval_end, live_occupancy)
+        dock_blocks = dock_blocks_by_appointment.get(appointment_id, [])
+        conflicts = [*interval_conflicts, *dock_blocks]
 
         booked_at = _coerce_ts(row["booked_at"])
-        deadline = booked_at + timedelta(minutes=DEFAULT_PENDING_TTL_MINUTES)
+        # #64: a non-NULL expires_at is hold_for_information's one-shot extension and OVERRIDES
+        # the derived deadline -- the same rule the D9 sweeper applies (expiry.py's CASE), so the
+        # countdown a planner sees and the moment the sweeper acts are one number. It doubles as
+        # the spent-extension marker the Hold button disables on (edge-cases.md #6).
+        extended_deadline = (
+            _coerce_ts(row["expires_at"]) if row.get("expires_at") is not None else None
+        )
+        deadline = extended_deadline or (booked_at + timedelta(minutes=DEFAULT_PENDING_TTL_MINUTES))
         remaining_seconds = int((deadline - now).total_seconds())
 
         queue_state = row.get("queue_state")
@@ -639,6 +679,7 @@ async def get_planner_queue(
                     deadline_ts=deadline,
                     remaining_seconds=remaining_seconds,
                     expired=remaining_seconds <= 0,
+                    hold_used=extended_deadline is not None,
                 ),
                 gate=QueueGateState(
                     queue_state=queue_state,
@@ -661,7 +702,9 @@ async def get_planner_queue(
                     interval_start=interval_start,
                     interval_end=interval_end,
                     interval_source=interval_source,
-                    conflict_ids=[str(c["claim_id"]) for c in conflicts],
+                    # `interval_conflicts`, never `conflicts`: the dock-block leg is displayed and
+                    # refuses, but must stay out of the digest (issue #88's hash-exclusion point).
+                    conflict_ids=[str(c["claim_id"]) for c in interval_conflicts],
                 ),
             )
         )
@@ -962,6 +1005,14 @@ async def _open_capacity_cascade(
             },
         )
     ).mappings().one()
+    # #94: one escalation (U65) but N notifications -- each affected driver is a different
+    # person who must be told about their own slot (section 5.1). Same transaction as the
+    # cascade row; build_dedupe_key's recipient component keeps the N from collapsing.
+    await notification_outbox.enqueue_option_withdrawn(
+        session,
+        appointment_ids=[str(item["appointment_id"]) for item in affected],
+        dock_code=anchor.get("dock_code"),
+    )
     del ctx  # scope was already proven by the caller's _dock_in_scope
     return str(row["escalation_id"])
 
@@ -1382,8 +1433,9 @@ async def get_dock_board(
     availability authority).
 
     **`facility_id` is a narrowing request, never a scope assertion** (section 7.5 principle 1 /
-    M15): it goes through `resolve_facility_scope`, so a `WAREHOUSE_PLANNER` may only ever name
-    their own facility and an `ADMIN`'s global read scope is what the parameter exists for.
+    M15): it goes through `resolve_facility_scope_with_user_scopes`, so a `WAREHOUSE_PLANNER` may
+    only ever name a facility the server grants them (their own, or one their `user_scopes` rows
+    name -- issue #106) and an `ADMIN`'s global read scope is what the parameter exists for.
     `require_facility=True` for the same reason `get_planner_queue` uses it -- `screens.md` section 1
     fixes this surface at one facility, never "All facilities".
 
@@ -1400,7 +1452,9 @@ async def get_dock_board(
     The flag's value is returned as `holds_enabled` so the client can say a HELD bar is currently
     unrenderable rather than silently drawing a legend entry nothing can fill.
     """
-    scope_facility = resolve_facility_scope(ctx, facility_id, require_facility=True)
+    scope_facility = await resolve_facility_scope_with_user_scopes(
+        session, ctx, facility_id, require_facility=True
+    )
     if scope_facility is None:  # pragma: no cover - require_facility=True already guarantees this
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
 

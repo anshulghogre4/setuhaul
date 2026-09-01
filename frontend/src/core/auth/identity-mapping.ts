@@ -132,6 +132,35 @@ export type AccountProfile = {
   scoped_facility_ids: string[]
 }
 
+/**
+ * One `(role x scope)` pair, exactly as `GET /api/v1/auth/me` now returns it (issue #52,
+ * `backend/app/services/auth_grants_service.py`).
+ *
+ * **`role_name` is the same on every entry, and that is the schema's answer, not a simplification.**
+ * `public.users.role_id` is a single `NOT NULL` FK to `roles` -- one account cannot hold two roles
+ * -- while `public.user_scopes` is a child table with `UNIQUE (user_id, scope_type, scope_value)`
+ * and no per-user cap. So issue #52's "multi-role identity" resolves to **one role, multiple
+ * facility/carrier scopes**, and this array is the scope list, not a role list.
+ *
+ * `scope_type` is the server naming its own branch rather than the client inferring one from which
+ * id happens to be non-null -- the same discipline `canSelectAllFacilities` already follows for
+ * `scope.type` below. `GLOBAL` and `NONE` are not `user_scopes.scope_type` values (that column's
+ * CHECK allows only FACILITY/CARRIER/DRIVER); they name the two cases where reach is the *absence*
+ * of a scope row.
+ *
+ * Declared here rather than in `core/http/api.ts`'s `MeProfile` **only because this task's file
+ * scope did not include that file**; folding it in there is the tidier home and a one-line
+ * follow-up. `toIdentity` accepts `MeProfile & { grants?: ServerGrant[] }`, which a plain
+ * `MeProfile` satisfies, so no caller changes and a backend that predates #52 still works.
+ */
+export type ServerGrant = {
+  role_name: string
+  scope_type: 'FACILITY' | 'CARRIER' | 'DRIVER' | 'GLOBAL' | 'NONE' | (string & {})
+  facility_id: string | null
+  facility_name?: string | null
+  carrier_id: string | null
+}
+
 /** Raised when the server's role has no surface in this application. Carries the role name so the
  *  UI can say which one, rather than showing a blank screen or a broken redirect. */
 export class UnmappedRoleError extends Error {
@@ -153,15 +182,30 @@ export class UnmappedRoleError extends Error {
  *
  * @throws {UnmappedRoleError} when `role_name` has no UI surface.
  */
-export function toIdentity(me: MeProfile, profile?: AccountProfile | null): Identity {
+export function toIdentity(
+  me: MeProfile & { grants?: ServerGrant[] },
+  profile?: AccountProfile | null,
+): Identity {
   const role = uiRoleFor(me.role_name)
   if (role === null) throw new UnmappedRoleError(me.role_name)
 
+  const serverGrants = me.grants ?? []
+
+  /**
+   * `grants[]` is a third source of facility ids, and the most reliable of the three: it is
+   * `user_scopes` unioned with the `users.facility_id` mirror, computed server-side
+   * (`auth_grants_service._facility_ids_in_scope`). Folding it in means the facility switcher stays
+   * complete even when the best-effort `/account-profile` read fails, which `auth-provider.tsx`
+   * explicitly tolerates. Still server-derived, so M15 is untouched -- this widens the list only
+   * with ids the server itself just authorised.
+   */
   const facilityIds = [
     ...new Set(
-      [...(profile?.scoped_facility_ids ?? []), me.facility_id].filter(
-        (id): id is string => typeof id === 'string' && id.length > 0,
-      ),
+      [
+        ...(profile?.scoped_facility_ids ?? []),
+        ...serverGrants.map((g) => g.facility_id),
+        me.facility_id,
+      ].filter((id): id is string => typeof id === 'string' && id.length > 0),
     ),
   ].sort()
 
@@ -200,27 +244,56 @@ export function toIdentity(me: MeProfile, profile?: AccountProfile | null): Iden
   const roleLabel = roleDisplayName(me.role_name)
 
   /**
-   * ⚠ **THE #52 grants[] SEAM, and it is now exactly one expression.**
+   * **THE #52 grants[] SEAM -- server-fed since 2026-09-01.**
    *
-   * `GET /api/v1/auth/me` returns a single `role_name` (`health_auth.py:48-62`), not a list, so an
-   * account can hold exactly one grant here. `identity.ts:37-38` and `features/auth/role-picker.tsx`
-   * are both already built for the multi-grant case -- the picker even refuses to render with
-   * fewer than two rows -- so when the server grows a `grants[]` array the change is:
+   * Steps 1 and 2 of the recipe this comment used to carry are done: `/auth/me` now returns a real
+   * `grants[]` (`backend/app/api/v1/routers/health_auth.py`, built by
+   * `app/services/auth_grants_service.resolve_grants`) and the single-element literal below is a
+   * `.map()` over it. A multi-facility ops account -- the only kind the schema can produce, since
+   * `users.role_id` is a single FK -- now yields one entry per facility.
    *
-   *   1. widen `MeProfile` with `grants: Array<{ role_name, facility_id, carrier_id }>`,
-   *   2. replace the single-element array below with a `.map()` over it,
-   *   3. render `<RolePicker>` after sign-in when the result has length > 1.
+   * **Step 3 is deliberately NOT done here**: rendering `<RolePicker>` after sign-in when
+   * `grants.length > 1` needs `core/auth/auth-provider.tsx` (to hold the chosen grant) and
+   * `App.tsx` (to route to it), neither of which is in this change's file scope. Until then a
+   * multi-grant account signs straight into its role's landing surface, which is the pre-#52
+   * behaviour -- correct, just not yet offering the choice. `RolePicker` already refuses to render
+   * with fewer than two rows, so wiring it is additive.
    *
-   * No component changes: everything downstream already consumes `Identity.grants`. Nothing else
-   * in `src/` constructs a `RoleGrant`.
+   * The fallback branch is not dead code: it covers a **deployed backend that predates #52**, the
+   * same reason `canSelectAllFacilities` above keeps its `permissions` fallback. Vercel ships the
+   * frontend on push while the backend deploys separately, so the two are routinely a version apart.
+   *
+   * No component changes: everything downstream already consumes `Identity.grants`, and nothing
+   * else in `src/` constructs a `RoleGrant`.
    */
-  const grants: RoleGrant[] = [
-    {
-      role,
-      roleLabel,
-      scopeLabel: scopeLabelFor(role, me.facility_id, canSelectAllFacilities),
-    },
-  ]
+  const grants: RoleGrant[] =
+    serverGrants.length > 0
+      ? serverGrants.map((g) => ({
+          // The server sends the same `role_name` on every entry (one role per account), so this
+          // is `role` in practice. Resolved per entry anyway rather than reused: if a grant ever
+          // did name a role this UI has no surface for, falling back to the caller's own resolved
+          // role is a strictly better failure than an undefined rail destination -- and
+          // `toIdentity` has already refused outright above if the *account's* role is unmapped.
+          role: uiRoleFor(g.role_name) ?? role,
+          roleLabel: roleDisplayName(g.role_name),
+          scopeLabel: grantScopeLabel(g, role, canSelectAllFacilities),
+        }))
+      : [
+          {
+            role,
+            roleLabel,
+            scopeLabel: scopeLabelFor(role, me.facility_id, canSelectAllFacilities),
+          },
+        ]
+
+  /**
+   * The `carrierId` gap this file used to record as "real, not an oversight" is closed: the
+   * `CARRIER` grant carries it, sourced from `user_scopes(scope_type='CARRIER')` exactly as
+   * `ExecutionContext.carrier_id` is (`core/deps.py`). Still `null` for every non-carrier account,
+   * and still not used for any authorisation decision -- every carrier read is scoped server-side
+   * from the token, so this is a fact to display, never one to act on.
+   */
+  const carrierId = serverGrants.find((g) => g.carrier_id)?.carrier_id ?? null
 
   return {
     userId: me.user_id,
@@ -233,17 +306,35 @@ export function toIdentity(me: MeProfile, profile?: AccountProfile | null): Iden
     facilities,
     activeFacilityId: me.facility_id,
     canSelectAllFacilities,
-    /**
-     * ⚠ Real gap, not an oversight: **no server read returns `carrier_id`.** The backend resolves
-     * it (`deps.py:196-210`, from `user_scopes`) and `ExecutionContext.carrier_id` carries it, but
-     * neither `/auth/me` (`health_auth.py:48-62`) nor `/account-profile`
-     * (`account_service.py:59-90`) projects it. Nothing in `src/` reads `Identity.carrierId` for
-     * behaviour today (verified by grep), and every carrier read is scoped server-side from the
-     * token, so `null` is honest rather than harmful. Adding it to `/auth/me` is a one-line
-     * backend change and is out of this frontend task's scope.
-     */
-    carrierId: null,
+    carrierId,
   }
+}
+
+/**
+ * A server grant's scope label -- "Jaipur", "All facilities", a carrier, or the role's own name.
+ *
+ * The facility branch prefers this app's own SHORT name over the database's full one, and that
+ * order is deliberate. `facilities.facility_name` is "SetuHaul Jaipur Distribution Centre"; the
+ * rail, the queue row and the picker all want "Jaipur" (`facility-names.ts`, U91). But the local
+ * table knows only two of the six facilities section 2 names, and its rule is *"an unknown id
+ * renders as itself, never a guessed name"* -- so `facility_name` fills exactly that hole with a
+ * real name from the database rather than a raw `FAC-...` id. Neither source is ever guessed.
+ */
+function grantScopeLabel(
+  grant: ServerGrant,
+  fallbackRole: RoleName,
+  canSelectAllFacilities: boolean,
+): string {
+  if (grant.scope_type === 'CARRIER') return roleDisplayName('CARRIER')
+  if (grant.scope_type === 'GLOBAL') return 'All facilities'
+  if (grant.facility_id) {
+    const short = facilityDisplayName(grant.facility_id)
+    // `facilityDisplayName` returns the id unchanged when it has no entry -- that is the signal
+    // there is no short name, not a coincidence worth hiding.
+    if (short !== grant.facility_id) return short
+    return grant.facility_name || grant.facility_id
+  }
+  return scopeLabelFor(fallbackRole, null, canSelectAllFacilities)
 }
 
 /**

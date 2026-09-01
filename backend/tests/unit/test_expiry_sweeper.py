@@ -309,6 +309,35 @@ async def test_sweep_derives_the_d9_deadline_from_the_injected_clock(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_the_scan_honours_a_hold_extended_deadline_over_the_derived_one(monkeypatch):
+    """Issue #64's precedence rule, now that `hold_for_information` actually writes the column.
+
+    A request a planner held is due at its stored `expires_at`, every other request at
+    `booked_at + ttl`. Both bounds have to reach the statement -- `now` for the extended rows and
+    `deadline` for the rest -- because the CASE picks per row, not per sweep. Dropping either bind
+    would make one whole class of request unsweepable: an extended row compared against the
+    `booked_at` cutoff expires 15 minutes early (undoing the hold the planner just granted), and an
+    ordinary row compared against `now` never expires at all.
+    """
+    session = _sweeper_session([], lock_returns=[])
+    monkeypatch.setattr(allocation, "_release_dock_occupancy", AsyncMock(return_value=True))
+
+    await expiry.sweep_expired_appointments(
+        session, actor_user_id="USR-SYS", clock=FrozenClock(SNAPSHOT), pending_ttl_minutes=15
+    )
+
+    scan = next(
+        call for call in session.execute.await_args_list
+        if PENDING_SCAN_MARKER in str(call.args[0])
+    )
+    sql = str(scan[0][0])
+    assert "WHEN a.expires_at IS NOT NULL THEN a.expires_at < :now" in sql
+    assert "ELSE a.booked_at < :deadline" in sql
+    assert scan.args[1]["now"] == SNAPSHOT
+    assert scan.args[1]["deadline"] == SNAPSHOT - timedelta(minutes=15)
+
+
+@pytest.mark.asyncio
 async def test_sweep_locks_with_the_status_predicate_and_skip_locked(monkeypatch):
     """This SQL *is* section 7.5.1's race resolution -- see expiry.py's module docstring."""
     candidate = {

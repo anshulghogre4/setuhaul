@@ -23,16 +23,19 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
+from app.core.settings import get_settings
 from app.scheduling import allocation, snapshot
 from app.scheduling.allocation import (
     BulkConfirmCommand,
     ConfirmAppointmentCommand,
     CounterOfferCommand,
+    HoldForInformationCommand,
     RejectAppointmentCommand,
     bulk_confirm,
     confirm_appointment,
     counter_offer,
     evaluate_safe_batch_predicates,
+    hold_for_information,
     reject_appointment,
 )
 from app.services import planner_service
@@ -115,14 +118,23 @@ _HASH_INPUTS = {
 
 
 def test_snapshot_hash_matches_the_planner_queue_producer_byte_for_byte():
-    """The drift guard the whole of issue #61 rests on.
+    """The drift guard the whole of issue #61 rests on -- now enforced by identity, not equality.
 
     `get_planner_queue` (#60) *produces* the token in `planner_service`; the write paths
     *recompute and compare* it in `scheduling/snapshot`. Two implementations of one digest is
     exactly the shape that silently diverges -- a deploy where they disagree would make every
-    confirm return `SNAPSHOT_STALE` with no way to distinguish a real drift from a skew. This
-    fails the moment either side changes.
+    confirm return `SNAPSHOT_STALE` with no way to distinguish a real drift from a skew.
+
+    Issue #88 folded the duplicate in: `planner_service._snapshot_hash` is now an import alias for
+    `snapshot.planner_snapshot_hash`, so the `is` below is the stronger assertion -- equality could
+    still pass against two copies that happen to agree today, while identity fails the moment
+    anyone re-introduces a second implementation. The value equality is kept underneath it so the
+    test still says what the contract *is*, not only where it lives.
     """
+    assert planner_service._snapshot_hash is snapshot.planner_snapshot_hash, (
+        "planner_service grew its own copy of the digest again -- issue #61's duplication, which "
+        "#88 removed. Import `snapshot.planner_snapshot_hash`; do not reimplement it."
+    )
     assert snapshot.planner_snapshot_hash(**_HASH_INPUTS) == planner_service._snapshot_hash(
         **_HASH_INPUTS
     )
@@ -1127,3 +1139,260 @@ async def test_reject_idempotency_hash_covers_the_note_not_just_the_code(monkeyp
 
     assert len(seen) == 2
     assert seen[0] != seen[1]
+
+
+# =================================================================================================
+# Issue #64 -- hold_for_information (section 7.5.1, FR-PLN-004, Flow 4)
+# =================================================================================================
+
+# `booked_at` fixes the derived D9 deadline, so `previous_deadline` is a value these tests can
+# predict exactly rather than an approximation of "about now".
+_BOOKED_AT = datetime(2026, 8, 16, 9, 0, tzinfo=timezone.utc)
+_HELD_PENDING = {**_PENDING, "booked_at": _BOOKED_AT, "expires_at": None}
+
+
+def _patch_hold_context(monkeypatch, *, appointment: dict | None = None):
+    monkeypatch.setattr(allocation, "lookup_idempotency", AsyncMock(return_value=None))
+    monkeypatch.setattr(allocation, "_shipment_for_status", AsyncMock(return_value=_shipment()))
+    monkeypatch.setattr(
+        allocation,
+        "_locked_appointment",
+        AsyncMock(return_value=dict(appointment if appointment is not None else _HELD_PENDING)),
+    )
+    monkeypatch.setattr(allocation, "_reread_appointment", AsyncMock(return_value={}))
+    monkeypatch.setattr(allocation, "store_idempotency", AsyncMock())
+
+
+_HOLD_QUESTION = "Is the reefer unit actually running? The manifest says ambient."
+
+
+def _hold_command(**overrides) -> HoldForInformationCommand:
+    return HoldForInformationCommand(
+        **{"appointment_id": "APT021", "question": _HOLD_QUESTION, **overrides}
+    )
+
+
+@pytest.mark.asyncio
+async def test_hold_extends_the_deadline_by_one_further_d9_ttl_and_returns_it(monkeypatch):
+    """section 7.5.1: "HELD_FOR_INFO + new_deadline".
+
+    The extension is D9's own `pending_confirmation_ttl_minutes`, not a second invented number --
+    asserted against `get_settings()` rather than a hard-coded 15, so re-tuning the TTL cannot
+    leave this tool silently on the old value.
+    """
+    session = AsyncMock()
+    _patch_hold_context(monkeypatch)
+    ttl = get_settings().pending_confirmation_ttl_minutes
+
+    before = datetime.now(timezone.utc)
+    result = await hold_for_information(
+        session, _ops_ctx(), shipment_id="SHP1002",
+        command=_hold_command(), idempotency_key="k",
+    )
+    after = datetime.now(timezone.utc)
+
+    assert result.code == "HELD_FOR_INFO"
+    # The promise state is untouched: section 4 has no paused state, and a hold is not a transition.
+    assert result.status == "PENDING_CONFIRMATION"
+    assert result.extension_minutes == ttl
+    assert result.hold_used is True
+    # `previous_deadline` is the *derived* one -- booked_at + ttl -- exactly as
+    # `expiry.py::_pending_candidates`' ELSE branch computes it.
+    assert result.previous_deadline == (_BOOKED_AT + timedelta(minutes=ttl)).isoformat()
+    new_deadline = datetime.fromisoformat(result.new_deadline)
+    assert before + timedelta(minutes=ttl) <= new_deadline <= after + timedelta(minutes=ttl)
+    # ...and the row really carries it, as a datetime bind: appointments.expires_at is timestamptz
+    # and asyncpg refuses to coerce a str (the DataError expiry.py documents).
+    _sql, params = _statement(session, "SET expires_at = :expires_at")
+    assert params["expires_at"] == new_deadline
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_second_hold_on_the_same_request_is_refused_as_hold_already_used(monkeypatch):
+    """section 7.5.1's cap, verbatim: "Pauses the D9 clock exactly once per request; a second call
+    returns HOLD_ALREADY_USED. Without that cap, hold for info becomes an unbounded way to sit on
+    capacity."
+
+    The marker is `expires_at IS NOT NULL`, which is the migration's own stated design
+    (20260829134929...sql:252-256) -- no separate boolean, no counter.
+    """
+    session = AsyncMock()
+    already = datetime(2026, 8, 16, 9, 20, tzinfo=timezone.utc)
+    _patch_hold_context(monkeypatch, appointment={**_HELD_PENDING, "expires_at": already})
+
+    with pytest.raises(AppError) as exc:
+        await hold_for_information(
+            session, _ops_ctx(), shipment_id="SHP1002",
+            command=_hold_command(), idempotency_key="k",
+        )
+
+    assert exc.value.code == "HOLD_ALREADY_USED"
+    assert exc.value.status_code == 409
+    assert json.loads(exc.value.detail)["current_deadline"] == already.isoformat()
+    # Nothing written: a refused second hold must not extend the deadline it just refused to extend.
+    session.commit.assert_not_awaited()
+    with pytest.raises(AssertionError):
+        _statement(session, "SET expires_at = :expires_at")
+
+
+@pytest.mark.asyncio
+async def test_the_update_carries_its_own_once_only_and_still_pending_predicates(monkeypatch):
+    """Belt-and-braces under a lock we already hold, but the invariant belongs where PostgreSQL can
+    enforce it: this statement can never extend a request that stopped being pending, nor spend a
+    second extension, even if a future caller reaches it by another route."""
+    session = AsyncMock()
+    _patch_hold_context(monkeypatch)
+
+    await hold_for_information(
+        session, _ops_ctx(), shipment_id="SHP1002",
+        command=_hold_command(), idempotency_key="k",
+    )
+
+    sql, _params = _statement(session, "SET expires_at = :expires_at")
+    assert "appointment_status = 'PENDING_CONFIRMATION'" in sql
+    assert "expires_at IS NULL" in sql
+
+
+@pytest.mark.asyncio
+async def test_hold_on_a_row_the_sweeper_already_took_is_already_actioned(monkeypatch):
+    """Same race, same answer as confirm/reject: the D9 sweeper can win while the planner is still
+    typing the question, and the loser is told which transition won (section 7.5.1)."""
+    session = AsyncMock()
+    _patch_hold_context(
+        monkeypatch,
+        appointment={
+            **_HELD_PENDING,
+            "appointment_status": "EXPIRED",
+            "cancellation_reason": "PENDING_CONFIRMATION expired unactioned (D9, 15-minute TTL)",
+        },
+    )
+
+    with pytest.raises(AppError) as exc:
+        await hold_for_information(
+            session, _ops_ctx(), shipment_id="SHP1002",
+            command=_hold_command(), idempotency_key="k",
+        )
+
+    assert exc.value.code == "ALREADY_ACTIONED"
+    assert "EXPIRED" in exc.value.message
+    session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_audit_row_reconstructs_the_whole_hold_from_itself(monkeypatch):
+    """M14: who paused it, what they asked, both deadlines, and that the one extension is spent.
+
+    `action_type` stays the generic `UPDATE` because `audit_logs_action_type_check` admits a closed
+    sixteen-value set with no hold-for-information verb -- the same constraint `counter_offer`
+    works within, and the same reason the discriminator lives in the payload.
+    """
+    session = AsyncMock()
+    _patch_hold_context(monkeypatch)
+
+    result = await hold_for_information(
+        session, _ops_ctx(), shipment_id="SHP1002",
+        command=_hold_command(), idempotency_key="k",
+    )
+
+    _sql, params = _statement(session, "INSERT INTO public.audit_logs")
+    payload = json.loads(params["new_value_json"])
+    assert params["action_type"] == allocation.AUDIT_ACTION_HOLD_FOR_INFORMATION == "UPDATE"
+    assert payload["transition"] == allocation.AUDIT_TRANSITION_HELD_FOR_INFO == "HELD_FOR_INFO"
+    assert payload["question"] == _HOLD_QUESTION
+    assert payload["new_deadline"] == result.new_deadline
+    assert payload["previous_deadline"] == result.previous_deadline
+    assert payload["hold_used"] is True
+    assert json.loads(params["old_value_json"])["expires_at"] is None
+    # audit_logs.created_at was never converted by E1.1 and must stay a string bind.
+    assert isinstance(params["created_at"], str)
+
+
+@pytest.mark.asyncio
+async def test_hold_derives_scope_from_the_shipment_and_refuses_another_facility(monkeypatch):
+    """M15 / section 7.5 principle 1: no scope id is accepted from the caller, and a planner scoped
+    to Jaipur cannot hold a Gurgaon request by naming its shipment."""
+    session = AsyncMock()
+    _patch_hold_context(monkeypatch)
+    monkeypatch.setattr(
+        allocation,
+        "_shipment_for_status",
+        AsyncMock(return_value=_shipment(facility_id="FAC-GGN-01")),
+    )
+
+    with pytest.raises(AppError) as exc:
+        await hold_for_information(
+            session, _ops_ctx(facility_id="FAC-JAI-01"), shipment_id="SHP1002",
+            command=_hold_command(), idempotency_key="k",
+        )
+
+    assert exc.value.status_code == 403
+    session.commit.assert_not_awaited()
+
+
+def test_the_command_refuses_a_client_supplied_deadline_or_snapshot_hash():
+    """The catalog gives this tool three arguments and no duration. A client that could choose how
+    long the hold buys would have the unbounded sit-on-capacity the cap exists to prevent; and a
+    `snapshot_hash` is deliberately absent because this consumes no capacity (section 7.5's
+    principle 3 attaches that guard to writes that do)."""
+    for extra in (
+        {"new_deadline": "2026-08-16T10:00:00+00:00"},
+        {"extension_minutes": 600},
+        {"snapshot_hash": "abc"},
+    ):
+        with pytest.raises(ValidationError):
+            HoldForInformationCommand(appointment_id="APT021", question="why?", **extra)
+
+
+@pytest.mark.asyncio
+async def test_a_retried_hold_replays_the_stored_response_rather_than_extending_twice(monkeypatch):
+    """M9. A retry is not a second extension -- and because the cap is `expires_at IS NOT NULL`, a
+    replay that fell through to the write path would come back HOLD_ALREADY_USED and turn a network
+    retry into a user-visible refusal."""
+    session = AsyncMock()
+    _patch_hold_context(monkeypatch)
+    stored = {
+        "as_of": "2026-08-16T09:05:00+00:00",
+        "shipment_id": "SHP1002",
+        "appointment_id": "APT021",
+        "question": _HOLD_QUESTION,
+        "new_deadline": "2026-08-16T09:20:00+00:00",
+        "previous_deadline": "2026-08-16T09:15:00+00:00",
+        "extension_minutes": 15,
+        "idempotency_key": "k",
+    }
+    monkeypatch.setattr(
+        allocation, "lookup_idempotency", AsyncMock(return_value={"response": stored})
+    )
+
+    result = await hold_for_information(
+        session, _ops_ctx(), shipment_id="SHP1002",
+        command=_hold_command(), idempotency_key="k",
+    )
+
+    assert result.idempotent_replay is True
+    assert result.new_deadline == "2026-08-16T09:20:00+00:00"
+    session.execute.assert_not_awaited()
+
+
+def test_the_hold_route_is_registered_on_the_planner_rest_surface_only():
+    """Where section 7.5.1 puts this tool, checked rather than assumed.
+
+    It is a *planner console* affordance (section 7.5.1, Flow 4, keyboard `H`), and section 7.5.4
+    enumerates the driver LLM allowlist in full -- twelve tools, `hold_for_information` not among
+    them. So there must be a REST route and there must **not** be an assistant tool: an LLM able to
+    pause a request's D9 clock on the driver's behalf is exactly the authority D6 withholds.
+    """
+    from app.assistant.tools import build_driver_tools
+    from app.main import app
+
+    path = "/api/v1/shipments/{shipment_id}/appointments/{appointment_id}/hold-for-information"
+    assert "post" in app.openapi()["paths"][path]
+
+    tool_names = {
+        tool.name
+        for tool in build_driver_tools(
+            session=AsyncMock(), ctx=_ops_ctx(), thread_id="THR-TEST"
+        )
+    }
+    assert "hold_for_information" not in tool_names

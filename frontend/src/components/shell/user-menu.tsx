@@ -52,7 +52,14 @@ export function UserMenu({
   const { choice, setChoice } = useTheme()
 
   const multiRole = identity.grants.length > 1
-  const activeGrant = identity.grants.find((g) => g.role === identity.activeRole)
+  // Grants are scope-distinct, not role-distinct (#52: one role, multiple scopes) -- so the
+  // active grant is the one matching the ACTIVE FACILITY when one is selected, falling back
+  // to role match for single-scope accounts. Matching on role alone made every grant "active"
+  // at once and emptied the switch list below.
+  const activeFacility = identity.facilities.find((f) => f.id === identity.activeFacilityId)
+  const activeGrant =
+    (activeFacility && identity.grants.find((g) => g.scopeLabel === activeFacility.name)) ??
+    identity.grants.find((g) => g.role === identity.activeRole)
 
   return (
     <Popover
@@ -109,7 +116,9 @@ export function UserMenu({
             {switchingRole ? (
               <div role="menu" aria-label="Switch role">
                 {identity.grants
-                  .filter((g) => g.role !== identity.activeRole)
+                  // Exclude the active grant itself, not everything sharing its role --
+                  // scope-distinct grants share one role and role-filtering emptied this list.
+                  .filter((g) => g !== activeGrant)
                   .map((g) => (
                     <button
                       key={`${g.role}-${g.scopeLabel}`}

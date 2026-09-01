@@ -4,6 +4,14 @@ Deliberately session-free: these are pure predicates over the trusted `Execution
 already-fetched row fields, so they can be unit-tested across every role without a database and
 called from a service, a repository read, or the scheduling layer alike.
 
+`resolve_facility_scope_with_user_scopes` is the one exception, and it is an exception rather than
+a new convention. Issue #106: `user_scopes` is the identity model's source of truth for scope
+(E2.3) and the admin console can genuinely grant a user two facilities (#72, shipped), but the
+`ExecutionContext` carries only the single `users.facility_id` mirror -- so the second facility was
+unreachable on every surface. Deciding that needs a row nobody has fetched yet, which is why that
+one function takes a session. The pure form below is unchanged and remains what every caller with
+no client-supplied facility uses.
+
 Read vs write tiers are kept distinct on purpose (see `ExecutionContext.is_admin`): read paths
 gate on `has_global_read_scope`, write paths on `is_admin`. TRANSPORT_MANAGER and
 REGIONAL_OPERATIONS_HEAD hold only `*_read_global` permissions, so collapsing the two tiers back
@@ -11,6 +19,9 @@ into one flag would silently hand them cross-facility write access. Do not merge
 """
 
 from __future__ import annotations
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext
@@ -59,6 +70,95 @@ def resolve_facility_scope(
     if require_facility and scope is None:
         raise AppError("Facility not in scope.", code="FORBIDDEN", status_code=403)
     return scope
+
+
+async def user_holds_facility_scope(
+    session: AsyncSession, *, user_id: str, facility_id: str
+) -> bool:
+    """Does this user carry an explicit `user_scopes` FACILITY grant for this facility?
+
+    One indexed probe: `user_scopes` carries `UNIQUE (user_id, scope_type, scope_value)`
+    (`20260823090000_e23_identity_model.sql`), so this is an exact-match lookup on that unique
+    index, not a scan of the user's grants. `LIMIT 1` is belt-and-braces on a unique key.
+
+    Reads `user_scopes` and never `users.facility_id`: the column is the *mirror*
+    (`admin_user_service`'s header states the two-place split), the table is the source of truth,
+    and a user with two facilities has two rows here and only one of them in the column.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT 1
+                FROM public.user_scopes
+                WHERE user_id = :user_id
+                  AND scope_type = 'FACILITY'
+                  AND scope_value = :facility_id
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id, "facility_id": facility_id},
+        )
+    ).first()
+    return row is not None
+
+
+async def resolve_facility_scope_with_user_scopes(
+    session: AsyncSession,
+    ctx: ExecutionContext,
+    requested_facility_id: str | None,
+    *,
+    require_facility: bool = False,
+    unmapped_code: str = "FORBIDDEN",
+) -> str | None:
+    """`resolve_facility_scope`, plus the `user_scopes` FACILITY grants (issue #106).
+
+    Same contract, same refusals, one addition: a **non**-global-read caller may name any facility
+    their own `user_scopes` grants, not only the single `users.facility_id` mirror on their token.
+    That is what makes #72's shipped multi-facility assignment usable -- before this, a coordinator
+    granted Jaipur *and* Gurugram could select the second in #99's switcher and every read answered
+    403, because scope resolution compared against the mirror alone and never consulted the table
+    E2.3 made authoritative.
+
+    Still `M15`/`NFR-019`-clean: `requested_facility_id` remains a *request*, and the only thing
+    that can turn it into an answer is a row the server itself holds for this verified `user_id`.
+    Nothing about the client's claim is trusted; anything outside the grants is still refused with
+    the identical code and message the pure resolver produces.
+
+    **Round trips, traced rather than assumed** (`deps.py` builds one `ExecutionContext` per
+    request and caches nothing across requests, so an unconditional read here would be a real extra
+    trip on every scoped read in the product):
+
+      * global-read persona                      -> 0 queries (the parameter already narrows)
+      * no `facility_id` requested               -> 0 queries (nothing to validate)
+      * requested facility == the token's mirror -> 0 queries (the pure rule already allows it)
+      * anything else                            -> exactly 1 indexed probe
+
+    So the query fires only in the case that is currently a wrong 403, and never on the paths that
+    already answered correctly. The last branch deliberately falls through to the pure resolver on
+    a miss rather than raising here, so there is one place that decides what a refusal looks like.
+    """
+    if (
+        ctx.has_global_read_scope
+        or not requested_facility_id
+        or requested_facility_id == ctx.facility_id
+    ):
+        return resolve_facility_scope(
+            ctx,
+            requested_facility_id,
+            require_facility=require_facility,
+            unmapped_code=unmapped_code,
+        )
+    if await user_holds_facility_scope(
+        session, user_id=ctx.user_id, facility_id=requested_facility_id
+    ):
+        return requested_facility_id
+    return resolve_facility_scope(
+        ctx,
+        requested_facility_id,
+        require_facility=require_facility,
+        unmapped_code=unmapped_code,
+    )
 
 
 def assert_shipment_visible(

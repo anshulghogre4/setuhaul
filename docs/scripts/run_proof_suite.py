@@ -37,6 +37,14 @@ fails against a directory nobody owns any more. Two concrete consequences for th
 A stale-run marker (`RUNS_DIR/*/marker.json`) is written before initdb and removed after teardown,
 and a reaper at startup stops and deletes any cluster a previous crashed run left behind.
 
+3. **The reaper asks who owns a directory before deleting it** (issue #105). Two agents ran this
+   script concurrently on 2026-09-01 and each destroyed the other's cluster mid-bootstrap: a marker
+   file records "a proof cluster lives here", which the reaper was reading as "nobody is using it".
+   Every run now writes `owner.pid` into its directory the instant that directory exists, and the
+   reaper skips any directory whose owning process is still alive. Concurrent runs in one shared
+   RUNS_DIR are therefore safe, and `--runs-dir <own path>` is no longer needed to get isolation --
+   it stays available for anyone who wants it anyway.
+
 ## Replay order, and why it is not simply "the migrations directory, sorted"
 
 `supabase/migrations/` is **not** a standalone chain. The baseline creates the schema; `seed.sql`
@@ -101,6 +109,18 @@ WORK_DB = "setuhaul_proof_work"
 
 SUPERUSER = "postgres"
 RUNS_DIR_NAME = "setuhaul-proof-clusters"
+
+# Issue #105. Written into every run directory the instant it is created -- BEFORE initdb, before
+# the marker, before anything slow -- so a concurrent run's reaper can tell "someone is using this"
+# from "a crashed run left this behind". `marker.json` also carries a pid, but it is not written
+# until `initdb()` starts, and the 2026-09-01 collision landed inside exactly that window.
+OWNER_PIDFILE_NAME = "owner.pid"
+
+# The safety valve for PID reuse. A dead run's pid can be handed to an unrelated long-lived process,
+# which would make its directory look permanently live and leak forever -- so a directory older than
+# this is reaped whatever its pid says. Hours, against a suite that takes minutes: it can only ever
+# fire on a run that is no longer real.
+MAX_CLUSTER_AGE_S = 12 * 60 * 60
 
 
 class ProofSuiteError(RuntimeError):
@@ -422,15 +442,151 @@ def clone_databases(cluster: ThrowawayCluster) -> None:
 # ----------------------------------------------------------------------------------------------
 
 
-def reap_stale_runs(runs_dir: Path, pg_bin: Path) -> int:
-    """Stop and delete clusters a previous crashed run left behind. Returns how many were reaped."""
-    if not runs_dir.is_dir():
-        return 0
-    reaped = 0
-    for child in sorted(runs_dir.iterdir()):
-        marker = child / "marker.json"
-        if not marker.is_file():
+def process_is_alive(pid: int) -> bool:
+    """Is a process with this pid running right now? Query only -- never signals anything.
+
+    ## Windows: NOT `os.kill(pid, 0)`
+
+    `os.kill(pid, 0)` is the POSIX idiom and it is actively dangerous on Windows. CPython's Windows
+    branch has no null-signal concept: `signal.CTRL_C_EVENT` **is** the integer 0, so 0 is either
+    dispatched as a console control event or passed to `TerminateProcess` as the victim's exit
+    code. bpo-14480 ("os.kill on Windows should accept zero as signal") asked for the POSIX
+    behaviour and was **rejected** -- "0 has no special meaning on Windows". So on this platform the
+    idiomatic liveness probe is a kill, which in this script would mean the reaper terminating the
+    very run it was asked to leave alone.
+
+    The real query is `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION=0x1000)` +
+    `GetExitCodeProcess`, both verified against Microsoft's current reference (2026-09-01):
+
+      * `OpenProcess` "returns NULL" if the function fails; a non-existent pid fails with
+        `ERROR_INVALID_PARAMETER`, and a process that exists but is protected fails with
+        `ERROR_ACCESS_DENIED` -- so access-denied is treated as ALIVE, not as absent.
+      * `GetExitCodeProcess` is why opening a handle is not by itself enough: a terminated process
+        object outlives its exit while handles remain, and the docs state the status is
+        `STILL_ACTIVE` (259) only "if the process has not terminated".
+
+    `psutil` would do this in one line and is deliberately not added -- it is not in
+    `backend/pyproject.toml` and this is one helper in one dev script.
+
+    ## POSIX: `os.kill(pid, 0)` is exactly right
+
+    POSIX.1 `kill()`: "If sig is 0 (the null signal), error checking is performed but no signal is
+    actually sent. The null signal can be used to check the validity of pid." `ESRCH` means no such
+    process; `EPERM` means it exists but is not ours to signal -- alive either way.
+    """
+    if pid <= 0:
+        return False
+
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        ERROR_ACCESS_DENIED = 5
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            # Existing-but-unopenable counts as alive: refusing to reap something we cannot inspect
+            # is the safe direction for a function whose "false" answer deletes a data directory.
+            return ctypes.get_last_error() == ERROR_ACCESS_DENIED
+        try:
+            code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
+    return True
+
+
+def write_owner_pidfile(root: Path) -> None:
+    """Claim a run directory for this process. Must run before anything else touches `root`."""
+    (root / OWNER_PIDFILE_NAME).write_text(str(os.getpid()), encoding="utf-8")
+
+
+def _owner_pid(child: Path) -> int | None:
+    """This run directory's owning pid, or None if it never recorded one."""
+    pidfile = child / OWNER_PIDFILE_NAME
+    if pidfile.is_file():
+        try:
+            return int(pidfile.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+    # Directories created before issue #105 carry the pid inside marker.json instead. Read it so an
+    # in-flight run started by an older copy of this script is still respected.
+    marker = child / "marker.json"
+    if marker.is_file():
+        try:
+            value = json.loads(marker.read_text(encoding="utf-8")).get("pid")
+        except (OSError, ValueError):
+            return None
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def _age_seconds(child: Path) -> float:
+    """How long ago this run directory was created, best effort."""
+    for candidate in (child / OWNER_PIDFILE_NAME, child / "marker.json", child):
+        try:
+            return max(0.0, time.time() - candidate.stat().st_mtime)
+        except OSError:
             continue
+    return 0.0
+
+
+def reap_stale_runs(runs_dir: Path, pg_bin: Path) -> tuple[int, int]:
+    """Stop and delete clusters a previous crashed run left behind.
+
+    Returns `(reaped, skipped_live)`.
+
+    **Issue #105 -- this used to delete every directory carrying a marker, full stop.** Correct for
+    the single-user design it was written for, destructive the moment two agents ran the suite at
+    once on 2026-09-01: one run's "stale" sweep caught the other's live `initdb`, because a marker
+    file says "a proof cluster lives here", not "nobody is using it". The liveness question needed
+    an owner, so every run now writes `owner.pid` before it does anything else and a directory whose
+    owner is still running is left alone.
+
+    Age-based cleanup is retained for the dead ones -- and it is load-bearing rather than belt and
+    braces, because `--keep` deliberately leaves a postmaster running after its owning process
+    exits. That is a dead pid by design, and it must still be reaped, which is exactly what
+    `--keep`'s own message promises ("just run this script again").
+    """
+    if not runs_dir.is_dir():
+        return 0, 0
+    reaped = 0
+    skipped = 0
+    for child in sorted(runs_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        # A directory with neither file is not this script's to touch -- and it is also the
+        # sub-millisecond window between `mkdtemp` and `write_owner_pidfile`, so skipping is the
+        # safe reading either way.
+        if not (child / "marker.json").is_file() and not (child / OWNER_PIDFILE_NAME).is_file():
+            continue
+
+        pid = _owner_pid(child)
+        if pid is not None and process_is_alive(pid) and _age_seconds(child) < MAX_CLUSTER_AGE_S:
+            skipped += 1
+            continue
+
         data_dir = child / "data"
         if data_dir.is_dir():
             subprocess.run(
@@ -442,7 +598,7 @@ def reap_stale_runs(runs_dir: Path, pg_bin: Path) -> int:
             )
         shutil.rmtree(child, ignore_errors=True)
         reaped += 1
-    return reaped
+    return reaped, skipped
 
 
 # ----------------------------------------------------------------------------------------------
@@ -499,11 +655,18 @@ def main(argv: list[str] | None = None) -> int:
     runs_dir = Path(args.runs_dir) if args.runs_dir else Path(tempfile.gettempdir()) / RUNS_DIR_NAME
     runs_dir.mkdir(parents=True, exist_ok=True)
 
-    reaped = reap_stale_runs(runs_dir, pg_bin)
+    reaped, skipped = reap_stale_runs(runs_dir, pg_bin)
     if reaped:
         print(f"Reaped {reaped} stale throwaway cluster(s) from a previous run.")
+    if skipped:
+        # Say so rather than staying silent: "another run is using this directory" is the single
+        # most useful thing to know when two suites are in flight (issue #105).
+        print(f"Left {skipped} cluster(s) alone -- still owned by a live process.")
 
     root = Path(tempfile.mkdtemp(prefix="run-", dir=str(runs_dir)))
+    # Issue #105: claim the directory immediately. `mkdtemp` has already created it, so any gap
+    # between these two lines is a gap in which a concurrent reaper sees an unclaimed directory.
+    write_owner_pidfile(root)
     cluster = ThrowawayCluster(pg_bin, root, keep=args.keep)
 
     # Belt and braces on top of the try/finally below: a SIGINT during the pytest run must still

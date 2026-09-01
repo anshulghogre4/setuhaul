@@ -1,3 +1,4 @@
+import { isDockBlockedConflict } from './types'
 import type { PlannerQueueRow } from './types'
 
 /**
@@ -130,13 +131,57 @@ export function priorityMarkerClass(priorityCode: string): string {
  * A hold has no shipment-facing id of its own in the conflict payload beyond `shipment_id`, so
  * that is what is named; `claim_source` distinguishes an appointment from a D2 hold, which is the
  * difference between "another truck is booked here" and "another truck is mid-booking here".
+ *
+ * ## Two legs since issue #88, and they are different sentences
+ *
+ * `displacement.conflicts` now carries both of the things the write path refuses on, each tagged
+ * with `conflict_type`:
+ *
+ *  - `INTERVAL_CONFLICT` -- another live claim overlaps. Somebody **is** displaced, and naming them
+ *    is the whole job of this column.
+ *  - `DOCK_BLOCKED` -- a `dock_status_events` outage overlaps. **Nobody is displaced**; the dock is
+ *    offline. This leg carries no `shipment_id` at all.
+ *
+ * Before this fix the mapper read `c.shipment_id` off every entry, so a blocked dock rendered
+ * *"Confirming this displaces undefined."* -- the literal defect #88's row-side change surfaced.
+ * Worse than cosmetic on this column specifically: section 7.3 calls it "the single most important
+ * field", and `undefined` in it is a planner being told a third party is at risk when the real
+ * answer is that the dock cannot take anyone.
+ *
+ * The two are reported as separate clauses rather than one merged list, because they have
+ * different recoveries: a displacement is a harm the planner may still choose to cause, an outage
+ * is not something confirming can push through at all.
  */
 export function describeDisplacement(row: PlannerQueueRow): string {
   if (row.displacement.status === 'NONE' || row.displacement.conflicts.length === 0) {
     return 'conflicts with none'
   }
-  const named = row.displacement.conflicts
-    .map((c) => (c.claim_source === 'dock_occupancy_hold' ? `${c.shipment_id} (holding)` : c.shipment_id))
-    .join(', ')
-  return `Confirming this displaces ${named}.`
+
+  const displaced: string[] = []
+  const blocked: string[] = []
+  for (const conflict of row.displacement.conflicts) {
+    if (isDockBlockedConflict(conflict)) {
+      // The block's own identifiers, never a shipment. `reason` is free text and nullable, so
+      // `event_type` is the fallback -- the same order `dock-board.tsx`'s BlockMarker uses, so the
+      // board and the row name one outage the same way.
+      blocked.push(conflict.reason ?? conflict.event_type)
+    } else {
+      displaced.push(
+        conflict.claim_source === 'dock_occupancy_hold'
+          ? `${conflict.shipment_id} (holding)`
+          : conflict.shipment_id,
+      )
+    }
+  }
+
+  const clauses: string[] = []
+  if (displaced.length > 0) clauses.push(`Confirming this displaces ${displaced.join(', ')}.`)
+  if (blocked.length > 0) {
+    clauses.push(
+      blocked.length === 1
+        ? `This dock is blocked (${blocked[0]}).`
+        : `This dock is blocked (${blocked.join('; ')}).`,
+    )
+  }
+  return clauses.join(' ')
 }

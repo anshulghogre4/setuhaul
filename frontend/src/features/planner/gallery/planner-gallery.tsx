@@ -1,19 +1,40 @@
 import { useState, type ReactNode } from 'react'
 
 import { BoardSkeleton } from '../components/board-skeleton'
+import { BoardPickerBanner } from '../components/board-picker'
 import { BoardPlate } from '../components/dock-board'
+import { QueueFilterControl } from '../components/queue-filter'
 import { NarrowViewportGuard } from '../components/narrow-viewport'
 import { NotYetAvailable } from '../components/not-yet-available'
 import {
   QueueEmptyCaughtUp,
   QueueEmptyNothingYet,
+  QueueFilterEmpty,
   QueueSearchEmpty,
   QueueSkeleton,
 } from '../components/queue-region-states'
 import { QueueRow } from '../components/queue-row'
 import { ReviewProposalButton } from '../components/review-proposal-button'
 import { Maintenance, NotFound, RegionError } from '@/components/states/region-states'
-import { BOARD, BOARD_EMPTY, OUTCOME_SKIPPED, ROW_CLEAN, ROW_CONFLICTED, ROW_DERIVED } from './fixtures'
+import {
+  BOARD,
+  BOARD_EMPTY,
+  OUTCOME_SKIPPED,
+  PICKER_OPTIONS,
+  PICKER_ROW,
+  ROW_CLEAN,
+  ROW_CONFLICTED,
+  ROW_DERIVED,
+  ROW_DOCK_BLOCKED,
+  ROW_HELD,
+} from './fixtures'
+import {
+  EMPTY_QUEUE_FILTER,
+  describeQueueFilter,
+  filterQueueRows,
+  type QueueFilter,
+} from '../lib/queue-filter'
+import type { RejectReasonCode } from '../lib/reasons'
 import type { PlannerRefusal } from '../lib/refusals'
 import type { BulkConfirmOutcome, PlannerQueueRow } from '../lib/types'
 
@@ -34,17 +55,21 @@ export function PlannerStatesGallery() {
       <header className="mb-8">
         <p className="text-label text-primary uppercase">SetuHaul · planner dock board (E5.3)</p>
         <h1 className="mt-2 text-display text-balance">
-          The queue is live; the board and the hold are not
+          The queue, the board and the hold are live; the sequencer is not
         </h1>
         <p className="mt-2 max-w-[80ch] text-body text-muted-foreground">
-          Updated 2026-08-29: `get_planner_queue` and the four write tools that start from one of
-          its rows all shipped, so the Queue tab, its five affordances, the refusal taxonomy and
-          bulk confirm are real. What is still stubbed is stubbed for a reason no UI can fix --
-          `dock_occupancy.state` does not exist in any live database (issue #53, migration
-          unapplied), `hold_for_information` is unbuilt (#64), the Sequencer is entirely unbuilt
-          (#49), and there is no live-update transport for the "N new" pill (#59). See
-          `features/planner/lib/flags.ts` for what each flag now gates and what was verified before
-          it moved.
+          Updated 2026-09-02. `get_planner_queue` and every write tool that starts from one of its
+          rows have shipped, so the Queue tab, its five affordances, the refusal taxonomy and bulk
+          confirm are real. Since 2026-08-31 the Board tab renders live occupancy (#53 applied,
+          #84 fixed); since 2026-09-02 the counter-offer <strong>board picker</strong> replaces the
+          interim dialog (U103) and <strong>hold for information</strong> is wired to its shipped
+          tool (#64). One thing genuinely remains stubbed for a reason no UI can fix: section
+          7.5.3's Sequencer is entirely unbuilt (#49), so the proposal diff has nothing to call.
+          Two divergences are deliberate and flagged rather than hidden -- the held countdown keeps
+          its number (the shipped tool extends the deadline, it does not pause the clock), and
+          lane eligibility in the picker is Stage 1's answer projected onto lanes rather than a
+          per-dock constraint explanation. See `features/planner/lib/flags.ts` for what each flag
+          gates and what was verified before it moved.
         </p>
       </header>
 
@@ -59,6 +84,18 @@ export function PlannerStatesGallery() {
         >
           <RowPlate rows={[ROW_CONFLICTED]} />
         </Plate>
+
+        <Plate
+          n="1d"
+          title="Issue #88 — both displacement legs: a displaced shipment AND a blocked dock, as two sentences"
+        >
+          {/* The regression plate for "Confirming this displaces undefined." A DOCK_BLOCKED
+              conflict carries no shipment_id, so the old mapper printed undefined into section
+              7.3's most important column. */}
+          <RowPlate rows={[ROW_DOCK_BLOCKED]} />
+        </Plate>
+
+        <QueueFilterDemo />
 
         <Plate n="8a" title="ALREADY_ACTIONED — assertive, and the winning transition is named">
           <RowPlate
@@ -172,14 +209,7 @@ export function PlannerStatesGallery() {
           assumed unreachable.
         </Note>
 
-        <Note n="3, 24, 25" title="Counter-offer — built as an interim form, not the board picker">
-          `counter_offer` shipped (#63) and is reachable from a queue row (`O`), but U103's
-          dock/time grid needs `dock_occupancy.state` — a column no live database has (#53,
-          migration unapplied). The interim dialog offers the intervals Stage 1 says are feasible
-          for that shipment, which is the same eligibility the dimmed lanes were going to express;
-          what is lost is the spatial context. Flagged in `lib/flags.ts`, not treated as the
-          finished design.
-        </Note>
+        <BoardPickerDemo />
 
         <Plate n="2" title="Board at rest — every bar treatment components.md §3 can produce">
           <div className="w-[860px]">
@@ -200,12 +230,17 @@ export function PlannerStatesGallery() {
           </div>
         </Plate>
 
-        <Note n="7, 14, 15" title="Hold for information — still blocked, and it needs a tool">
-          The `appointments.expires_at` column the original blocker named now exists in the #53
-          migration, but that migration is applied to no database and `hold_for_information`
-          itself is unbuilt (#64). Two gates, not one — the Hold affordance renders Inactive with
-          that explanation rather than as a button with nowhere to go.
-        </Note>
+        <Plate
+          n="7, 14, 15"
+          title="Hold for information — spent: held countdown, and the Hold affordance disabled with its reason"
+        >
+          {/* Issue #64 shipped, so this is a real state rather than a note about a missing tool.
+              Worth looking at rather than reading: the TTL cell keeps its NUMBER. U67 says a
+              paused countdown hides the value, but the shipped mechanism is a bounded EXTENSION,
+              not a pause -- time is still elapsing, so hiding it would assert the opposite. See
+              queue-row.tsx's TTL cell for the full reasoning and the owner fork it raises. */}
+          <RowPlate rows={[ROW_HELD]} />
+        </Plate>
 
         <Note n="—" title="Escalate — no tool in section 7.5.1's shape">
           `escalate_request(appointment_id, reason, owner?)` does not exist. The shipped
@@ -283,6 +318,97 @@ function RowPlate({
         </tbody>
       </table>
     </div>
+  )
+}
+
+/**
+ * **States 3 / 24 / 25 — the counter-offer board picker** (U103, `screens.md` section 4).
+ *
+ * Mounts the real `BoardPickerBanner` and the real `Board` (through `BoardPlate`) over fixture
+ * options, so what a reviewer or a click-sweep sees is the component the `/planner` route renders,
+ * not a look-alike. **It cannot write**: `BoardPlate` takes no `counterOffer` path at all -- that
+ * call lives in `DockBoardPanel`, which this gallery never mounts -- so `Send counter-offer` here
+ * is inert by construction rather than by a disabled attribute.
+ *
+ * This plate exists because the live surface cannot demonstrate the picker today, and that is an
+ * environment fact rather than a build gap: `PlannerConsole` scopes to the signed-in planner's own
+ * facility, `get_planner_queue` for `FAC-JAI-01` returns `count: 0`, and the only pending
+ * appointment in the system sits at `FAC-GGN-01` where no `WAREHOUSE_PLANNER` account exists. With
+ * no queue row there is no Counter-offer to press. Recorded here so the picker's rendering is
+ * verifiable now and the live activation can be checked the moment a Jaipur row exists.
+ */
+function BoardPickerDemo() {
+  const [chosen, setChosen] = useState<string | null>(null)
+  const [reason, setReason] = useState<RejectReasonCode | null>(null)
+  const [note, setNote] = useState('')
+  const chosenOption = PICKER_OPTIONS.find((o) => o.slot_id === chosen) ?? null
+
+  return (
+    <Plate
+      n="3, 24, 25"
+      title="Counter-offer board picker — eligible lanes clickable, ineligible dimmed, out-of-horizon options counted"
+    >
+      <div className="w-[860px]">
+        <BoardPickerBanner
+          row={PICKER_ROW}
+          chosen={chosenOption}
+          reason={reason}
+          note={note}
+          optionCount={PICKER_OPTIONS.length}
+          // SLOT-G3 starts at 10:15Z against a horizon ending 09:30Z -- see `fixtures.ts`.
+          outOfHorizonCount={1}
+          loading={false}
+          busy={false}
+          error={null}
+          onReasonChange={setReason}
+          onNoteChange={setNote}
+          onClearChoice={() => setChosen(null)}
+          onCancel={() => setChosen(null)}
+          onSubmit={() => {}}
+        />
+        <BoardPlate
+          board={BOARD}
+          pickable={PICKER_OPTIONS}
+          chosenSlotId={chosen}
+          onPickInterval={(option) => setChosen(option.slot_id)}
+        />
+      </div>
+    </Plate>
+  )
+}
+
+/**
+ * **The priority / ETA-confidence filter** (`screens.md` section 2's Rules).
+ *
+ * Mounts the real `QueueFilterControl` over the real `filterQueueRows` predicate and the same
+ * fixture rows plate 1 uses, so the narrowing observed here is the narrowing `queue-tab.tsx`
+ * performs -- one implementation, exercised twice, per `lib/queue-filter.ts`'s own header.
+ *
+ * The three fixtures cover the axes between them: `ROW_CLEAN` is CRITICAL / MEDIUM,
+ * `ROW_DERIVED` is HIGH, and `ROW_CONFLICTED` is NORMAL / **LOW** — so "CRITICAL only" and
+ * "LOW confidence only", the design's two stated use cases, both narrow to exactly one row.
+ */
+function QueueFilterDemo() {
+  const [filter, setFilter] = useState<QueueFilter>(EMPTY_QUEUE_FILTER)
+  const rows = [ROW_CLEAN, ROW_DERIVED, ROW_CONFLICTED]
+  const shown = filterQueueRows(rows, filter)
+  const summary = describeQueueFilter(filter, shown.length)
+
+  return (
+    <Plate n="1c" title="Filter by priority or ETA confidence — membership only, never the sort">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-4 text-supporting">
+          <QueueFilterControl filter={filter} onChange={setFilter} />
+          {/* The design's chip-free affordance: "Filter: CRITICAL · 6 shown" in the toolbar. */}
+          {summary ? <span className="font-semibold">{summary}</span> : null}
+        </div>
+        {shown.length === 0 ? (
+          <QueueFilterEmpty description={summary ?? ''} onClear={() => setFilter(EMPTY_QUEUE_FILTER)} />
+        ) : (
+          <RowPlate rows={shown} />
+        )}
+      </div>
+    </Plate>
   )
 }
 

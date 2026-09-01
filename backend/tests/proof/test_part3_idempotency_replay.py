@@ -35,6 +35,7 @@ below actually counts; the outbox-specific half is a named skip rather than a si
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -469,6 +470,17 @@ ESCALATION_SOURCE_ROOT = Path(escalation_service.__file__).resolve().parents[1]
 ARBITER_PREDICATE = "ON CONFLICT (dedupe_key) WHERE escalation_status NOT IN ('RESOLVED', 'CANCELLED')"
 TERMINAL_STATUSES = ("RESOLVED", "CANCELLED")
 
+# The table an `ON CONFLICT` arbiter belongs to, resolved from the nearest preceding INSERT.
+#
+# Added 2026-09-02 with issue #94. The scan below used to assume `ON CONFLICT (dedupe_key)` could
+# only ever mean `escalation_queue` -- true when it was written, and false the moment
+# `20260902093000_notification_outbox.sql` added a second table with a `dedupe_key`.
+# `notification_outbox` is upserted with a BARE `ON CONFLICT (dedupe_key)`, and correctly so: its
+# unique index (`notification_outbox_dedupe_key_uidx`) is NOT partial, so there is no
+# index_predicate to repeat and adding escalation_queue's would make the arbiter match nothing.
+# Requiring the predicate everywhere would therefore have failed a correct file.
+_INSERT_TARGET = re.compile(r"INSERT INTO\s+public\.(\w+)")
+
 
 def _ops_ctx(*, user_id: str, request_id: str) -> ExecutionContext:
     """A facility-scoped coordinator for `harness.FACILITY_ID`.
@@ -846,39 +858,69 @@ async def test_no_bare_on_conflict_dedupe_key_is_left_anywhere_in_the_backend():
     the expiry one fires from a scheduled sweep where a 42P10 is a silent, total outage of M8's
     escalate leg.
 
-    Scoped to `ON CONFLICT (dedupe_key)`, which in `backend/app/` only ever targets
-    `escalation_queue`: `driver_exceptions` also has a `dedupe_key`, but it has never been
-    unique-indexed (20260807184700's own header note) and no code upserts on it.
+    Scoped to arbiters whose INSERT actually targets `escalation_queue`, resolved per site rather
+    than assumed. `driver_exceptions` also has a `dedupe_key` but has never been unique-indexed
+    (20260807184700's own header note) and nothing upserts on it; `notification_outbox`
+    (20260902093000, issue #94) does upsert on one, and does so with a deliberately BARE arbiter
+    because its unique index is not partial -- repeating escalation_queue's predicate there would
+    match no index at all and cause the very 42P10 this guard exists to prevent. The narrowing is
+    therefore a correction, not a relaxation: every escalation_queue site is still checked.
     """
     offenders: list[str] = []
     sites = 0
+    skipped_other_tables: list[str] = []
     for path in sorted(ESCALATION_SOURCE_ROOT.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
         start = 0
         while (found := source.find("ON CONFLICT (dedupe_key)", start)) != -1:
-            sites += 1
             start = found + 1
+            line = source.count("\n", 0, found) + 1
+            # The nearest preceding `INSERT INTO public.<table>` is the statement this arbiter
+            # belongs to. Nearest-preceding is sound here because every one of these is a single
+            # `text("""...""")` literal, so no other INSERT can sit between the two.
+            inserts = list(_INSERT_TARGET.finditer(source, 0, found))
+            target = inserts[-1].group(1) if inserts else None
+            if target != "escalation_queue":
+                skipped_other_tables.append(
+                    f"{path.relative_to(ESCALATION_SOURCE_ROOT)}:{line} -> {target}"
+                )
+                continue
+            sites += 1
             if not source.startswith(ARBITER_PREDICATE, found):
-                line = source.count("\n", 0, found) + 1
                 offenders.append(f"{path.relative_to(ESCALATION_SOURCE_ROOT)}:{line}")
-    assert sites > 0, "the scan found no ON CONFLICT (dedupe_key) at all -- it has stopped working"
+    assert sites > 0, "the scan found no escalation_queue dedupe_key arbiter -- it has stopped working"
     assert offenders == [], (
         "these ON CONFLICT (dedupe_key) arbiters do not carry the partial index's predicate and "
         f"will raise 42P10 at runtime: {offenders}\n  expected: {ARBITER_PREDICATE}"
     )
     record_evidence("3. issue #96: arbiter sites carrying the predicate", f"{sites}/{sites}")
+    if skipped_other_tables:
+        # Reported, never silent: a site that lands here because someone renamed the INSERT (rather
+        # than because it genuinely targets another table) would otherwise stop being checked
+        # without anyone noticing.
+        record_evidence(
+            "3. issue #96: dedupe_key arbiters on other tables (not checked)",
+            "; ".join(skipped_other_tables),
+        )
 
 
-@pytest.mark.skip(
-    reason=(
-        "NAMED SKIP, not a silent omission (issue #44). Section 10.3's 'one notification' is "
-        "asserted above against `operational_messages`, the table that actually exists. The "
-        "outbox-specific half of the claim -- section 6.1's `notification_outbox`, 'a "
-        "transactional outbox so a booking and its notification cannot diverge' -- cannot be "
-        "asserted because that table has never been created: no `CREATE TABLE "
-        "notification_outbox` exists anywhere in supabase/migrations/ (verified by grep "
-        "2026-09-01). This is an unbuilt design element, not a failing one."
-    )
-)
-async def test_notification_outbox_receives_exactly_one_row_per_dedupe_key():
-    raise AssertionError("unreachable while the skip stands")
+# ---------------------------------------------------------------------------------------------
+# The named skip this file used to carry, retired 2026-09-02 (issue #94)
+# ---------------------------------------------------------------------------------------------
+#
+# `test_notification_outbox_receives_exactly_one_row_per_dedupe_key` sat here as one of this
+# suite's three named skips, with the reason *"that table has never been created: no `CREATE TABLE
+# notification_outbox` exists anywhere in supabase/migrations/ (verified by grep 2026-09-01)"*.
+# `20260902093000_notification_outbox.sql` creates it, so the reason is no longer true and a skip
+# carrying a false reason is worse than no skip at all.
+#
+# The assertion it stood in for now exists for real, against the same replayed cluster, in
+# `tests/proof/test_part3b_notification_outbox.py` --
+# `test_a_replayed_producer_yields_exactly_one_outbox_row_per_dedupe_key` (three committed producer
+# runs, one surviving row, one feed entry). It lives in its own module rather than here because it
+# needs a different fixture set (a routable recipient, a drain cycle) and because the two halves of
+# section 10.3's "one notification" now genuinely measure different tables: this file's
+# `operational_messages` count and that file's `notification_outbox` count, which issue #94's
+# reconciliation makes two distinct facts rather than one duplicated.
+#
+# The `operational_messages` assertion above is deliberately left exactly as it was.

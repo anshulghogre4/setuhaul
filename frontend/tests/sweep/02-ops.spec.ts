@@ -238,7 +238,7 @@ test('ops: queue pane filters, selection, resort and error retry', async ({ page
   say(
     'Queue settings gear',
     'MISSING',
-    `no queue-settings control exists on the rendered pane (${await gear.count()} matches). components/queue-pane.tsx's header renders the count, the arrivals pill and the Filter dropdown only -- there is no gear and no display-options surface anywhere in features/ops.`,
+    `no queue-settings control exists on the rendered pane (${await gear.count()} matches). components/queue-pane.tsx's header renders the count, the arrivals pill and the Filter dropdown only. DELIBERATELY NOT BUILT this session, and the reason is a design gap rather than effort: the gear appears in exactly two places -- screens.md §2's ASCII ("[Filter: reason ▾] [⚙]") and stitch-prompts.md:194/:244 ("a filter control and a settings icon button", "small ghost icon button, Lucide settings-2 16px") -- and NEITHER states what it does. There is no behaviour, no panel contents and no persisted preference named anywhere in 02-ops-exception-console/. The obvious guess, column preferences, does not apply here: this queue is a role="listbox" of composed rows (id/reason/shipment/SLA), not a column table like the planner's, so there are no columns to show or hide. Building it would mean inventing a feature and then inventing what it configures. NEEDS A DESIGN RULING: say what the gear opens, or drop it from §2's sketch.`,
   )
 
   // ---- Queue row select ---------------------------------------------------------------------------
@@ -380,45 +380,67 @@ test('ops: detail-pane lifecycle — acknowledge, reassign, takeover, resolve', 
   await detail.getByRole('button', { name: 'Acknowledge' }).click()
   const ackRes = await ackReq
   const ackKey = ackRes.request().headers()['idempotency-key']
-  await expect(detail.getByRole('button', { name: 'Reassign' })).toBeVisible({ timeout: 15_000 })
+  // Acknowledge retires (the escalation is now owned) and the overflow appears -- screens.md §3's
+  // "once acknowledged". Previously this waited on a standalone Reassign button, which moved into
+  // the overflow this session.
+  await expect(detail.getByRole('button', { name: 'More actions' })).toBeVisible({ timeout: 15_000 })
+  await expect(detail.getByRole('button', { name: 'Acknowledge' })).toBeHidden()
   say(
     'Acknowledge',
     'WORKING',
-    `POST /operations/escalations/${id}/acknowledge (HTTP ${ackRes.status()}) with Idempotency-Key ${ackKey ? 'present' : 'MISSING'}; the owner control flipped from Acknowledge to Reassign and the stepper advanced to ACKNOWLEDGED`,
+    `POST /operations/escalations/${id}/acknowledge (HTTP ${ackRes.status()}) with Idempotency-Key ${ackKey ? 'present' : 'MISSING'}; the Acknowledge button retired, the acknowledged-only overflow [⋯] appeared, and the stepper advanced to ACKNOWLEDGED`,
   )
 
   // ---- Advance to IN_PROGRESS -------------------------------------------------------------------------
-  const inProgress = detail.getByRole('button', { name: /in progress|start work|advance/i })
+  // The stepper is a role="img" whose accessible name IS its position ("Stage: Ack" ->
+  // "Stage: In prog"), so the assertion reads the rendered lifecycle rather than a CSS class.
+  const stepper = detail.getByRole('img', { name: /^Stage:/ })
+  const stageBefore = await stepper.getAttribute('aria-label')
+
+  const inProgress = detail.getByRole('button', { name: 'Mark in progress' })
+  await expect(inProgress).toBeVisible()
+  const startReq = page.waitForResponse(
+    (r) => r.url().includes(`/escalations/${id}/start`) && r.request().method() === 'POST',
+  )
+  await inProgress.click()
+  const startRes = await startReq
+  const startKey = startRes.request().headers()['idempotency-key']
+  const startBody = (await startRes.json()) as { data?: { code?: string; stepper_position?: number } }
+
+  // The stepper must actually move, and it only can once the queue has been re-read -- the
+  // position is a server field, never a local increment.
+  await expect(stepper).toHaveAttribute('aria-label', /In prog/, { timeout: 15_000 })
+  const stageAfter = await stepper.getAttribute('aria-label')
+  // Once IN_PROGRESS the control retires: a second press could only return ALREADY_IN_PROGRESS.
+  await expect(inProgress).toBeHidden()
+
   say(
     'Advance to IN_PROGRESS',
-    'MISSING',
-    `no control offers it. POST /operations/escalations/{id}/start exists and lib/api.ts wraps it, but components/detail-pane.tsx renders no button for it -- ops-console.tsx calls startEscalationWork() only from the "Mark in progress, then hand back" recovery banner inside a failed hand-back. ${await inProgress.count()} matching controls on the acknowledged pane.`,
+    'WORKING',
+    `built this session and driven end to end. Pressing "Mark in progress" fired POST /operations/escalations/${id}/start (HTTP ${startRes.status()}, code=${startBody.data?.code}, stepper_position=${startBody.data?.stepper_position}) with Idempotency-Key ${startKey ? 'present' : 'MISSING'}, and the detail pane's stepper advanced "${stageBefore}" -> "${stageAfter}" off the server's own stepper_position after the queue re-read. The control then disappears (a second press could only answer ALREADY_IN_PROGRESS). Before this session the endpoint and lib/api.ts's startEscalationWork() both existed with no button anywhere -- the only call site was the hand-back recovery banner, so the middle stepper dot was reachable only via a FAILED hand-back. Design note: flows-and-states.md Flow 1 step 4 requires this transition ("a status the coordinator sets explicitly once real work has started") but screens.md §3 and stitch-prompts.md prompt 7 never DRAW the control; it is placed in the pane's lifecycle action row as neutral, not primary, per prompt 7's "only one primary action exists in this view". Flagged for the owner as a placement the design does not settle.`,
   )
 
-  // ---- Reassign combobox ----------------------------------------------------------------------------
-  const reassign = detail.getByRole('button', { name: 'Reassign' })
-  await reassign.click()
-  const reassignMenu = page.getByRole('menu').last()
-  await expect(reassignMenu).toBeVisible()
-  const reassignCopy = (await reassignMenu.textContent())?.trim() ?? ''
+  // ---- Overflow menu ------------------------------------------------------------------------------------
+  const overflow = detail.getByRole('button', { name: 'More actions' })
+  await expect(overflow).toBeVisible()
+  await overflow.click()
+  const overflowMenu = page.getByRole('menu').last()
+  await expect(overflowMenu).toBeVisible()
+  const overflowItems = await overflowMenu.getByRole('menuitem').allTextContents()
+  const overflowCopy = (await overflowMenu.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
   await page.keyboard.press('Escape')
+
+  say(
+    'Overflow menu (Escalate / Reassign / Cancel)',
+    'WORKING',
+    `built this session. A ghost [⋯] button (accessible name "More actions", Lucide ellipsis per stitch-prompts.md prompt 7) renders on the ACKNOWLEDGED pane only -- screens.md §3's "once acknowledged" -- and opens a menu whose items are [${overflowItems.map((t) => t.trim().slice(0, 60)).join(' | ')}]. DIVERGENCE, stated not hidden: the menu holds Escalate and Reassign but NOT Cancel, because the design contradicts itself -- screens.md §3's prose puts Cancel in this menu while §3 and §3b both DRAW it as a button in the pane's action group ("[ Take over thread ] [ Cancel ]", "[ Resolve ] [ Cancel ]"). This build keeps the drawn group (which is also what makes Flow 6's Resolve/Cancel pairing legible) and the menu says so in place of a duplicated entry. Owner fork: correct §3's prose, or redraw §3/§3b.`,
+  )
+
+  // ---- Reassign (now inside the overflow) ----------------------------------------------------------------
   say(
     'Reassign combobox',
     'INACTIVE-LABELED',
-    `activating it opens a menu whose single item is disabled and states the reason verbatim: "${reassignCopy.slice(0, 160)}…" plus an sr-only "Reassign is not available: no coordinator list endpoint exists yet." No §7.5.5 tool returns a facility-scoped coordinator list.`,
-  )
-
-  // ---- Overflow menu / Escalate ------------------------------------------------------------------------
-  const overflow = detail.getByRole('button', { name: /more|overflow|actions|⋯/i })
-  say(
-    'Overflow menu (Escalate / Reassign / Cancel)',
-    'MISSING',
-    `no overflow menu is rendered on the acknowledged detail pane (${await overflow.count()} matches). Resolve and Cancel are two direct buttons in their own group and Reassign is its own control, so the design's "demote the secondary actions" grouping does not exist.`,
-  )
-  say(
-    'Escalate (overflow)',
-    'MISSING',
-    'no escalate-further control exists anywhere in features/ops/components; there is no overflow menu to hold it and lib/api.ts wraps no escalate call.',
+    `moved out of the owner control and into the overflow this session, per screens.md §3 / stitch-prompts.md prompt 7 ("Escalate, Reassign and Cancel ... deliberately not primary buttons"). It renders as a disabled menu item stating the reason verbatim inside the menu opened above: "${overflowCopy.slice(0, 200)}…". Unchanged in substance -- no §7.5.5 tool returns a facility-scoped coordinator list, and a free-text new_owner_id would be exactly the client-supplied scope id M15 forbids.`,
   )
 
   // ---- Co-pilot ------------------------------------------------------------------------------------------
@@ -466,6 +488,157 @@ test('ops: detail-pane lifecycle — acknowledge, reassign, takeover, resolve', 
     'WORKING',
     `POST /operations/escalations/${id}/resolve (HTTP ${resolveRes.status()}) with reason_code=${resolveBody.reason_code}; the escalation reached its terminal state, which is also this test's own cleanup`,
   )
+})
+
+/**
+ * **Escalate, from the detail pane's overflow** (built this session).
+ *
+ * ## Why this is its own test and why it targets `SHP-RS-NOSLOT`
+ *
+ * The dialog escalates the **selected escalation's own shipment**, so proving it needs a selected
+ * row whose shipment is the sanctioned escalate surface. `SHP-RS-NOSLOT` is that surface (the
+ * reschedule sandbox); the lifecycle test above works `SHP-RS-PENDING` and must not have a second
+ * case opened underneath it mid-flow.
+ *
+ * ## What is written, and how it is unwound
+ *
+ * Two rows can exist when this finishes: the fresh case this test mints to have something to
+ * select, and the case the Escalate control opens. **Both are cancelled in a `finally`**, so a
+ * failed assertion cannot leave an OPEN row in the queue. The preview half writes nothing at all
+ * by construction -- `escalate_exception` returns `CONFIRMATION_REQUIRED` before it touches the
+ * database -- which this test asserts directly rather than assuming.
+ */
+test('ops: escalate a further case from the detail-pane overflow', async ({ page }) => {
+  const seed = await createFreshEscalation('ops-ggn', 'SHP-RS-NOSLOT')
+  if (seed === null) {
+    // Not a build failure and not silently swallowed. `createFreshEscalation` treats any non-200
+    // as "this type is not free" and rotates, so a transient backend 500 across several types
+    // exhausts all nine and returns null. Observed directly on this stack while building this
+    // test: POST /operations/escalate answered 500 `(EMAXCONNSESSION) max clients reached in
+    // session mode - max clients are limited to pool_size: 15` -- the same pool-exhaustion class
+    // AGENTS.md records from 2026-08-17 -- and a retry seconds later answered 200. Recorded as an
+    // environment block with the real cause rather than failing the suite for it.
+    say(
+      'Escalate (overflow)',
+      'BLOCKED-ENV',
+      'could not mint a sandbox escalation on SHP-RS-NOSLOT to escalate FROM: POST /api/v1/operations/escalate failed for all nine escalation types. Seen on this stack as HTTP 500 "(EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15", which is backend connection-pool exhaustion, not a frontend gap. The control itself is built (features/ops/components/escalate-dialog.tsx + overflow-menu.tsx) and its two-press preview/confirm path is wired to POST /operations/escalate. Re-run when the pool recovers.',
+    )
+    return
+  }
+  const seedId = seed.escalationId
+  let openedId: string | null = null
+
+  try {
+    await openConsole(page)
+    const detail = page.getByRole('region', { name: 'Escalation detail' })
+    await rowFor(page, seedId).click()
+    await expect(detail.getByRole('heading', { level: 2 })).toContainText(seedId)
+
+    // The overflow is acknowledged-only, so claim the case first.
+    const ack = page.waitForResponse(
+      (r) => r.url().includes(`/escalations/${seedId}/acknowledge`) && r.request().method() === 'POST',
+    )
+    await detail.getByRole('button', { name: 'Acknowledge' }).click()
+    await ack
+
+    // Re-select if the post-acknowledge queue re-read dropped the selection. `handleAcknowledge`
+    // calls `load()`, and a failed re-read (the same EMAXCONNSESSION class above) leaves the pane
+    // on its "Select an escalation." empty state with the write itself already committed. Observed
+    // once during this test's own development, so the recovery is explicit rather than a retry
+    // loop that would hide it.
+    const detailEmpty = detail.getByText('Select an escalation.')
+    if (await detailEmpty.isVisible().catch(() => false)) {
+      await rowFor(page, seedId).click()
+      await expect(detail.getByRole('heading', { level: 2 })).toContainText(seedId)
+    }
+
+    const overflow = detail.getByRole('button', { name: 'More actions' })
+    await expect(overflow).toBeVisible({ timeout: 15_000 })
+    await overflow.click()
+    await page.getByRole('menuitem', { name: 'Escalate…' }).click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Escalate' })
+    await expect(dialog).toBeVisible()
+
+    // The open case's own reason must be offered but NOT selectable -- escalations dedupe on
+    // (shipment, day, type), so re-raising it would refresh this row rather than open a case.
+    const reasonSelect = dialog.getByLabel('Reason')
+    const disabledOptions = await reasonSelect
+      .locator('option[disabled]')
+      .allTextContents()
+
+    // Commit is gated until the free-text "what is happening" is filled.
+    const commit = dialog.getByRole('button', { name: /Preview escalation|Escalate/ })
+    const gatedBefore = await commit.getAttribute('aria-disabled')
+    const gateWhy = await commit.getAttribute('title')
+
+    await reasonSelect.selectOption('SAFETY_OR_REGULATED')
+    await dialog.getByLabel('Severity').selectOption('MEDIUM')
+    await dialog
+      .getByLabel('What is happening')
+      .fill('UI click-sweep probe — opened and cancelled in this same test')
+
+    // ---- Step 1: preview. Asserts confirmed=false AND that nothing was written. ----
+    const previewReq = page.waitForResponse(
+      (r) => r.url().includes('/operations/escalate') && r.request().method() === 'POST',
+    )
+    await commit.click()
+    const previewRes = await previewReq
+    const previewSent = JSON.parse(previewRes.request().postData() ?? '{}')
+    const previewBody = (await previewRes.json()) as {
+      data?: { code?: string; note?: string; escalation_id?: string }
+    }
+    await expect(dialog.getByText(/Confirm before this becomes a real case/)).toBeVisible()
+
+    expect(previewSent.confirmed, 'the first press must send confirmed=false').toBe(false)
+    expect(previewBody.data?.code, 'the preview must not write').toBe('CONFIRMATION_REQUIRED')
+    expect(previewBody.data?.escalation_id, 'a preview carries no escalation id').toBeUndefined()
+
+    // ---- Step 2: confirm. This one writes. ----
+    const confirmReq = page.waitForResponse(
+      (r) =>
+        r.url().includes('/operations/escalate') &&
+        r.request().method() === 'POST' &&
+        JSON.parse(r.request().postData() ?? '{}').confirmed === true,
+    )
+    await dialog.getByRole('button', { name: 'Escalate', exact: true }).click()
+    const confirmRes = await confirmReq
+    const confirmSent = JSON.parse(confirmRes.request().postData() ?? '{}')
+    const confirmBody = (await confirmRes.json()) as { data?: { escalation_id?: string } }
+    openedId = confirmBody.data?.escalation_id ?? null
+    await expect(dialog).toBeHidden()
+
+    // M15: the body may name a shipment and never a facility, driver or owner -- the server
+    // derives all three from the shipment row and the verified token. Asserted, not assumed.
+    const bodyKeys = Object.keys(confirmSent).sort()
+    expect(bodyKeys).toEqual(
+      ['confirmed', 'escalation_type', 'payload', 'severity_code', 'shipment_id'],
+    )
+
+    say(
+      'Overflow menu (Escalate / Reassign / Cancel)',
+      'WORKING',
+      `see also the lifecycle test. Here the menu's Escalate… entry opened its dialog from the acknowledged pane.`,
+    )
+    say(
+      'Escalate (overflow)',
+      'WORKING',
+      `built this session and driven end to end on the sanctioned SHP-RS-NOSLOT surface. TWO presses, and the first writes nothing: press 1 posted POST /api/v1/operations/escalate with confirmed=false and the server answered code=${previewBody.data?.code} carrying its OWN confirm sentence ("${(previewBody.data?.note ?? '').slice(0, 110)}…"), which the dialog renders verbatim rather than paraphrasing -- and the response carries no escalation_id, i.e. escalate_exception returned before touching the database (escalation_service.py:128-141). Press 2 posted the identical body with confirmed=true (HTTP ${confirmRes.status()}) and opened ${openedId}. The commit is gated until the free-text cause is filled (aria-disabled=${gatedBefore}, title "${gateWhy}"), and the open case's own reason is rendered DISABLED with the dedupe stated [${disabledOptions.map((t) => t.trim()).join(' | ')}] -- re-raising the same (shipment, day, type) refreshes the existing row rather than opening a case, so offering it would read as "nothing happened". M15 asserted directly: the request body keys are exactly [${bodyKeys.join(', ')}] -- a shipment id and nothing that names a facility, driver or owner; the server derives scope from the shipment row plus the verified token (assert_facility_write_scope). DESIGN NOTE: screens.md §3 names Escalate in the overflow and defines nothing else about it -- no argument list, no target -- so the semantics built here (open a SEPARATE case on the same shipment under a different §7.4 reason, leaving the current case's owner and SLA untouched) are the only ones any shipped tool supports. Flagged for the owner.`,
+    )
+  } finally {
+    // Both rows terminal, whatever happened above.
+    for (const cleanupId of [openedId, seedId]) {
+      if (!cleanupId) continue
+      const res = await apiAs(
+        'ops-ggn',
+        'POST',
+        `/api/v1/operations/escalations/${cleanupId}/cancel`,
+        { reason_code: 'CREATED_IN_ERROR' },
+        { 'Idempotency-Key': `sweep-cleanup-${cleanupId}` },
+      )
+      console.log(`[sweep cleanup] cancel ${cleanupId} -> HTTP ${res.status}`)
+    }
+  }
 })
 
 test('ops: cancel with a reason, and the capacity-incident row', async ({ page }) => {

@@ -39,7 +39,10 @@ import { describePredicates } from '../lib/reasons'
 const ROW_ACTION_TITLE = {
   confirm:
     'Confirm is not available yet — see features/planner/lib/flags.ts (plannerConfirmEnabled).',
-  hold: 'Hold for information is not available yet — section 7.5.1’s hold_for_information tool is unbuilt (issue #64), so there is nothing to pause the D9 clock with.',
+  hold: 'Hold for information is switched off in this build — see features/planner/lib/flags.ts (plannerHoldEnabled).',
+  /** The one-shot cap, stated as the fact it is rather than as a failure. `edge-cases.md` #6. */
+  holdUsed:
+    'Already held once — a request’s D9 deadline can only be extended a single time, and this one’s extension has been used.',
   escalate:
     'Escalate is not available yet — section 7.5.1’s escalate_request(appointment_id, reason) does not exist. The shipped POST /operations/escalate needs an escalation_type from a fixed vocabulary that has no value for “a planner needs help deciding this request”, and it would not remove the row from this queue the way Flow 5 requires.',
   counterOffer:
@@ -78,6 +81,8 @@ export type QueueRowProps = {
   onConfirm: () => void
   onReject: () => void
   onCounterOffer: () => void
+  /** Flow 4. Optional so the gallery's `RowPlate` can mount a row with no write path at all. */
+  onHold?: () => void
 }
 
 export const QueueRow = memo(function QueueRow({
@@ -96,6 +101,7 @@ export const QueueRow = memo(function QueueRow({
   onConfirm,
   onReject,
   onCounterOffer,
+  onHold = () => {},
 }: QueueRowProps) {
   // One shared 1 Hz tick for every row (`shared/lib/countdown.tsx`) -- 35 pending rows must not
   // run 35 timers, and the reading is computed from *server* time via the measured offset the
@@ -258,16 +264,60 @@ export const QueueRow = memo(function QueueRow({
         </td>
 
         <td className="px-2 py-1.5">
+          {/**
+           * Issue #64's held treatment, and the one place this surface knowingly departs from
+           * `00-foundations/components.md` §3 (U67). Read the reason before "fixing" it.
+           *
+           * **U67 specifies a PAUSE**: pause icon, colour off the amber->red urgency scale, and the
+           * numeric value *"freezes and hides -- replaced by the reason text, not a static 04:12.
+           * A frozen number invites the misread that time is still passing normally."* Resume is a
+           * visible transition when the driver answers.
+           *
+           * **The shipped tool is not a pause.** `hold_for_information` (#64) writes
+           * `appointments.expires_at = now + N minutes` -- ONE bounded extension, server-chosen --
+           * and `ttl.deadline_ts` becomes that value. Time keeps elapsing. Nothing resumes,
+           * because nothing stopped, and no server path recalculates the deadline when the driver
+           * answers.
+           *
+           * So this takes U67's visual language, which serves its stated purpose (a held row must
+           * be unmistakable from a healthy long-TTL row), and **keeps the number**, which U67 says
+           * to hide. Hiding it here would invert U67's own reasoning: the misread it protects
+           * against is "time is still passing normally" when it is not, and on this mechanism time
+           * genuinely IS still passing. A planner told "paused · waiting on driver" would look away
+           * from a request that expires in twelve minutes.
+           *
+           * Flagged for the owner rather than decided as settled -- either (a) accept extension
+           * semantics and correct U67's copy and this column's spec, or (b) build a real
+           * pause/resume server-side, at which point the number should hide exactly as written.
+           */}
           <span
             data-numeric
-            className={cn('font-mono text-supporting tabular-nums', TTL_BAND_CLASS[band])}
+            data-held={row.ttl.hold_used ? 'true' : undefined}
+            className={cn(
+              'font-mono text-supporting tabular-nums',
+              // Held wins over the urgency band deliberately: U67's rule that a held row must not
+              // "visually compete with rows that are genuinely running out".
+              row.ttl.hold_used ? 'text-muted-foreground' : TTL_BAND_CLASS[band],
+            )}
             title={
-              countdown.live
-                ? undefined
-                : 'Offline — this countdown is holding at its last known value rather than ticking.'
+              row.ttl.hold_used
+                ? 'Held for information — this request’s one deadline extension has been used. The clock is still running against the extended deadline.'
+                : countdown.live
+                  ? undefined
+                  : 'Offline — this countdown is holding at its last known value rather than ticking.'
             }
           >
-            {countdown.expired ? '0:00' : countdown.label}
+            {row.ttl.hold_used ? (
+              <span className="inline-flex items-center gap-1">
+                <Pause aria-hidden="true" className="size-3" />
+                {/* "held", not "paused": the word has to match the mechanism. */}
+                held · {countdown.expired ? '0:00' : countdown.label}
+              </span>
+            ) : countdown.expired ? (
+              '0:00'
+            ) : (
+              countdown.label
+            )}
           </span>
         </td>
 
@@ -303,12 +353,19 @@ export const QueueRow = memo(function QueueRow({
                 disabled={terminal || busy}
                 onClick={onCounterOffer}
               />
+              {/* One-shot, prevented rather than handled: `edge-cases.md` #6 is explicit that a
+                  second hold must be impossible to attempt, not merely refused afterwards. The
+                  gate is the row's own `ttl.hold_used`, which is the same fact the server checks
+                  (`appointments.expires_at IS NOT NULL`). */}
               <RowAction
                 icon={Pause}
                 label={`Hold ${row.shipment_id} for information`}
-                inactive={!plannerHoldEnabled}
-                inactiveTitle={ROW_ACTION_TITLE.hold}
-                onClick={() => {}}
+                inactive={!plannerHoldEnabled || row.ttl.hold_used}
+                inactiveTitle={
+                  plannerHoldEnabled ? ROW_ACTION_TITLE.holdUsed : ROW_ACTION_TITLE.hold
+                }
+                disabled={terminal || busy}
+                onClick={onHold}
               />
               <RowAction
                 icon={ArrowUpRight}

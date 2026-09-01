@@ -111,7 +111,8 @@ export type QueueReceipt = {
  * D2 hold rather than an appointment, which is why `appointment_id` is nullable and `claim_id` --
  * not `appointment_id` -- is the identity that goes into the snapshot digest.
  */
-export type QueueConflict = {
+export type QueueIntervalConflict = {
+  conflict_type: 'INTERVAL_CONFLICT'
   claim_id: string
   claim_source: string
   appointment_id: string | null
@@ -121,6 +122,42 @@ export type QueueConflict = {
   hold_expires_at: string | null
   window_start: string
   window_end: string
+}
+
+/**
+ * The second leg of the displacement column, added by issue #88:
+ * `snapshot.py::load_dock_block_conflicts` -- a `dock_status_events` outage overlapping this
+ * interval.
+ *
+ * **It carries no shipment, and that is the whole point.** Nobody is displaced; the dock is simply
+ * gone. The exact field set is the one the SQL builds
+ * (`scheduling/snapshot.py:323-327`): `conflict_type`, `dock_event_id`, `dock_id`, `event_type`,
+ * `reason` -- no `window_start`/`window_end`, no `claim_id`, no `shipment_id`. Typing those absent
+ * fields as optional-anything would have let `describeDisplacement` keep reading `shipment_id` off
+ * this leg, which is exactly the bug the discriminator exists to make impossible.
+ */
+export type QueueDockBlockedConflict = {
+  conflict_type: 'DOCK_BLOCKED'
+  dock_event_id: string
+  dock_id: string
+  event_type: string
+  reason: string | null
+}
+
+export type QueueConflict = QueueIntervalConflict | QueueDockBlockedConflict
+
+/**
+ * The one place that reads the discriminator.
+ *
+ * **An absent `conflict_type` is treated as `INTERVAL_CONFLICT`**, deliberately: that is the only
+ * shape this field had before #88, so a response from an older deploy degrades to the previous
+ * (correct-for-it) rendering rather than to `undefined`. Narrowing on the *presence* of
+ * `DOCK_BLOCKED` rather than on the absence of the other value is what makes that true.
+ */
+export function isDockBlockedConflict(
+  conflict: QueueConflict,
+): conflict is QueueDockBlockedConflict {
+  return conflict.conflict_type === 'DOCK_BLOCKED'
 }
 
 /** Section 7.3's "single most important field": would confirming this hurt a third party? */
@@ -141,6 +178,17 @@ export type QueueTtl = {
   deadline_ts: string
   remaining_seconds: number
   expired: boolean
+  /**
+   * Issue #64: true once `hold_for_information` has spent this request's one extension
+   * (`planner_service.py:237-248` -- it is `appointments.expires_at IS NOT NULL`, not a separate
+   * counter). When true, `deadline_ts` **is** the extended deadline.
+   *
+   * Two consequences, both rendered: the Hold affordance goes Disabled (the one-shot cap, prevented
+   * before the call rather than handled after a 409 -- `edge-cases.md` #6), and the countdown takes
+   * its held treatment. See `queue-row.tsx` for the one place the design and the shipped mechanism
+   * genuinely disagree, and what this build does about it.
+   */
+  hold_used: boolean
 }
 
 export type QueueGateState = {
@@ -326,6 +374,33 @@ export type CounterOfferResult = {
   idempotent_replay: boolean
   appointment_writes: number
   snapshot_hash: string | null
+}
+
+/**
+ * `hold_for_information` -- section 7.5.1, FR-PLN-004, issue #64.
+ * `allocation.py::HoldForInformationResult`, `extra="forbid"`, copied field for field.
+ *
+ * `previous_deadline` is carried so the row can say what the hold actually *bought* rather than
+ * only what the new deadline is, and `hold_used` is returned explicitly (always `true` on success)
+ * so a client never has to infer "spent" from the presence of `new_deadline`.
+ */
+export type HoldForInformationResult = {
+  as_of: string
+  source: string
+  freshness: string
+  status: string
+  code: string
+  shipment_id: string
+  appointment_id: string
+  question: string
+  new_deadline: string
+  previous_deadline: string
+  extension_minutes: number
+  hold_used: boolean
+  appointment: Record<string, unknown> | null
+  idempotency_key: string
+  idempotent_replay: boolean
+  appointment_writes: number
 }
 
 /**

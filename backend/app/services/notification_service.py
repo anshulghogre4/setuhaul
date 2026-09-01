@@ -1,18 +1,34 @@
-"""Notification shared tools -- SOLUTION_DESIGN.md section 7.5.8, FR-X-019 .. FR-X-022.
+"""Notification shared tools -- SOLUTION_DESIGN.md section 7.5.8, FR-X-019 .. FR-X-023.
 
 `notifications`/`notification_preferences` (`supabase/migrations/20260825211500_e35_notifications_
-and_search.sql`) are new tables -- Module 10 (Notification/Outbox) is entirely unbuilt (confirmed
-live 2026-08-25: no such table existed anywhere before this migration), the same class of gap E3.2
-found for the Sequencer. Unlike the Sequencer, these tools are not blocked by that: a user can set
-preferences and read a correctly-empty feed today. **No producer is wired here or anywhere else in
-this pass** -- nothing in the codebase inserts a `notifications` row yet, so the feed being empty
-right now is expected, not a bug. Wiring every write path that should notify someone (escalation
-creation, appointment confirm/reject, etc.) is separate, cross-cutting scope, left as a known gap
-rather than silently assumed complete.
+and_search.sql`) are the user-facing half of Module 10 (Notification/Outbox).
+
+## What changed 2026-09-02 (issue #94): this file now has a producer, and a defined role
+
+E3.5 shipped these four read/write tools against tables **nothing ever wrote to**, and said so
+honestly in this docstring's previous version. `supabase/migrations/20260902093000_notification_
+outbox.sql` closes that: `notification_outbox` -- designed in section 6.1 and never migrated until
+then -- is now the authoritative event record, written inside the business transaction that causes
+it, and `public.notifications` is **the IN_APP channel's delivery record and the user's read
+model**, written *only* by that outbox's drain through `deliver_in_app_notification` below.
+
+The division matters, because issue #94's actual finding was that three notification artifacts
+existed and none connected:
+
+| Artifact | Job | Written by |
+|---|---|---|
+| `notification_outbox` | authoritative event + delivery intent, transactional with the business write | `notification_outbox.enqueue_notification` |
+| `notifications` (here) | IN_APP delivery record + `is_read`/`read_at` read model | `deliver_in_app_notification`, from the drain, only |
+| `operational_messages` | EMAIL delivery status (TECH_STACK section 6) | nothing yet -- no SES client exists |
+
+**Nothing outside the drain may insert a `notifications` row.** A business path that wrote here
+directly would be writing a notification that survives its own transaction's rollback, which is the
+one thing section 6.1's outbox exists to prevent.
 
 `category` is a fixed three-value grouped model (`ESCALATION`/`APPOINTMENT`/`SYSTEM`), matching
 the migration's own `CHECK` constraint -- `Source: assumption, untested`, since section 7.5.8 never
-names the groups, only that they are grouped rather than per-event.
+names the groups, only that they are grouped rather than per-event. `notification_outbox`'s
+`category` CHECK is byte-identical, because the drain copies the value straight across.
 """
 
 from __future__ import annotations
@@ -31,6 +47,71 @@ NOTIFICATION_CATEGORIES = frozenset({"ESCALATION", "APPOINTMENT", "SYSTEM"})
 
 def _as_of() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# --------------------------------------------------------------------------------------------
+# The IN_APP channel adapter -- the consumption end of section 6.1's outbox (issue #94)
+# --------------------------------------------------------------------------------------------
+
+
+def in_app_notification_id(outbox_id: str) -> str:
+    """A `notifications` id derived deterministically from the outbox row that produced it.
+
+    Not cosmetic. It makes the insert below idempotent by primary key, which is a second,
+    independent guarantee on top of `_deliver_one`'s `status = 'PENDING'` row lock: if that guard
+    were ever weakened, a re-delivery would collide on this id and do nothing, rather than putting a
+    duplicate in the driver's feed. Two cheap mechanisms for "exactly one notification" (NFR-009)
+    is the right number when the failure mode is a driver seeing the same slot confirmed twice.
+
+    `NOB-1A2B...` -> `NTF-1A2B...`: the suffix `app.services.ids.new_id` generated is already a
+    uuid4 fragment, so it carries all the uniqueness this needs without a second random draw.
+    """
+    return f"NTF-{outbox_id.split('-', 1)[-1]}"
+
+
+async def deliver_in_app_notification(session: AsyncSession, outbox_row: dict[str, Any]) -> str:
+    """Deliver one outbox row to the in-app feed. Registered as `CHANNEL_ADAPTERS['IN_APP']`.
+
+    Section 3's module 10: *"The outbox keeps a pluggable channel adapter, so adding [a channel]
+    later is not a rewrite."* This is that interface's first implementation -- take a claimed row,
+    create the channel's own delivery record, return its id. The EMAIL adapter, when an SES client
+    exists, is the same signature writing `operational_messages` instead.
+
+    **Does not commit.** `notification_outbox._deliver_one` owns the transaction: this insert and
+    the outbox row's transition to DELIVERED commit together or not at all, so the feed can never
+    hold a notification the outbox believes is still pending, nor the reverse.
+
+    Raises on a genuine database failure, which is the contract the drain expects -- it catches,
+    increments `attempts`, and retries on the next cycle.
+
+    `is_read` is not set here and defaults to 0: delivery and reading are different events with
+    different owners, which is exactly why the outbox does not carry read state and this table does.
+    """
+    notification_id = in_app_notification_id(outbox_row["outbox_id"])
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.notifications (
+              notification_id, user_id, category, title, body,
+              related_entity_type, related_entity_id
+            ) VALUES (
+              :notification_id, :user_id, :category, :title, :body,
+              :related_entity_type, :related_entity_id
+            )
+            ON CONFLICT (notification_id) DO NOTHING
+            """
+        ),
+        {
+            "notification_id": notification_id,
+            "user_id": outbox_row["recipient_user_id"],
+            "category": outbox_row["category"],
+            "title": outbox_row["title"],
+            "body": outbox_row["body"],
+            "related_entity_type": outbox_row["related_entity_type"],
+            "related_entity_id": outbox_row["related_entity_id"],
+        },
+    )
+    return notification_id
 
 
 async def get_notifications(

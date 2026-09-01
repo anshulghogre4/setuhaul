@@ -390,9 +390,19 @@ async def audit_log(
     date_from: Annotated[str | None, Query()] = None,
     date_to: Annotated[str | None, Query()] = None,
     resource: Annotated[str | None, Query()] = None,
+    event: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
+    """section 7.5.7 `get_audit_log` / `FR-ADM-008`.
+
+    `event` is issue #104's addition: `event_type` filters `action_type`, which is a generic CRUD
+    verb for every admin-console write, so it cannot express `screens.md` section 5's Event column
+    ("Policy published", "User removed"). An unsupported value is a 422 naming the vocabulary, not
+    an empty list -- see `admin_governance_service.AUDIT_EVENT_VOCABULARY`. Both filters remain and
+    compose.
+    """
     result = await get_audit_log(
-        session, ctx, actor=actor, event_type=event_type, date_from=date_from, date_to=date_to, resource=resource
+        session, ctx, actor=actor, event_type=event_type, date_from=date_from, date_to=date_to,
+        resource=resource, event=event,
     )
     return ok(result, get_request_id(request))
 
@@ -404,8 +414,15 @@ async def audit_log_export(
     event_type: Annotated[str | None, Query()] = None,
     date_from: Annotated[str | None, Query()] = None,
     date_to: Annotated[str | None, Query()] = None,
+    event: Annotated[str | None, Query()] = None,
 ) -> PlainTextResponse:
+    """section 7.5.7 `export_audit_log` -- "same filters as the current view".
+
+    `event` is threaded through for that clause specifically (issue #104): an export that ignored a
+    filter the tab can now apply would be exactly the silent full-table dump section 7.5.7 forbids.
+    """
     csv_text = await export_audit_log(
-        session, ctx, actor=actor, event_type=event_type, date_from=date_from, date_to=date_to
+        session, ctx, actor=actor, event_type=event_type, date_from=date_from, date_to=date_to,
+        event=event,
     )
     return PlainTextResponse(csv_text, media_type="text/csv")

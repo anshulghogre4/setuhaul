@@ -96,12 +96,17 @@ class ResolvedLLM:
         return self.gemini_backend in GEMINI_VERTEX_BACKENDS
 
 
-def _is_ready(settings: Settings, provider: str) -> bool:
+def _is_ready(settings: Settings, provider: str, *, mode: str = "auto") -> bool:
     if provider == "openai":
         return bool((settings.openai_api_key or "").strip())
     if provider == "openrouter":
         return bool((settings.openrouter_api_key or "").strip())
     if provider == "gemini":
+        # Owner ruling 2026-09-02: in AUTO, Gemini means the free API key -- a host with only
+        # Vertex credentials falls through to openai/openrouter rather than auto-selecting the
+        # Vertex path (explicit LLM_PROVIDER=gemini still honours Vertex config).
+        if mode == "auto":
+            return settings.ready_gemini_api_key
         return settings.ready_gemini
     return False
 
@@ -153,30 +158,36 @@ _EXPRESS_DEFEATING_ENV = ("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION")
 
 
 def _gemini_key_backend() -> str:
-    """Express mode unless something in the environment would silently defeat it.
+    """AI Studio by default (owner ruling 2026-09-02); express mode is explicit opt-in.
 
-    Vertex express mode (`vertexai=True` + an API key, no project/location) is the preferred key
-    path: it is genuinely served by Vertex rather than by generativelanguage.googleapis.com, so it
-    retains more of E4.1's intent, and it measured fastest of the three shapes.
+    History, because this preference has now flipped twice and the next reader deserves the
+    whole arc: E4.1 mandated Vertex/ADC and excluded the API key; the 2026-09-01 owner ruling
+    re-admitted the key, and Vertex EXPRESS mode (`vertexai=True` + key, no project/location)
+    measured fastest of the three shapes (~4x faster warm than AI Studio) so it became the key
+    path's default. The 2026-09-02 owner ruling then simplified again: **stick to the free
+    Gemini API** -- express mode is served by Vertex and bills as Vertex, while the AI Studio
+    key has the free tier, and for this POC cost predictability beats the latency delta.
 
-    The guard exists because express mode fails *silently and badly* rather than loudly. In the
-    pinned google-genai 2.19.0, when `vertexai=True` the constructor drops the API key if it sees
-    project/location -- explicitly at `_api_client.py:749-755` and implicitly, from
-    GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION, at `:756-768`. The client then falls back to ADC
-    that a container does not have, and the failure surfaces as "Could not resolve project using
-    application default credentials" -- reproduced live on 2026-09-01 by passing a location.
-    Rather than emit a broken client, fall back to plain AI Studio, which works with the same key.
+    Express remains available as an explicit opt-in (GEMINI_KEY_BACKEND=vertex_express) because
+    the code path is built, tested, and was live-verified in production on 2026-09-01 -- do not
+    delete it; flipping back is a config act. The opt-in inherits the same silent-failure guard:
+    in the pinned google-genai 2.19.0, `vertexai=True` discards the API key if project/location
+    are present explicitly (`_api_client.py:749-755`) or via GOOGLE_CLOUD_PROJECT /
+    GOOGLE_CLOUD_LOCATION (`:756-768`), stranding the client on ADC a container does not have.
     """
-    defeated = [name for name in _EXPRESS_DEFEATING_ENV if (os.environ.get(name) or "").strip()]
-    if defeated:
-        logger.warning(
-            "Using the AI Studio Gemini endpoint instead of Vertex express mode because %s "
-            "is set, which makes the google-genai client discard the API key and fall back to "
-            "ADC. Unset it to get Vertex serving on the key path.",
-            " and ".join(defeated),
-        )
-        return GEMINI_AI_STUDIO
-    return GEMINI_VERTEX_EXPRESS
+    requested = (os.environ.get("GEMINI_KEY_BACKEND") or "").strip().lower()
+    if requested == GEMINI_VERTEX_EXPRESS:
+        defeated = [n for n in _EXPRESS_DEFEATING_ENV if (os.environ.get(n) or "").strip()]
+        if defeated:
+            logger.warning(
+                "GEMINI_KEY_BACKEND=vertex_express requested but %s is set, which makes the "
+                "google-genai client discard the API key and fall back to ADC. Serving from "
+                "AI Studio instead; unset it to get Vertex express.",
+                " and ".join(defeated),
+            )
+            return GEMINI_AI_STUDIO
+        return GEMINI_VERTEX_EXPRESS
+    return GEMINI_AI_STUDIO
 
 
 def resolve_llm(settings: Settings) -> ResolvedLLM:
@@ -193,7 +204,7 @@ def resolve_llm(settings: Settings) -> ResolvedLLM:
         )
 
     for provider in candidates:
-        if not _is_ready(settings, provider):
+        if not _is_ready(settings, provider, mode=mode):
             if mode != "auto":
                 env_name = {
                     "gemini": "either GOOGLE_API_KEY (AI Studio), or -- preferred, and the only "
@@ -212,11 +223,14 @@ def resolve_llm(settings: Settings) -> ResolvedLLM:
 
         if provider == "gemini":
             model = override or DEFAULT_MODELS["gemini"]
-            # Vertex wins whenever it is configured, even if a key is also present. Both shapes
-            # answer the same prompts; only Vertex keeps inference in `asia-south1`, so preferring
-            # it is the residency decision, made here once rather than left to key precedence --
-            # which is exactly the silent-ordering bug AUTO_ORDER's own comment above records.
-            if settings.ready_gemini_vertex:
+            # Owner ruling 2026-09-02: AUTO never selects Vertex -- the free API key is the
+            # Gemini path (then openai, then openrouter). Vertex/ADC remains reachable ONLY by
+            # explicit LLM_PROVIDER=gemini with Vertex configured: an operator who names the
+            # provider and provisions GCP credentials has said what they want, and the built,
+            # live-verified Vertex code stays a config flip rather than a rebuild. This also
+            # fixes a real local failure: a laptop with leftover gcloud ADC + GCP_PROJECT was
+            # auto-selecting vertex_adc and dying on the asia-south1 3.7 rollout 404 (#31).
+            if mode != "auto" and settings.ready_gemini_vertex:
                 return ResolvedLLM(
                     provider="gemini", model=model, gemini_backend=GEMINI_VERTEX_ADC,
                     gcp_project=settings.gcp_project.strip(),

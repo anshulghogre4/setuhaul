@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -512,15 +513,29 @@ async def record_eta_update(
             "user_id": ctx.user_id,
             "action_type": AUDIT_ACTION_UPDATE_ETA,
             "entity_id": shipment_id,
-            "old_value_json": str({"latest_eta_ts": shipment.get("latest_eta_ts")}),
-            "new_value_json": str(
+            # json.dumps, not str(): str() emits a Python dict repr (single quotes), which is
+            # not JSON -- found by the proof suite's audit-payload validity scan (2026-09-02).
+            #
+            # `default=str` is not decoration and is the half that was missing: `latest_eta_ts`
+            # comes off the shipments row as a `datetime` (timestamptz since E1.1), which
+            # json.dumps refuses outright with `TypeError: Object of type datetime is not JSON
+            # serializable` -- so the bare-dumps form raised on every real ETA update and took
+            # proof parts 3 and 6 down with it (2026-09-02). `str()` had swallowed the datetime
+            # silently, which is exactly why the malformed payload survived unnoticed for so long.
+            # Same `default=str` every other audit writer in this codebase already passes
+            # (`allocation.counter_offer`, `holds.create_hold`).
+            "old_value_json": json.dumps(
+                {"latest_eta_ts": shipment.get("latest_eta_ts")}, default=str
+            ),
+            "new_value_json": json.dumps(
                 {
                     "latest_eta_ts": command.declared_eta_ts,
                     "eta_update_id": eta_id,
                     "exception_id": exception_id,
                     "repair_duration_min": command.repair_duration_min,
                     "reported_delay_min": command.reported_delay_min,
-                }
+                },
+                default=str,
             ),
             # audit_logs.created_at is still `text` -- string bind, deliberately.
             "created_at": now_iso,

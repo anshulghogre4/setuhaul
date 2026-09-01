@@ -175,13 +175,23 @@ export const plannerLiveArrivalsEnabled = true
  *  - `Idempotency-Key` is one UUID per *press*, reused across a retry of that press. Generating a
  *    fresh key inside the request helper would have looked correct and silently defeated U70.
  *
- * **The #62 asymmetry is carried, not closed here.** `DISPLACEMENT_DETECTED` is a superset of what
- * the row displays: `snapshot.py::displacement_conflicts` returns `conflicts + dock_blocks`, while
- * the row's own displacement column comes from `planner_service._conflicts_for`, which carries
- * only the overlapping-claim half. A planner can therefore be refused for a reason their screen
- * never showed -- a dock taken offline under them since render. The UI's answer is to render
- * **whatever the server actually returned** in place of the row's stale conflict set, so the
- * refusal is never narrowed to match the row. Closing the gap properly is server-side work.
+ * **The #62 asymmetry is CLOSED as of issue #88 (2026-09-02).** It used to read, correctly at the
+ * time, that `DISPLACEMENT_DETECTED` was a superset of what the row displayed: the write path
+ * counted `snapshot.py::displacement_conflicts` (`conflicts + dock_blocks`) while the row's column
+ * came from `planner_service._conflicts_for`, the overlapping-claim half only -- so a planner could
+ * be refused for a dock taken offline under them since render, a reason their screen never showed.
+ *
+ * #88 made the row carry **both** legs, each tagged with a `conflict_type`
+ * (`INTERVAL_CONFLICT` | `DOCK_BLOCKED`), so the row and the refusal now count the same thing. The
+ * client half of that landed here the same day: `lib/types.ts`'s `QueueConflict` is a discriminated
+ * union and `lib/format.ts::describeDisplacement` renders the two legs as different sentences --
+ * a blocked dock displaces nobody and carries no `shipment_id`, which is why reading one off it
+ * previously rendered "Confirming this displaces undefined."
+ *
+ * What has not changed, and still matters: the refusal renders **whatever the server actually
+ * returned**, never the row's idea of the conflict set. The two agreeing is now the expected case
+ * rather than the guaranteed one -- a row rendered before a dock went offline is still stale by
+ * definition, and that is a race, not an asymmetry.
  */
 export const plannerConfirmEnabled = true
 
@@ -229,22 +239,92 @@ export const plannerConfirmEnabled = true
 export const plannerCounterOfferEnabled = true
 
 /**
- * Gates Hold for information (states 7, 14, 15) -- the D9 clock pause.
+ * Gates U103's **board picker** -- `screens.md` section 4, states 3/24/25: Counter-offer on a
+ * queue row switches to the Board tab pinned to that request, a persistent banner names the
+ * shipment and offers Cancel, and the planner clicks an open interval on an eligible dock.
  *
- * **Default OFF. This one is still genuinely blocked on the backend -- the only planner flag that
- * is.**
+ * **ON since 2026-09-02.** `plannerCounterOfferEnabled`'s own comment set the exit criterion --
+ * *"#53 applied, `dockBoardEnabled` on, then the dialog gives way to the board picker"* -- and
+ * named the remaining third as "build work, not a gate". Both gates are met (`dockBoardEnabled`
+ * has been on since 2026-08-31) and this is that build.
  *
- * P-G5 / issue #64 is **partially** resolved: the column it was blocked on,
- * `appointments.expires_at`, now exists in
- * `supabase/migrations/20260829134929_d2_held_state_dock_occupancy.sql` (with sweeper handling, so
- * it is not a trap), which retires `expiry.py:77-81`'s stated blocker. **But the
- * `hold_for_information` tool itself is not built** -- there is nothing to call -- and that
- * migration is **not applied to any database**, so even the column is not live.
+ * ## What is genuinely spatial now, and what is honestly not
  *
- * **Exit criterion:** the migration is applied AND `hold_for_information` ships (returning a real
- * `new_deadline`, pausing the D9 clock exactly once), then flip. Two gates, not one.
+ * **Built:** the pinned banner with Cancel; the board rendered underneath it with each *feasible*
+ * interval drawn as a real focusable button at its true position in its own dock lane; lanes with
+ * no feasible interval for this shipment dimmed and non-interactive (`components.md` section 18's
+ * **Disabled**, not Inactive -- a heavy-only shipment's ineligibility for D1-D4 is a
+ * prerequisite, not a permission); `INTERVAL_UNAVAILABLE` re-fetching so the board re-renders with
+ * that interval gone rather than dead-clicking, which is section 4's own stated refusal behaviour.
+ *
+ * **Not built, and stated rather than implied:** eligibility here is *derived from Stage 1's
+ * answer*, not computed per lane. `find_feasible_slots` returns the intervals that are feasible
+ * for this shipment; a lane is drawn eligible exactly when at least one of them lands on it. That
+ * is the same eligibility the design's dimming was going to express, but it cannot say **why** an
+ * ineligible dock is ineligible (weight class? refrigeration? already occupied?) -- no read
+ * returns per-dock-per-shipment constraint failures. The lane's tooltip says "no feasible interval
+ * for this shipment", which is true and is all the server actually told us.
+ *
+ * **A second honest boundary:** the board's horizon is "four hours, or until closing time"
+ * (server-computed), while Stage 1's feasible set can reach beyond it. Options that fall outside
+ * the drawn horizon cannot be plotted, so the banner **counts them and says so**, and the interim
+ * dialog stays reachable as the way to take one. A picker that silently dropped four of six
+ * options would be worse than the dialog it replaced.
+ *
+ * ## The reason code is still required, and the design's sketch omits it
+ *
+ * `counter_offer` takes `reason_code` (section 7.5.1) and the server 422s without a supported one.
+ * `screens.md` section 4 draws only the click. So the picker collects the reason in the banner
+ * *after* an interval is chosen -- the spatial act stays a click, and the contract's required
+ * argument is gathered in the one place the planner is already looking. Flagged rather than
+ * silently resolved: the design's sketch and the tool's signature disagree, and this is the
+ * reading that keeps both true.
+ *
+ * **To revert:** set this to `false`. Counter-offer returns to `counter-offer-dialog.tsx`, which
+ * is kept for exactly that reason and is also still the route for an out-of-horizon option.
  */
-export const plannerHoldEnabled = false
+export const plannerBoardPickerEnabled = true
+
+/**
+ * Gates Hold for information (states 7, 14, 15) -- section 7.5.1 / FR-PLN-004,
+ * `flows-and-states.md` Flow 4, keyboard `H`.
+ *
+ * **ON since 2026-09-02 (issue #64).** Both gates this comment previously named are met, and each
+ * was re-checked against the code rather than taken from the issue's title:
+ *
+ *  1. **The column is live.** `appointments.expires_at` exists and is swept
+ *     (`repositories/operations.py:142` reads `(a.expires_at IS NOT NULL) AS hold_used`), retiring
+ *     `expiry.py`'s original stated blocker.
+ *  2. **The tool ships.** `POST /shipments/{id}/appointments/{id}/hold-for-information`
+ *     (`routers/scheduling.py:414`) -> `allocation.hold_for_information`, returning a real
+ *     `new_deadline` / `previous_deadline` / `extension_minutes`, `Idempotency-Key` required,
+ *     `OPS_PORTAL_ROLES`, scope asserted server-side off the shipment (M15 -- no scope id is
+ *     accepted from the caller).
+ *  3. **The queue read feeds the UI.** `ttl.hold_used` is on every row
+ *     (`planner_service.py:237-248`), which is what lets the one-shot cap be *prevented* rather
+ *     than handled after a 409 (`edge-cases.md` #6).
+ *
+ * ## The one thing that is NOT what the design describes, stated here rather than discovered later
+ *
+ * U67 and `00-foundations/components.md` §3 specify a **pause**: the D9 clock stops, the numeric
+ * value "freezes and hides", and it *resumes* with a visible transition when the driver answers.
+ * **The shipped tool is a bounded extension, not a pause** -- it writes `expires_at = now + N`
+ * once, time keeps elapsing against the new deadline, and nothing resumes because nothing stopped.
+ *
+ * So the row takes U67's visual language (pause icon, neutral colour off the urgency scale, held
+ * label) but **keeps the number visible**, which U67 says to hide. Hiding it would invert U67's own
+ * stated reason for hiding it -- it protects against the misread "time is still passing normally"
+ * when it is not, and here time genuinely is. Full reasoning at the render site
+ * (`components/queue-row.tsx`'s TTL cell). **Owner fork:** accept extension semantics and correct
+ * U67's copy, or build real pause/resume server-side and then hide the number as written.
+ *
+ * Also note the tool is **REST-only and deliberately not an LLM tool** -- section 7.5.4's driver
+ * allowlist does not contain it, and the route's own docstring records that check.
+ *
+ * **To revert:** set this to `false`. The Hold affordance returns to Inactive with its reason, the
+ * `H` key stops opening the dialog (`openHold` is flag-guarded), and nothing else changes.
+ */
+export const plannerHoldEnabled = true
 
 /**
  * Gates Bulk confirm (states 9, 10) -- "Select all eligible (N)" and the server-side re-check of

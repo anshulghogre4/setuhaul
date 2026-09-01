@@ -1,18 +1,37 @@
-"""CloudWatch histograms (optional OTEL) + LangSmith run config. Safe when tracing is off.
+"""CloudWatch histograms + tool spans (optional OTEL) + LangSmith run config + Sentry init.
 
 Instruments TECH_STACK.md section 10's six named measurements (E0.3): TTFT p50/p95,
 hop-count distribution per turn, per-tool DB latency, the LLM latency split, prompt-cache
 hit rate and Redis RTT. Everything here is degrade-safe: with no OTEL distro installed
 (local uvicorn) every instrument is None and every record call is a no-op, and a metric
 failure is never allowed to break a turn.
+
+Two later additions, both DEPLOYMENT.md section 8 (decision D-3), which splits observability
+three ways -- CloudWatch owns infra/app signals, Sentry owns unhandled exceptions with stack
+traces, LangSmith owns what happens inside a turn:
+
+* **E7.3 / issue #51 -- tool-level spans.** Until this, CloudWatch saw only the platform-level
+  `AgentCore.Runtime.Invoke` span: the process emitted metrics and no spans of its own at all
+  (`from opentelemetry import metrics` was the only OTEL import in `backend/app/`). The spans
+  below are created through `opentelemetry-api` only -- never the SDK, never an exporter -- so
+  they attach to whatever provider is already installed in the process. On AgentCore that is
+  ADOT's, so a tool span joins the platform span's trace instead of starting a rival one; with
+  no SDK configured (local uvicorn, ECS) `get_tracer` hands back a proxy over the no-op provider
+  and the whole path costs an attribute lookup.
+
+* **E7.2 / issue #46 -- Sentry.** `init_sentry` is here rather than in `main.py` so the AgentCore
+  entrypoint, which never runs the FastAPI lifespan, can call the same function.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from contextlib import contextmanager
 from typing import Any, Iterator
+
+logger = logging.getLogger(__name__)
 
 ENVIRONMENT = "poc"
 APP_VERSION = "sprint4"
@@ -103,6 +122,79 @@ except Exception:  # noqa: BLE001 — tracing-off / missing distro must not cras
     llm_cached_input_tokens_metric = None
     llm_output_tokens_metric = None
     redis_duration_metric = None
+
+
+# --- E7.3 (issue #51): tool-level spans -------------------------------------------------
+#
+# `opentelemetry-api` only, deliberately. The historical blocker on this issue was a
+# `RecursionError` raised deep inside ADOT's *exporter* (`aws_auth_session.py`) -- an SDK-side
+# fault, fixed upstream in `aws-opentelemetry-distro` 0.18.0. Nothing here can reintroduce it,
+# because nothing here configures a provider, a processor or an exporter: `get_tracer` returns a
+# `ProxyTracer` that resolves lazily against whatever global provider exists at first use. In the
+# AgentCore container ADOT's auto-instrumentation has already installed one, so these spans join
+# the live trace; everywhere else the proxy resolves to the no-op provider and every call below is
+# free. The import is still guarded because `opentelemetry-api` is a runtime dependency that a
+# stripped install could lack, and telemetry must never be the reason a driver turn fails.
+try:
+    from opentelemetry import trace as _otel_trace
+    from opentelemetry.trace import SpanKind, Status, StatusCode
+
+    _tool_tracer = _otel_trace.get_tracer("setuhaul.agent")
+except Exception:  # noqa: BLE001 — no OTEL API installed must not crash local uvicorn
+    _otel_trace = None  # type: ignore[assignment]
+    SpanKind = None  # type: ignore[assignment]
+    Status = None  # type: ignore[assignment]
+    StatusCode = None  # type: ignore[assignment]
+    _tool_tracer = None
+
+
+def _emit_tool_span(*, tool: str, duration_ms: float, ok: bool, hop: int) -> None:
+    """One span per tool call, parented to the ambient turn trace.
+
+    The span is created *after* the tool returned, with explicit `start_time`/`end_time`, rather
+    than by wrapping the call in `start_as_current_span`. That is a scope decision, not a
+    preference: the wrapping seam is `run_assistant._execute_tool_round`, and this change is
+    deliberately confined to the observability module. The consequence is worth stating plainly --
+    name, duration, attributes, status and *parent* are all exactly what a wrapping span would
+    produce, but any auto-instrumented span raised inside the tool (an asyncpg query, say) parents
+    to the turn rather than nesting under its tool. Issue #51 asks for tool-level visibility, which
+    this delivers; nesting the tool's own children is the follow-up, and it is one line at the
+    seam once someone owns that file.
+
+    Attribute names follow OpenTelemetry's GenAI semantic conventions (`gen_ai.operation.name` =
+    `execute_tool`, `gen_ai.tool.name`, span name `execute_tool {name}`), which are still marked
+    Development stability -- so the SetuHaul-specific numbers are carried under a `setuhaul.*`
+    prefix that cannot be invalidated by a convention change.
+    """
+    if _tool_tracer is None:
+        return
+    try:
+        end_ns = time.time_ns()
+        # Wall-clock start reconstructed from the measurement the caller already made. Clamped at
+        # zero so a negative duration (a clock adjustment mid-call) can never emit a span that
+        # ends before it starts, which some backends reject outright.
+        start_ns = end_ns - max(0, int(duration_ms * 1_000_000))
+        span = _tool_tracer.start_span(
+            f"execute_tool {tool}",
+            kind=SpanKind.INTERNAL,
+            start_time=start_ns,
+            attributes={
+                "gen_ai.operation.name": "execute_tool",
+                "gen_ai.tool.name": tool,
+                "setuhaul.tool.duration_ms": duration_ms,
+                "setuhaul.tool.outcome": "ok" if ok else "error",
+                "setuhaul.turn.hop": hop,
+                **COMMON_ATTRIBUTES,
+            },
+        )
+        # No exception is recorded: `_execute_tool_round` has already caught it and turned it into
+        # a JSON result the model reads, so there is no live exception to attach. ERROR status
+        # without a message is the honest encoding of "this tool call failed" -- the *why* is in
+        # the LangSmith run, which is where D-3 says turn internals live.
+        span.set_status(Status(StatusCode.ERROR) if not ok else Status(StatusCode.OK))
+        span.end(end_time=end_ns)
+    except Exception:  # noqa: BLE001 — a span must never break a turn, same rule as _record
+        pass
 
 
 def _record(instrument: Any, value: float, attributes: dict[str, Any] | None = None) -> None:
@@ -287,14 +379,23 @@ class TurnLatency:
 
     def record_tool(self, *, tool: str, duration_ms: float, ok: bool) -> None:
         """Per-tool latency. Driver tools are typed PostgreSQL reads, so measuring at the
-        call site is per-tool DB latency without touching the tool layer."""
+        call site is per-tool DB latency without touching the tool layer.
+
+        E7.3 (issue #51) also emits a span here. The histogram answers "how slow are tools in
+        aggregate"; the span answers "what did *this* turn actually do", which is the question
+        CloudWatch could not answer while only the platform-level `AgentCore.Runtime.Invoke` span
+        existed. `self.hops` is the current round index -- already tracked for the hop-count
+        distribution, so the span costs no new plumbing through the caller.
+        """
         self.tool_calls += 1
         self.tool_ms += duration_ms
+        resolved = tool or "unknown"
         _record(
             tool_duration_metric,
             duration_ms,
-            {"tool": tool or "unknown", "outcome": "ok" if ok else "error"},
+            {"tool": resolved, "outcome": "ok" if ok else "error"},
         )
+        _emit_tool_span(tool=resolved, duration_ms=duration_ms, ok=ok, hop=self.hops)
 
     @property
     def cache_hit_rate(self) -> float | None:
@@ -492,3 +593,82 @@ def shutdown_telemetry(timeout_millis: float = 5_000) -> bool:
         return True
     except Exception:  # noqa: BLE001 — shutdown must never mask a real shutdown error
         return False
+
+
+# --- E7.2 (issue #46): Sentry ------------------------------------------------------------
+
+
+def sentry_before_send(event: Any, _hint: Any = None) -> Any:
+    """Run every outgoing Sentry event through this project's own redaction rule.
+
+    `send_default_pii=False` already stops the SDK attaching headers, cookies and bodies, but it
+    says nothing about *stack-frame locals*, which Sentry sends by default and which on this
+    codebase can hold a Supabase service-role key, a JWT or an Upstash token -- exactly the values
+    `AGENTS.md` forbids putting anywhere durable. `sanitize_for_trace` is the redaction rule
+    LangSmith traces already use, reused rather than reinvented so the two channels cannot drift.
+
+    Fails **closed**: if scrubbing itself raises, the event is dropped rather than sent unscrubbed.
+    Losing one crash report is recoverable; publishing a service-role key to a third party is not.
+    """
+    try:
+        return sanitize_for_trace(event)
+    except Exception:  # noqa: BLE001
+        logger.warning("sentry event dropped: redaction failed")
+        return None
+
+
+def init_sentry(settings: Any) -> bool:
+    """Initialise Sentry, but only when a DSN is actually configured. Returns whether it ran.
+
+    DEPLOYMENT.md section 8 (D-3) gives Sentry one job: unhandled exceptions with stack traces,
+    frontend and backend. Called from `main.create_app` before the FastAPI app is constructed
+    (Sentry's own FastAPI guide: "configuration should happen as early as possible", and the
+    Starlette/FastAPI integrations are auto-enabled by the presence of the packages, so there is
+    nothing to pass explicitly) and from the AgentCore entrypoint, which never runs that lifespan.
+
+    The empty-DSN branch does not merely skip `init` -- it never imports `sentry_sdk` at all, so an
+    unconfigured deployment carries no import cost, installs no `sys.excepthook`, patches no ASGI
+    app and opens no background transport thread. That is what "ships dark" has to mean for this
+    to be a safe no-op rather than a dormant feature.
+
+    Every failure path returns False instead of raising: an observability tool must not be able to
+    stop the API from booting.
+    """
+    dsn = (getattr(settings, "sentry_dsn", "") or "").strip()
+    if not dsn:
+        return False
+    try:
+        import sentry_sdk
+    except Exception:  # noqa: BLE001
+        # A configured DSN with no SDK installed is a real deployment mistake, so it is a warning
+        # rather than a silent skip -- but still not fatal.
+        logger.warning("SENTRY_DSN is set but sentry-sdk is not installed; error tracking is off")
+        return False
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=(getattr(settings, "environment", "") or "unknown").strip(),
+            # `or None` rather than `or ""`, and the difference is not cosmetic: `None` hands the
+            # decision to Sentry's own `get_default_release()`, which reads `SENTRY_RELEASE` and
+            # then falls back to the git HEAD SHA. Verified rather than assumed -- initialising
+            # with a blank setting in this repo produces the current commit SHA as the release, so
+            # leaving `sentry_release` unset already gives correctly-versioned events locally and
+            # anywhere the deploy exports `SENTRY_RELEASE`. An empty string would instead be taken
+            # as a real release name and group every event ever sent under it.
+            release=(getattr(settings, "sentry_release", "") or "").strip() or None,
+            traces_sample_rate=float(getattr(settings, "sentry_traces_sample_rate", 0.1) or 0.0),
+            # Explicit, not inherited. Sentry's own FastAPI quickstart sets this True; this
+            # project must not. Driver names, phone numbers and shipment references are the
+            # payloads these endpoints carry, and SOLUTION_DESIGN's data-residency posture does
+            # not survive shipping them to a third-party region by default.
+            send_default_pii=False,
+            # Same reasoning one layer down: without this, a 500 on a booking write would carry
+            # the request body -- driver identity and appointment detail -- into the event.
+            max_request_body_size="never",
+            before_send=sentry_before_send,
+        )
+    except Exception:  # noqa: BLE001 — a malformed DSN must not stop the API from starting
+        logger.warning("sentry init failed; continuing without error tracking")
+        return False
+    return True
