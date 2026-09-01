@@ -2,6 +2,17 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-01 10:25 IST - M5 DEPLOYED: production is coherent end to end for the first time since the overhaul began
+
+**Agent/surface:** Claude Fable 5 (Claude Code) + owner (image push). Region `ap-south-1` throughout.
+
+- **AgentCore:** deployed via `python docs/scripts/agentcore_deploy.py --agentcore-cmd agentcore.cmd` (the mandatory wrapper; the `--agentcore-cmd` flag exists for exactly this Windows shim case). All local gates green first (codezip staged from current source, 824 tests, `agentcore package`). **`agentRuntimeVersion 1 -> 2`** -- deployed content provably changed, the signal the wrapper exists to provide.
+- **ECS:** ARM64 image built from `backend/Dockerfile` at `879e5bd` (116MB); owner pushed both tags to ECR (digest `b3a91a9e...`) after the coordinator's credential-piping step was classifier-blocked; manifest verified server-side; service rolled (`--force-new-deployment`); **`services-stable` waiter passed and rollout settled to COMPLETED, 1/1 running, 0 failed.**
+- **End-to-end proof through CloudFront** (`d382h70qmz3ife.cloudfront.net`): `/health/live` 200, and five M5-only routes (`/planner/queue`, `/planner/board`, `/gate/trucks`, `/admin/policy/active`, `/admin/facilities`) all answer **401 not 404** -- the routes exist and are auth-gated; on the pre-M5 image every one was a 404. Vercel frontend, ECS backend, AgentCore runtime and the migrated database now agree.
+- **A deploy-script defect of this session's own making, found and fixed:** `deploy/deploy_m5_ecs.ps1` printed "ECS DEPLOY COMPLETE" on its first run while steps 3-5 had all failed on an expired OAuth token -- `$ErrorActionPreference = "Stop"` does not stop on native-command failures and only the docker steps carried `$LASTEXITCODE` guards. Every aws step is now guarded with a comment recording the incident. Same defect class as the wrapper's own reason for existing: never trust an unexamined success signal.
+- **Two operational notes:** `aws login` OAuth grants expired twice mid-session (once between the owner's push and the roll -- the roll was completed from the coordinator's still-valid context); Docker Desktop's daemon was down again at start and relaunched directly, per the repo's recorded precedent.
+- **Not verified:** a live authenticated chat turn through BFF -> AgentCore v2 (needs POC credentials; route-level 401s and runtime version-change are the evidence in hand). New files: `deploy/deploy_m5_ecs.sh`, `deploy/deploy_m5_ecs.ps1` -- uncommitted.
+
 ## 2026-09-01 02:20 IST - Decision-queue sweep: all nine owner decisions executed, the live HELD smoke run against production, #90/#91 fixed
 
 **Agent/surface:** Claude Fable 5 (Claude Code) coordinating two `fullstack-engineer` subagents (Claude Opus 5) plus direct edits; per-decision records posted to #59/#65/#67/#68/#73/#87/#90/#91.

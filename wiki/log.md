@@ -1085,3 +1085,10 @@ last_updated: 2026-08-29
 - #91: density-derived tap-floor hit regions (proven by off-box clicks, compact true-negative held); ops duplicate ids 5->0; spacing doc resolves its own contradiction by mechanism, both numbers kept.
 - GATE_OFFICER single-facility: named 422 before DB/Auth round trips; the multi-grant was invisible authority anyway (deps.py reads only the facility_id mirror).
 - End: 824/8/0, tsc/lint/build clean, 75 renders 0 page errors. Uncommitted on ab37b30; commit message handed to owner. Updated [[handoff]], [[current-state]], root CHANGELOG.
+
+## 2026-09-01 10:25 IST | deployment | M5 deployed: AgentCore v2 + ECS rolled + CloudFront-verified
+
+- AgentCore via the mandatory wrapper (local gates green, agentRuntimeVersion 1->2). ECS: ARM64 image from 879e5bd; owner pushed (coordinator's cred-piping step was classifier-blocked); coordinator verified manifest, rolled, waiter passed, rollout COMPLETED 1/1.
+- CloudFront proof: /health/live 200; five M5-only routes 401-not-404. Production frontend/backend/runtime/database coherent for the first time.
+- Own-goal fixed: deploy_m5_ecs.ps1 reported COMPLETE over three failed steps (unguarded native commands); every aws step now $LASTEXITCODE-guarded with the incident documented inline.
+- Updated [[current-state]], [[handoff]], root CHANGELOG. deploy scripts uncommitted; commit message handed to owner.

@@ -10,6 +10,9 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-01 10:25 IST: M5 deployed to production and verified through CloudFront.** AgentCore v2 (wrapper, deployHash-proven), ECS stable on the M5 image, five new routes answering 401-not-404, health 200. **NEXT:** (1) optional: one authenticated chat turn + a real booking through the live app to see the HELD flow with human eyes; (2) the issue-closure review sweep (#36-#91 carry evidence, close on your review); (3) M6 (#43/#44 -- Playwright now installed and proven) or M8 (#49 Sequencer). Commit `deploy/deploy_m5_ecs.{sh,ps1}` with the deploy-record changelog entry.
+
+
 - **2026-09-01 02:20 IST: decision-queue sweep complete.** All nine deferred owner decisions executed (records on #59/#65/#67/#68/#73/#87/#90/#91); the live HELD smoke ran against production with owner authorization -- **3 passed**, cleanup verified. #90 (opacity->muted tokens) and #91 (tap-floor hit regions, 5 dup ids->0) fixed and measured; `GATE_OFFICER` constrained to one facility. End state: backend **824/8/0**, tsc/lint/build clean, 75 renders 0 page errors. Uncommitted on top of `ab37b30` -- ready for the owner's commit. **Nothing is left in M5's queue**; next work is backend deploy (prod frontend currently ahead of deployed backend), the issue-closure review sweep, then M6/M8.
 
 
