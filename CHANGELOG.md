@@ -2,6 +2,18 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-02 20:40 IST - Deploy day 2: the whole night is LIVE on production and verified; free-key Gemini confirmed by wire log; #111 filed (job token never provisioned on ECS); outbox recipient resolver fixed
+
+**Agent/surface:** Claude Fable 5.1 (Claude Code) + owner (ECS script). 
+
+- **ECS** rolled by the owner (PRIMARY COMPLETED 1/1, 0 failed). **AgentCore v4 -> v5** via the wrapper, whose new post-deploy smoke (#92) ran for the first time: the deployed runtime served a real turn (tools=['list_active_shipments']) and the BFF task role's invoke grant was verified to cover the deployed ARN. The wrapper then crashed on its own print of the emoji-bearing reply (cp1252 console) AFTER both checks passed -- fixed to ascii-escape; the exit code must never depend on the console's code page.
+- **Production probes, all on the new stack**: /auth/me grants[] (ADMIN -> GLOBAL) · sequencer list route 200 (count 0 = no runs yet) · pending-confirmations 200 WITHOUT facility_id (#107 fixed live) with the section-7.3 ordering block · audit `event` filter 200 (#104) · carrier portal 178 rows for Sanjay (#101) · HELD lifecycle green (hold 839 -> PENDING_CONFIRMATION -> cancelled) · driver chat 200 on runtime v5.
+- **Wire-log proof of the LLM ruling**: 8 calls in 15 min to `generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent`, zero to aiplatform -- the free-key AI Studio path is what production serves now.
+- **Outbox on production**: producers verified (the smoke's cancel enqueued APPOINTMENT_CANCELLED for the sandbox driver). Two findings: (1) six UNROUTABLE rows, all ESCALATION_RESOLVED/CANCELLED with shipment_id NULL -- root cause: escalation-only producers pass only escalation_id and the resolver never looked up the escalation's shipment. **Fixed** (one indexed read; unit regression added; outbox tests 46/46; proof 169/0 on a clean cluster -- an earlier run showed two timing-sensitive part3b reds under concurrent clusters that did not reproduce, recorded rather than hidden). (2) **#111 filed**: `POST /internal/jobs/notification-drain` -> 503 JOB_AUTH_UNCONFIGURED on production -- the ECS task carries no JOB_AUTH_TOKEN, so NEITHER internal job (drain, expiry-sweep) can run there until provisioned (+ the #20 scheduler leg). Capacity correctness is unaffected (lazy expiry on the claim/read paths), but PENDING_EXPIRED escalations and in-app notifications are unproduced on production until #111.
+- **#109 closed on evidence** (keyword did not fire on push).
+
+**Tracker: #45 (owner console), #110 (owner forks), #111 (owner provisioning + scheduler leg). Owner sequence: push this; the deploy/README.md IAM cleanup step (confirm the CDK grant landed, THEN delete the hand-patched SetuHaulSsmHydrate); #111's token into the ECS task def; then #45/#110 at your pace.**
+
 ## 2026-09-02 09:30 IST - Tracker close-out: both migrations applied by the owner, sequencer flags flipped on live evidence, #79 complete with a real kiosk credential, #109 fixed; the tracker is down to owner-only items
 
 **Agent/surface:** Claude Fable 5 (Claude Code) + owner (three applier scripts + push) + two `fullstack-engineer` subagents (Claude Opus 5).

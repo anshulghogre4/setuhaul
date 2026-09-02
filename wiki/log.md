@@ -1176,3 +1176,7 @@ last_updated: 2026-08-29
 ## 2026-09-02 09:30 IST | close-out | migrations applied (owner), sequencer flags all four flipped ON on a DRIVEN round tr..., #79 complete, #109 fixed; tracker = #45 + #110
 
 - #79: applier helper bug (psql SET tag) fixed; kiosk credential live and proven end to end (auth/me, gate search MATCH, planner 403). #109: fixed by SHARING snapshot.BLOCKING_EVENT_TYPES (identity-asserted) into feasibility's two scans via one join literal, bi. Updated [[current-state]], [[handoff]], root CHANGELOG. Commit message handed.
+
+## 2026-09-02 20:40 IST | deployment | night live on prod: ECS + AgentCore v5 (self-smoke OK); free-key Gemini wire-proven; #111 filed; resolver fix
+
+- 8 prod probes green; generativelanguage host x8 / aiplatform x0; outbox producers write; drain blocked by missing JOB_AUTH_TOKEN (#111 -- both internal jobs refuse on prod). Escalation-only recipient resolver fixed (46/46 unit, proof 169/0). Wrapper print made console-safe (crashed after a green smoke). #109 closed on evidence. Updated [[current-state]], [[handoff]], root CHANGELOG.

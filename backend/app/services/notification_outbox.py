@@ -514,6 +514,17 @@ async def enqueue_notification(
         resolved_shipment = shipment_id
         entity_id = escalation_id or appointment_id or shipment_id
 
+        # Escalation-only events (resolve/cancel/take-over producers pass escalation_id and a
+        # reason, nothing else) must resolve their shipment from the escalation row, or the
+        # recipient lookup below has nothing to walk and the row lands UNROUTABLE. Found on
+        # production 2026-09-02: six ESCALATION_RESOLVED/CANCELLED rows with shipment_id NULL,
+        # every one for a shipment whose driver DOES have an active users row.
+        if escalation_id is not None and resolved_shipment is None:
+            resolved_shipment = await session.scalar(
+                text("SELECT shipment_id FROM public.escalation_queue WHERE escalation_id = :id"),
+                {"id": escalation_id},
+            )
+
         if appointment_id is not None:
             context = await _appointment_context(session, appointment_id)
             if context is None:

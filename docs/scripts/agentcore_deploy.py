@@ -328,7 +328,10 @@ def invoke_smoke(*, runtime_arn: str, region: str | None, payload_path: Path) ->
     tools = [t.get("name") for t in body.get("tool_calls") or [] if isinstance(t, dict)]
     response = str(body.get("response") or "")
     print(f"[smoke] OK -- runtime served a turn. tools={tools or '[]'}")
-    print(f"[smoke] response (truncated): {response[:160]!r}")
+    # ascii-escaped: the runtime replies with emoji, and a cp1252 Windows console raised
+    # UnicodeEncodeError here AFTER a successful deploy + smoke (2026-09-02), turning a green
+    # run into exit 1. The smoke result must never depend on the console's code page.
+    print("[smoke] response (truncated): " + response[:160].encode("ascii", "backslashreplace").decode("ascii"))
 
     # A loud warning, not a failure. `memory_degraded` means the Redis half of hydration did not
     # land -- if the reason names a missing credential, that IS #92 defect 2 partially recurring

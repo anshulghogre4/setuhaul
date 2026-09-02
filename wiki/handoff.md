@@ -10,6 +10,9 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-02 20:40 IST: deploy day 2 complete; commit message handed.** Uncommitted: resolver fix + test, wrapper print fix, writeback. **Owner: (1) push; (2) deploy/README.md IAM cleanup (confirm CDK grant, then delete hand-patched policy); (3) #111 -- JOB_AUTH_TOKEN into the ECS task def (+ SENTRY_DSN when ready) and the EventBridge leg for expiry-sweep + notification-drain; (4) #45 console; (5) #110 rulings.** Next agent work only when a ruling or provisioning lands. Local stack: uvicorn:8000 + vite:5173 (restart backend to pick up today's last two edits).
+
+
 - **2026-09-02 09:30 IST: close-out done; commit message handed.** Tracker = #45 (owner console decommission) + #110 (owner rulings). **NEXT: (1) owner pushes; (2) deploy cycle -- python docs/scripts/agentcore_deploy.py (now self-smokes), deploy/deploy_m5_ecs.ps1, Vercel auto -- ships: free-key LLM ruling, #108, the sequencer, notification outbox producers, grants[], Sentry (dark), tool spans, IaC grants (+ the post-deploy cleanup step in deploy/README.md); (3) verify in LangSmith: provider=gemini via AI Studio; (4) #45 checklist; (5) rule on #110's forks -- each is a small follow-up once decided.** Local stack: uvicorn:8000 + vite:5173 on the full tree.
 
 

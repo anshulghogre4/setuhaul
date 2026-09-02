@@ -451,3 +451,29 @@ def test_the_in_app_adapter_is_the_only_registered_channel_and_the_others_are_na
     push-subscription table -- so EMAIL and WEB_PUSH are absent by decision, not half-built."""
     assert list(outbox.CHANNEL_ADAPTERS) == ["IN_APP"]
     assert outbox.CHANNEL_ADAPTERS["IN_APP"]() is notification_service.deliver_in_app_notification
+
+
+async def test_an_escalation_only_event_resolves_its_shipment_from_the_escalation_row():
+    """Regression for the 2026-09-02 production finding: resolve/cancel producers pass only
+    escalation_id + reason, and without this lookup the recipient walk had no shipment to
+    start from -- six ESCALATION_RESOLVED/CANCELLED rows landed UNROUTABLE for drivers who
+    DID have active users rows."""
+    import json as _json
+    from app.services import notification_outbox as nob
+
+    session = AsyncMock()
+    session.begin_nested = MagicMock(side_effect=lambda: _nested_cm())
+    # scalar call order: (1) shipment lookup from escalation_queue, (2) recipient user,
+    # (3) the INSERT ... RETURNING outbox_id.
+    session.scalar = AsyncMock(side_effect=["SHP-X", "USR-DRV-X", "NOB-1"])
+    session.execute = AsyncMock()
+    out = await nob.enqueue_notification(
+        session, event_type=nob.ESCALATION_RESOLVED, escalation_id="ESC-1", reason="RESOLVED"
+    )
+    assert out == "NOB-1"
+    first_sql = str(session.scalar.await_args_list[0].args[0])
+    assert "escalation_queue" in first_sql and "shipment_id" in first_sql
+    # The INSERT must carry the resolved shipment and a PENDING (routable) status.
+    insert_params = session.scalar.await_args_list[-1].args[1]
+    assert insert_params["shipment_id"] == "SHP-X"
+    assert insert_params["status"] == nob.STATUS_PENDING
