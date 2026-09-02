@@ -238,10 +238,32 @@ export function AdminStatesGallery() {
           </div>
           <p className="mt-3 text-supporting text-muted-foreground">
             Every number here — the four coefficients, both caps, the priority tiers,{' '}
-            <code>w_fairness</code> — comes from the server. The Danger Zone is Inactive with its
-            reason (#69, another agent&rsquo;s flag); <code>P_churn</code> is absent entirely
-            because the API refuses the key with a 422.
+            <code>w_fairness</code> — comes from the server. The Danger Zone now carries a real
+            Enable action (#69 landed <code>w_fairness</code> as a live formula term);{' '}
+            <code>P_churn</code> is still absent entirely, because the API refuses that key with a
+            422 naming the sequencer (#49) as its reason.
           </p>
+        </Plate>
+
+        <Plate n="8.3, 9" title="Danger Zone unlocked — w_fairness as an ordinary weight row">
+          {/* Flow 7 step 2: confirming makes `w_fairness` editable "in the ordinary weight editor
+              (§3) rather than immediately publishing anything". So the unlocked state is not a
+              special control — it is the same WeightRow every other coefficient uses, with the
+              same label/unit/aria wiring, and the Enable button is GONE rather than disabled
+              (there is nothing left to enable, and Flow 7 step 3 puts disabling back on the
+              ordinary path). Press "Enable fairness term" in the plate above to see Screen 9's
+              typed confirmation; it writes nothing anywhere. */}
+          <PolicyWeightEditor
+            live={POLICY_ACTIVE_FIXTURE.live_weights}
+            priorityScores={POLICY_ACTIVE_FIXTURE.live_priority_scores}
+            drafts={POLICY_DRAFTS_FIXTURE}
+            invalidKeys={new Set()}
+            onChange={() => {}}
+            onSimulate={() => {}}
+            simulating={false}
+            windowLabel="the last 30 days"
+            fairnessUnlocked
+          />
         </Plate>
 
         <Plate

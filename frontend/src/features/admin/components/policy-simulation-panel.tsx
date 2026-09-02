@@ -207,16 +207,8 @@ export function SimulationResult({
           part of this tool and paraphrasing it would be the dishonest part. */}
       <p className="mt-3 text-supporting text-muted-foreground">{simulation.note}</p>
 
-      {/* `fairness_term_evaluated: false` is a real answer, not a skip — both sides ran at
-          w_fairness = 0, so the term was arithmetically absent. Stated so the Danger Zone never
-          has to be inferred from a flip count. */}
-      <p className="mt-1 text-supporting text-muted-foreground">
-        Fairness term{' '}
-        {simulation.fairness_term_evaluated
-          ? 'participated in this run'
-          : 'did not participate: both sides ran at w_fairness = 0'}
-        .
-      </p>
+      <FairnessReadout simulation={simulation} />
+      <ChurnReadout simulation={simulation} />
 
       {/* U79 — safer action first in DOM order; §19's 16px minimum between a neutral and a
           committing control comes from the gap. */}
@@ -248,6 +240,136 @@ export function SimulationResult({
         <p className="mt-2 text-supporting text-muted-foreground">{whyNotPublish}.</p>
       )}
     </div>
+  )
+}
+
+/**
+ * Screen 10's fairness half — the part `implementation-spec.md` §3 marked 🟡 as caveat (a):
+ * *"any `w_fairness`/`P_churn` value an admin enters is silently no-op'd by the same formula gap as
+ * Screen 8/9 — a simulation 'using' fairness would report identical flip counts regardless of the
+ * value."*
+ *
+ * **That caveat is retired, and this component is where it becomes visible.** The backend now
+ * returns three fields specifically so this can be *stated rather than inferred* (`edge-cases.md`
+ * #6: *"The response now also carries `fairness_term_evaluated`, so the UI can state that the term
+ * participated rather than inferring it"*):
+ *
+ *  - `fairness_term_evaluated` — whether the term arithmetically participated at all.
+ *  - `live_w_fairness` / `proposed_w_fairness` — the two sides, so an admin can see *what was
+ *    compared against what* rather than trusting a boolean.
+ *
+ * ## Three states, not two, and the middle one is the one worth getting right
+ *
+ *  1. **Both sides zero** — `false` is a *real answer*, not a skipped step: the term was
+ *     arithmetically absent because §D7 ships it disabled. Saying "did not participate" without
+ *     saying why would read like a defect.
+ *  2. **The proposed value is non-zero** — the term genuinely moved this flip count, and the two
+ *     values are named. This is the state that could not exist before #69.
+ *  3. **Non-zero but `fairness_term_evaluated` is false** — a contradiction between the value and
+ *     the engine's own report. Surfaced as a warning rather than smoothed over: it would mean the
+ *     value reached the API but not the formula, which is exactly the silent-ignore defect #69 was
+ *     filed about, and an admin must not publish on the strength of it.
+ */
+function FairnessReadout({ simulation }: { simulation: PolicySimulation }) {
+  const live = simulation.live_w_fairness
+  const proposed = simulation.proposed_w_fairness
+  const bothZero = live === 0 && proposed === 0
+  const contradiction = !simulation.fairness_term_evaluated && !bothZero
+
+  if (contradiction) {
+    return (
+      <p
+        role="status"
+        className="mt-1 flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-supporting text-warning-fg"
+      >
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span>
+          A non-zero fairness weight (
+          <span className="font-data" data-numeric>
+            {formatNumber(proposed)}
+          </span>
+          ) was sent, but the engine reports the term did not participate in this run. Treat this
+          flip count as evidence about the other weights only, and do not publish on it.
+        </span>
+      </p>
+    )
+  }
+
+  return (
+    <p className="mt-1 text-supporting text-muted-foreground">
+      Fairness term{' '}
+      {simulation.fairness_term_evaluated ? (
+        <>
+          participated: live{' '}
+          <span className="font-data" data-numeric>
+            {formatNumber(live)}
+          </span>{' '}
+          vs proposed{' '}
+          <span className="font-data" data-numeric>
+            {formatNumber(proposed)}
+          </span>
+          , multiplied by how many other appointments each carrier already holds that day
+        </>
+      ) : (
+        <>
+          did not participate: both sides ran at{' '}
+          <span className="font-data">w_fairness = 0</span>, so the term was arithmetically absent
+          rather than skipped
+        </>
+      )}
+      .
+    </p>
+  )
+}
+
+/**
+ * The churn half of Screen 10 (issues #49/#69, 2026-09-02).
+ *
+ * ## Why this is NOT the fairness readout with a different key
+ *
+ * `FairnessReadout` above treats *"non-zero value, term not evaluated"* as a **contradiction** and
+ * warns about it, because for `w_fairness` that combination would mean the value reached the API
+ * but not the formula — the silent-ignore defect #69 was filed about.
+ *
+ * For `P_churn` the identical combination is **correct and expected**, and copying the fairness
+ * logic here would have raised a permanent false alarm on a working system. `P_churn` is a
+ * **sequencer-objective** weight (§5.1, "Pricing churn"); §5 Stage 2's per-driver formula does not
+ * contain it at all. So it can never change a `flip_count`, at any value, and
+ * `churn_term_evaluated` is hard-coded `false` server-side rather than computed.
+ *
+ * What matters instead is that an admin who edits `P_churn`, re-simulates and sees an **unchanged**
+ * flip count can tell *"this term did nothing here"* from *"this term was ignored"* — the same
+ * distinction #69 established, applied to a term whose answer is always the first one. So the two
+ * values are shown even when equal, and the server's own note (which says where the value *does*
+ * take effect) is rendered verbatim rather than paraphrased.
+ */
+function ChurnReadout({ simulation }: { simulation: PolicySimulation }) {
+  const changed = simulation.live_p_churn !== simulation.proposed_p_churn
+  return (
+    <p className="mt-1 text-supporting text-muted-foreground">
+      Churn term{' '}
+      {changed ? (
+        <>
+          changed here (live{' '}
+          <span className="font-data" data-numeric>
+            {formatNumber(simulation.live_p_churn)}
+          </span>{' '}
+          → proposed{' '}
+          <span className="font-data" data-numeric>
+            {formatNumber(simulation.proposed_p_churn)}
+          </span>
+          ), and did not affect the count above
+        </>
+      ) : (
+        <>
+          unchanged at{' '}
+          <span className="font-data" data-numeric>
+            {formatNumber(simulation.proposed_p_churn)}
+          </span>
+        </>
+      )}
+      . {simulation.p_churn_note}
+    </p>
   )
 }
 

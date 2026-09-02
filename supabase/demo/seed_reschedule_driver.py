@@ -313,7 +313,9 @@ async def book_and_confirm(*, dry_run: bool) -> list[dict[str, Any]]:
                     # (#95): finish the confirm leg so the fixture reaches its
                     # designed CONFIRMED state instead of parking at PENDING.
                     if spec["confirm"] and active.get("appointment_status") == "PENDING_CONFIRMATION":
-                        snap = await load_appointment_snapshot(session, active["appointment_id"])
+                        snap = await load_appointment_snapshot(
+                            session, active["appointment_id"], actor_user_id=admin_ctx.user_id
+                        )
                         if snap is not None:
                             confirmed = await confirm_appointment(
                                 session,
@@ -386,7 +388,9 @@ async def book_and_confirm(*, dry_run: bool) -> list[dict[str, Any]]:
                     # ConfirmAppointmentCommand requires snapshot_hash (#84's optimistic
                     # concurrency, section 7.5 principle 3). Read it the way the planner
                     # console does -- recomputed live -- rather than inventing one.
-                    snap = await load_appointment_snapshot(session, appointment_id)
+                    snap = await load_appointment_snapshot(
+                        session, appointment_id, actor_user_id=admin_ctx.user_id
+                    )
                     if snap is None:
                         outcomes.append(
                             {"shipment_id": shipment_id, "action": "confirm_failed_no_snapshot"}

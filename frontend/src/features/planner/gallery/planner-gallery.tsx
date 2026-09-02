@@ -13,7 +13,14 @@ import {
   QueueSearchEmpty,
   QueueSkeleton,
 } from '../components/queue-region-states'
+import {
+  AppliedNotice,
+  PartiallyInfeasible,
+  ProposalReviewBody,
+  SnapshotDrift,
+} from '../components/proposal-overlay'
 import { QueueRow } from '../components/queue-row'
+import { RequestResequenceButton } from '../components/request-resequence-button'
 import { ReviewProposalButton } from '../components/review-proposal-button'
 import { Maintenance, NotFound, RegionError } from '@/components/states/region-states'
 import {
@@ -22,6 +29,9 @@ import {
   OUTCOME_SKIPPED,
   PICKER_OPTIONS,
   PICKER_ROW,
+  PROPOSAL_DELTAS,
+  PROPOSAL_INFEASIBLE,
+  PROPOSAL_RUN,
   ROW_CLEAN,
   ROW_CONFLICTED,
   ROW_DERIVED,
@@ -196,8 +206,89 @@ export function PlannerStatesGallery() {
           </div>
         </Plate>
 
-        <Plate n="—" title="Review proposal — Inactive with (0), issue #49">
-          <ReviewProposalButton />
+        <Plate n="—" title="Review proposal — Inactive with (0), and live with a real count">
+          {/* Two states since `GET /api/v1/scheduling/runs` landed (2026-09-02). The third --
+              "the server cannot answer, so the count is unknown" -- was real while no list
+              endpoint existed and is now unreachable, so it is deleted rather than kept as a
+              defensive branch. `(0)` stays Inactive-not-Disabled: focusable, and it explains
+              itself on activation. */}
+          <div className="flex flex-wrap items-center gap-4">
+            <ReviewProposalButton count={0} />
+            <ReviewProposalButton count={2} />
+          </div>
+        </Plate>
+
+        <Plate n="—" title="Request re-sequence — idle, in flight, and RUN_ALREADY_ACTIVE">
+          {/* `edge-cases.md` §4's debounce state is an INFO-toned inline notice with no retry
+              affordance, deliberately distinct from the danger-toned apply refusals below --
+              retrying is the exact thing the debounce exists to prevent. */}
+          <div className="flex flex-col gap-3">
+            <RequestResequenceButton />
+            <RequestResequenceButton busy />
+            <RequestResequenceButton runAlreadyActive alreadyActiveRunId="RUN-8f2a" />
+          </div>
+        </Plate>
+
+        <Plate
+          n="19, 20, 21"
+          title="Sequencer proposal — the diff drawn on the board itself (§5.1's four categories)"
+        >
+          <div className="flex w-[860px] flex-col gap-3">
+            {/* The delta layer rendered through the SAME `Board` the live overlay and the live
+                Board tab both mount. Four things are worth looking at rather than reading:
+                SHP1009's MOVED outline sits on D4 (the ARRIVAL lane, not the origin), SHP1044's
+                badge reads NEW, SHP1031 is unchanged and therefore carries NO outline at all, and
+                SHP1015 is unplaceable so it appears only in the list below -- never as a bar. */}
+            <BoardPlate board={BOARD} proposal={PROPOSAL_DELTAS} />
+            <ProposalReviewBody run={PROPOSAL_RUN} />
+          </div>
+        </Plate>
+
+        <Plate n="20, 21" title="Apply outcomes — applied, and the two refusals that are never retries">
+          {/* All three are the REAL components the overlay mounts. The two refusals are the pair
+              §5.1 forbids softening: SNAPSHOT_DRIFT offers a FRESH proposal (never a retry of the
+              stale one), and PARTIALLY_INFEASIBLE names the shipments and offers no "apply what's
+              still valid" — because the tool has no argument for one. Neither renders an Apply
+              button, and neither list carries a per-row control. */}
+          <div className="flex w-[720px] flex-col gap-4">
+            <AppliedNotice
+              result={{
+                as_of: PROPOSAL_RUN.as_of,
+                code: 'APPLIED',
+                scheduling_run_id: PROPOSAL_RUN.scheduling_run_id,
+                status: 'APPLIED',
+                notification_batch_id: PROPOSAL_RUN.scheduling_run_id,
+                notifications_enqueued: 3,
+                moved: 2,
+                newly_placed: 1,
+                unchanged: 1,
+                drift: null,
+                infeasible: [],
+                idempotency_key: null,
+                idempotent_replay: false,
+              }}
+              onClose={() => {}}
+            />
+            <SnapshotDrift onRequestFresh={() => {}} />
+            <PartiallyInfeasible
+              result={{
+                as_of: PROPOSAL_RUN.as_of,
+                code: 'PARTIALLY_INFEASIBLE',
+                scheduling_run_id: PROPOSAL_RUN.scheduling_run_id,
+                status: 'PROPOSED',
+                notification_batch_id: null,
+                notifications_enqueued: 0,
+                moved: 0,
+                newly_placed: 0,
+                unchanged: 0,
+                drift: null,
+                infeasible: PROPOSAL_INFEASIBLE,
+                idempotency_key: null,
+                idempotent_replay: false,
+              }}
+              onClose={() => {}}
+            />
+          </div>
         </Plate>
 
         <Note n="12, 13" title="Reject dialog — built, and reachable on /planner">

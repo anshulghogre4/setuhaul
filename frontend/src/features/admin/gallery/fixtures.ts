@@ -330,6 +330,19 @@ export const SIMULATION_FIXTURE: PolicySimulation = {
   fairness_term_evaluated: false,
   live_w_fairness: 0,
   proposed_w_fairness: 0,
+  // Always false, and correct: P_churn is a SEQUENCER-objective weight, so it can never move a
+  // Stage-2 per-driver ranking. The fixture carries a changed value (30 -> 45) precisely so the
+  // plate shows the honest pairing -- a value that differs, a flip_count it did not influence, and
+  // the server's own note saying where it DOES take effect.
+  churn_term_evaluated: false,
+  live_p_churn: 30,
+  proposed_p_churn: 45,
+  p_churn_note:
+    'P_churn is a sequencer-objective weight (SOLUTION_DESIGN.md section 5.1, "Pricing churn"): ' +
+    'it prices each communicated promise a facility re-sequence moves. It therefore never changes ' +
+    'a Stage-2 per-driver ranking and contributes nothing to flip_count above. A changed P_churn ' +
+    "takes effect on the next propose_facility_schedule -- compare two runs' objective.churn_cost " +
+    'to see it.',
   note:
     'Approximation, not a literal replay: no historical decision log exists, so this re-scores ' +
     "each shipment's current appointment against other slots open today at the same facility, " +

@@ -137,9 +137,11 @@
       "compatible_but_not_exact_dock_penalty": -25,
       "lateness_cap_minutes": 720,
       "fit_slack_cap_minutes": 120,
-      "w_fairness": 0
+      "w_fairness": 0,
+      "P_churn": 30
     },
     "w_fairness_note": "D7's per-carrier displacement penalty, present and defaulted OFF (0) so the shipped policy is exactly the specified formula. Multiplies carrier_concentration -- the number of other active appointments this shipment's carrier already holds at the destination facility on the candidate interval's facility-local date. Expected NEGATIVE when enabled, matching the sign convention of the other penalties. Enabling it is a policy decision with an audit trail, not a code change (issue #69, 2026-08-29).",
+    "P_churn_note": "SOLUTION_DESIGN.md section 5.1 'Pricing churn': ~30 weighted-minute-equivalents per moved promise, priced because moving a communicated promise costs a notification, the driver's re-planning, a real chance of refusal, and a slice of trust -- a move must pay for itself. It is a SEQUENCER-objective weight, not a per-driver ranking weight: it is read by scheduling/sequencer.py and by nothing in feasibility.py::_rank_slot, because it prices a schedule change and there is no schedule change to price when one shipment's own candidate slots are ranked against each other. It lives here rather than in a sequencer-only file because section 5.1 says so verbatim ('P_churn lives in policy_versions alongside the Stage-2 weights (D7) and is stamped on every run'), and because that is what makes it admin-editable and simulable through the same allowlist every other weight uses (issue #69, 2026-09-02).",
     "explainability_required": true,
     "randomness_allowed": false
   },

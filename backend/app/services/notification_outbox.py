@@ -85,6 +85,9 @@ logger = logging.getLogger(__name__)
 APPOINTMENT_CONFIRMED = "APPOINTMENT_CONFIRMED"
 APPOINTMENT_REJECTED = "APPOINTMENT_REJECTED"
 APPOINTMENT_CANCELLED = "APPOINTMENT_CANCELLED"
+# Issue #49. Added by `20260902160000_scheduling_runs.sql`, which extends the CHECK constraint.
+# See EVENT_CATALOG below for why none of the other eleven could carry this fact.
+APPOINTMENT_RESEQUENCED = "APPOINTMENT_RESEQUENCED"
 PENDING_EXPIRED = "PENDING_EXPIRED"
 HOLD_LAPSED = "HOLD_LAPSED"
 OPTION_WITHDRAWN = "OPTION_WITHDRAWN"
@@ -211,6 +214,30 @@ EVENT_CATALOG: dict[str, EventSpec] = {
         ),
         entity_type="appointments",
     ),
+    APPOINTMENT_RESEQUENCED: EventSpec(
+        category=CATEGORY_APPOINTMENT,
+        title="Your dock slot has moved",
+        # SOLUTION_DESIGN.md section 5.1's cascade path ends "planner applies -> notifications batch
+        # out", and its own diff example annotates a moved row "(communicated -- driver will be
+        # notified)". No existing catalog value can carry that fact honestly, which is why this is a
+        # twelfth rather than a borrowed eleventh (the migration's step 9 states all three reasons):
+        # APPOINTMENT_CONFIRMED's dedupe key is already spent by the original confirmation, so the
+        # move would be silently suppressed; COUNTER_OFFER says "nothing is held yet", which is
+        # false once the apply has re-claimed the interval; OPTION_WITHDRAWN asserts a dock outage,
+        # which is one possible cause and not the fact being reported.
+        #
+        # Composed in voice-and-tone.md's register rather than quoted from it -- the doc's eight
+        # negative-path templates do not cover a re-sequence -- so `sourced=False`. It follows that
+        # file's two governing rules for this class of message: it declares the new operational
+        # state rather than apologising for the old one, and it carries the dock AND the date
+        # (notifications-panel.tsx:13 -- "a bare '13:00' is a wrong-day booking waiting to happen").
+        body=(
+            "The facility has re-sequenced your slot. You are now on Dock {dock} - {date} - "
+            "{window} at {facility}."
+        ),
+        entity_type="appointments",
+        sourced=False,
+    ),
     COUNTER_OFFER: EventSpec(
         category=CATEGORY_APPOINTMENT,
         title="Counter-offer from the warehouse",
@@ -288,7 +315,12 @@ EVENT_FOR_TRANSITION: dict[str, str] = {
 # ------------------------------------------------------------------------------------------
 
 
-def build_dedupe_key(event_type: str, entity_id: str, recipient_user_id: str | None) -> str:
+def build_dedupe_key(
+    event_type: str,
+    entity_id: str,
+    recipient_user_id: str | None,
+    dedupe_scope: str | None = None,
+) -> str:
     """The exactly-once key. **EVENT INSTANCE, never a calendar day.**
 
     NFR-009 / M9 / section 10.3 -- *"duplicate `dedupe_key` -> 1 exception, 1 booking attempt,
@@ -301,8 +333,18 @@ def build_dedupe_key(event_type: str, entity_id: str, recipient_user_id: str | N
     (a cascade tells every affected driver about the same dock outage) and those are different
     notifications, not duplicates of one. `NONE` for an unroutable recipient keeps the row unique
     and countable instead of colliding every unroutable event for the same entity into one.
+
+    `dedupe_scope` (added for issue #49) names the **occurrence** when the same event can genuinely
+    happen to the same entity more than once. The sequencer is the case that needs it: two applied
+    proposals can both move one appointment, and those are two real notifications, not a replay --
+    without a scope the second would be silently suppressed by
+    `notification_outbox_dedupe_key_uidx`, which is the day-bucket failure mode issue #96 recorded,
+    reached from a different direction. It defaults to `None` and appends nothing when absent, so
+    every existing producer's key is **byte-identical** to what it was before this parameter
+    existed (`test_notification_outbox.py` pins that, parametrised over the catalog).
     """
-    return f"{event_type}:{entity_id}:{recipient_user_id or 'NONE'}"
+    scope = f"@{dedupe_scope}" if dedupe_scope else ""
+    return f"{event_type}:{entity_id}{scope}:{recipient_user_id or 'NONE'}"
 
 
 def render_event(event_type: str, params: dict[str, Any]) -> tuple[str, str]:
@@ -428,6 +470,7 @@ async def enqueue_notification(
     actor: str | None = None,
     dock_code: str | None = None,
     extra: dict[str, Any] | None = None,
+    dedupe_scope: str | None = None,
 ) -> str | None:
     """Write one outbox row in the caller's transaction. **Never commits, never raises.**
 
@@ -544,7 +587,9 @@ async def enqueue_notification(
                 ),
                 {
                     "outbox_id": outbox_id,
-                    "dedupe_key": build_dedupe_key(event_type, entity_id, recipient_user_id),
+                    "dedupe_key": build_dedupe_key(
+                        event_type, entity_id, recipient_user_id, dedupe_scope
+                    ),
                     "event_type": event_type,
                     "category": spec.category,
                     "recipient_user_id": recipient_user_id,

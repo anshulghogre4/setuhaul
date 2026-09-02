@@ -434,16 +434,78 @@ export const plannerBulkConfirmEnabled = true
 export const dockBoardEnabled = true
 
 /**
- * Gates the sequencer proposal diff overlay (states 19, 20, 21) and turns
- * "[ Review proposal (N) ]" from permanently Inactive into a real entry point.
+ * Gates the sequencer proposal diff overlay (states 19, 20, 21), the Board toolbar's
+ * "Request re-sequence" action, and turns "[ Review proposal (N) ]" from permanently Inactive into
+ * a real entry point.
  *
- * **Default OFF, and it must stay off until issue #49 lands** (the epic that also gates E5.2's
- * prompt 14 -- the two surfaces are the two halves of U93's handoff, and neither can be built
- * before the other).
+ * **Still OFF as of 2026-09-02 -- and the reason has changed from "unbuilt" to "unexercised".**
  *
- * Why (P-G9): section 7.5.3 (the Sequencer) is entirely unbuilt -- `propose_facility_schedule`,
- * `apply_schedule_proposal` and `get_scheduling_run` are all absent.
+ * ## What is now DELIVERED (issue #49, FR-PLN-009, FR-SYS-016)
  *
- * **Exit criterion:** issue #49 closed, then flip to `true`.
+ * P-G9's premise -- *"all three sequencer tools absent"* -- is retired. All three landed this
+ * session, verified by reading `routers/scheduling.py` and `scheduling/sequencer.py` directly:
+ *
+ *  - `POST /api/v1/scheduling/proposals` -> `propose_facility_schedule`, `trigger_reason` pinned
+ *    server-side to `PLANNER_REQUESTED`.
+ *  - `GET /api/v1/scheduling/runs/{id}` -> `get_scheduling_run`, returning the **same**
+ *    `SchedulingRunResult` model propose does, so a run reviewed an hour later is the identical
+ *    object the requester saw.
+ *  - `POST /api/v1/scheduling/runs/{id}/apply` -> `apply_schedule_proposal`, `Idempotency-Key`
+ *    required, body `extra="forbid"` with `snapshot_hash` as its **only** field -- so section
+ *    7.5.3's "deliberately no 'apply these three rows' argument" is enforced by a 422, not by
+ *    convention.
+ *  - Plus `supabase/migrations/20260902160000_scheduling_runs.sql`, whose partial unique index
+ *    `(facility_id) WHERE status = 'PROPOSED'` is section 5.1's debounce rule made structural.
+ *
+ * The client half is built and **reconciled to those exact paths and shapes**:
+ * `components/proposal-overlay.tsx` (states 19-21, section 5.1's diff drawn on the real board via
+ * `BoardPlate`, both named refusals), `components/request-resequence-button.tsx` (Flow 9's
+ * self-trigger, `edge-cases.md` section 4's inline debounce state), and `review-proposal-button.tsx`.
+ * All of it is mountable at `/planner/_states` without a backend.
+ *
+ * **Two reconciliations worth remembering, because both were wrong on the first pass here:** this
+ * client originally invented `/planner/scheduling-runs*` (section 7.5.3 is a tool catalog and names
+ * no URLs), and it originally typed the objective as nullable and omitted zero terms -- the shipped
+ * `ObjectiveValues` reports **every** term even when zero, precisely so "contributed nothing" and
+ * "not measured" stay distinguishable. Both are fixed; the second changed what the overlay renders.
+ *
+ * ## The catalog gap is CLOSED: the pending-run list now exists
+ *
+ * Section 7.5.3 defines no read for *"which runs are pending at my facility"*, yet `screens.md`
+ * section 3 requires "[ Review proposal (N) ]" to carry a count and Flow 9 requires it to go live
+ * for an **ops-handoff** run this surface never observes. `GET /api/v1/scheduling/runs` landed
+ * 2026-09-02 and names itself honestly as *"an addition to section 7.5.3's catalog, not an
+ * implementation of it"*, citing both callers. `listPendingSchedulingRuns` is wired to it and the
+ * old "unknown count" degrade is deleted, along with the button's third state.
+ *
+ * ## Why it is STILL OFF, and this time the blocker was measured, not inferred
+ *
+ * **The routes are mounted and every one of them 500s.** Driven live on 2026-09-02 against the
+ * restarted backend (91 paths, all five sequencer routes present in `/openapi.json`):
+ *
+ * ```
+ * POST /api/v1/scheduling/proposals          -> 500 INTERNAL_ERROR
+ * GET  /api/v1/scheduling/runs?status=...    -> 500 INTERNAL_ERROR
+ * POST /operations/escalations/{id}/sequencer-proposal (after acknowledge) -> 500 INTERNAL_ERROR
+ *   asyncpg.exceptions.UndefinedTableError:
+ *   relation "public.scheduling_runs" does not exist
+ * ```
+ *
+ * **The migration `supabase/migrations/20260902160000_scheduling_runs.sql` is written but has not
+ * been applied to this database.** The code shipped; the schema did not. This is precisely why
+ * "the routes appear in `/openapi.json`" was never sufficient evidence to flip — a mounted route
+ * is not a working feature, and flipping here would have put a 500 behind every control on this
+ * surface's proposal path.
+ *
+ * Worth recording because it is reusable: the failing statement is the horizon sweep
+ * (`UPDATE ... SET status = 'SUPERSEDED' ... WHERE horizon_end <= now`), which runs *before* the
+ * insert — so the failure is immediate and total rather than partial, and no half-written run can
+ * exist as a result of it.
+ *
+ * **Exit criterion, now a single step:** apply the migration, then re-run the sweep row
+ * *"Sequencer engine — live round trip"* in `tests/sweep/03-planner.spec.ts`, which drives a real
+ * propose and reports the outcome. Flip only when it stops reporting `BLOCKED-ENV`.
+ * **Do not drive an APPLY against the demo cast to satisfy this** — an applied run rewrites real
+ * promises; a proposal left un-applied, or a deliberate `SNAPSHOT_DRIFT`, is the safe proof.
  */
 export const sequencerProposalEnabled = false

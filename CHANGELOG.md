@@ -2,6 +2,31 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-02 07:40 IST - M8 delivered: the section-7.5.3 Sequencer (#49) + its ops delegate (#54) + P_churn (#69) built, proof-verified, and surfaced; two follow-up issues filed (#109 defect, #110 forks)
+
+**Agent/surface:** Claude Fable 5 (Claude Code) coordinating one backend and one frontend `fullstack-engineer` (Claude Opus 5); coordinator did the integration restart, owner-run applier, follow-up triage, and independent re-verification.
+
+### Backend (#49/#54/#69)
+
+- **Contract built to section 7.5.3's letter, every element cited**: `scheduling_runs` (input snapshot, section-5.1 diff, objective values, explanation, snapshot_hash, status lifecycle; RLS + revoke per the #94 precedent), `propose_facility_schedule` (RUN_ALREADY_ACTIVE enforced by a partial unique index -- #96's house style -- not a check), `apply_schedule_proposal` (APPLIED all-or-nothing / SNAPSHOT_DRIFT / PARTIALLY_INFEASIBLE refuses entirely; no cherry-pick argument exists, section 5.1), `get_scheduling_run` (byte-identical replay proven for planner AND ops), and #54's `request_sequencer_proposal` delegate (CAPACITY_INCIDENT, escalation FK persisted; facility derived from the escalation row and a mismatch REFUSED -- stricter than the design's wording). D5 enforced at the ROUTE: ops cannot reach /apply.
+- **The objective is section 5.1's four terms + D7's fairness term, coefficients read from constraints.json with inverted sign -- none is a literal in code**; waiting and fairness are LIFTED from Stage 2's own ranking receipt, so "one currency with Stage 2" is an identity, not a claim. `P_churn` = communicated promises moved past D11's 15-minute epsilon, weight 30 (#69's remaining half; admin governance now accepts and types it; simulate reports `churn_term_evaluated:false` by design -- it prices sequencer moves, not driver rank).
+- **Apply walks the REAL write primitives** (`_release_dock_occupancy`/`_claim_dock_occupancy`, audit, savepoint-safe outbox producers with a new APPOINTMENT_RESEQUENCED event) in one transaction; "zero writes" on refusals is MEASURED by a capacity fingerprint (counts + md5 of every assignment and claim window), because a move rewrites slot_id without changing any count.
+- **Two defects its own proof suite caught before shipping**: propose/apply Stage-1 asymmetry (job A moving into job B's old slot was refused -- fixed by one shared `movable_slot_ids_of`); a movable-but-unplaced job's claim treated as free (fixed by seeding real claims and lifting only while deciding that job, plus a horizon spill margin).
+- **Coordinator addenda closed before landing**: apply's 409 now carries `json.dumps(ApplyResult)` in `errors[0].detail` (the allocation convention -- the frontend's ApiError parses it), and a scoped `GET /scheduling/runs` list read (a section-7.5.3 catalog addendum, needed by planner screens.md section 3 -- ratification queued on #110).
+- Migration `20260902160000_scheduling_runs.sql` written locally; owner applies via **deploy/apply_49_scheduling_runs.py** (precondition: apply_94 first -- it alters the outbox CHECK).
+
+### Frontend
+
+ops proposal screens (request/review/refusal states, no partial-apply affordance -- verified as 0 interactive controls in the rendered diff rows), planner Flow 9 overlay on the real board plus the Request re-sequence control (closes #102's last planner row), admin Screens 8/9/10 (typed Danger-Zone confirmation driven live; churn readout designed as its own thing because P_churn is correctly never a Stage-2 term). API layer reconciled to the landed routes (three path guesses corrected; list key is runs; 409 ApplyResult parsed via ApiError.data). Flags on evidence: adminFairnessTermEnabled=true (split from a new adminChurnWeightEnabled=true, both live-proven); the two sequencerProposalEnabled flags stay FALSE with the measured 500 in their comments -- the live DB lacks scheduling_runs until the owner runs apply_49, after which the flip is one sweep re-run. Gates: tsc x2 clean, oxlint 8 baseline/0 new, vite build clean, auth+isolation 14/14, touched sweeps 20/20; sweep totals 108 rows, DEAD 0.
+
+### Follow-ups filed, not buried
+**#109** (defect, same family as #84/#88/#97): `find_feasible_slots` carries no event_type filter on dock events, so a REOPENED event hides a free slot from drivers while every other consumer filters to the blocking set. **#110** (forks): unplaceable-escalation policy, a reject tool, section 5.1's trigger coalescing (unbuilt -- all runs are human-requested today), D12's claim-less rows, P_churn's Stage-2 meaning, the list-read ratification, seed saturation for demos.
+
+### Verification (coordinator-independent)
+**Proof suite 164 passed / 0 failed / 2 skipped / 2 xfailed (20 files replayed -- 18 migrations); unit 1072 passed / 0 failed.** Frontend gates: see the section above.
+
+**With this, every issue the agent side could complete is complete. Open on the tracker: #45 and #79 (owner console/script), #109/#110 (filed tonight). Owner activation: apply_94 -> apply_49 -> apply_79, push, then one deploy cycle ships the night.**
+
 ## 2026-09-02 03:35 IST - Goal wave complete: 14 issues fixed/built in one coordinated pass (#42/#46/#51/#52/#64/#88/#92/#94/#102/#104-#108); all four Locust race scenarios RUN against the live stack; #108 found, fixed, and live-re-proven the same night
 
 **Agent/surface:** Claude Fable 5 (Claude Code) coordinating eight `fullstack-engineer`/`deployment-engineer` subagents (Claude Opus 5) on partitioned file sets, plus coordinator-direct fixes and all mutating live runs. Highlights only -- each agent's full evidence is in its report and on its issue.

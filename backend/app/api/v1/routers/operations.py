@@ -31,6 +31,7 @@ from app.services.escalation_service import (
     start_escalation_work,
     take_over_thread,
 )
+from app.scheduling.sequencer import request_sequencer_proposal
 from app.services.ops_copilot import get_resolution_suggestion
 from app.services.thread_message_service import post_operations_message
 
@@ -189,6 +190,63 @@ async def start_escalation_work_endpoint(
         await session.rollback()
         raise
     return ok(result, get_request_id(request))
+
+
+class RequestSequencerProposalBody(BaseModel):
+    """Section 7.5.5 `request_sequencer_proposal` -- `escalation_id` (path), `facility_id`.
+
+    `facility_id` is accepted because the catalog lists it, and is **never used as the answer**: the
+    service derives the facility from the escalation's own row and refuses a mismatch (M15 /
+    section 7.5 principle 1 -- *"Where an id appears, it selects within the caller's scope and is
+    validated against it"*). Omitting it is the normal case and the recommended one; the field
+    exists so a client that already knows the facility can have that belief checked rather than
+    trusted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    facility_id: str | None = Field(default=None, max_length=100)
+
+
+@router.post("/operations/escalations/{escalation_id}/sequencer-proposal")
+async def request_sequencer_proposal_endpoint(
+    escalation_id: str,
+    body: RequestSequencerProposalBody,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Section 7.5.5's eighth tool / FR-OPS-004 / FR-SYS-019 (issues #54, #49).
+
+    A **thin delegate** to section 7.5.3's `propose_facility_schedule`, exactly as the catalog
+    specifies -- *"rather than a parallel tool -- the incident and the run stay linkable"* -- with
+    `trigger_reason = 'CAPACITY_INCIDENT'` and this escalation's id persisted on the resulting run
+    (`scheduling_runs.escalation_id`, a real FK). It returns *"the same shape section 7.5.3 already
+    defines"*, so the ops console and the planner board render one object.
+
+    **This route cannot apply a proposal**, which is D5 surviving the two-surface handoff:
+    `apply_schedule_proposal` lives on `routers/scheduling.py` behind
+    `WAREHOUSE_PLANNER`/`ADMIN` only. Ops Flow 4 step 3 says the same thing in the UI's words --
+    *"This does not apply any capacity change; it asks the sequencer (D5) to compute one."*
+
+    No `Idempotency-Key`: the call consumes no capacity, and the partial unique index behind
+    `RUN_ALREADY_ACTIVE` already makes a double-press produce one run plus a named refusal. Two
+    coordinators pressing it on the same incident is therefore safe by construction rather than by
+    header discipline.
+    """
+    try:
+        result = await request_sequencer_proposal(
+            session, ctx, escalation_id=escalation_id, facility_id=body.facility_id
+        )
+    except Exception:
+        await session.rollback()
+        raise
+    message = (
+        f"Proposal {result.scheduling_run_id} routed to the planner queue."
+        if result.code == "PROPOSED"
+        else "This facility already has a proposal awaiting a planner's review."
+    )
+    return ok(result.model_dump(), get_request_id(request), message=message)
 
 
 @router.get("/operations/escalations/{escalation_id}/suggestion")

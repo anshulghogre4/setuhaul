@@ -345,16 +345,58 @@ test('admin: Policy tab — weights, fairness, simulate, discard, publish gate',
     `the four routine coefficients render seeded from GET /admin/policy/active (HTTP ${policyRes.status()}) -- nothing renders before the server answers, so an invented coefficient is structurally impossible -- and editing one took (${original} -> ${changed}). The published version stays visible above the editor. NOTE P_churn is deliberately absent (the API refuses the key with a 422 because the sequencer is unbuilt), so this row is four fields, not five.`,
   )
 
-  // ---- "Enable fairness term" ------------------------------------------------------------------------------------
+  // ---- Churn (P_churn) — mockup.html section 8's fifth weight row, now real ----------------------
+  const churnField = page.getByLabel(/Churn \(/)
+  await expect(churnField).toBeVisible()
+  const churnSeeded = await churnField.inputValue()
+  await churnField.fill(String(Number(churnSeeded) + 15))
+  const churnEdited = await churnField.inputValue()
+  say(
+    'Churn (P_churn) weight field',
+    'WORKING',
+    `VERDICT CHANGE from NOT-IN-DESIGN (recorded earlier the same day, when the key was still refused). mockup.html section 8's fifth weight row now renders, seeded from the server at ${churnSeeded} -- section 5.1's own recommended ~30 weighted-min-equivalents per moved promise -- and editing took (${churnSeeded} -> ${churnEdited}). The 422 that made this field dishonest is gone: P_churn is a live constraints.json score_weights key and admin_governance_service.BLOCKED_WEIGHT_KEYS is now empty. Gated by adminChurnWeightEnabled, which was SPLIT out of adminFairnessTermEnabled precisely so this half could flip on its own evidence rather than waiting on the fairness gate.`,
+  )
+  // Restore before the simulation below, so the payload assertion is about the routine edit.
+  await churnField.fill(churnSeeded)
+
+  // ---- "Enable fairness term" — Screen 9's Danger-Zone gate, now live ----------------------------
   const fairness = page.getByRole('button', { name: 'Enable fairness term' })
   await expect(fairness).toBeVisible()
-  const fairnessDisabled = await fairness.getAttribute('aria-disabled')
-  const fairnessTitle = await fairness.getAttribute('title')
   const dangerBox = await page.getByRole('heading', { name: /Fairness term/ }).count()
+  await fairness.click()
+
+  const gate = page.getByRole('dialog')
+  await expect(gate).toBeVisible()
+  const confirmButton = gate.getByRole('button', { name: 'Enable fairness term' })
+  const disabledBefore = await confirmButton.isDisabled()
+  const confirmWhy = await confirmButton.getAttribute('title')
+  const stakes = await gate
+    .getByText(/balances urgency against carrier concentration/)
+    .count()
+  const publishesNothing = await gate.getByText(/It does not publish anything/).count()
+
+  // The phrase must be exact: a near-miss must NOT arm the button, which is the whole point of a
+  // typed confirmation rather than an "Are you sure?".
+  const phraseField = gate.getByLabel(/to confirm/)
+  await phraseField.fill('enable fairness')
+  const disabledOnNearMiss = await confirmButton.isDisabled()
+  await phraseField.fill('ENABLE FAIRNESS')
+  const disabledAfter = await confirmButton.isDisabled()
+
+  await confirmButton.click()
+  await expect(gate).toBeHidden()
+
+  // Flow 7 step 2: confirming makes w_fairness editable in the ORDINARY editor and publishes
+  // nothing. Both halves are asserted -- the field appears, and no policy write was issued.
+  const fairnessField = page.getByLabel(/Fairness \(/)
+  await expect(fairnessField).toBeVisible()
+  const fairnessValue = await fairnessField.inputValue()
+  const enableGone = await page.getByRole('button', { name: 'Enable fairness term' }).count()
+
   say(
-    '"Enable fairness term"',
-    'INACTIVE-LABELED',
-    `present inside its own visually-separated danger-zone box (${dangerBox} heading), focusable, aria-disabled=${fairnessDisabled}, title "${fairnessTitle}", with an sr-only copy of the same reason and an inline note. Gated by adminFairnessTermEnabled=false (#69). w_fairness is round-tripped unchanged rather than dropped.`,
+    '"Enable fairness term" (Screen 9 Danger Zone)',
+    'WORKING',
+    `the full FR-ADM-007 gate, driven end to end and writing nothing. The action sits in its own visually-separated danger-zone box (${dangerBox} heading) -- components.md section 4's "the visual separation IS the signal". Activating it opened the typed confirmation carrying the real stakes copy (${stakes} match) and the "does not publish anything" statement (${publishesNothing} match). The confirm button is GENUINELY disabled until the phrase matches exactly: empty -> disabled=${disabledBefore} (title "${confirmWhy}"), near-miss "enable fairness" -> disabled=${disabledOnNearMiss} (case-sensitive, so a near-miss does not arm it), exact "ENABLE FAIRNESS" -> disabled=${disabledAfter}. Confirming made w_fairness an ORDINARY weight row seeded from live data (value ${fairnessValue}) and removed the Enable button entirely (${enableGone} remaining) rather than leaving a no-op disabled control -- Flow 7 step 3 puts DISABLING back on the ordinary weight path, so there is no second gate to render. NOTHING WAS PUBLISHED: the dialog has no write path at all, and any non-zero value still has to pass the ordinary simulate-then-publish gate (edge-cases.md #6).`,
   )
 
   // ---- Simulate (read-only; safe to execute) ----------------------------------------------------------------------
@@ -370,7 +412,27 @@ test('admin: Policy tab — weights, fairness, simulate, discard, publish gate',
   say(
     '"Simulate against last 30 days"',
     'WORKING',
-    `POST /admin/policy/simulate (HTTP ${simRes.status()}) carrying exactly [${Object.keys(simBody.weights ?? {}).join(', ')}] -- the edited routine weights plus the untouched passthrough keys, w_fairness included -- and the aggregate rendered first as an aria-live status: "${headlineText}". Read-only: it never touches policy_versions.`,
+    `POST /admin/policy/simulate (HTTP ${simRes.status()}) carrying exactly [${Object.keys(simBody.weights ?? {}).join(', ')}] -- the edited routine weights plus the untouched passthrough keys, w_fairness included -- and the aggregate rendered first as an aria-live status: "${headlineText}". Read-only: it never touches policy_versions. P_churn is NOT in that key list and cannot be: buildProposedWeights starts from the server's own live_weights, so an unaccepted key is structurally impossible to send rather than merely unlikely.`,
+  )
+
+  // ---- Screen 10's churn readout — an always-false term reported honestly ------------------------
+  const churnReadout = page.getByText(/Churn term (changed here|unchanged at)/)
+  await expect(churnReadout).toBeVisible()
+  const churnText = (await churnReadout.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
+  say(
+    'Simulation churn readout (Screen 10)',
+    'WORKING',
+    `the panel states the churn term's participation and, critically, does NOT treat "non-zero value, term not evaluated" as a contradiction the way the fairness readout does: "${churnText.slice(0, 260)}". That asymmetry is the finding. For w_fairness that combination WOULD be the silent-ignore defect #69 was filed about; for P_churn it is correct and permanent, because P_churn is a SEQUENCER-objective weight (section 5.1, "Pricing churn") and section 5 Stage 2's per-driver formula contains no churn term at all -- so it can never move a flip_count at any value. Driven live: simulating P_churn 30 -> 45 returned HTTP 200 with flip_count unchanged at 0, churn_term_evaluated=false, live_p_churn=30, proposed_p_churn=45. Copying the fairness logic here would have raised a permanent false alarm on a working system. The server's own p_churn_note is rendered verbatim, and it names where the value DOES take effect (the next propose_facility_schedule, comparing two runs' objective.churn_cost).`,
+  )
+
+  // ---- Screen 10's fairness readout — the caveat implementation-spec.md flagged, now retired -----
+  const fairnessReadout = page.getByText(/Fairness term (participated|did not participate)/)
+  await expect(fairnessReadout).toBeVisible()
+  const readoutText = (await fairnessReadout.textContent())?.replace(/\s+/g, ' ').trim()
+  say(
+    'Simulation fairness readout (Screen 10)',
+    'WORKING',
+    `the panel STATES the term's participation rather than leaving it inferred from a flip count: "${readoutText}". This is the retirement of implementation-spec.md section 3's Screen 10 caveat (a) -- "a simulation 'using' fairness would report identical flip counts regardless of the value" -- which held while w_fairness was silently dropped. The backend now returns fairness_term_evaluated plus live_w_fairness and proposed_w_fairness, and all three are rendered. A non-zero weight reported as NOT evaluated is treated as a contradiction and warned about rather than smoothed over, because that combination would be exactly the silent-ignore defect #69 was filed for.`,
   )
 
   // ---- Case expander rows ----------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
-import { apiGet, apiPost } from '@/core/http/api'
-import { plannerGet, plannerPost } from './http'
+import { apiGet, apiPost, isApiError } from '@/core/http/api'
+import { plannerGet, plannerPost, plannerPostNoKey } from './http'
 import type {
+  ApplyProposalResult,
   AppointmentTransitionResult,
   BulkConfirmResult,
   CounterOfferResult,
@@ -11,6 +12,9 @@ import type {
   FeasibleSlotsResult,
   HoldForInformationResult,
   PlannerQueue,
+  SchedulingRun,
+  SchedulingRunList,
+  SchedulingRunSummary,
 } from './types'
 import type { RejectReasonCode } from './reasons'
 
@@ -298,3 +302,200 @@ export function bulkConfirm(args: {
  *  above that refuses an obviously-wrong call without ever refusing a real one. Mirrored here so
  *  the UI can stop before the server has to. */
 export const MAX_BULK_CONFIRM_IDS = 50
+
+/* ==============================================================================================
+ * The Sequencer -- SS7.5.3's three tools (issue #49, FR-PLN-009, FR-SYS-016)
+ *
+ * PATHS RECONCILED 2026-09-02 against `backend/app/api/v1/routers/scheduling.py` as landed. SS7.5.3
+ * is a TOOL catalog, not a REST spec -- it names arguments and returns, never URLs -- so the routes
+ * below are the backend's choice and this client was corrected to them, not the other way round.
+ * The one path this client guessed correctly is the ops delegate, because SS7.5.5 pins it to the
+ * escalation it is called on.
+ * ============================================================================================ */
+
+/**
+ * `propose_facility_schedule` -- SS7.5.3. Flow 9's **self-triggered** origin.
+ *
+ * `POST /api/v1/scheduling/proposals`.
+ *
+ * ## Three arguments this client deliberately does not send, each for a different reason
+ *
+ * **`trigger_reason`** -- the route pins it to `PLANNER_REQUESTED` server-side and takes no such
+ * body field. That is the correct division and it matches what this client wanted anyway: the other
+ * admissible value, `CAPACITY_INCIDENT`, belongs to SS7.5.5's ops delegate and is set there from the
+ * escalation it was called on. A planner client able to choose it could stamp an incident origin
+ * onto a run no incident produced, which is exactly the linkage SS7.5.5 exists to keep honest.
+ *
+ * **`horizon_end`** -- the body accepts it; this client omits it. SS5.1 fixes the run scope at
+ * *"4 hours or to `close_time`, whichever is sooner"*, and both bounds need the facility's own
+ * timezone and closing time. Same reasoning `fetchDockBoard` gives for sending no horizon: a browser
+ * deriving them from a local clock is the wrong-day hazard this product designs against. The
+ * response reports which bound applied (`horizon.end_reason`).
+ *
+ * **`Idempotency-Key`** -- the route takes none, deliberately, and its docstring gives a better
+ * reason than this client's original one: SS7.5 principle 3 attaches keys to calls that *consume
+ * capacity*, and a proposal writes no `dock_occupancy` row, no appointment and no notification
+ * (D5: *"Sequencer output is a reviewable artifact, never a silent write"*). The protection is
+ * already given, and given better, by the partial unique index behind `RUN_ALREADY_ACTIVE` -- a
+ * double-submit produces **one** run and a named refusal naming it, rather than two runs sharing a
+ * key. The key was removed from this signature rather than sent and ignored.
+ *
+ * `facilityId` goes in the **body** (not a query string, which is what this client first guessed)
+ * and remains a **narrowing request, never an assertion** (M15/NFR-019), identical to
+ * `fetchPlannerQueue`/`fetchDockBoard`: it is sent because an `ADMIN` holds global read scope and
+ * something has to name a facility, and a mismatch is a server-side 403.
+ *
+ * ## `RUN_ALREADY_ACTIVE` arrives as a 200, not an error
+ *
+ * The route returns *"200 with a typed body in both outcomes, matching `bulk_confirm`'s posture
+ * rather than `request_slot`'s 409: `RUN_ALREADY_ACTIVE` is not an error, it is section 5.1's
+ * debounce working, and the response carries the incumbent run the planner should look at
+ * instead."* So there is no catch block here at all -- the caller branches on `code`, and
+ * `active_run` names the incumbent.
+ */
+export function proposeFacilitySchedule(args: {
+  facilityId?: string | null
+}): Promise<SchedulingRun> {
+  return plannerPostNoKey<SchedulingRun>('/api/v1/scheduling/proposals', {
+    facility_id: args.facilityId ?? null,
+  })
+}
+
+/**
+ * `get_scheduling_run` -- SS7.5.3: *"the stored run: input snapshot, proposal, objective values,
+ * explanation -- replayable a month later, which is what makes SS8's 'how the business can trust
+ * the allocation' answerable."*
+ *
+ * `GET /api/v1/scheduling/runs/{scheduling_run_id}`.
+ *
+ * A plain read with no snapshot argument: reading a run never revalidates it. The staleness check
+ * belongs to apply, and doing it here would make merely *opening* the overlay refuse a proposal the
+ * planner has not yet decided about.
+ *
+ * **Returns the same `SchedulingRunResult` model `propose` does**, which is the backend's own
+ * deliberate choice: *"a planner reviewing a proposal an hour after it was computed must see the
+ * identical object the requester saw, or the review is of something else."*
+ */
+export function fetchSchedulingRun(schedulingRunId: string): Promise<SchedulingRun> {
+  return plannerGet<SchedulingRun>(
+    `/api/v1/scheduling/runs/${encodeURIComponent(schedulingRunId)}`,
+  )
+}
+
+/**
+ * The pending-run list behind `[ Review proposal (N) ]` (`screens.md` section 3).
+ *
+ * `GET /api/v1/scheduling/runs?facility_id=&status=PROPOSED&limit=`.
+ *
+ * ## The gap this function used to report is CLOSED (2026-09-02)
+ *
+ * It previously returned `null` for "this backend cannot answer", because SS7.5.3 defines propose /
+ * apply / get-by-id and **no list**, while `screens.md` section 3 requires a count on the Board
+ * toolbar and Flow 9 requires the button to go live for an **ops-handoff** run this surface never
+ * observes. The endpoint now exists and names itself honestly as *"an addition to section 7.5.3's
+ * catalog, not an implementation of it"*, citing both callers -- the same discipline
+ * `planner.py::dock_block_impact` states for itself. The `null` degrade is therefore gone: an
+ * unknown count was only ever the right answer while the server genuinely could not answer.
+ *
+ * ## Two properties worth keeping straight
+ *
+ * `facility_id` is a **narrowing request, never a scope assertion** (M15) -- it runs through
+ * `resolve_facility_scope_with_user_scopes`. Unlike `/scheduling/proposals` no facility is
+ * *required*, deliberately: *"is any facility waiting on a planner"* is a legitimate question for a
+ * global-read tier, and this is a read.
+ *
+ * The response carries **summaries**, not whole runs (`runs`, not `items` -- checked against the
+ * model rather than assumed): enough for a count and an id, so opening one still fetches the full
+ * run by id. An unknown `status` is a 422 rather than a silently empty list, which is why nothing
+ * here coerces the filter.
+ */
+export async function listPendingSchedulingRuns(
+  facilityId?: string | null,
+): Promise<SchedulingRunSummary[]> {
+  const params = new URLSearchParams({ status: 'PROPOSED' })
+  if (facilityId) params.set('facility_id', facilityId)
+  const res = await plannerGet<SchedulingRunList>(`/api/v1/scheduling/runs?${params.toString()}`)
+  return res.runs ?? []
+}
+
+/**
+ * `apply_schedule_proposal` -- SS7.5.3, and the most constrained call on this surface.
+ *
+ * `POST /api/v1/scheduling/runs/{scheduling_run_id}/apply`.
+ *
+ * ## Three arguments, and the absent fourth is the contract
+ *
+ * `scheduling_run_id` (path), `snapshot_hash` (body), `Idempotency-Key` (header, **required** -- the
+ * route 400s `IDEMPOTENCY_KEY_REQUIRED` without one, because this is the sequencer call that does
+ * consume capacity). **There is deliberately no "apply these rows" argument** -- SS7.5.3 states it
+ * outright, SS5.1 gives the reason (*"cherry-picking produces a schedule nobody validated"*), and
+ * `components.md` section 7 turns it into a UI rule (*"the UI does not offer a control the tool
+ * doesn't support"*). The backend enforces it too: `ApplyScheduleBody` is `extra="forbid"` with
+ * `snapshot_hash` as its only field. This signature is where that rule lives on the client side --
+ * there is no parameter a future checkbox could be wired into.
+ *
+ * `snapshotHash` is the value the **run** handed us, round-tripped verbatim and never recomputed --
+ * the same discipline every other write on this surface follows (see this file's header).
+ *
+ * ## Five outcomes across two transports, all normalised to one result
+ *
+ * 200 carries `APPLIED`, `ALREADY_APPLIED` and `RUN_NOT_ACTIVE` -- none of which is a failure, so
+ * they arrive as ordinary results. 409 carries `SNAPSHOT_DRIFT` and `PARTIALLY_INFEASIBLE`, the two
+ * refusals Flow 9 steps 4-5 give distinct screens; they are folded back into a result here so the
+ * overlay branches on one `code` rather than on a status.
+ *
+ * ## The 409 payload gap is CLOSED (2026-09-02), and the fix landed where it belonged
+ *
+ * This client previously reported that the route put the typed `ApplyResult` in the envelope's
+ * `data` while `core/http/errors.ts` builds `ApiError` from `errors[0]` only -- so `infeasible[]`
+ * and `drift`, the recovery data Flow 9 renders from, never reached the client. The route now
+ * `json.dumps`-es the whole `ApplyResult` into `errors[0].detail`, which is exactly what
+ * `allocation.py`'s own `_snapshot_stale_error` / `_displacement_error` /
+ * `_interval_unavailable_error` already did and precisely why `ApiError.data` exists. So the
+ * parsed document below is the real payload, not a reconstruction -- **fixed on the backend in one
+ * line rather than worked around per-surface, and without touching a shared error type every
+ * surface depends on.**
+ */
+export async function applyScheduleProposal(args: {
+  schedulingRunId: string
+  snapshotHash: string
+  idempotencyKey: string
+}): Promise<ApplyProposalResult> {
+  const path = `/api/v1/scheduling/runs/${encodeURIComponent(args.schedulingRunId)}/apply`
+  try {
+    return await plannerPost<ApplyProposalResult>(
+      path,
+      { snapshot_hash: args.snapshotHash },
+      args.idempotencyKey,
+    )
+  } catch (error) {
+    if (
+      isApiError(error) &&
+      (error.code === 'SNAPSHOT_DRIFT' || error.code === 'PARTIALLY_INFEASIBLE')
+    ) {
+      // `error.data` IS the server's own `ApplyResult`, parsed from the JSON document it put in
+      // `detail`. Spread rather than field-picked, so a term the server adds later reaches the
+      // overlay instead of being silently dropped by a hand-written mapping.
+      const doc = (error.data ?? {}) as Partial<ApplyProposalResult>
+      return {
+        as_of: doc.as_of ?? new Date().toISOString(),
+        scheduling_run_id: args.schedulingRunId,
+        status: 'PROPOSED',
+        notification_batch_id: null,
+        notifications_enqueued: 0,
+        moved: 0,
+        newly_placed: 0,
+        unchanged: 0,
+        drift: null,
+        infeasible: [],
+        idempotency_key: args.idempotencyKey,
+        idempotent_replay: false,
+        ...doc,
+        // Last word to the envelope's own code: `detail` and `errors[0].code` cannot be allowed to
+        // disagree about which refusal this is, and the code is what the overlay switches on.
+        code: error.code,
+      }
+    }
+    throw error
+  }
+}

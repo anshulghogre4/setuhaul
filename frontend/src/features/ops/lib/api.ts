@@ -12,6 +12,7 @@ import type {
   ResolutionSuggestion,
   ResolveCancelResult,
   ResolveReasonCode,
+  SequencerProposalResult,
   StartWorkResult,
   TakeOverResult,
   ThreadMessagesResponse,
@@ -232,6 +233,61 @@ export async function postOperationsMessage(
     `/api/v1/operations/threads/${threadId}/messages`,
     { message_text: messageText, client_message_id: idempotencyKey },
     { idempotencyKey },
+  )
+  return res.data
+}
+
+/**
+ * `request_sequencer_proposal` -- SS7.5.5's delegate, issues #54/#49, FR-OPS-004.
+ *
+ * ## The whole point of this call is that it is a DELEGATE, not a parallel tool
+ *
+ * SS7.5.5: *"Delegates to SS7.5.3's `propose_facility_schedule` with `trigger_reason =
+ * 'CAPACITY_INCIDENT'` and the `escalation_id` attached to the resulting `scheduling_run_id` ...
+ * the incident and the run stay linkable."* So this client sends **neither** argument: the trigger
+ * reason is the delegate's own constant (a client that could choose it could launder a planner-
+ * requested run through an incident it never triaged), and the escalation id is in the path.
+ *
+ * ## `facility_id` is deliberately NOT sent, and the shipped route confirms that is safe
+ *
+ * SS7.5.5's row names `escalation_id, facility_id`. M15/NFR-019 -- restated at the top of SS7.5 and
+ * enforced everywhere else on this surface -- says scope is derived server-side from the verified
+ * token and never accepted as a client argument. The escalation's own row already carries
+ * `facility_id` (it is on `EscalationQueueItem`, written by `escalation_service`), so the second
+ * argument is redundant *and* is the one shape by which this client could ask for a run against a
+ * facility the incident does not belong to. `escalateException` above resolved the identical
+ * tension the same way (its body names a shipment, never a facility).
+ *
+ * **Verified against the landed route rather than assumed:** `RequestSequencerProposalBody` declares
+ * `facility_id: str | None = None` and is `extra="forbid"`, so an empty body is valid and omitting
+ * the field is a supported call, not a gamble. Sent nothing; nothing broke.
+ *
+ * ## No `Idempotency-Key`, and the route's own reasoning is better than this client's first one
+ *
+ * This function originally generated a key, on the reasoning that a proposal persists a
+ * `scheduling_runs` row. The route takes none, deliberately, and says why: SS7.5 principle 3
+ * attaches keys to calls that **consume capacity**, and a proposal writes no `dock_occupancy` row,
+ * no appointment and no notification (D5 -- *"Sequencer output is a reviewable artifact, never a
+ * silent write"*). The double-press protection comes instead from `scheduling_runs`' partial unique
+ * index on `(facility_id) WHERE status = 'PROPOSED'`, which makes two coordinators pressing this on
+ * the same incident produce **one** run plus a named refusal -- safe by construction rather than by
+ * header discipline, and stronger than two runs sharing a key would be.
+ *
+ * ## `RUN_ALREADY_ACTIVE` arrives as a 200, so there is no catch block here
+ *
+ * SS5.1's debounce rule is an **expected, recoverable condition** --
+ * `03-planner-dock-board/edge-cases.md` section 4 says so outright and requires an inline state
+ * rather than a failure. The catalog expresses it as a return value and the shipped route agrees,
+ * returning 200 with a typed body in both outcomes (its docstring: *"`RUN_ALREADY_ACTIVE` is not an
+ * error, it is section 5.1's debounce working, and the response carries the incumbent run"*). So the
+ * caller branches on `code` and nothing is thrown for it. Every real error still throws.
+ */
+export async function requestSequencerProposal(
+  escalationId: string,
+): Promise<SequencerProposalResult> {
+  const res = await apiPost<SequencerProposalResult>(
+    `/api/v1/operations/escalations/${escalationId}/sequencer-proposal`,
+    {},
   )
   return res.data
 }

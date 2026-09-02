@@ -3,6 +3,9 @@ import type {
   DockBoard,
   FeasibleSlotOption,
   PlannerQueueRow,
+  ProposalPlacement,
+  ProposalUnplaceable,
+  SchedulingRun,
 } from '../lib/types'
 
 /**
@@ -356,4 +359,231 @@ export const PICKER_OPTIONS: FeasibleSlotOption[] = [
     differentiator: 'Latest available',
     ranking_explanation: [],
   },
+]
+
+/* ==============================================================================================
+ * The sequencer proposal (states 19-21) -- issue #49, FR-PLN-009
+ *
+ * Shapes copied from `backend/app/scheduling/sequencer.py`'s Pydantic models, which are all
+ * `extra="forbid"` -- so a field the server stops sending, or one this fixture invents, breaks the
+ * gallery at COMPILE time rather than only when someone looks at the plate.
+ * ============================================================================================ */
+
+/** Fields every `PlacementView` carries that this gallery does not vary. Named once so each
+ *  placement below reads as its own differences rather than as a wall of boilerplate. */
+const PLACEMENT_BASE = {
+  order_reference: null,
+  carrier_id: 'CAR-001',
+  release_source: 'ETA',
+  wait_minutes: 0,
+  lateness_minutes: 0,
+  exact_dock_match: true,
+  cost: 0,
+  pinned: false,
+} as const
+
+/**
+ * A proposal shaped like SS5.1's own worked example, drawn against `BOARD` above.
+ *
+ * Deliberately exercises all four of SS5.1's diff categories at once, because the summary line and
+ * the delta layer are the two things a plate can prove and a type cannot:
+ *
+ *  - **moved, communicated, past the epsilon** -- SHP1009 off D1 onto D4 by 30 min. `communicated`
+ *    AND `is_churn`, so the moved list must say "driver will be notified" and this is the row the
+ *    objective's `churn_count: 1` is counting.
+ *  - **moved, not yet communicated** -- SHP1021 within D2. Same category, opposite annotation, and
+ *    NOT churn: SS5.1 only charges `P_churn` for a promise already communicated. This is why
+ *    `promises_moved` is 2 while `churn_count` is 1 -- the two numbers the overlay renders side by
+ *    side precisely so they cannot be confused.
+ *  - **newly placed** -- SHP1044 onto D3, `previous_*` all null, so it must draw a `NEW` badge
+ *    rather than `MOVED` (the delta bar discriminates on `previous_start_ts`, not on a client tag).
+ *  - **unchanged** -- SHP1031 stays exactly where the board already draws it. Included precisely so
+ *    the plate proves it draws NO outline: outlining an unchanged appointment would say the
+ *    sequencer proposes to move something it proposes to leave alone.
+ *  - **unplaceable** -- SHP1015, SS5.1's own reefer example. `UnplaceableView` has no interval
+ *    fields at all, so it CANNOT be drawn as a bar -- it appears only in the list below the board.
+ *
+ * The claim intervals are deliberately longer than the promised ones (start + unload + D10's
+ * buffer), which is what lets the plate demonstrate that the delta bars are drawn from
+ * `claim_*` and the moved list quotes `start_ts` -- the one field pairing most likely to be
+ * silently swapped.
+ */
+export const PROPOSAL_RUN: SchedulingRun = {
+  as_of: BOARD_START,
+  source: 'postgresql',
+  code: 'PROPOSED',
+  scheduling_run_id: 'RUN-8f2a',
+  facility_id: 'FAC-JAI-01',
+  facility_name: 'Jaipur',
+  trigger_reason: 'CAPACITY_INCIDENT',
+  escalation_id: 'ESC-GALLERY-01',
+  status: 'PROPOSED',
+  policy_version: 'POL-v3',
+  snapshot_hash: 'sha256/gallery-proposal-v1',
+  horizon: { start_ts: BOARD_START, end_ts: BOARD_END, end_reason: 'ROLLING_WINDOW' },
+  counts: { unchanged: 1, moved: 2, newly_placed: 1, unplaceable: 1 },
+  explanation:
+    'Greedy insertion by Stage-2 score, then pairwise improvement. Two promises moved to clear the D1 outage window; one reefer load could not be placed before close.',
+  objective: {
+    policy_version: 'POL-v3',
+    lateness_cost: 1200,
+    waiting_cost: -510,
+    fallback_dock_cost: 25,
+    churn_cost: 30,
+    fairness_cost: 0,
+    total_cost: 41_200,
+    churn_count: 1,
+    promises_moved: 2,
+    placements: 4,
+    unchanged_count: 1,
+    newly_placed_count: 1,
+    unplaceable_count: 1,
+    waiting_minutes_total: 140,
+    waiting_minutes_delta: -85,
+    coefficients: { lateness_per_minute: 4, wait_after_eta_per_minute: -6, w_fairness: 0 },
+  },
+  requested_by_user_id: 'USR101',
+  created_at: BOARD_START,
+  applied_at: null,
+  applied_by_user_id: null,
+  notifications_enqueued: null,
+  superseded_at: null,
+  superseded_reason: null,
+  input_snapshot: {},
+  active_run: null,
+  diff: {
+    unchanged: [
+      {
+        ...PLACEMENT_BASE,
+        shipment_id: 'SHP1031',
+        appointment_id: null,
+        priority_code: 'NORMAL',
+        dock_id: 'D3',
+        dock_code: 'D3',
+        slot_id: 'SLOT-D3-0630',
+        start_ts: '2026-08-29T06:30:00+00:00',
+        end_ts: '2026-08-29T07:30:00+00:00',
+        claim_start_ts: '2026-08-29T06:30:00+00:00',
+        claim_end_ts: '2026-08-29T07:45:00+00:00',
+        previous_slot_id: 'SLOT-D3-0630',
+        previous_dock_id: 'D3',
+        previous_dock_code: 'D3',
+        previous_start_ts: '2026-08-29T06:30:00+00:00',
+        delta_minutes: 0,
+        communicated: true,
+        is_churn: false,
+        release_ts: '2026-08-29T06:00:00+00:00',
+      },
+    ],
+    moved: [
+      {
+        ...PLACEMENT_BASE,
+        shipment_id: 'SHP1009',
+        appointment_id: 'APT-1042',
+        priority_code: 'HIGH',
+        dock_id: 'D4',
+        dock_code: 'D4',
+        slot_id: 'SLOT-D4-0615',
+        start_ts: '2026-08-29T06:15:00+00:00',
+        end_ts: '2026-08-29T07:15:00+00:00',
+        claim_start_ts: '2026-08-29T06:15:00+00:00',
+        claim_end_ts: '2026-08-29T07:30:00+00:00',
+        previous_slot_id: 'SLOT-D1-0545',
+        previous_dock_id: 'D1',
+        previous_dock_code: 'D1',
+        previous_start_ts: '2026-08-29T05:45:00+00:00',
+        delta_minutes: 30,
+        // Past the 15-minute epsilon AND already told to the driver -- so this is the one row
+        // `churn_count: 1` counts.
+        communicated: true,
+        is_churn: true,
+        release_ts: '2026-08-29T05:30:00+00:00',
+        exact_dock_match: false,
+      },
+      {
+        ...PLACEMENT_BASE,
+        shipment_id: 'SHP1021',
+        appointment_id: 'APT-1044',
+        priority_code: 'NORMAL',
+        dock_id: 'D2',
+        dock_code: 'D2',
+        slot_id: 'SLOT-D2-0800',
+        start_ts: '2026-08-29T08:00:00+00:00',
+        end_ts: '2026-08-29T09:00:00+00:00',
+        claim_start_ts: '2026-08-29T08:00:00+00:00',
+        claim_end_ts: '2026-08-29T09:15:00+00:00',
+        previous_slot_id: 'SLOT-D2-0730',
+        previous_dock_id: 'D2',
+        previous_dock_code: 'D2',
+        previous_start_ts: '2026-08-29T07:30:00+00:00',
+        delta_minutes: 30,
+        // Moved just as far, but nobody has been told -- so it is NOT churn. This pair is the
+        // whole reason the overlay renders promises_moved and churn_count separately.
+        communicated: false,
+        is_churn: false,
+        release_ts: '2026-08-29T07:00:00+00:00',
+      },
+    ],
+    newly_placed: [
+      {
+        ...PLACEMENT_BASE,
+        shipment_id: 'SHP1044',
+        appointment_id: null,
+        priority_code: 'CRITICAL',
+        dock_id: 'D3',
+        dock_code: 'D3',
+        slot_id: 'SLOT-D3-0800',
+        start_ts: '2026-08-29T08:00:00+00:00',
+        end_ts: '2026-08-29T08:45:00+00:00',
+        claim_start_ts: '2026-08-29T08:00:00+00:00',
+        claim_end_ts: '2026-08-29T09:00:00+00:00',
+        // All null: nothing was promised before, which is what makes the badge read NEW.
+        previous_slot_id: null,
+        previous_dock_id: null,
+        previous_dock_code: null,
+        previous_start_ts: null,
+        delta_minutes: null,
+        communicated: false,
+        is_churn: false,
+        release_ts: '2026-08-29T07:45:00+00:00',
+      },
+    ],
+    unplaceable: [PROPOSAL_UNPLACEABLE_ROW()],
+  },
+}
+
+/**
+ * SS5.1's own unplaceable example. A function rather than a const so it can also seed the
+ * `PARTIALLY_INFEASIBLE` plate without the two sharing a mutable object identity.
+ */
+function PROPOSAL_UNPLACEABLE_ROW(): ProposalUnplaceable {
+  return {
+    shipment_id: 'SHP1015',
+    order_reference: 'ORD-1015',
+    priority_code: 'CRITICAL',
+    release_ts: '2026-08-29T05:00:00+00:00',
+    release_source: 'GATE_IN',
+    failure_code: 'NO_COMPATIBLE_DOCK',
+    message: 'no compatible reefer interval before close',
+    candidates_considered: 12,
+  }
+}
+
+/** The delta layer the overlay hands `BoardPlate` -- moved + newly placed, never unchanged (already
+ *  drawn as a committed bar) and never unplaceable (no interval to draw). */
+export const PROPOSAL_DELTAS: ProposalPlacement[] = [
+  ...PROPOSAL_RUN.diff.moved,
+  ...PROPOSAL_RUN.diff.newly_placed,
+]
+
+/**
+ * `PARTIALLY_INFEASIBLE`'s named rows -- Flow 9 step 5's *"explains which constraint made the whole
+ * proposal invalid"*.
+ *
+ * Typed as the loose `Record` the wire actually carries (`ApplyResult.infeasible` is
+ * `list[dict[str, Any]]`, the one untyped field in the sequencer contract), so the plate exercises
+ * the same defensive read path the live refusal takes rather than a stricter one that would hide it.
+ */
+export const PROPOSAL_INFEASIBLE: Array<Record<string, unknown>> = [
+  { ...PROPOSAL_UNPLACEABLE_ROW() },
 ]

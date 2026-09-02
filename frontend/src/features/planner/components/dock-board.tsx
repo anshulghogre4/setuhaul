@@ -27,6 +27,7 @@ import type {
   DockBoard as DockBoardPayload,
   FeasibleSlotOption,
   PlannerQueueRow,
+  ProposalPlacement,
 } from '../lib/types'
 
 /**
@@ -481,6 +482,7 @@ export function BoardPlate({
   pickable = null,
   chosenSlotId = null,
   onPickInterval,
+  proposal = null,
 }: {
   board: DockBoardPayload
   /** Lets the gallery mount the picker's own rendering (states 3/24/25) through the SAME `Board`
@@ -489,6 +491,10 @@ export function BoardPlate({
   pickable?: FeasibleSlotOption[] | null
   chosenSlotId?: string | null
   onPickInterval?: (option: FeasibleSlotOption) => void
+  /** States 19-21's delta layer. Same reason as `pickable`: the gallery must render the proposal
+   *  overlay through the real board, not a look-alike. Drawing a delta writes nothing by
+   *  construction -- `apply_schedule_proposal` lives in `proposal-overlay.tsx`. */
+  proposal?: ProposalPlacement[] | null
 }) {
   const { now, offsetMs } = useCountdownClock()
   return (
@@ -498,6 +504,7 @@ export function BoardPlate({
       pickable={pickable}
       chosenSlotId={chosenSlotId}
       onPickInterval={onPickInterval}
+      proposal={proposal}
     />
   )
 }
@@ -508,6 +515,7 @@ function Board({
   pickable = null,
   chosenSlotId = null,
   onPickInterval,
+  proposal = null,
 }: {
   board: DockBoardPayload
   nowMs: number
@@ -516,12 +524,33 @@ function Board({
   pickable?: FeasibleSlotOption[] | null
   chosenSlotId?: string | null
   onPickInterval?: (option: FeasibleSlotOption) => void
+  /** `null` = at rest. Non-null means a sequencer proposal is being reviewed over this board
+   *  (states 19-21) -- the current schedule stays drawn and the delta floats above it. */
+  proposal?: ProposalPlacement[] | null
 }) {
   const horizonStartMs = useMemo(() => Date.parse(board.horizon_start), [board.horizon_start])
   const horizonEndMs = useMemo(() => Date.parse(board.horizon_end), [board.horizon_end])
 
   const barsByDock = useMemo(() => groupByDock(board.bars), [board.bars])
   const blocksByDock = useMemo(() => groupByDock(board.blocks), [board.blocks])
+  /**
+   * Deltas grouped by the dock they are PROPOSED onto, not the one they currently sit on.
+   *
+   * That is the whole visual claim of `screens.md` section 6's sketch -- `D3 ... [MOVED→]` draws the
+   * arrival lane, because the question a planner is answering is "where would this end up", and an
+   * outline left behind on the origin lane would say the opposite. A change with no proposed dock is
+   * `UNPLACEABLE` and is excluded here by construction: it lists below the board instead, never as a
+   * bar (`data-formatting.md`'s absence rule).
+   */
+  const deltasByDock = useMemo(() => {
+    const map = new Map<string, ProposalPlacement[]>()
+    for (const change of proposal ?? []) {
+      const list = map.get(change.dock_id)
+      if (list) list.push(change)
+      else map.set(change.dock_id, [change])
+    }
+    return map
+  }, [proposal])
   const ticks = useMemo(
     () => hourTicks(horizonStartMs, horizonEndMs),
     [horizonStartMs, horizonEndMs],
@@ -601,6 +630,8 @@ function Board({
               laneOptions={pickable?.filter((o) => o.dock_id === dock.dock_id) ?? []}
               chosenSlotId={chosenSlotId}
               onPickInterval={onPickInterval}
+              deltas={deltasByDock.get(dock.dock_id) ?? []}
+              proposalActive={proposal !== null}
             />
           ))}
 
@@ -648,6 +679,8 @@ function Lane({
   laneOptions = [],
   chosenSlotId = null,
   onPickInterval,
+  deltas = [],
+  proposalActive = false,
 }: {
   dock: BoardDock
   bars: BoardBar[]
@@ -659,6 +692,11 @@ function Lane({
   laneOptions?: FeasibleSlotOption[]
   chosenSlotId?: string | null
   onPickInterval?: (option: FeasibleSlotOption) => void
+  /** Proposed placements landing on THIS dock (states 19-21). */
+  deltas?: ProposalPlacement[]
+  /** Whether a proposal is being reviewed at all -- separate from `deltas.length`, because a lane
+   *  with no proposed arrival still has to dim its current bars while the delta layer is up. */
+  proposalActive?: boolean
 }) {
   /**
    * `screens.md` section 4: *"Ineligible docks dim and become unclickable (`components.md` §18's
@@ -722,6 +760,21 @@ function Lane({
           <Bar
             key={bar.occupancy_id}
             bar={bar}
+            dock={dock}
+            horizonStartMs={horizonStartMs}
+            horizonEndMs={horizonEndMs}
+            recede={proposalActive}
+          />
+        ))}
+
+        {/* The proposal layer, drawn ABOVE the committed bars it is proposed against -- the literal
+            visual expression of "not committed yet" (`stitch-prompts.md` section 11's elevation
+            note). Same stacking argument as `PickableInterval` below: the thing being decided about
+            has to be on top of the thing it would change. */}
+        {deltas.map((change) => (
+          <ProposalDeltaBar
+            key={`${change.shipment_id}-${change.claim_start_ts}`}
+            change={change}
             dock={dock}
             horizonStartMs={horizonStartMs}
             horizonEndMs={horizonEndMs}
@@ -816,16 +869,141 @@ function PickableInterval({
   )
 }
 
+/**
+ * One proposed placement, drawn as a **floating dashed outline over the current schedule**
+ * (`stitch-prompts.md` section 11, `components.md` section 7, `screens.md` section 6).
+ *
+ * ## Why this is an outline and a text badge rather than a colour
+ *
+ * All three design files say the same thing in three different ways, and it is the one rule most
+ * likely to be "improved" away: *"Moved and newly-placed bars render distinctly from the
+ * current-schedule bars beneath them (an outline or ghost treatment, **not a new hue** -- the hue
+ * budget stays exactly where U10/U59/U85 already fixed it)"*, and the prompt spells out the payoff:
+ * *"under `prefers-reduced-motion`, forced-colors mode, or greyscale this still reads, because the
+ * distinction is border style plus a text badge, not hue."* So the distinction here is carried by
+ * (a) a 2px dashed border, (b) a 2px upward offset, (c) an 11px uppercase `MOVED`/`NEW` badge, and
+ * (d) an elevation shadow. No fifth semantic colour is introduced anywhere in this component.
+ *
+ * ## And why it does not animate
+ *
+ * *"the diff bars do **not** animate into position -- no morphing from the current bar to the
+ * proposed one, no travelling ghost."* There is no transition on this element, deliberately: a
+ * ghost sliding from an old slot to a new one reads as *already happened*, which is precisely the
+ * fact the whole overlay exists to deny.
+ *
+ * The badge word is `NEW` rather than `NEWLY PLACED` because the prompt's own sketch uses `[NEW]`;
+ * the **accessible name uses the full SS5.1 vocabulary**, so the four-word rule survives for a
+ * screen-reader user even where the visual badge is abbreviated for width.
+ */
+function ProposalDeltaBar({
+  change,
+  dock,
+  horizonStartMs,
+  horizonEndMs,
+}: {
+  change: ProposalPlacement
+  dock: BoardDock
+  horizonStartMs: number
+  horizonEndMs: number
+}) {
+  /**
+   * **Drawn from the CLAIM interval, not the promised slot** -- the one field choice on this board
+   * that would be silently wrong if taken from the more obvious pair.
+   *
+   * `PlacementView` carries both: `start_ts`/`end_ts` are the promise (what the driver is told), and
+   * `claim_start_ts`/`claim_end_ts` are the D1 `dock_occupancy` interval the placement actually
+   * reserves -- start + unload + D10's buffer. The model's own comment states the consequence:
+   * *"Rendered on the planner's board, which draws claims and not slots."* Every committed bar
+   * beneath this outline is a claim, so drawing the proposal from the promise would offset the delta
+   * against the very bars it is meant to be compared with, and would understate how much dock time
+   * the placement consumes.
+   */
+  const place = placeOnTrack(
+    change.claim_start_ts,
+    change.claim_end_ts,
+    horizonStartMs,
+    horizonEndMs,
+  )
+  if (place === null) return null
+
+  // `previous_start_ts` is the server's own discriminator between the two drawable categories: a
+  // moved row has somewhere it came from, a newly-placed one does not. Taken from the payload
+  // rather than from a client-side tag, so the board and the lists below cannot disagree.
+  const moved = change.previous_start_ts !== null
+  const badge = moved ? 'MOVED' : 'NEW'
+  const vocabulary = moved ? 'moved' : 'newly placed'
+  const from = moved
+    ? `${change.previous_dock_code ?? change.previous_dock_id ?? 'unknown dock'} ${formatTime(
+        change.previous_start_ts as string,
+      )}`
+    : null
+  // The PROMISE pair here, deliberately -- the accessible name quotes what the driver was or would
+  // be told, while the geometry above uses the claim. Same row, two honest answers to two different
+  // questions.
+  const to = `${dock.dock_code} ${formatTime(change.start_ts)}–${formatTime(change.end_ts)}`
+  // SS5.1's own annotation, and the reason P_churn is a number a planner can check: "(communicated
+  // -- driver will be notified)" is a materially different decision from moving a promise nobody
+  // has been told about yet. `is_churn` is the stricter fact -- communicated AND past the
+  // 15-minute epsilon -- and is what the objective's churn_count actually totals.
+  const communicated = change.communicated
+    ? change.is_churn
+      ? ' · communicated — driver will be notified (counts as churn)'
+      : ' · communicated'
+    : ' · not yet communicated'
+  const description = `Proposed: ${change.shipment_id} ${vocabulary} · ${formatDate(
+    change.start_ts,
+  )} · ${from ? `${from} → ${to}` : to}${communicated}`
+
+  return (
+    <span
+      role="img"
+      title={description}
+      aria-label={description}
+      className={cn(
+        // `-top-0.5` is the prompt's "offset 2px above their current position"; `shadow-md` is its
+        // `0 4px 12px rgba(15,23,42,0.10)` floating layer, taken from the theme's own elevation
+        // scale rather than a hand-rolled rgba so both themes stay correct.
+        'pointer-events-none absolute -top-0.5 flex h-7 items-center gap-1 overflow-hidden rounded-sm px-1',
+        'border-2 border-dashed bg-transparent shadow-md',
+        'text-micro font-semibold whitespace-nowrap',
+        // The SAME promise-state hue the committed bar already carries, per the prompt's rule that
+        // the proposal reuses the palette rather than extending it. Pending is the honest one to
+        // borrow: a proposed placement is exactly a promise not yet committed.
+        'border-state-pending-border text-state-pending-text',
+      )}
+      style={{ left: `${place.leftPct}%`, width: `${place.widthPct}%` }}
+    >
+      <span
+        aria-hidden="true"
+        className="shrink-0 rounded-xs bg-state-pending-bg px-1 text-micro font-bold tracking-wide uppercase"
+      >
+        {badge}
+      </span>
+      <span aria-hidden="true" className="truncate font-mono">
+        {change.shipment_id}
+      </span>
+    </span>
+  )
+}
+
 function Bar({
   bar,
   dock,
   horizonStartMs,
   horizonEndMs,
+  recede = false,
 }: {
   bar: BoardBar
   dock: BoardDock
   horizonStartMs: number
   horizonEndMs: number
+  /** `stitch-prompts.md` section 11: while a proposal is up, *"the current schedule stays drawn in
+   *  its normal promise-state bars, **at reduced contrast**"* -- so the delta reads as the
+   *  foreground layer. Applied as a token-level demotion of the LABEL only, never an opacity
+   *  multiplier on the whole bar: issue #90's ruling is that opacity drags a measured border
+   *  contrast below the 3:1 floor it was measured at, and these borders are load-bearing state
+   *  encoding. */
+  recede?: boolean
 }) {
   const treatment = barTreatment(bar.state)
   const place = placeOnTrack(bar.window_start, bar.window_end, horizonStartMs, horizonEndMs)
@@ -861,7 +1039,10 @@ function Bar({
       {treatment.icon === 'truck' ? (
         <Truck size={12} strokeWidth={2} aria-hidden="true" className="shrink-0" />
       ) : null}
-      <span aria-hidden="true" className="truncate font-mono">
+      <span
+        aria-hidden="true"
+        className={cn('truncate font-mono', recede ? 'text-muted-foreground' : undefined)}
+      >
         {identity}
       </span>
     </button>

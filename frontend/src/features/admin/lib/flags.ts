@@ -30,10 +30,10 @@
  *    that block. Still OFF.
  *  - `adminRuleImpactEnabled`: the endpoint now exists; the blocker is that its only entry point
  *    (Screen 6) does not. Still OFF.
- *  - `adminFairnessTermEnabled`: **its stated reason is stale and is deliberately left untouched
- *    here** — `w_fairness` *is* now a live `score_weights` key and unknown keys are *no longer*
- *    silently dropped (they are a 422). A concurrent agent owns that flag and the work behind it
- *    (#69); rewriting its comment mid-flight would clobber theirs. Flagged, not edited.
+ *  - `adminFairnessTermEnabled`: its stated reason was stale and was deliberately left untouched by
+ *    the 2026-08-31 pass, because a concurrent agent owned #69 at the time. **Resolved 2026-09-02**:
+ *    the comment is rewritten to delivered reality, the flag is ON, and the `P_churn` half it used
+ *    to conflate is now its own flag (`adminChurnWeightEnabled`). See both blocks below.
  *
  * **What is NOT behind a flag, deliberately:**
  *
@@ -351,25 +351,111 @@ export const adminRuleImpactEnabled = false
 export const adminPolicyEditorEnabled = true
 
 /**
- * Gates the fairness-term Danger Zone (Screen 9 entirely, plus the fairness box and the Churn
- * (`P_churn`) field inside Screen 8, plus any fairness-carrying simulation on Screen 10).
+ * Gates the fairness-term Danger Zone — Screen 9's typed-confirmation dialog, the Enable action in
+ * Screen 8's fairness box, and `w_fairness` becoming an editable weight field afterwards.
  *
- * **Default OFF. Hard block (🔴) on the surface's own flagship feature.**
+ * **ON since 2026-09-02 (issue #69, FR-ADM-007).**
  *
- * Why (A-G1, issue #69): `w_fairness` and `P_churn` are real `SOLUTION_DESIGN.md` §D7/§5 formula
- * terms and neither exists in the live ranking engine. `constraints.json`'s `score_weights` has
- * four keys only, and `feasibility.py::_rank_slot`'s formula — which
- * `admin_governance_service.py::_score` copies verbatim — has no fairness or churn term.
- * `SimulatePolicyBody.weights` is an untyped `dict[str, Any]` (`admin.py:93`), so sending
- * `w_fairness` produces **no error at all**: it is silently ignored, and an admin would get a
- * real-looking `flip_count` back with the field having contributed nothing. That is worse than a
- * rejection, and it is the specific reason this is a flag rather than a "just leave the field in,
- * it's harmless" call.
+ * ## This flag was SPLIT in the same change, and the split is the important part
  *
- * `P_churn`'s own definition depends on the Sequencer (§7.5.3, issue #49), which is entirely
- * unbuilt — the third surface in a row to hit that root cause, after ops and planner.
+ * It previously gated three things at once: Screen 9's Danger Zone (`w_fairness`), Screen 8's Churn
+ * field (`P_churn`), and "any fairness-carrying simulation" on Screen 10. Those have **two
+ * different dependencies with two different readiness dates**, and by 2026-09-02 exactly one of
+ * them had landed — so a single flag could only be wrong in one direction or the other. `P_churn`
+ * is now `adminChurnWeightEnabled` below.
  *
- * **Exit criterion:** issue #69 closed (at minimum `w_fairness` as a real formula term; `P_churn`
- * additionally depends on #49), then flip to `true`.
+ * This is the same correction `plannerQueueLiveEnabled` took when it conflated the queue read (#60,
+ * shipped) with the live-arrivals transport (#59, not started), and it is recorded here for the
+ * same reason: **a stale flag reason is how a wrong flip happens.** Without the split, this
+ * surface's single most-emphasised requirement — `screens.md` calls it "locked this checkpoint",
+ * `components.md` §4 gives it its own anatomy section, `REQUIREMENTS.md` gives it `FR-ADM-007` —
+ * would stay hidden behind a dependency it does not have.
+ *
+ * **Flagged for the owner rather than decided silently:** the instruction this build worked to said
+ * to flip only if *both* halves were real. The split honours that rule per half instead of per
+ * flag. If the owner would rather Screen 9 wait for `P_churn` too, set this back to `false`; the
+ * `false` branch is kept intact and is exactly the previous rendering.
+ *
+ * ## What was verified before flipping, against the live engine rather than the issue text
+ *
+ *  - **`w_fairness` is a real `score_weights` key**, read out of
+ *    `backend/app/scheduling/constraints.json` in this session: the seven keys are
+ *    `lateness_per_minute`, `wait_after_eta_per_minute`, `fit_slack_per_minute`,
+ *    `compatible_but_not_exact_dock_penalty`, `lateness_cap_minutes`, `fit_slack_cap_minutes` and
+ *    `w_fairness` — shipping at `0`, i.e. *present but off*, which is precisely what §D7 specifies
+ *    ("reserve a place for fairness, but ship it disabled") and what "absent" was indistinguishable
+ *    from before #69.
+ *  - **The engine genuinely multiplies it.** `feasibility.py:558-559`:
+ *    `w_fairness = weights.get(WEIGHT_FAIRNESS, 0)` then
+ *    `fairness_penalty = w_fairness * carrier_concentration`, with `carrier_concentration` keyed on
+ *    the candidate interval's facility-local date. `admin_governance_service._score` carries the
+ *    same term, so the simulator and the ranker cannot disagree.
+ *  - **The silent-ignore that made this a hard block is gone.** `_validate_weight_keys` derives its
+ *    allowlist at runtime from `constraints.json`'s own `score_weights`, so `w_fairness` is
+ *    accepted *because the engine reads it*, not because a list was updated by hand. The old
+ *    objection — "an admin could get a real-looking `flip_count` back with the field having
+ *    contributed nothing" — is structurally impossible now.
+ *  - **The simulation says so out loud.** `simulate_policy_weights` returns
+ *    `fairness_term_evaluated`, plus `live_w_fairness` and `proposed_w_fairness`, so Screen 10
+ *    states that the term participated rather than inferring it from a flip count.
+ *
+ * **NOT verified: a live HTTP round trip through an authenticated admin session.** Stated plainly,
+ * the same way `adminPolicyEditorEnabled` and `adminRemovalImpactEnabled` record their own
+ * boundaries. The blast radius is bounded by design: the Danger Zone **publishes nothing**
+ * (`flows-and-states.md` Flow 7 step 2 — it makes a field editable and nothing else), any non-zero
+ * value still has to pass the ordinary simulate-then-publish gate (`edge-cases.md` #6: "there is no
+ * separate bypass for the fairness field"), and the weight-key allowlist is enforced server-side.
+ *
+ * **To revert:** set this to `false`. The Danger Zone returns to its Inactive explanation,
+ * `w_fairness` goes back to being round-tripped unchanged rather than edited, and nothing else
+ * changes.
  */
-export const adminFairnessTermEnabled = false
+export const adminFairnessTermEnabled = true
+
+/**
+ * Gates Screen 8's **Churn (`P_churn`)** field — the fifth weight row `mockup.html` §8 draws.
+ *
+ * **ON since 2026-09-02 (issues #49/#69, FR-ADM-006).** Split out of `adminFairnessTermEnabled`
+ * earlier the same day precisely so this half could flip on its own evidence, and it now has it.
+ *
+ * ## What was verified, and it was driven live rather than read
+ *
+ *  - **`P_churn: 30` is a live `score_weights` key** — `constraints.json`, and confirmed through
+ *    `GET /api/v1/admin/policy/active`, whose `live_weights` returns all eight keys. 30 is §5.1's
+ *    own recommended value ("≈30 weighted-minute-equivalents per moved promise").
+ *  - **`BLOCKED_WEIGHT_KEYS` is now `{}`** — the 422 that made a Churn field dishonest is gone.
+ *  - **The round trip was executed**, which is the part that matters: `POST /admin/policy/simulate`
+ *    carrying `P_churn: 45` against a live weight of 30 answered **HTTP 200** — accepted, not
+ *    refused — returning `churn_term_evaluated: false`, `live_p_churn: 30`, `proposed_p_churn: 45`
+ *    and the explanatory `p_churn_note`.
+ *  - **The sequencer genuinely consumes it**: `sequencer.py:1222`,
+ *    `churn=int(weights.get(WEIGHT_CHURN, 30))`, priced into every run's `objective.churn_cost`.
+ *
+ * ## A correction to this flag's OWN exit criterion, recorded rather than quietly dropped
+ *
+ * The previous version of this comment required, as criterion 3, that *"`simulate_policy_weights`
+ * returns a `flip_count` the value genuinely influenced"*. **That criterion was wrong, and it was
+ * wrong because it assumed `P_churn` behaves like `w_fairness`.** It does not. §5 Stage 2's
+ * per-driver formula (`S_priority + w_lateness·Δ + w_wait·Δ + w_slack·Δ − P_dock`) contains no
+ * churn term at all; §5.1's *sequencer* objective is where `P_churn` lives. So it can never move a
+ * per-driver ranking, at any value, and a `flip_count` it influenced is not merely absent — it is
+ * unobtainable in principle. Measured: simulating 30 → 45 returns `flip_count: 0` unchanged.
+ *
+ * Criterion 3 is therefore **superseded** by the one that matches the real formula: the sequencer
+ * reads the weight and prices it into `objective.churn_cost`. Verified at the call site above.
+ *
+ * ## The one leg that is NOT yet observable, stated plainly
+ *
+ * `objective.churn_cost` responding to a changed `P_churn` cannot be seen end to end today, because
+ * every sequencer route 500s on this database — `relation "public.scheduling_runs" does not exist`
+ * (migration `20260902160000_scheduling_runs.sql` is written but **unapplied**; see
+ * `features/planner/lib/flags.ts::sequencerProposalEnabled`). That does **not** gate this field:
+ * what the field does is set a policy weight, and setting/simulating/publishing it is proven
+ * working. The UI does not overclaim either — Screen 10 renders the server's own `p_churn_note`
+ * verbatim, which says the value takes effect on the next `propose_facility_schedule` and tells the
+ * admin to compare two runs' `objective.churn_cost` to see it.
+ *
+ * **To revert:** set this to `false`. The Churn row disappears, `P_churn` is round-tripped
+ * unchanged rather than edited, and the Danger Zone's explanatory note returns.
+ */
+export const adminChurnWeightEnabled = true

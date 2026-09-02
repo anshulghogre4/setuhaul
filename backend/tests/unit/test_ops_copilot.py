@@ -285,16 +285,27 @@ def test_an_admin_may_act_on_another_coordinators_case() -> None:
     assert as_admin["recommended_action"] == TAKE_OVER
 
 
-def test_the_unbuilt_sequencer_is_reported_not_hidden() -> None:
-    """`request_sequencer_proposal` is the eighth §7.5.5 tool and it does not exist (#54/#49).
+def test_the_sequencer_action_follows_the_delegates_own_guards() -> None:
+    """`request_sequencer_proposal` is the eighth §7.5.5 tool, **built 2026-09-02** (#54/#49).
 
-    It appears in every response as `unavailable / NOT_IMPLEMENTED`. Omitting it would let a
-    coordinator believe the catalog is complete.
+    Until then this asserted `unavailable / NOT_IMPLEMENTED`. Now it asserts the thing that
+    actually protects a coordinator: the entry is `available` exactly when
+    `sequencer.request_sequencer_proposal` would succeed, and carries that function's own refusal
+    code otherwise. The co-pilot's one hard guarantee is that it never points at a button the
+    server is about to refuse.
     """
-    result = _suggest(_inputs(_escalation(escalation_status="ACKNOWLEDGED", owner_user_id=ME)))
-    entry = _action(result, SEQUENCER)
+    owned = _suggest(_inputs(_escalation(escalation_status="ACKNOWLEDGED", owner_user_id=ME)))
+    assert _action(owned, SEQUENCER)["status"] == "available"
+
+    unowned = _suggest(_inputs(_escalation(escalation_status="OPEN", owner_user_id=None)))
+    entry = _action(unowned, SEQUENCER)
     assert entry["status"] == "unavailable"
-    assert entry["reason_code"] == "NOT_IMPLEMENTED"
+    assert entry["reason_code"] == "NOT_ACKNOWLEDGED"
+
+    other = _suggest(_inputs(_escalation(escalation_status="ACKNOWLEDGED", owner_user_id="USR-X")))
+    entry = _action(other, SEQUENCER)
+    assert entry["status"] == "unavailable"
+    assert entry["reason_code"] == "NOT_OWNER"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -391,16 +402,25 @@ def test_ambiguous_shipment_with_no_thread_abstains() -> None:
     assert result["abstain_reason"]["code"] == "NO_THREAD_TO_TAKE_OVER"
 
 
-def test_capacity_cascade_says_the_right_move_is_not_buildable() -> None:
-    """The most valuable output in the feature: telling a coordinator the correct action has no
-    backing tool, instead of steering them to a wrong one that does."""
+def test_capacity_cascade_now_recommends_the_sequencer_proposal() -> None:
+    """`flows-and-states.md` Flow 1 step 4's own mapping -- "request a sequencer proposal for
+    `CAPACITY_EVENT_CASCADE`" -- reachable at last.
+
+    This branch abstained with `SEQUENCER_UNBUILT` until issues #54/#49 landed; the abstention was
+    always a statement about the tool catalog rather than about the reasoning, so building the tool
+    is the whole of the change. The evidence assertion is unchanged and deliberately kept: a
+    recommendation must not cost the coordinator the facts underneath it.
+    """
     esc = _escalation(escalation_type="CAPACITY_EVENT_CASCADE", escalation_status="ACKNOWLEDGED",
                       owner_user_id=ME)
     inputs = _inputs(esc, payload={"affected_count": 4, "dock_id": "DOCK-JAI-D3",
                                    "reason": "Dock block overlaps live appointments."})
     result = _suggest(inputs)
-    assert result["recommended_action"] is None
-    assert result["abstain_reason"]["code"] == "SEQUENCER_UNBUILT"
+    assert result["recommended_action"] == SEQUENCER
+    assert result["abstain_reason"] is None
+    assert result["confidence"] == "high"
+    # D5 must survive the recommendation: ops requests, a planner applies.
+    assert "planner applies" in result["rationale"]
     assert any(e["code"] == "AFFECTED_SHIPMENTS" and "4 appointments" in e["label"]
                for e in result["evidence"])
 
@@ -545,7 +565,9 @@ def test_an_unparseable_payload_costs_evidence_not_the_response() -> None:
     esc = _escalation(escalation_type="CAPACITY_EVENT_CASCADE", escalation_status="ACKNOWLEDGED",
                       owner_user_id=ME)
     result = _suggest(_inputs(esc, payload={}))
-    assert result["abstain_reason"]["code"] == "SEQUENCER_UNBUILT"
+    # The recommendation survives an unreadable payload -- it is derived from lifecycle columns,
+    # not from the payload -- and only the one payload-derived evidence line is lost.
+    assert result["recommended_action"] == SEQUENCER
     assert not any(e["code"] == "AFFECTED_SHIPMENTS" for e in result["evidence"])
 
 

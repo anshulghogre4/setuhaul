@@ -721,12 +721,12 @@ test('ops: cancel with a reason, and the capacity-incident row', async ({ page }
     say(
       '"Request sequencer proposal"',
       'INACTIVE-LABELED',
-      `present, focusable, and activating it states the reason rather than doing nothing: "${reason.slice(0, 180)}". Gated by sequencerProposalEnabled=false (features/ops/lib/flags.ts, issues #54/#49).`,
+      `present, focusable, and activating it states the reason rather than doing nothing: "${reason.slice(0, 180)}". Gated by sequencerProposalEnabled=false (features/ops/lib/flags.ts, issues #54/#49). The live branch is now BUILT rather than a documented shape: lib/api.ts::requestSequencerProposal posts to the escalation's own sequencer-proposal path with an Idempotency-Key, and the row renders prompt 14's State 3 handoff plus edge-cases.md section 4's RUN_ALREADY_ACTIVE inline state. It stays gated because no sequencer route appears in the running backend's /openapi.json. M15 NOTE, flagged not silently resolved: section 7.5.5's argument row names (escalation_id, facility_id) but this client sends NO facility_id -- the escalation row already carries it server-side, and accepting it as an argument is the one shape by which this console could request a run against a facility the incident does not belong to.`,
     )
     say(
       '"View in planner queue"',
       'INACTIVE-LABELED',
-      'part of the post-request handoff state, which the same sequencerProposalEnabled flag gates; the flag\'s only reachable control (Request sequencer proposal, above) carries the labelled explanation, so the gap is stated rather than silent. No separate cross-surface link renders.',
+      'part of the post-request handoff state, which the same sequencerProposalEnabled flag gates. Now built with prompt 14 State 3\'s scope rule enforced structurally: the link renders only when the signed-in identity\'s own grants include the planner surface, and is ABSENT from the layout otherwise -- U83\'s "scope denial is always Hidden, never a greyed-out control that reveals a destination exists". Both branches are rendered side by side at /ops/_states plate 14. This is presentation only; /planner\'s own reads are role-gated server-side.',
     )
     await page.keyboard.press('Escape')
     // Leave the probe incident terminal.

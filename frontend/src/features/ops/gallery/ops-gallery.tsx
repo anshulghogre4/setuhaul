@@ -225,13 +225,45 @@ export function OpsStatesGallery() {
           outcome for six of §7.4's nine reasons, not an error state.
         </Note>
 
-        <Plate n="14" title="Capacity incident — collapsed / expanded / gated action">
+        <Plate n="14" title="Capacity incident — collapsed / expanded / request action">
           <div className="w-[360px] border border-border">
             <CapacityIncidentRow
               rowId={ESCALATION_CAPACITY_INCIDENT.escalation_id}
               dockLabel="DOCK-JAI-D3"
               affected={ESCALATION_CAPACITY_INCIDENT.affected_shipments ?? []}
             />
+          </div>
+        </Plate>
+
+        <Plate n="14" title="Capacity incident — State 3's planner-scope split (U83: Hidden, never greyed)">
+          {/* The same row twice, differing ONLY in whether the viewer holds planner scope. Prompt
+              14 State 3: "If they are not, the button is absent from the layout entirely — scope
+              denial is always Hidden, never a greyed-out control that reveals a destination
+              exists." The live console derives this from the signed-in identity's own grants; the
+              prop exists so both branches can be seen side by side here. */}
+          <div className="flex gap-4">
+            <div className="w-[360px] border border-border">
+              <p className="border-b border-border px-4 py-1 text-micro text-muted-foreground">
+                viewer HAS planner scope
+              </p>
+              <CapacityIncidentRow
+                rowId={ESCALATION_CAPACITY_INCIDENT.escalation_id}
+                dockLabel="DOCK-JAI-D3"
+                affected={ESCALATION_CAPACITY_INCIDENT.affected_shipments ?? []}
+                viewerHasPlannerScope
+              />
+            </div>
+            <div className="w-[360px] border border-border">
+              <p className="border-b border-border px-4 py-1 text-micro text-muted-foreground">
+                viewer has NO planner scope
+              </p>
+              <CapacityIncidentRow
+                rowId={`${ESCALATION_CAPACITY_INCIDENT.escalation_id}-noscope`}
+                dockLabel="DOCK-JAI-D3"
+                affected={ESCALATION_CAPACITY_INCIDENT.affected_shipments ?? []}
+                viewerHasPlannerScope={false}
+              />
+            </div>
           </div>
         </Plate>
 

@@ -523,3 +523,303 @@ export type DockBoard = {
    *  lets the legend omit an entry nothing could ever fill rather than showing a dead swatch. */
   holds_enabled: boolean
 }
+
+/* ==============================================================================================
+ * The Sequencer -- SS7.5.3 / SS5.1 (issue #49, FR-PLN-009, FR-SYS-016)
+ *
+ * RECONCILED against the shipped backend on 2026-09-02, field by field, from
+ * `backend/app/scheduling/sequencer.py`'s Pydantic models rather than from the design prose. Every
+ * model there is `extra="forbid"`, so these types are the COMPLETE shape and not a hopeful
+ * superset -- the same standard `PlannerQueueRow` above is held to.
+ * ============================================================================================ */
+
+/*
+ * SS5.1's four diff categories are `unchanged / moved / newly placed / unplaceable` -- verbatim,
+ * with no synonyms invented for the UI (`screens.md` section 6; `stitch-prompts.md` section 11 bans
+ * "rescheduled", "added" and "failed" by name). They are NOT a type here, deliberately: the server
+ * sends four separate arrays, and the one place a category has to be told apart on a flattened list
+ * -- the board's delta bar -- discriminates on `previous_start_ts` (a moved row has somewhere it
+ * came from; a newly-placed one does not), which is the server's own fact rather than a client tag
+ * that could disagree with it. An earlier draft of this file exported a `ProposalChangeKind` union
+ * for that job; reconciling against the real payload made it dead, so it is gone rather than left
+ * as exported API nothing calls.
+ */
+
+/**
+ * `sequencer.PlacementView` -- one placed job's row in the diff.
+ *
+ * ## The two interval pairs are not redundant, and picking the wrong one draws the wrong board
+ *
+ * `start_ts`/`end_ts` are **the promise**: the slot the driver is (or would be) given.
+ * `claim_start_ts`/`claim_end_ts` are **the D1 occupancy interval** the claim actually reserves --
+ * start + unload + D10's buffer. The model's own comment names the consequence: *"Rendered on the
+ * planner's board, which draws claims and not slots."* So the delta bar is drawn from the CLAIM
+ * pair (it has to line up with the committed `dock_occupancy` bars beneath it, which are claims),
+ * while the moved list quotes the PROMISE pair (that is what the driver was told). Using one for
+ * both would either misdraw the board or misquote the promise.
+ *
+ * `previous_*` is populated for a `moved` row and null for `newly_placed` -- nothing was promised
+ * before.
+ */
+export type ProposalPlacement = {
+  shipment_id: string
+  appointment_id: string | null
+  order_reference: string | null
+  priority_code: string
+  carrier_id: string | null
+
+  dock_id: string
+  dock_code: string
+  slot_id: string
+  /** The promised interval -- what the driver is told. */
+  start_ts: string
+  end_ts: string
+  /** The D1 interval the claim reserves. **This is what the board draws.** */
+  claim_start_ts: string
+  claim_end_ts: string
+
+  previous_slot_id: string | null
+  previous_dock_id: string | null
+  previous_dock_code: string | null
+  previous_start_ts: string | null
+  /** Signed minutes the promise moves by. Negative means earlier. */
+  delta_minutes: number | null
+
+  /** SS5.1's annotation on a moved row: "(not yet communicated)" vs "(communicated -- driver will
+   *  be notified)". */
+  communicated: boolean
+  /** `communicated` AND past SS5.1's 15-minute epsilon -- i.e. **exactly what P_churn counts**.
+   *  Rendered rather than recomputed: the epsilon is the engine's rule, not this client's. */
+  is_churn: boolean
+  /** A fixed task (SS5.1): an in-progress unload pins its dock and cannot be moved. */
+  pinned: boolean
+
+  release_ts: string
+  release_source: string
+  wait_minutes: number
+  lateness_minutes: number
+  exact_dock_match: boolean
+  cost: number
+}
+
+/**
+ * `sequencer.UnplaceableView` -- a job Stage 1 could not place anywhere in the horizon.
+ *
+ * **No interval fields at all, and that absence is the design.** `screens.md` section 6: unplaceable
+ * shipments *"list separately below the board, since they have no interval to show -- a gap is a
+ * gap, never a zero-width bar pretending to be a real placement"*. A type with no timestamps is what
+ * makes drawing one impossible rather than merely discouraged.
+ *
+ * `message` is `evaluate_candidate_slot`'s own `InfeasibleSlotReason` prose -- the same vocabulary
+ * the driver path uses -- so it is rendered verbatim rather than paraphrased into "couldn't place".
+ */
+export type ProposalUnplaceable = {
+  shipment_id: string
+  order_reference: string | null
+  priority_code: string
+  release_ts: string
+  release_source: string
+  failure_code: string
+  message: string
+  candidates_considered: number
+}
+
+/** `sequencer.ProposalDiff`. Four arrays, SS5.1's four words, in its own order. */
+export type ProposalDiff = {
+  unchanged: ProposalPlacement[]
+  moved: ProposalPlacement[]
+  newly_placed: ProposalPlacement[]
+  unplaceable: ProposalUnplaceable[]
+}
+
+/**
+ * `sequencer.ObjectiveValues` -- SS5.1's objective in the same currency as Stage 2.
+ *
+ * **Every term is reported even when it is zero**, which is the server's own stated rule (the same
+ * one `_rank_slot`'s `ranking_factors` follows since #69: *"'the fairness term contributed nothing'
+ * and 'there is no fairness term' must be distinguishable by reading the receipt"*). So these are
+ * non-nullable numbers, and a `0` here is a measurement rather than an absence -- the opposite of
+ * the nullable shape a catalog reading alone would have suggested, and the reason this file was
+ * rewritten against the model instead of the prose.
+ *
+ * `churn_count` vs `promises_moved` is the distinction the admin console's `P_churn` field would
+ * price, and they are genuinely different numbers: `churn_count` counts only promises that were
+ * **communicated** and moved past the 15-minute epsilon; `promises_moved` counts every move.
+ * `churn_count <= promises_moved` always.
+ */
+export type ProposalObjective = {
+  policy_version: string
+  lateness_cost: number
+  waiting_cost: number
+  fallback_dock_cost: number
+  churn_cost: number
+  fairness_cost: number
+  total_cost: number
+  /** SS5.1's P_churn multiplicand -- D7's "count of promises the Sequencer moved". */
+  churn_count: number
+  promises_moved: number
+  placements: number
+  unchanged_count: number
+  newly_placed_count: number
+  unplaceable_count: number
+  /** SS5.1's headline: "Effect: total driver waiting -85 min". */
+  waiting_minutes_total: number
+  waiting_minutes_delta: number
+  /** The coefficients this run was scored with, stamped per D7 / Stage 2. */
+  coefficients: Record<string, unknown>
+}
+
+/** `sequencer.HorizonView`. SS5.1's run scope: four hours or to `close_time`, whichever is sooner. */
+export type ProposalHorizon = {
+  start_ts: string
+  end_ts: string
+  /** `ROLLING_WINDOW` or `FACILITY_CLOSE` -- the same two values, from the same server helper, that
+   *  `DockBoard.horizon_end_reason` carries, so the board and the proposal cannot disagree about
+   *  where the axis ends. Open string: an unrecognised bound must render, not crash. */
+  end_reason: string
+}
+
+/**
+ * `sequencer.SchedulingRunResult` -- **the return of `propose_facility_schedule` AND of
+ * `get_scheduling_run`, one model for both.**
+ *
+ * That is the backend's own deliberate choice and it is the right one for this UI: *"a planner
+ * reviewing a proposal an hour after it was computed must see the identical object the requester
+ * saw, or the review is of something else."* It is also why the ops delegate can return "the same
+ * shape SS7.5.3 already defines" (SS7.5.5) rather than a third variant.
+ *
+ * `code` lives ON this object rather than in a wrapper, so `RUN_ALREADY_ACTIVE` arrives as a
+ * run-shaped body with `active_run` naming the incumbent.
+ */
+export type SchedulingRun = {
+  as_of: string
+  source: string
+  /** `PROPOSED` or `RUN_ALREADY_ACTIVE` -- SS5.1's debounce rule as a return value. */
+  code: string
+  scheduling_run_id: string
+  facility_id: string
+  facility_name: string | null
+  /** `CAPACITY_INCIDENT` (the ops delegate) or `PLANNER_REQUESTED` (Flow 9's self-trigger) -- the
+   *  two values the migration's CHECK constraint admits. **Server-pinned per route**; there is no
+   *  argument by which any client chooses it. */
+  trigger_reason: string
+  /** Non-null only for a run the ops console delegated -- SS7.5.5's linkage, and what lets the
+   *  overlay header say "requested from Ops (capacity incident)" rather than guessing. */
+  escalation_id: string | null
+  /** `scheduling_runs.status`: PROPOSED | APPLIED | SUPERSEDED per the migration's CHECK. Open
+   *  string -- the only branch taken on it is "is this still PROPOSED". */
+  status: string
+  /** D7 / SS5.1: "P_churn lives in policy_versions ... and is stamped on every run". */
+  policy_version: string
+  /** Opaque, round-tripped verbatim into apply. Never recomputed client-side. */
+  snapshot_hash: string
+  horizon: ProposalHorizon
+  /** Server-computed per category. Preferred over array lengths, which may be truncated. */
+  counts: Record<string, number>
+  diff: ProposalDiff
+  objective: ProposalObjective
+  /** SS5.1's own "Effect: ..." line, persisted so the run is replayable. Rendered verbatim. */
+  explanation: string
+  requested_by_user_id: string | null
+  created_at: string | null
+  applied_at: string | null
+  applied_by_user_id: string | null
+  notifications_enqueued: number | null
+  superseded_at: string | null
+  superseded_reason: string | null
+  /** SS5 Stage 4's "input snapshot": the job set and its SS5.1 parameters, stored for replay. */
+  input_snapshot: Record<string, unknown>
+  /** `RUN_ALREADY_ACTIVE` only -- which run is in the way. */
+  active_run: Record<string, unknown> | null
+}
+
+/**
+ * `sequencer.ApplyResult` -- SS7.5.3's three outcomes.
+ *
+ * **The shape of this type IS the design rule**: there is no per-row result array because there is
+ * no per-row argument. SS7.5.3: *"There is deliberately no 'apply these three rows' argument --
+ * cherry-picking produces a schedule nobody validated (SS5.1)."* The backend makes that structural
+ * too -- `ApplyScheduleBody` is `extra="forbid"` with `snapshot_hash` as its only field, so a client
+ * that tried to send `appointment_ids` gets a 422.
+ *
+ * `PARTIALLY_INFEASIBLE` names "partially" and behaves totally, which is the trap worth not
+ * "fixing": the *proposal* is partially infeasible, so the *apply* is refused whole.
+ *
+ * `notification_batch_id` **is the run id** on the backend ("one apply is one batch, and the run id
+ * already identifies it uniquely -- so the batch id IS the run id rather than a second identifier
+ * that could disagree with it"), which is why the applied notice prefers the explicit count when
+ * both are present.
+ */
+export type ApplyProposalResult = {
+  as_of: string
+  /**
+   * Five outcomes across two transports, and the split is deliberate.
+   *
+   * **200:** `APPLIED` · `ALREADY_APPLIED` (this run was already applied -- an idempotent replay
+   * seen from the outside) · `RUN_NOT_ACTIVE` (the run is `SUPERSEDED`, i.e. a newer proposal took
+   * its place). Neither of the last two is a failure: nothing was asked for that did not already
+   * happen, so they are states to report, not errors to raise.
+   *
+   * **409:** `SNAPSHOT_DRIFT` · `PARTIALLY_INFEASIBLE` -- the two refusals Flow 9 steps 4-5 give
+   * distinct screens and distinct next actions.
+   */
+  code:
+    | 'APPLIED'
+    | 'ALREADY_APPLIED'
+    | 'RUN_NOT_ACTIVE'
+    | 'SNAPSHOT_DRIFT'
+    | 'PARTIALLY_INFEASIBLE'
+  scheduling_run_id: string
+  status: string
+  notification_batch_id: string | null
+  notifications_enqueued: number
+  moved: number
+  newly_placed: number
+  unchanged: number
+  /** `SNAPSHOT_DRIFT` only: what the digest is now, and which appointments moved underneath. */
+  drift: Record<string, unknown> | null
+  /** `PARTIALLY_INFEASIBLE` only: every placement that failed revalidation, named. */
+  infeasible: Array<Record<string, unknown>>
+  idempotency_key: string | null
+  idempotent_replay: boolean
+}
+
+/**
+ * `sequencer.SchedulingRunSummary` -- one row of the pending-proposals list.
+ *
+ * **Deliberately not the whole run.** The server's own reasoning: *"`screens.md` section 3 needs a
+ * number on a button and the identity behind it, and shipping every run's full diff to build a
+ * badge would move kilobytes to render one integer."* So the toolbar counts these, and opening one
+ * fetches the full run by id.
+ *
+ * `promises_moved`/`churn_count` are lifted out of `objective_json` so the list can badge or sort
+ * without parsing a whole objective.
+ */
+export type SchedulingRunSummary = {
+  scheduling_run_id: string
+  facility_id: string
+  status: string
+  trigger_reason: string
+  escalation_id: string | null
+  policy_version: string
+  snapshot_hash: string
+  horizon: ProposalHorizon
+  counts: Record<string, number>
+  explanation: string
+  requested_by_user_id: string | null
+  created_at: string | null
+  applied_at: string | null
+  superseded_reason: string | null
+  promises_moved: number
+  churn_count: number
+}
+
+/** `sequencer.SchedulingRunList` -- the wrapper `GET /api/v1/scheduling/runs` returns. */
+export type SchedulingRunList = {
+  as_of: string
+  source: string
+  facility_id: string | null
+  status: string | null
+  count: number
+  runs: SchedulingRunSummary[]
+}

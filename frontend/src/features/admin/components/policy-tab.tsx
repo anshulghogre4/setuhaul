@@ -15,7 +15,7 @@ import {
   publishPolicyVersion,
   simulatePolicyWeights,
 } from '../lib/api'
-import { adminPolicyEditorEnabled } from '../lib/flags'
+import { adminChurnWeightEnabled, adminPolicyEditorEnabled } from '../lib/flags'
 import { buildProposedWeights, draftsFrom, parseWeightInput, weightsEqual } from '../lib/policy'
 import type {
   ActivePolicyResponse,
@@ -107,6 +107,20 @@ function PolicyEditor() {
   const [publisherNames, setPublisherNames] = useState<Record<string, string>>({})
 
   /**
+   * Flow 7's Danger-Zone gate, passed or not, for this session only.
+   *
+   * **Deliberately not persisted anywhere** — not to `localStorage`, not to the server. Flow 7's
+   * friction is on the *act* of turning the term on, and a remembered unlock would mean the second
+   * admin to open this tab inherits the first one's confirmation without ever reading the stakes
+   * panel. It is also not a server capability: the *term* is always live in the engine; what this
+   * gates is whether this console will edit its coefficient.
+   *
+   * It lives here rather than in the editor because it changes what
+   * `buildProposedWeights` is allowed to read, which is a payload concern, not a rendering one.
+   */
+  const [fairnessUnlocked, setFairnessUnlocked] = useState(false)
+
+  /**
    * The `Idempotency-Key` for the current publish INTENT, held across retries.
    *
    * Minting a fresh key inside each call would defeat the header entirely: a publish whose response
@@ -185,10 +199,20 @@ function PolicyEditor() {
     return invalid
   }, [drafts])
 
-  /** The exact payload a simulate or publish would send right now, or null if a field is unusable. */
+  /**
+   * The exact payload a simulate or publish would send right now, or null if a field is unusable.
+   *
+   * `fairnessUnlocked` is a dependency, and that is what makes `edge-cases.md` #6 true without any
+   * extra code: passing the gate changes this object, so an already-completed simulation
+   * immediately compares unequal and is marked stale. The fairness field gets no exemption from
+   * the simulate-before-publish rule because it never leaves the mechanism that enforces it.
+   */
   const proposed = useMemo(
-    () => (policy === null ? null : buildProposedWeights(policy.live_weights, drafts)),
-    [policy, drafts],
+    () =>
+      policy === null
+        ? null
+        : buildProposedWeights(policy.live_weights, drafts, fairnessUnlocked, adminChurnWeightEnabled),
+    [policy, drafts, fairnessUnlocked],
   )
 
   /**
@@ -334,6 +358,16 @@ function PolicyEditor() {
         onSimulate={() => void onSimulate()}
         simulating={sim.kind === 'running'}
         windowLabel={`the last ${SIMULATION_WINDOW_DAYS} days`}
+        fairnessUnlocked={fairnessUnlocked}
+        onUnlockFairness={() => {
+          setFairnessUnlocked(true)
+          // Flow 7 step 2: enabling the term "does not publish anything". It does invalidate a
+          // completed publish message, though -- that message describes a version published under
+          // the previous field set, and leaving it on screen beside a newly-editable coefficient
+          // would read as if the fairness value had been part of it.
+          setPublish((current) => (current.kind === 'done' ? { kind: 'idle' } : current))
+          setPublishKey(null)
+        }}
       />
 
       {sim.kind === 'running' ? <SimulationRunning /> : null}

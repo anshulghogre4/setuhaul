@@ -63,8 +63,11 @@ there is no argument by which a client could widen its own scope (`M15`/`NFR-019
 **Abstention is a first-class outcome, not a failure.** When the honest answer is "the action this
 reason calls for has no tool," `recommended_action` is `null`, `abstain_reason` names why, and
 `evidence` is still populated -- the panel shows the facts without a recommendation rather than
-manufacturing one. Six of the nine §7.4 reasons resolve this way today, which is a statement about
-the tool catalog, not about the engine.
+manufacturing one. **Five** of the nine §7.4 reasons resolve this way today, which is a statement
+about the tool catalog, not about the engine -- and the number moved from six to five on
+2026-09-02, when issues #54/#49 built `request_sequencer_proposal` and `CAPACITY_EVENT_CASCADE`
+stopped abstaining. That is the abstention list working as intended: it is an inventory of what the
+catalog cannot do, so building a tool must shorten it.
 """
 
 from __future__ import annotations
@@ -255,11 +258,20 @@ def _classify_actions(esc: dict[str, Any], *, caller_user_id: str, caller_is_adm
     actions[RESOLVE]["arguments"] = {"reason_code": "ISSUE_FIXED"}
     actions[CANCEL] = entry(True, None)
 
-    # `request_sequencer_proposal` is the eighth §7.5.5 tool and **it does not exist**: it delegates
-    # to §7.5.3's `propose_facility_schedule`, and the Sequencer is entirely unbuilt (issues #54,
-    # #49). Reported as unavailable rather than omitted, so a CAPACITY_EVENT_CASCADE row says
-    # plainly that the right move is not buildable yet instead of steering to a wrong one.
-    actions[SEQUENCER] = entry(False, "NOT_IMPLEMENTED")
+    # `request_sequencer_proposal` -- the eighth §7.5.5 tool, **built 2026-09-02** (issues #54/#49).
+    # It shipped here as `entry(False, "NOT_IMPLEMENTED")` for as long as the Sequencer did not
+    # exist; this is that shim's removal, not a widening of what the co-pilot does. The co-pilot
+    # still only *names* the button -- it never calls the tool (see this module's opening line).
+    #
+    # The guard mirrors `scheduling/sequencer.request_sequencer_proposal`'s exactly: non-terminal
+    # (handled above), ACKNOWLEDGED/IN_PROGRESS, owned by the caller or admin. Same shape as
+    # `take_over_thread`'s below it, because both are "work on a case somebody has claimed", and
+    # `test_ops_copilot.py::test_legality_matches_the_service_guards` asserts the pairing rather
+    # than trusting this comment.
+    if status not in {"ACKNOWLEDGED", "IN_PROGRESS"} or not owned:
+        actions[SEQUENCER] = entry(False, "NOT_ACKNOWLEDGED")
+    else:
+        actions[SEQUENCER] = entry(owned_by_caller, "NOT_OWNER")
 
     if str(esc.get("escalation_type")) == "SAFETY_OR_REGULATED":
         for name in SAFETY_SUPPRESSED_ACTIONS:
@@ -500,10 +512,6 @@ ABSTAIN_LABELS: dict[str, str] = {
         "Re-planning this shipment is a planner action. The ops console has no rescheduling tool, "
         "so there is nothing here to recommend."
     ),
-    "SEQUENCER_UNBUILT": (
-        "The right move is a sequencer proposal, and the sequencer is not built yet (issues #54, "
-        "#49). No other ops action fixes a capacity cascade."
-    ),
     "NO_TOOL_FOR_CONTACT_REPAIR": (
         "The fix is to correct the contact record, and no tool in this product edits facility "
         "contacts. Retrying the send is never the fix for an unroutable recipient."
@@ -625,10 +633,22 @@ def build_suggestion(
     # R5 -- reason-specific. Flow 1 step 4's own list, one branch per reason, each either
     # recommending a tool that exists or saying plainly that the design's stated fix has none.
     elif escalation_type == "CAPACITY_EVENT_CASCADE":
-        # §7.5.5 delegates this to the Sequencer, which is unbuilt. There is no ops action that
-        # fixes a cascade, and steering to resolve/cancel would close an incident whose shipments
-        # are still stranded.
-        abstain = _abstain("SEQUENCER_UNBUILT")
+        # Flow 1 step 4's own mapping for this reason -- "request a sequencer proposal for
+        # `CAPACITY_EVENT_CASCADE`" -- and, since issues #54/#49 landed, a tool that exists. This
+        # branch abstained with `SEQUENCER_UNBUILT` until 2026-09-02; the abstention was a statement
+        # about the tool catalog, not about the reasoning, so building the tool is the whole of the
+        # change here.
+        if available(SEQUENCER):
+            recommended, confidence = SEQUENCER, "high"
+            rationale = (
+                "A capacity incident is one row covering N stranded shipments. Ops triages and "
+                "requests; the sequencer computes one proposal for the whole facility and a "
+                "planner applies it (D5). Nothing is re-promised by pressing this."
+            )
+        else:
+            # Reachable only when another coordinator owns the case -- R2 catches the caller's own
+            # not-owned rows earlier, so this is the admin-viewing-someone-else's-row path.
+            abstain = _abstain("NO_CONFIDENT_RECOMMENDATION")
 
     elif escalation_type == "NOTIFICATION_UNROUTABLE":
         # edge-cases.md #6: "UNROUTABLE's resolution is never 'retry send'". There is no contact

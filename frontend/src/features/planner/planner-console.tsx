@@ -1,15 +1,24 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react'
 import { toast } from 'sonner'
 
 import { BlockDockDialog } from './components/block-dock-dialog'
 import { DockBoardPanel } from './components/dock-board'
 import { NarrowViewportGuard } from './components/narrow-viewport'
 import { NotYetAvailable } from './components/not-yet-available'
+import { ProposalOverlay } from './components/proposal-overlay'
 import { QueueTab } from './components/queue-tab'
+import { RequestResequenceButton } from './components/request-resequence-button'
 import { ReviewProposalButton } from './components/review-proposal-button'
-import { dockBoardEnabled, plannerBoardPickerEnabled, plannerQueueLiveEnabled } from './lib/flags'
+import { listPendingSchedulingRuns, proposeFacilitySchedule } from './lib/api'
+import {
+  dockBoardEnabled,
+  plannerBoardPickerEnabled,
+  plannerQueueLiveEnabled,
+  sequencerProposalEnabled,
+} from './lib/flags'
 import type { PlannerQueueRow } from './lib/types'
 import { Button } from '@/shared/ui/button'
+import { formatUserFriendlyError } from '@/core/http/api'
 
 type Tab = 'queue' | 'board'
 
@@ -51,6 +60,76 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
   /** Bumped after a counter-offer commits, so the Queue tab re-reads rather than showing the row's
    *  pre-offer interval and a now-stale `snapshot_hash`. */
   const [queueReloadToken, setQueueReloadToken] = useState(0)
+
+  /* ------------------------------------------------------------------------------------------
+   * Flow 9 -- the sequencer proposal, owned here for the same reason `picking` is: the two
+   * entry points (this toolbar's "Request re-sequence" and "Review proposal (N)") and the
+   * overlay's effect on the board are three different children of this console, and no one of
+   * them can see the other two.
+   * ---------------------------------------------------------------------------------------- */
+
+  /**
+   * Pending runs the SERVER reports, newest first.
+   *
+   * Was `string[] | null` while no list endpoint existed, so the toolbar could say "unknown" rather
+   * than lie with "(0)". `GET /api/v1/scheduling/runs` landed 2026-09-02, so the null case is gone:
+   * an empty array now genuinely means "the server answered, and there are none".
+   */
+  const [pendingRunIds, setPendingRunIds] = useState<string[]>([])
+  /** The run currently open in the overlay. */
+  const [reviewingRunId, setReviewingRunId] = useState<string | null>(null)
+  const [proposing, setProposing] = useState(false)
+  const [proposeFailure, setProposeFailure] = useState<string | null>(null)
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [runAlreadyActive, setRunAlreadyActive] = useState(false)
+
+  const refreshPendingRuns = useCallback(async () => {
+    if (!sequencerProposalEnabled) return
+    try {
+      const runs = await listPendingSchedulingRuns(facilityId || null)
+      setPendingRunIds(runs.map((r) => r.scheduling_run_id))
+    } catch {
+      // Deliberately silent and deliberately NOT cleared: this read is advisory, and a transient
+      // failure must neither take the Board tab down nor retract a count the server already gave.
+    }
+  }, [facilityId])
+
+  useEffect(() => {
+    void refreshPendingRuns()
+  }, [refreshPendingRuns])
+
+  const onRequestResequence = useCallback(async () => {
+    if (proposing) return
+    setProposing(true)
+    setProposeFailure(null)
+    setRunAlreadyActive(false)
+    try {
+      // No Idempotency-Key: the route takes none, and its own docstring gives the better reason --
+      // a proposal consumes no capacity, and `scheduling_runs`' partial unique index turns a
+      // double-press into ONE run plus a named RUN_ALREADY_ACTIVE naming it. See
+      // `lib/http.ts::plannerPostNoKey`.
+      const run = await proposeFacilitySchedule({ facilityId: facilityId || null })
+      if (run.code === 'RUN_ALREADY_ACTIVE') {
+        // The debounce answers with a run-shaped body: `active_run` names the incumbent, and the
+        // run's own id is the fallback when it does not.
+        setRunAlreadyActive(true)
+        const incumbent = run.active_run?.scheduling_run_id
+        setActiveRunId(
+          typeof incumbent === 'string' ? incumbent : (run.scheduling_run_id ?? null),
+        )
+        return
+      }
+      // Flow 9 step 1: the planner requested it, so open the review rather than making them find
+      // the button that just became live.
+      setReviewingRunId(run.scheduling_run_id)
+      // Prepended, not appended: this is the newest run, and the list is newest-first.
+      setPendingRunIds((current) => [run.scheduling_run_id, ...current])
+    } catch (error) {
+      setProposeFailure(formatUserFriendlyError(error))
+    } finally {
+      setProposing(false)
+    }
+  }, [proposing, facilityId])
 
   const queueTabRef = useRef<HTMLButtonElement | null>(null)
   const boardTabRef = useRef<HTMLButtonElement | null>(null)
@@ -151,7 +230,27 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
               <Button variant="neutral" onClick={() => setBlockDialogOpen(true)}>
                 Block a dock
               </Button>
-              <ReviewProposalButton />
+              {/* Flow 9's self-triggered origin. Sits beside Review proposal because the two are
+                  the two halves of one job -- produce a proposal, then decide about it. */}
+              <RequestResequenceButton
+                busy={proposing}
+                runAlreadyActive={runAlreadyActive}
+                alreadyActiveRunId={activeRunId}
+                failure={proposeFailure}
+                onRequest={() => void onRequestResequence()}
+                onReviewActive={
+                  activeRunId ? () => setReviewingRunId(activeRunId) : undefined
+                }
+              />
+              <ReviewProposalButton
+                count={pendingRunIds.length}
+                onReview={() => {
+                  // Newest first: the server's own index is `created_at DESC`
+                  // (`ix_scheduling_runs_facility_created`), so element 0 is the newest run.
+                  const next = pendingRunIds[0] ?? null
+                  if (next) setReviewingRunId(next)
+                }}
+              />
             </div>
           </div>
 
@@ -206,6 +305,36 @@ export function PlannerConsole({ facilityId }: { facilityId: string }) {
           setBoardReloadToken((n) => n + 1)
         }}
       />
+
+      {reviewingRunId === null ? null : (
+        <ProposalOverlay
+          schedulingRunId={reviewingRunId}
+          facilityId={facilityId || null}
+          open
+          onOpenChange={(next) => {
+            if (!next) setReviewingRunId(null)
+          }}
+          onApplied={(result) => {
+            toast.success('Proposal applied in full.')
+            // Flow 9 step 3: the board reflects the new committed schedule. The queue reloads too
+            // -- an applied run moves appointment intervals, so every row's own snapshot_hash is
+            // now stale, and a confirm against a stale hash is precisely what the guard refuses.
+            setBoardReloadToken((n) => n + 1)
+            setQueueReloadToken((n) => n + 1)
+            setPendingRunIds((current) =>
+              current.filter((id) => id !== result.scheduling_run_id),
+            )
+            setActiveRunId(null)
+            setRunAlreadyActive(false)
+          }}
+          onRequestFresh={() => {
+            // `edge-cases.md` section 5: drift's fix is a NEW proposal. The drifted run is dropped
+            // from the pending set first, so the toolbar cannot offer it again.
+            setPendingRunIds((current) => current.filter((id) => id !== reviewingRunId))
+            void onRequestResequence()
+          }}
+        />
+      )}
     </NarrowViewportGuard>
   )
 }

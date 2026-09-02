@@ -38,12 +38,14 @@ import pytest
 from app.services import notification_outbox as outbox
 from app.services import notification_service
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260902093000_notification_outbox.sql"
-)
+MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "supabase" / "migrations"
+MIGRATION = MIGRATIONS_DIR / "20260902093000_notification_outbox.sql"
+# Issue #49 added a twelfth event (`APPOINTMENT_RESEQUENCED`) by DROP/ADD-ing the same CHECK
+# constraint in a later migration, so "the effective CHECK" is no longer one file's text. The
+# resolver below reads the whole directory in filename order and takes the LAST definition, which
+# is what PostgreSQL ends up with after a replay -- so a third migration that touches it again
+# needs no change here.
+MIGRATION_GLOB = "*.sql"
 
 IST = timezone.utc  # replaced per-test; slot fixtures below are timezone-aware UTC
 
@@ -53,22 +55,61 @@ IST = timezone.utc  # replaced per-test; slot fixtures below are timezone-aware 
 # ---------------------------------------------------------------------------------------------
 
 
+def _effective_event_type_check() -> set[str]:
+    """The `event_type` value set a replayed migration chain actually leaves in the database.
+
+    Two forms are recognised, because the constraint has been written both ways: the inline column
+    CHECK that created it (20260902093000) and the `ADD CONSTRAINT ... CHECK` that redefines it
+    (20260902160000, issue #49). Files are read in filename order -- which is the order
+    `docs/scripts/run_proof_suite.py` replays them in -- and the last match wins, exactly as
+    PostgreSQL's own DROP-then-ADD does.
+    """
+    inline = re.compile(r"event_type\s+text NOT NULL CHECK \(event_type IN \((.*?)\)\)", re.S)
+    altered = re.compile(
+        r"ADD CONSTRAINT notification_outbox_event_type_check\s*\n?\s*"
+        r"CHECK \(event_type IN \((.*?)\)\)",
+        re.S,
+    )
+    values: set[str] | None = None
+    for path in sorted(MIGRATIONS_DIR.glob(MIGRATION_GLOB)):
+        sql = path.read_text(encoding="utf-8")
+        for pattern in (inline, altered):
+            for match in pattern.finditer(sql):
+                values = set(re.findall(r"'([A-Z_]+)'", match.group(1)))
+    assert values is not None, "no event_type CHECK constraint found in supabase/migrations/"
+    return values
+
+
 def test_the_migration_check_constraint_lists_exactly_the_python_event_catalog():
     """The one test that catches the whole class of "added an event, forgot the migration".
 
     A producer emitting an event the CHECK does not permit fails at the INSERT -- and because
     `enqueue_notification` deliberately never raises, that failure would be a logged line and a
-    silently missing notification, not an error anyone sees. Parsing the migration is cheap
+    silently missing notification, not an error anyone sees. Parsing the migrations is cheap
     insurance against exactly that.
     """
-    sql = MIGRATION.read_text(encoding="utf-8")
-    block = re.search(r"event_type\s+text NOT NULL CHECK \(event_type IN \((.*?)\)\)", sql, re.S)
-    assert block is not None, "the event_type CHECK constraint could not be found in the migration"
-    in_sql = set(re.findall(r"'([A-Z_]+)'", block.group(1)))
+    in_sql = _effective_event_type_check()
     assert in_sql == set(outbox.EVENT_CATALOG), (
         f"catalog drift: only in SQL={in_sql - set(outbox.EVENT_CATALOG)}, "
         f"only in Python={set(outbox.EVENT_CATALOG) - in_sql}"
     )
+
+
+def test_the_resequenced_event_was_added_by_its_own_migration_not_the_original():
+    """Issue #49's twelfth event. Two things worth pinning separately from the set equality above.
+
+    First, that it really is added by a *later* migration -- 20260902093000 must stay as it was
+    applied to production on 2026-09-02, and editing an already-applied migration in place is how a
+    replayed chain stops matching the live database. Second, that the redefinition keeps the
+    constraint's original NAME, which `tests/proof/test_part3b_notification_outbox.py`'s
+    six-CHECK-names assertion depends on.
+    """
+    original = MIGRATION.read_text(encoding="utf-8")
+    assert "APPOINTMENT_RESEQUENCED" not in original
+
+    later = (MIGRATIONS_DIR / "20260902160000_scheduling_runs.sql").read_text(encoding="utf-8")
+    assert "APPOINTMENT_RESEQUENCED" in later
+    assert "ADD CONSTRAINT notification_outbox_event_type_check" in later
 
 
 def test_every_catalog_category_is_one_the_notifications_table_accepts():

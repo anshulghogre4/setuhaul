@@ -314,6 +314,24 @@ export type PolicySimulation = {
   fairness_term_evaluated: boolean
   live_w_fairness: number
   proposed_w_fairness: number
+  /**
+   * **Always `false`, and that is correct rather than a bug** (issue #49/#69, 2026-09-02).
+   *
+   * `P_churn` is a **sequencer-objective** weight (SS5.1, "Pricing churn") -- it prices each
+   * communicated promise a facility re-sequence moves. SS5 Stage 2's per-driver formula does not
+   * contain it at all. So it can never change a Stage-2 ranking and contributes nothing to
+   * `flip_count`, no matter what value is simulated.
+   *
+   * The field exists so an admin who changes `P_churn`, re-simulates and sees an unchanged
+   * `flip_count` can tell *"the term did nothing here"* from *"the term was ignored"* -- the exact
+   * distinction #69 was filed about, now applied to the second term.
+   */
+  churn_term_evaluated: boolean
+  live_p_churn: number
+  proposed_p_churn: number
+  /** The server's own explanation of why `churn_term_evaluated` is false, and where the value DOES
+   *  take effect. Rendered verbatim -- paraphrasing it would be the dishonest part. */
+  p_churn_note: string
   /** The service's own statement of what it approximates. Rendered, never paraphrased. */
   note: string
 }

@@ -52,3 +52,26 @@ export async function plannerPost<T>(
   const res = await apiPost<T>(path, payload, { idempotencyKey })
   return res.data
 }
+
+/**
+ * A planner mutation the backend deliberately does NOT key.
+ *
+ * Exists so that "no key" is a **stated** decision at the call site rather than an omission that
+ * looks like a mistake -- `plannerPost`'s required positional key is the discipline this surface is
+ * written to, and quietly passing an unused string to satisfy it would hide the real contract.
+ *
+ * Only one caller today: `propose_facility_schedule` (`POST /scheduling/proposals`). Its route
+ * docstring gives the reasoning, and it is stronger than a key would be: SS7.5 principle 3 attaches
+ * idempotency to calls that *consume capacity*, and a proposal writes no `dock_occupancy` row, no
+ * appointment and no notification (D5 -- *"Sequencer output is a reviewable artifact, never a silent
+ * write"*). The double-submit protection comes instead from `scheduling_runs`' partial unique index
+ * on `(facility_id) WHERE status = 'PROPOSED'`, which turns a second press into **one** run plus a
+ * named `RUN_ALREADY_ACTIVE` refusal -- a stronger guarantee than two runs sharing a key.
+ *
+ * Do not reach for this to skip a key on a write that does consume capacity; `apply` keeps
+ * `plannerPost` for exactly that reason and the backend 400s without the header.
+ */
+export async function plannerPostNoKey<T>(path: string, payload: unknown): Promise<T> {
+  const res = await apiPost<T>(path, payload)
+  return res.data
+}

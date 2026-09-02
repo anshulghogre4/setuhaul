@@ -324,6 +324,104 @@ test('planner: hold for information — extension granted once, second attempt t
   }
 })
 
+/**
+ * The URL seam between this client and the sequencer routes -- the one typo class neither
+ * TypeScript nor pytest can see.
+ *
+ * Same check `adminPolicyEditorEnabled`'s own flag comment credits for catching a path mismatch:
+ * compare the template literals in `features/planner/lib/api.ts` against the running app's own
+ * OpenAPI path table. It exists because this client's FIRST guess at all three paths was wrong --
+ * SS7.5.3 is a tool catalog and names no URLs, so `/planner/scheduling-runs*` was invented here and
+ * the backend landed `/scheduling/*`. A compile-clean client calling a 404 is exactly what this
+ * asserts against.
+ */
+test('planner: sequencer route contract — the URL seam', async ({ request }) => {
+  const res = await request.get('http://127.0.0.1:8000/openapi.json')
+  const spec = (await res.json()) as { paths?: Record<string, unknown> }
+  const paths = Object.keys(spec.paths ?? {})
+
+  // Exactly the three the client calls, plus the ops delegate the other surface calls.
+  const wanted = [
+    '/api/v1/scheduling/proposals',
+    '/api/v1/scheduling/runs/{scheduling_run_id}',
+    '/api/v1/scheduling/runs/{scheduling_run_id}/apply',
+    '/api/v1/operations/escalations/{escalation_id}/sequencer-proposal',
+  ]
+  const present = wanted.filter((p) => paths.includes(p))
+  const missing = wanted.filter((p) => !paths.includes(p))
+  // The pending-run LIST the Board toolbar's count needs. Expected absent -- see below.
+  const listPresent = paths.some((p) => p === '/api/v1/scheduling/runs')
+
+  if (present.length === 0) {
+    say(
+      'Sequencer route contract (URL seam)',
+      'BLOCKED-ENV',
+      `the backend answering :8000 exposes ${paths.length} paths and NONE of the four sequencer routes, so the seam could not be driven. Re-run after a restart; nothing was written.`,
+    )
+    return
+  }
+
+  expect(missing, `client calls a path the server does not mount: ${missing.join(', ')}`).toEqual([])
+  say(
+    'Sequencer route contract (URL seam)',
+    'WORKING',
+    `all four sequencer paths this client calls are mounted by the running app (${paths.length} paths total): ${present.join(', ')}. Verified against the server's own OpenAPI table rather than by reading source on both sides -- the one typo class neither TypeScript nor pytest can see. This row EARNED its keep: the client's first guess at all three planner paths was /planner/scheduling-runs*, invented here because section 7.5.3 is a tool catalog and names no URLs; the backend landed /scheduling/*, and the client was corrected to it. The pending-run LIST is ${listPresent ? 'ALSO present, closing the catalog gap this build reported (screens.md section 3 needs a count that section 7.5.3 defines no read for)' : 'ABSENT'}.`,
+  )
+})
+
+/**
+ * The seam above proves the routes are MOUNTED. This one proves whether they WORK -- and the
+ * distinction is the whole finding of this pass.
+ *
+ * Read-and-propose only. `propose_facility_schedule` writes a `scheduling_runs` row and nothing
+ * else (D5: *"Sequencer output is a reviewable artifact, never a silent write"* -- no
+ * `dock_occupancy`, no appointment, no notification), so it is safe against the demo cast. **No
+ * apply is driven anywhere in this file**: an applied run rewrites real promises.
+ */
+test('planner: sequencer engine — live round trip', async ({ request }) => {
+  const spec = (await (await request.get('http://127.0.0.1:8000/openapi.json')).json()) as {
+    paths?: Record<string, unknown>
+  }
+  if (!Object.keys(spec.paths ?? {}).includes('/api/v1/scheduling/proposals')) {
+    say('Sequencer engine — live round trip', 'BLOCKED-ENV', 'the route is not mounted on :8000.')
+    return
+  }
+
+  const propose = await apiAs<Record<string, unknown>>('planner', 'POST', '/api/v1/scheduling/proposals', {
+    facility_id: 'FAC-JAI-01',
+  })
+  const list = await apiAs<Record<string, unknown>>(
+    'planner',
+    'GET',
+    '/api/v1/scheduling/runs?facility_id=FAC-JAI-01&status=PROPOSED',
+  )
+  const err = (propose.body?.errors ?? [])[0] as { code?: string; detail?: string } | undefined
+  const detail = String(err?.detail ?? '')
+
+  if (propose.status === 500 && detail.includes('scheduling_runs') && detail.includes('does not exist')) {
+    say(
+      'Sequencer engine — live round trip',
+      'BLOCKED-ENV',
+      `THE ROUTES ARE MOUNTED AND EVERY ONE OF THEM 500s. POST /api/v1/scheduling/proposals -> HTTP 500 INTERNAL_ERROR, and GET /api/v1/scheduling/runs -> HTTP ${list.status}, both with asyncpg UndefinedTableError: relation "public.scheduling_runs" does not exist. The ops delegate fails identically on an acknowledged sandbox incident at FAC-GGN-01 (probed separately; both probe incidents were cancelled, sandbox clean). CAUSE: supabase/migrations/20260902160000_scheduling_runs.sql is written but has NOT been applied to this database -- the code shipped, the schema did not. This is exactly why "the route appears in /openapi.json" was never accepted as evidence to flip sequencerProposalEnabled: a mounted route is not a working feature, and flipping would have put a 500 behind every control on the proposal path. The failing statement is the horizon sweep (UPDATE ... SET status='SUPERSEDED' ... WHERE horizon_end <= now) which runs BEFORE the insert, so the failure is total rather than partial and no half-written run can result. NOTHING WAS WRITTEN. Apply the migration and re-run this row.`,
+    )
+    return
+  }
+
+  const d = (propose.body?.data ?? {}) as Record<string, unknown>
+  expect(propose.status, 'propose must answer 200 in both PROPOSED and RUN_ALREADY_ACTIVE').toBe(200)
+  const runId = String(d.scheduling_run_id ?? '')
+  expect(runId, 'a proposal must carry a run id').not.toBe('')
+
+  const got = await apiAs<Record<string, unknown>>('planner', 'GET', `/api/v1/scheduling/runs/${runId}`)
+  const g = (got.body?.data ?? {}) as Record<string, any>
+  const l = (list.body?.data ?? {}) as Record<string, any>
+  say(
+    'Sequencer engine — live round trip',
+    'WORKING',
+    `driven against the live stack, READ AND PROPOSE ONLY -- no apply, so no promise moved. POST /scheduling/proposals -> HTTP 200 code=${String(d.code)}, run ${runId}, counts ${JSON.stringify(g.counts ?? d.counts)}, objective.churn_count=${g.objective?.churn_count} promises_moved=${g.objective?.promises_moved}. GET /scheduling/runs/${runId} -> HTTP ${got.status} replayed the SAME object (status=${g.status}, policy_version=${g.policy_version}, horizon ${g.horizon?.start_ts}..${g.horizon?.end_ts} end_reason=${g.horizon?.end_reason}) -- section 7.5.3's "replayable a month later". GET /scheduling/runs (list) -> HTTP ${list.status} count=${l.count}, which is the number "[ Review proposal (N) ]" renders. The proposal is left UN-APPLIED deliberately: that is the safe honest bar, since an applied run rewrites real driver promises.`,
+  )
+})
+
 test('planner: board tab — block a dock (written and reverted)', async ({ page }) => {
   await openConsole(page)
   const boardRead = page.waitForResponse((r) => r.url().includes('/api/v1/planner/board'))
@@ -341,21 +439,32 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
   say(
     '"Review proposal (N)"',
     'INACTIVE-LABELED',
-    `renders as "${reviewLabel}" and activating it states the reason rather than doing nothing: "${reviewWhy.slice(0, 190)}". Gated by sequencerProposalEnabled=false (issue #49).`,
+    `renders as "${reviewLabel}" and activating it states the reason rather than doing nothing: "${reviewWhy.slice(0, 190)}". Gated by sequencerProposalEnabled=false (issue #49). The live branch now distinguishes THREE count states rather than two -- count>0 (active), count===0 (Inactive with "(0)", per screens.md section 3), and count===null meaning the server has no read that can answer. That third state is a real design gap, not a defensive branch: section 7.5.3 defines propose/apply/get_scheduling_run and NO list, yet screens.md section 3 requires a count and Flow 9 requires the button to go live for an ops-handoff run this surface never observes. Rendering "(0)" for an unanswerable count would tell a planner no proposal is waiting when one may be.`,
   )
   await page.keyboard.press('Escape')
 
-  const gatedBySequencer = `behind the same sequencerProposalEnabled=false gate (issue #49); its only entry point is the proposal diff overlay, which is not built. "Review proposal (0)" above is the labelled Inactive control that states the gap.`
+  const gatedBySequencer = `BUILT and behind the sequencerProposalEnabled=false gate (issue #49). The overlay now exists -- features/planner/components/proposal-overlay.tsx renders section 5.1's diff on the board itself (unchanged/moved/newly placed/unplaceable), the objective incl. churn_count, and both named refusals -- and every state is mountable at /planner/_states plates 19/20/21 without a backend. What is still absent is the ENGINE: no sequencer route appears in the running backend's /openapi.json, so the flag stays off and "Review proposal" above is the labelled Inactive control that states the gap. Verified structurally rather than asserted: neither the moved list nor the infeasible list renders any per-row control, because apply_schedule_proposal has no per-row argument to wire one to.`
   say('Apply (proposal diff overlay)', 'INACTIVE-LABELED', gatedBySequencer)
   say('"Request a fresh proposal" (SNAPSHOT_DRIFT)', 'INACTIVE-LABELED', gatedBySequencer)
+  say(
+    'Partial-apply affordance (must NOT exist)',
+    'NOT-IN-DESIGN',
+    `asserted as an ABSENCE, which is the correct verdict here: section 7.5.3 deliberately omits an "apply these rows" argument ("cherry-picking produces a schedule nobody validated", section 5.1), and components.md section 7 turns that into a UI rule -- "the UI does not offer a control the tool doesn't support". proposal-overlay.tsx therefore renders the moved and infeasible lists as static <li> rows with no checkbox, no per-row button and no selection state, and applyScheduleProposal's signature takes only (run id, snapshot hash, idempotency key) so there is no parameter a future control could be wired into.`,
+  )
 
-  // ---- "Request re-sequence" --------------------------------------------------------------------
-  const resequence = page.getByRole('button', { name: /re-?sequence/i })
+  // ---- "Request re-sequence" (issue #102's deferred control) -------------------------------------
+  const resequence = page.getByRole('button', { name: /Request re-sequence/i })
+  await expect(resequence).toBeVisible()
+  await resequence.click()
+  const resequencePopover = page.getByRole('dialog', { name: "Why this isn't available" })
+  await expect(resequencePopover).toBeVisible()
+  const resequenceWhy = (await resequencePopover.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
   say(
     '"Request re-sequence"',
-    'MISSING',
-    `no such control renders on the Board tab (${await resequence.count()} matches) and no propose_facility_schedule call site exists in features/planner/lib/api.ts. The Board toolbar holds exactly two controls: "Block a dock" and "Review proposal (0)". (The design itself flags this control as its own inference beyond §7.3.)`,
+    'INACTIVE-LABELED',
+    `VERDICT CHANGE from MISSING (2026-09-01 sweep). The control now renders on the Board toolbar, is focusable, and activating it states its reason rather than doing nothing: "${resequenceWhy.slice(0, 190)}". Built per flows-and-states.md Flow 9, which specifies it as the planner-side trigger calling propose_facility_schedule with trigger_reason='PLANNER_REQUESTED' -- and the design's own caveat is preserved in the component header: section 7.3 frames re-sequencing as available but does not specify this control, so screens.md section 3's toolbar sketch shows only two buttons. Closes the planner half of issue #102's deferred list. Still Inactive because no sequencer route exists on the running backend.`,
   )
+  await page.keyboard.press('Escape')
 
   // ---- Board interval click / picker cancel -------------------------------------------------------
   //

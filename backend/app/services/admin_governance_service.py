@@ -33,6 +33,19 @@ because the result *looks* authoritative. `_validate_weight_keys` now rejects an
 engine does not read, deriving the allowlist from `constraints.json`'s own `score_weights` so the
 two can never drift apart. `publish_policy_version` validates too: writing an unread key into an
 immutable `policy_versions` row is the same lie, made durable.
+
+**`P_churn` un-refused 2026-09-02 (issue #69's remaining half, unblocked by #49).** It was refused
+by name because the sequencer that produces the count did not exist. It exists now
+(`scheduling/sequencer.py`), `P_churn` is a real `score_weights` key that
+`Coefficients.from_policy` reads, and the derived allowlist therefore accepts and publishes it with
+no change to `_validate_weight_keys` at all. What did NOT happen is the tempting half: it is **not**
+a term in `_score`. Section 5.1 prices it per promise a *facility re-sequence* moves, and Stage 2
+ranks one shipment's own candidates against each other, where nothing is being moved -- so folding
+it in would invent a per-driver meaning the design never gives it and would break this copy's
+formula parity with `feasibility._rank_slot`. `simulate_policy_weights` therefore accepts the key
+and states in its own response that the term did not participate and where it does
+(`churn_term_evaluated`, `p_churn_note`), which is the distinction #69 was actually about: silence
+is the defect, not absence.
 """
 
 from __future__ import annotations
@@ -56,6 +69,11 @@ from app.scheduling.feasibility import (
     check_facility_rules,
     parse_rule_boundary,
 )
+
+# Imported, not restated: `P_churn` is one string that two modules must spell identically, and a
+# literal in each is exactly how `w_fairness` nearly ended up with two spellings before #69 named
+# it once. `sequencer` imports nothing from this module, so the direction is one-way.
+from app.scheduling.sequencer import WEIGHT_CHURN
 from app.services.idempotency import lookup_idempotency, payload_hash, store_idempotency
 from app.services.ids import new_id
 
@@ -85,17 +103,25 @@ RULE_IMPACT_SCAN_LIMIT = 500
 # entry but IS read by simulate_policy_weights, so it joins the allowlist explicitly.
 NON_WEIGHT_POLICY_KEYS = frozenset({"priority_scores"})
 
-# Named separately from the generic "unknown key" path because this one has a real, documented
-# reason and a tracking issue: P_churn counts promises the SEQUENCER moved (SOLUTION_DESIGN.md
-# section 5, "Pricing churn"), and the sequencer (section 7.5.3, issue #49) is entirely unbuilt.
-# It is not a typo and telling the admin so is more useful than "unknown key".
-BLOCKED_WEIGHT_KEYS = {
-    "P_churn": (
-        "P_churn counts promises the facility sequencer moved. The sequencer is not built "
-        "(issue #49), so there is nothing to count and the term cannot affect a simulation. "
-        "Rejected rather than accepted-and-ignored."
-    ),
-}
+# Keys refused by NAME with their own reason, rather than falling through to the generic "unknown
+# key" message. **Empty since 2026-09-02, and deliberately kept as live machinery.**
+#
+# `P_churn` was its only entry. It was refused because it counts promises the SEQUENCER moved
+# (SOLUTION_DESIGN.md section 5.1, "Pricing churn") and the sequencer did not exist -- so the term
+# had no source, and accepting it would have recreated the silent-ignore defect issue #69 was filed
+# about. Issue #49 built the sequencer; `P_churn` is now a real `score_weights` key that
+# `scheduling/sequencer.py::Coefficients.from_policy` actually reads, so `allowed_weight_keys()`
+# admits it automatically -- which is the whole point of deriving the allowlist from
+# `constraints.json` rather than restating it here.
+#
+# What that does NOT mean is that it silently affects a simulation: it does not, because it is a
+# sequencer-objective weight and `simulate_policy_weights` simulates Stage-2 rankings. That is
+# stated in the tool's own response (`churn_term_evaluated`, `p_churn_note`) rather than left for an
+# admin to infer from an unchanged flip count -- see `simulate_policy_weights`.
+#
+# The dict stays because the next weight that is real-but-unreadable will want exactly this
+# treatment, and rediscovering the pattern is more expensive than keeping four lines of it.
+BLOCKED_WEIGHT_KEYS: dict[str, str] = {}
 
 
 def allowed_weight_keys() -> set[str]:
@@ -582,6 +608,17 @@ def _score(
     `carrier_concentration` mirrors `_rank_slot`'s own parameter of the same name (issue #69) and
     defaults to 0 for the same reason: the formula-parity test calls both with the default, and at
     the shipped `w_fairness = 0` the term is arithmetically absent either way.
+
+    **`P_churn` is deliberately not a term here, and that is not an omission.** It is a real
+    `score_weights` key since issue #49, so `_validate_weight_keys` accepts it -- but section 5.1
+    prices it per *promise the sequencer moved*, and Stage 2 ranks one shipment's own candidate
+    slots against each other, where no promise is being moved at all. Adding it to this formula
+    would invent a driver-ranking meaning the design never gives it, and would make this copy
+    disagree with `feasibility._rank_slot` (which has no such term either) -- breaking the
+    formula-parity test that exists precisely to stop this module drifting from the live engine.
+    Where a changed `P_churn` *does* take effect is `scheduling/sequencer.py::placement_cost`, and
+    `simulate_policy_weights` says so in its own response rather than leaving an admin to infer it
+    from a flip count that did not move.
     """
     lateness_cap = weights.get("lateness_cap_minutes", 720)
     fit_slack_cap = weights.get("fit_slack_cap_minutes", 120)
@@ -787,6 +824,22 @@ async def simulate_policy_weights(
         "fairness_term_evaluated": fairness_active,
         "live_w_fairness": live_weights.get(WEIGHT_FAIRNESS, 0),
         "proposed_w_fairness": weights.get(WEIGHT_FAIRNESS, live_weights.get(WEIGHT_FAIRNESS, 0)),
+        # Issue #69's remaining half, answered the only honest way (see `_score`). `P_churn` is a
+        # real, accepted, publishable weight now that the sequencer reads it -- but it is a
+        # sequencer-objective weight, so it contributes nothing to a Stage-2 flip count. Saying so
+        # in the payload is the same "never silently identical" discipline `fairness_term_evaluated`
+        # established: an admin who changes P_churn and sees an unchanged flip_count must be able to
+        # tell "the term did nothing here" from "the term was ignored".
+        "churn_term_evaluated": False,
+        "live_p_churn": live_weights.get(WEIGHT_CHURN, 0),
+        "proposed_p_churn": weights.get(WEIGHT_CHURN, live_weights.get(WEIGHT_CHURN, 0)),
+        "p_churn_note": (
+            "P_churn is a sequencer-objective weight (SOLUTION_DESIGN.md section 5.1, 'Pricing "
+            "churn'): it prices each communicated promise a facility re-sequence moves. It "
+            "therefore never changes a Stage-2 per-driver ranking and contributes nothing to "
+            "flip_count above. A changed P_churn takes effect on the next "
+            "propose_facility_schedule -- compare two runs' objective.churn_cost to see it."
+        ),
         "note": (
             "Approximation, not a literal replay: no historical decision log exists, so this "
             "re-scores each shipment's current appointment against other slots open today at the "

@@ -1,8 +1,9 @@
 import { ShieldAlert } from 'lucide-react'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 
 import { InactiveNote } from './primitives'
-import { adminFairnessTermEnabled } from '../lib/flags'
+import { FairnessDangerDialog } from './fairness-danger-dialog'
+import { adminChurnWeightEnabled, adminFairnessTermEnabled } from '../lib/flags'
 import {
   CHURN_KEY,
   FAIRNESS_KEY,
@@ -41,6 +42,8 @@ export function PolicyWeightEditor({
   onSimulate,
   simulating,
   windowLabel,
+  fairnessUnlocked = false,
+  onUnlockFairness,
 }: {
   live: PolicyWeights
   priorityScores: Record<string, number>
@@ -52,9 +55,18 @@ export function PolicyWeightEditor({
   simulating: boolean
   /** The exact interval the Simulate button will send, spelled out for the admin. */
   windowLabel: string
+  /** Whether Flow 7's Danger-Zone gate has been passed in this session. Owned by the tab, because
+   *  it also decides what `buildProposedWeights` is allowed to read. */
+  fairnessUnlocked?: boolean
+  onUnlockFairness?: () => void
 }) {
-  const fields = editableFields(live)
-  const passthrough = passthroughKeys(live).filter((key) => key !== FAIRNESS_KEY)
+  const fields = editableFields(live, fairnessUnlocked, adminChurnWeightEnabled)
+  // Any key that became an EDITED field must leave the read-only "also in this policy" list, or it
+  // would render twice with two different affordances for the same key. Derived from `fields`
+  // rather than from a hand-maintained exclusion list, so a future editable weight cannot be
+  // forgotten here. `w_fairness` is excluded even while locked: the Danger Zone below states its
+  // value, so listing it as a passthrough too would say the same number twice.
+  const passthrough = passthroughKeys(live, fields).filter((key) => key !== FAIRNESS_KEY)
   const canSimulate = invalidKeys.size === 0 && !simulating
   const whyId = useId()
   const whyNotSimulate = simulating
@@ -129,7 +141,11 @@ export function PolicyWeightEditor({
         </section>
       )}
 
-      <FairnessDangerZone live={live} />
+      <FairnessDangerZone
+        live={live}
+        unlocked={fairnessUnlocked}
+        onUnlock={onUnlockFairness}
+      />
 
       <div>
         <Button
@@ -227,31 +243,53 @@ function WeightRow({
 }
 
 /**
- * `components.md` §4 — the fairness-term Danger Zone, and Screen 9's entry point.
+ * `components.md` §4 / `screens.md` §4 / `mockup.html` §8's fourth block — the fairness-term Danger
+ * Zone, and Screen 9's entry point. **FR-ADM-007.**
  *
- * **Still gated on issue #69 (`adminFairnessTermEnabled`), and this build does not flip it.** What
- * changed since E5.6 wrote this off entirely is worth stating precisely, because the reason is no
- * longer the one the flag records: `w_fairness` **does** now exist as a real term — it is in
- * `constraints.json`'s `score_weights` at `0`, `feasibility.py::_rank_slot` multiplies it by a
- * per-carrier concentration count, and `simulate_policy_weights` reports `fairness_term_evaluated`
- * rather than silently ignoring the key. So the old objection ("the typed-confirmation gate would
- * be confirming something fictional") no longer holds.
+ * ## The visual separation IS the signal, and it is not decoration
  *
- * It stays gated anyway because **another agent owns that flag and the work behind it** (#69), and
- * flipping a flag whose exit criterion someone else is mid-way through writing is precisely the
- * failure the M5 flag audit caught. The value is therefore rendered read-only from live data — a
- * real "Currently disabled (0)" rather than a hardcoded one — and round-tripped unchanged.
+ * `components.md` §4: *"This is the one weight field with its own confirmation gate, deliberately
+ * inconsistent with every other field in §3's editor — the inconsistency *is* the point, matching
+ * the Admin Panel checklist's Danger Zone pattern: visual separation is what signals 'this one is
+ * different,' not a note buried in copy an admin could skim past."* Hence its own card, its own
+ * border colour and its own icon.
  *
- * The visual separation *is* the signal (§4): its own card, its own border colour, its own icon,
- * not a note in the copy above that an admin could skim past.
+ * ## Live as of 2026-09-02 (issue #69), and why the previous objection is genuinely retired
+ *
+ * E5.6 refused to build this because *"what it would be confirming is fictional"* — `w_fairness`
+ * was not a term in the shipped formula at all. It is now: a live `score_weights` key at `0`,
+ * multiplied by a per-carrier concentration count in `feasibility.py::_rank_slot`, with the
+ * simulator carrying the same term and reporting `fairness_term_evaluated`. Verified by reading
+ * `constraints.json` and `feasibility.py:558-559` in this session, not from the issue's state — see
+ * `lib/flags.ts::adminFairnessTermEnabled` for the full check.
+ *
+ * ## An enabled term is stated differently from a disabled one, and neither is hardcoded
+ *
+ * The value comes from `live_weights`, so *"Currently disabled (0)"* is a real reading of the
+ * engine rather than the artboard's literal string. Once non-zero it says so, because an admin
+ * arriving at a policy someone else already enabled must not be shown the default copy.
+ *
+ * ## A no-op button is not offered
+ *
+ * Once the gate has been passed the Enable action is **gone**, not disabled — there is nothing left
+ * to enable, and Flow 7 step 3 puts disabling back on the ordinary weight-field path rather than a
+ * second gate. What replaces it is a line saying the field is now editable above.
  */
-function FairnessDangerZone({ live }: { live: PolicyWeights }) {
+function FairnessDangerZone({
+  live,
+  unlocked,
+  onUnlock,
+}: {
+  live: PolicyWeights
+  unlocked: boolean
+  onUnlock?: () => void
+}) {
   const whyId = useId()
+  const [dialogOpen, setDialogOpen] = useState(false)
   const value = live[FAIRNESS_KEY]
   const known = typeof value === 'number'
   const enabled = known && value !== 0
-  const why =
-    'Enabling the fairness term is gated on issue #69, which is still in progress.'
+  const why = 'Enabling the fairness term is gated on issue #69, which is still in progress.'
 
   return (
     <section
@@ -279,7 +317,7 @@ function FairnessDangerZone({ live }: { live: PolicyWeights }) {
           carrier-concentration canary.
         </p>
 
-        {adminFairnessTermEnabled ? null : (
+        {!adminFairnessTermEnabled ? (
           <>
             <Button
               variant="cautionary"
@@ -298,23 +336,69 @@ function FairnessDangerZone({ live }: { live: PolicyWeights }) {
               <strong className="font-semibold">Gated on issue #69.</strong> The term is real in the
               engine now — <code>{FAIRNESS_KEY}</code> is a live <code>score_weights</code> key and
               the ranking formula multiplies it by a per-carrier concentration count — but the
-              Danger-Zone flow (<code>flows-and-states.md</code> Flow 7) is still being built.
+              Danger-Zone flow (<code>flows-and-states.md</code> Flow 7) is switched off here.
               Whatever value the engine holds is sent back unchanged when you simulate or publish
               from this tab; this console does not edit it.
             </InactiveNote>
-            <InactiveNote>
-              <strong className="font-semibold">
-                Churn (<code>{CHURN_KEY}</code>) is not offered at all.
-              </strong>{' '}
-              It is not a weight this API accepts: the key is refused with a 422 naming its own
-              reason — <code>{CHURN_KEY}</code> counts promises the facility sequencer moved, and
-              the sequencer (issue #49) is entirely unbuilt. A field with nowhere to send its value
-              is worse than no field, so <code>mockup.html</code> §8&rsquo;s Churn row is
-              deliberately absent rather than rendered inert.
-            </InactiveNote>
+          </>
+        ) : unlocked ? (
+          <p role="status" className="text-supporting">
+            <strong className="font-semibold">Editable above.</strong> Setting it back to{' '}
+            <span className="font-data">0</span> is an ordinary weight edit and needs no
+            confirmation — the friction is on turning it on. Any non-zero value still has to be
+            simulated and published like every other weight.
+          </p>
+        ) : (
+          <>
+            {/* `mockup.html` §8: "a neutral button ... it is a gated action button, not a switch a
+                cursor can slip onto." A toggle is excluded by name in the prompt; this stays a
+                button that opens a confirmation. */}
+            <Button
+              variant="neutral"
+              className="mt-1 self-start"
+              onClick={() => setDialogOpen(true)}
+            >
+              Enable fairness term
+            </Button>
+            <FairnessDangerDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              onEnable={() => onUnlock?.()}
+            />
           </>
         )}
+
+        <ChurnNote />
       </div>
     </section>
+  )
+}
+
+/**
+ * Why `mockup.html` §8's fifth weight row — Churn (`P_churn`) — is absent rather than inert.
+ *
+ * This note survives independently of the fairness gate, which is exactly why it was split out of
+ * `FairnessDangerZone`'s `false` branch: the two used to share a flag and no longer do. `P_churn`'s
+ * dependency is the **Sequencer (#49)**, not #69, and an admin looking for the field the artboard
+ * draws needs the reason whether or not fairness is enabled.
+ *
+ * Re-verified against the backend in this session: `P_churn` is not a key in `constraints.json`'s
+ * `score_weights`, and `admin_governance_service.BLOCKED_WEIGHT_KEYS` still refuses it by name with
+ * a 422 `UNKNOWN_WEIGHT_KEYS`. A field whose value the API rejects on submit is worse than no
+ * field — so nothing is rendered to type into, and this says why.
+ */
+function ChurnNote() {
+  if (adminChurnWeightEnabled) return null
+  return (
+    <InactiveNote>
+      <strong className="font-semibold">
+        Churn (<code>{CHURN_KEY}</code>) is not offered as a field.
+      </strong>{' '}
+      It is not a weight this API accepts: the key is refused with a 422 naming its own reason —{' '}
+      <code>{CHURN_KEY}</code> counts promises the facility sequencer moved, and the sequencer
+      (issue #49) is not shipped as a ranking term. A field with nowhere to send its value is worse
+      than no field, so <code>mockup.html</code> §8&rsquo;s Churn row is deliberately absent rather
+      than rendered inert.
+    </InactiveNote>
   )
 }

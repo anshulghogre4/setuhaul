@@ -42,17 +42,62 @@ export const opsLiveUpdatesEnabled = true
  * Gates "Request sequencer proposal" (prompt 14's only action on a capacity incident) and the
  * post-request handoff state ("Proposal requested · routed to Planner queue").
  *
- * **Default OFF, and it must stay off until issue #54 lands.**
+ * **Still OFF as of 2026-09-02 -- but the reason has changed completely, and the new reason is the
+ * only thing standing between this and `true`.**
  *
- * Why (issue #54, G1, filed 2026-08-29): `request_sequencer_proposal` does not exist --
- * `SOLUTION_DESIGN.md` section 7.5.5 defines it as a thin delegate to section 7.5.3's
- * `propose_facility_schedule`, and section 7.5.3 (the Sequencer) is entirely unbuilt, tracked
- * separately as issue #49. There is nothing to request a proposal FROM. The collapsed incident
- * row, its expanded read-only affected-shipment list, and the scope-denied state all render
- * regardless -- only the action button and its handoff state are behind this flag.
+ * ## What is now DELIVERED (issues #54/#49, FR-OPS-004)
  *
- * **Exit criterion:** issue #54 (and its parent #49) closed, then flip to `true` and delete the
- * flag and its one call site in `capacity-incident-row.tsx`.
+ * The old reason -- *"there is nothing to request a proposal FROM"* -- is retired. Section 7.5.3
+ * landed this session and section 7.5.5's delegate landed with it, verified by reading the router
+ * rather than an issue title:
+ *
+ *  - **`POST /api/v1/operations/escalations/{escalation_id}/sequencer-proposal`** exists
+ *    (`routers/operations.py:211`), gated `OPS_PORTAL_ROLES`, returning `SchedulingRunResult` --
+ *    literally *"the same shape section 7.5.3 already defines"*, as the catalog requires.
+ *  - It is a **real delegate, not a parallel tool**: `trigger_reason = 'CAPACITY_INCIDENT'` is
+ *    server-pinned and this escalation's id is persisted on the run as a real FK
+ *    (`scheduling_runs.escalation_id`), so the incident and the run stay linkable.
+ *  - **It cannot apply.** `apply_schedule_proposal` sits on `routers/scheduling.py` behind
+ *    `WAREHOUSE_PLANNER`/`ADMIN` only -- D5 surviving the two-surface handoff structurally rather
+ *    than by UI convention.
+ *  - The client half is built and reconciled to that route: `lib/api.ts::requestSequencerProposal`,
+ *    plus prompt 14's State 3 handoff and `edge-cases.md` section 4's `RUN_ALREADY_ACTIVE` inline
+ *    state in `capacity-incident-row.tsx`. Both scope branches of "View in planner queue" render at
+ *    `/ops/_states` plate 14.
+ *
+ * Two contract details were confirmed against the landed route rather than assumed, because both
+ * would have been silent defects: the body is `extra="forbid"` with `facility_id` **optional**, so
+ * sending nothing is a supported call and M15 is honoured (the facility comes from the escalation's
+ * own row); and there is **no `Idempotency-Key`**, deliberately -- a proposal consumes no capacity,
+ * and `scheduling_runs`' partial unique index makes a double-press produce one run plus a named
+ * refusal, which is stronger than two runs sharing a key.
+ *
+ * ## Why it is STILL OFF, and the blocker was measured this time rather than inferred
+ *
+ * The route is mounted and **it 500s**. Driven live on 2026-09-02 against the restarted backend,
+ * on a real sandbox capacity incident at `FAC-GGN-01`:
+ *
+ * ```
+ * POST /api/v1/operations/escalate              -> 200  (incident created)
+ * POST /operations/escalations/{id}/acknowledge -> 200
+ * POST /operations/escalations/{id}/sequencer-proposal -> 500 INTERNAL_ERROR
+ *   asyncpg.exceptions.UndefinedTableError:
+ *   relation "public.scheduling_runs" does not exist
+ * ```
+ *
+ * **The migration `supabase/migrations/20260902160000_scheduling_runs.sql` is written but has not
+ * been applied to this database.** The code shipped; the schema did not. Flipping on "the route is
+ * in `/openapi.json`" would have put a 500 behind the only action this console has on an incident.
+ * (Both probe incidents were cancelled; the sandbox is clean.)
+ *
+ * **One real guard was proven along the way, and it is worth keeping:** called on an *unacknowledged*
+ * incident the delegate answers **409 `NOT_ACKNOWLEDGED`** (`escalation_status=OPEN, stepper=0`)
+ * before it touches the sequencer at all. So Flow 4's ordering -- expand, read, *then* act -- is
+ * enforced server-side, not merely by the UI's layout.
+ *
+ * **Exit criterion, now a single step:** apply the migration, then re-run the sweep row
+ * *"Sequencer engine — live round trip"* in `tests/sweep/03-planner.spec.ts`. Flip only when it
+ * stops reporting `BLOCKED-ENV`. Nothing else in this folder needs touching.
  */
 export const sequencerProposalEnabled = false
 

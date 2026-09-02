@@ -13,6 +13,11 @@ Three things are under test and they are deliberately separate concerns:
   3. **Unknown weight keys are refused, not ignored.** The actual defect #69 names: an admin could
      send `w_fairness`/`P_churn` to `POST /admin/policy/simulate` and get a real-looking
      `flip_count` the field contributed nothing to.
+  4. **`P_churn`, since issue #49 built the sequencer (2026-09-02).** It is no longer refused --
+     it is a real `score_weights` key the sequencer's objective reads -- and it is still not a
+     Stage-2 term. Both halves are asserted, because getting either one wrong reintroduces #69:
+     refusing it would deny a real policy weight, and scoring with it would invent a per-driver
+     meaning the design never gives it.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from app.core.execution_context import ExecutionContext, RoleName
 from app.scheduling import feasibility
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.feasibility import WEIGHT_FAIRNESS, _rank_slot, evaluate_candidate_slot
+from app.scheduling.sequencer import WEIGHT_CHURN
 from app.services import admin_governance_service
 
 FACILITY = "FAC-JAI-01"
@@ -361,26 +367,64 @@ def test_the_weight_allowlist_is_derived_from_the_live_engines_own_key_set():
     assert engine_keys <= allowed
     assert WEIGHT_FAIRNESS in allowed
     assert "priority_scores" in allowed
-    assert "P_churn" not in allowed
+    # Issue #49 built the sequencer, so `P_churn` became a real `score_weights` key that
+    # `sequencer.Coefficients.from_policy` reads -- and the derived allowlist admitted it with no
+    # change to `_validate_weight_keys` at all. That automatic follow-through IS this test's claim.
+    assert WEIGHT_CHURN in allowed
 
 
 @pytest.mark.asyncio
-async def test_simulate_refuses_p_churn_and_names_the_sequencer_as_the_reason():
-    """P_churn is not a typo -- it is a real section 5 formula term whose definition depends on
-    the sequencer (#49), which is unbuilt. Saying so beats "unknown key"."""
+async def test_simulate_accepts_p_churn_and_states_that_it_did_not_participate():
+    """Issue #69's remaining half, after #49 unblocked it.
+
+    `P_churn` used to be refused by name because the sequencer that produces its count did not
+    exist. It exists now, so refusing a real, readable, publishable policy weight would be wrong.
+    But it is a **sequencer-objective** weight and this tool simulates **Stage-2** rankings, so it
+    genuinely contributes nothing to `flip_count` -- and the defect #69 was actually filed about is
+    *silence*, not absence. The contract is therefore: accept it, and say plainly in the response
+    that it did not participate and where it does.
+    """
+    # An empty candidate window: this test is about what the response *says*, not about scoring,
+    # so the read is stubbed to return no rows rather than fixtured with appointments.
+    empty = MagicMock()
+    empty.mappings.return_value.all.return_value = []
     session = AsyncMock()
-    session.execute = AsyncMock()
-    with pytest.raises(AppError) as exc:
-        await admin_governance_service.simulate_policy_weights(
-            session, _admin_ctx(), weights={"P_churn": 30},
-            window_start=datetime.now(timezone.utc), window_end=datetime.now(timezone.utc) + timedelta(days=1),
-        )
-    assert exc.value.code == "UNKNOWN_WEIGHT_KEYS"
-    assert exc.value.status_code == 422
-    assert "P_churn" in exc.value.message
-    assert "sequencer" in exc.value.detail.lower() and "#49" in exc.value.detail
-    # Refused before any read: a rejected simulation must not scan the window.
-    session.execute.assert_not_awaited()
+    session.execute = AsyncMock(return_value=empty)
+
+    result = await admin_governance_service.simulate_policy_weights(
+        session, _admin_ctx(), weights={WEIGHT_CHURN: 60},
+        window_start=datetime.now(timezone.utc),
+        window_end=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    assert result["code"] == "SIMULATED"
+    # The three fields that make the non-participation legible rather than inferable.
+    assert result["churn_term_evaluated"] is False
+    assert result["proposed_p_churn"] == 60
+    assert result["live_p_churn"] == (
+        load_scheduling_constraints().ranking_policy.score_weights[WEIGHT_CHURN]
+    )
+    assert "sequencer" in result["p_churn_note"].lower()
+    assert "propose_facility_schedule" in result["p_churn_note"]
+
+
+def test_p_churn_is_not_a_term_in_the_simulators_stage_2_formula():
+    """The half of #69 that must NOT be built.
+
+    Section 5.1 prices `P_churn` per promise a facility re-sequence moves; Stage 2 ranks one
+    shipment's own candidate slots against each other, where no promise is being moved. Folding it
+    into `_score` would invent a driver-ranking meaning the design never gives it AND break this
+    copy's parity with `feasibility._rank_slot`, which has no such term either. Asserted by
+    computing the same score at two very different churn prices.
+    """
+    priority_scores = load_scheduling_constraints().ranking_policy.priority_scores
+    base = dict(load_scheduling_constraints().ranking_policy.score_weights)
+    args = dict(
+        priority_code="HIGH", lateness_minutes=35, wait_after_eta_minutes=25,
+        fit_slack_minutes=40, exact_dock_type_match=True, priority_scores=priority_scores,
+    )
+    cheap = admin_governance_service._score(weights={**base, WEIGHT_CHURN: 0}, **args)
+    dear = admin_governance_service._score(weights={**base, WEIGHT_CHURN: 100_000}, **args)
+    assert cheap == dear
 
 
 @pytest.mark.asyncio
@@ -454,7 +498,9 @@ async def test_publish_refuses_an_unread_weight_key_before_taking_an_idempotency
     session.execute = AsyncMock()
     with pytest.raises(AppError) as exc:
         await admin_governance_service.publish_policy_version(
-            session, _admin_ctx(), weights={"P_churn": 30}, idempotency_key="pub-churn",
+            # `P_churn` is a real key since issue #49, so the unread key this test needs is a
+            # genuine typo instead -- which is the case the guard exists for anyway.
+            session, _admin_ctx(), weights={"P_chrun": 30}, idempotency_key="pub-churn",
         )
     assert exc.value.code == "UNKNOWN_WEIGHT_KEYS"
     session.execute.assert_not_awaited()

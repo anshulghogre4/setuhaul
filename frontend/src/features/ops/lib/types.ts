@@ -353,6 +353,79 @@ export type SuggestionEvidence = {
   source: string
 }
 
+/* ==============================================================================================
+ * `request_sequencer_proposal` -- SS7.5.5's delegate to SS7.5.3 (issues #54/#49, FR-OPS-004)
+ *
+ * RECONCILED 2026-09-02 against the shipped route. SS7.5.5 says the delegate returns *"the same
+ * shape SS7.5.3 already defines"*, and it genuinely does: `routers/operations.py`'s handler is typed
+ * `-> SchedulingRunResult`, the identical Pydantic model `POST /scheduling/proposals` and
+ * `GET /scheduling/runs/{id}` both return.
+ *
+ * **This surface deliberately types only the subset it renders.** SS5.1's diff itself belongs to the
+ * planner (U93), and ops can never act on a row of it -- so the placement arrays are typed as
+ * opaque counts rather than mirrored from `features/planner/lib/types.ts`. Copying the full shape
+ * here would create a second definition of a contract this surface cannot use, and importing the
+ * planner's would couple two surfaces that are deliberately independent.
+ * ============================================================================================ */
+
+/** SS5.1's own run scope, as the server reports it. */
+export type SequencerHorizon = {
+  start_ts: string
+  end_ts: string
+  end_reason: string
+}
+
+/**
+ * The subset of `sequencer.ObjectiveValues` the handoff line names.
+ *
+ * `churn_count` is the one SS5.1 puts in words in its sample effect line ("promises moved 1"), and
+ * the one the admin console's `P_churn` field would price. Every term is a real number on the wire
+ * even when zero -- the server reports them all so that "contributed nothing" and "not measured"
+ * stay distinguishable -- so these are not nullable.
+ */
+export type SequencerObjective = {
+  churn_count: number
+  promises_moved: number
+  waiting_minutes_delta: number
+  total_cost: number
+}
+
+/**
+ * What `request_sequencer_proposal` returns -- `sequencer.SchedulingRunResult`.
+ *
+ * `RUN_ALREADY_ACTIVE` is SS5.1's debounce rule expressed as a return value ("at most one active run
+ * per facility, serialised"), and `03-planner-dock-board/edge-cases.md` section 4 requires it be
+ * rendered as *an expected, recoverable condition, not a failure*. The shipped route agrees and
+ * returns **200 with a typed body in both outcomes** rather than a 409 -- so this is branched on
+ * `code`, exactly like `acknowledge_escalation`'s `ALREADY_ACTIONED`.
+ *
+ * `counts` is the server's own per-category map, preferred over array lengths (which may be
+ * truncated on a large facility). The placement arrays are omitted from this type entirely: ops
+ * renders totals and a handoff, never a row.
+ */
+export type SequencerProposalResult = {
+  as_of: string
+  code: 'PROPOSED' | 'RUN_ALREADY_ACTIVE'
+  scheduling_run_id: string
+  facility_id: string
+  facility_name: string | null
+  /** Always `CAPACITY_INCIDENT` from this route -- the delegate pins it, so no client chooses it. */
+  trigger_reason: string
+  /** SS7.5.5: *"the `escalation_id` attached to the resulting `scheduling_run_id` ... the incident
+   *  and the run stay linkable."* A real FK on `scheduling_runs`, echoed back so the handoff line
+   *  can prove the linkage rather than assume it. */
+  escalation_id: string | null
+  status: string
+  policy_version: string
+  snapshot_hash: string
+  horizon: SequencerHorizon
+  counts: Record<string, number>
+  objective: SequencerObjective
+  explanation: string
+  /** `RUN_ALREADY_ACTIVE` only -- which run is in the way. */
+  active_run: Record<string, unknown> | null
+}
+
 export type ResolutionSuggestion = {
   as_of: string
   source: string

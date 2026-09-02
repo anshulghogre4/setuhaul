@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -40,8 +41,31 @@ from app.scheduling.allocation import (
 )
 from app.scheduling.feasibility import find_feasible_slots
 from app.scheduling.holds import confirm_held_slot
+from app.scheduling.sequencer import (
+    MAX_RUN_LIST,
+    STATUS_APPLIED,
+    STATUS_PROPOSED,
+    STATUS_SUPERSEDED,
+    TRIGGER_PLANNER_REQUESTED,
+    apply_schedule_proposal,
+    get_scheduling_run,
+    list_scheduling_runs,
+    propose_facility_schedule,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["scheduling"])
+
+# Section 7.5.3's own opening line -- *"D5 says the sequencer proposes and a planner applies, so
+# these are planner-scoped, not agent-scoped"* -- and the same gate `routers/planner.py` uses for
+# section 7.5.1's `block_dock`/`end_dock_block`, for the same reason its docstring gives:
+# `OPS_PORTAL_ROLES` would admit every operator role, and this is the planner's own persona.
+#
+# The asymmetry with `GET /scheduling/runs/{id}` below is deliberate and is D5 in the role table:
+# reading a proposal is open to the ops portal (section 7.5.3: *"The agent may read a proposal to
+# explain it; it may never apply one"*), while proposing and applying are the planner's.
+SequencerCtx = Annotated[
+    ExecutionContext, Depends(require_roles(RoleName.WAREHOUSE_PLANNER, RoleName.ADMIN))
+]
 
 
 class CancelAppointmentBody(BaseModel):
@@ -139,6 +163,211 @@ class HoldForInformationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(min_length=1, max_length=500)
+
+
+class ProposeScheduleBody(BaseModel):
+    """Section 7.5.3 `propose_facility_schedule` -- `facility_id`, `horizon_end?`,
+    `trigger_reason`.
+
+    `facility_id` is optional and is a **narrowing request, never a scope assertion** (M15 /
+    section 7.5 principle 1): the service passes it through
+    `repositories.scope.resolve_facility_scope_with_user_scopes`, so a planner may only ever name a
+    facility the server itself grants them and an `ADMIN`'s global scope is what the field exists
+    for. Omitting it resolves to the caller's own facility. `extra="forbid"` means an invented
+    field is a 422 rather than a silently ignored one.
+
+    `trigger_reason` is fixed to `PLANNER_REQUESTED` here and cannot be set to
+    `CAPACITY_INCIDENT`: that value belongs to section 7.5.5's delegate, which is the only thing
+    that can attach a real `escalation_id`, and a client-settable trigger reason would let a
+    planner-initiated run masquerade as an incident response in the audit trail.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    facility_id: str | None = Field(default=None, max_length=100)
+    horizon_end: datetime | None = None
+
+
+class ApplyScheduleBody(BaseModel):
+    """Section 7.5.3 `apply_schedule_proposal` -- `scheduling_run_id` (path), `snapshot_hash`,
+    `Idempotency-Key` (header).
+
+    **There is deliberately no per-row argument**, and its absence is the contract rather than an
+    oversight: section 7.5.3 says so outright -- *"There is deliberately no 'apply these three rows'
+    argument -- cherry-picking produces a schedule nobody validated (section 5.1)."* `extra="forbid"`
+    is what makes that structural: a client that tries to send `appointment_ids` gets a 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_hash: str = Field(min_length=1, max_length=128)
+
+
+@router.post("/scheduling/proposals")
+async def propose_schedule(
+    body: ProposeScheduleBody,
+    request: Request,
+    ctx: SequencerCtx,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Section 7.5.3 `propose_facility_schedule` / FR-SYS-016 / FR-PLN-009 (issue #49).
+
+    **No `Idempotency-Key`, deliberately.** Section 7.5 principle 3 attaches keys to calls that
+    *consume capacity*, and this one writes no `dock_occupancy` row, no appointment and no
+    notification -- D5: *"Sequencer output is a reviewable artifact, never a silent write."* The
+    protection a key would give is already given, and given better, by the database: the partial
+    unique index behind `RUN_ALREADY_ACTIVE` means a double-submit produces one run and a named
+    refusal naming it, rather than two runs sharing a key.
+
+    Returns **200 with a typed body in both outcomes**, matching `bulk_confirm`'s posture rather
+    than `request_slot`'s 409: `RUN_ALREADY_ACTIVE` is not an error, it is section 5.1's debounce
+    working, and the response carries the incumbent run the planner should look at instead.
+    """
+    result = await propose_facility_schedule(
+        session,
+        ctx,
+        facility_id=body.facility_id,
+        horizon_end=body.horizon_end,
+        trigger_reason=TRIGGER_PLANNER_REQUESTED,
+    )
+    message = (
+        f"Proposal {result.scheduling_run_id}: " + result.explanation
+        if result.code == "PROPOSED"
+        else "This facility already has a proposal awaiting review."
+    )
+    return ok(result.model_dump(), get_request_id(request), message=message)
+
+
+@router.get("/scheduling/runs")
+async def scheduling_runs(
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    facility_id: Annotated[str | None, Query()] = None,
+    status: Annotated[str | None, Query()] = STATUS_PROPOSED,
+    limit: Annotated[int, Query(ge=1, le=MAX_RUN_LIST)] = MAX_RUN_LIST,
+) -> dict[str, Any]:
+    """The pending-proposals read. **An addition to section 7.5.3's catalog, not an implementation
+    of it** -- flagged here and in `sequencer.list_scheduling_runs`, per the same discipline
+    `planner.py::dock_block_impact` states for itself.
+
+    Two shipped surfaces need it and neither can be built from `get_scheduling_run` alone, because
+    both begin without a run id:
+
+    * `03-planner-dock-board/screens.md` section 3's `[ Review proposal (N) ]` control, whose N is
+      the count of live proposals for this facility;
+    * `flows-and-states.md` Flow 9's **ops-handoff** origin -- the run is created on the ops console
+      by `request_sequencer_proposal`, so the planner surface never observed its id.
+
+    `facility_id` is a narrowing request, never a scope assertion (M15): it goes through
+    `resolve_facility_scope_with_user_scopes`, so it can only narrow a global-read persona or name a
+    facility this caller is granted. Unlike `/scheduling/proposals`, no facility is *required* --
+    "is any facility waiting on a planner" is a legitimate question for a global-read tier, and this
+    is a read.
+
+    `status` defaults to `PROPOSED` (the live set the button counts) and accepts `APPLIED` /
+    `SUPERSEDED` for the audit view section 8 asks for. An unknown value is a 422 rather than a
+    silently empty list -- a filter that quietly matches nothing reads as "no proposals".
+    """
+    if status is not None and status not in {STATUS_PROPOSED, STATUS_APPLIED, STATUS_SUPERSEDED}:
+        raise AppError(
+            f"Unsupported status filter '{status}'.",
+            code="INVALID_STATUS",
+            status_code=422,
+            detail=f"Supported: {STATUS_PROPOSED}, {STATUS_APPLIED}, {STATUS_SUPERSEDED}.",
+        )
+    result = await list_scheduling_runs(
+        session, ctx, facility_id=facility_id, status=status, limit=limit
+    )
+    return ok(result.model_dump(), get_request_id(request))
+
+
+@router.get("/scheduling/runs/{scheduling_run_id}")
+async def scheduling_run(
+    scheduling_run_id: str,
+    request: Request,
+    ctx: Annotated[ExecutionContext, Depends(require_roles(*OPS_PORTAL_ROLES))],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Section 7.5.3 `get_scheduling_run` / FR-PLN-009 / FR-SYS-042 (issue #49).
+
+    Gated at `OPS_PORTAL_ROLES` rather than the planner pair, and that is D5 rather than looseness:
+    section 7.5.3 says *"The agent may **read** a proposal to explain it; it may never apply one"*,
+    and ops Flow 4 step 4 keeps the incident row rendering its handoff state, which needs this read.
+    The facility is derived from the run's own row, so a wider role set cannot see a wider set of
+    runs -- `assert_facility_visible` still refuses another facility's.
+
+    A `GET`, and that is the whole safety story rather than a REST nicety: replaying a stored
+    decision writes nothing.
+    """
+    result = await get_scheduling_run(session, ctx, scheduling_run_id)
+    return ok(result.model_dump(), get_request_id(request))
+
+
+@router.post("/scheduling/runs/{scheduling_run_id}/apply")
+async def apply_schedule(
+    scheduling_run_id: str,
+    body: ApplyScheduleBody,
+    request: Request,
+    ctx: SequencerCtx,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    """Section 7.5.3 `apply_schedule_proposal` / FR-PLN-009 (issue #49).
+
+    **The one route in the sequencer group that ops may not reach.** D5's whole content is the
+    split -- *"Ops triages and requests; a planner still applies"* (section 7.5.5's own note on
+    `request_sequencer_proposal`) -- and `SequencerCtx` is where that is enforced, not a UI
+    decision. `sequencer.apply_schedule_proposal` re-checks facility write scope on top, so the
+    role gate and the scope rule agree by construction.
+
+    `Idempotency-Key` is required: this one consumes capacity, so section 7.5 principle 3 attaches.
+
+    Returns 409 for the two refusals with the typed body still present, so the console can render
+    Flow 9 steps 4 and 5 (*"offers 'Request a fresh proposal' rather than a bare error"*, *"explains
+    which constraint made the whole proposal invalid"*) from the payload rather than from a status
+    code alone.
+    """
+    if not idempotency_key or not idempotency_key.strip():
+        raise AppError(
+            "Idempotency-Key header is required.", code="IDEMPOTENCY_KEY_REQUIRED", status_code=400
+        )
+    try:
+        result = await apply_schedule_proposal(
+            session,
+            ctx,
+            scheduling_run_id=scheduling_run_id,
+            snapshot_hash=body.snapshot_hash,
+            idempotency_key=idempotency_key.strip(),
+        )
+    except AppError:
+        await session.rollback()
+        raise
+    except Exception:
+        await session.rollback()
+        raise
+
+    payload = ok(result.model_dump(), get_request_id(request))
+    if result.code in {"SNAPSHOT_DRIFT", "PARTIALLY_INFEASIBLE"}:
+        payload["success"] = False
+        # `detail` carries the **typed result as JSON**, not prose, and that is this codebase's
+        # existing convention rather than a new one: `allocation._snapshot_stale_error`,
+        # `_displacement_error` and `_interval_unavailable_error` all `json.dumps` their structured
+        # refusal into `detail` for the same reason. The frontend's central error type is built from
+        # `errors[0]` alone, so anything that lives only in `data` is unreachable from a rejected
+        # call -- which would put `infeasible[]` (Flow 9 step 5's "explains which constraint made
+        # the whole proposal invalid") and `drift` (step 4's "states this plainly") out of the
+        # console's reach at exactly the moment it needs them. `data` keeps the same object, so a
+        # client reading either place sees one truth.
+        payload["errors"] = [
+            {
+                "code": result.code,
+                "detail": json.dumps(result.model_dump(), default=str),
+                "field": None,
+            }
+        ]
+        return JSONResponse(status_code=409, content=payload)
+    return payload
 
 
 @router.get("/shipments/{shipment_id}/slots/feasible")

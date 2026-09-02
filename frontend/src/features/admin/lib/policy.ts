@@ -22,14 +22,36 @@ import type { ActivePolicy, PolicyWeights } from './types'
 export const FAIRNESS_KEY = 'w_fairness'
 
 /**
- * `P_churn` is NOT a live key and is never sent.
+ * `P_churn` -- a live `score_weights` key since 2026-09-02 (issues #49/#69).
  *
- * It is in `admin_governance_service.BLOCKED_WEIGHT_KEYS`, which returns a **422**
- * (`UNKNOWN_WEIGHT_KEYS`) carrying its own reason: the term counts promises the facility
- * sequencer moved, and the sequencer (§7.5.3, issue #49) is entirely unbuilt. Named here so the
- * Danger Zone can state that fact rather than rendering a field with nowhere to go.
+ * It used to be in `admin_governance_service.BLOCKED_WEIGHT_KEYS`, refused with a 422 because the
+ * sequencer that produces the count did not exist. The sequencer shipped, `constraints.json` now
+ * carries `P_churn: 30` (§5.1's own recommended ≈30 weighted-minute-equivalents per moved promise),
+ * and `BLOCKED_WEIGHT_KEYS` is empty.
+ *
+ * **It is a sequencer-objective weight, not a Stage-2 ranking coefficient**, which is why the
+ * simulator reports `churn_term_evaluated: false` by design: §5 Stage 2's per-driver formula does
+ * not contain `P_churn` at all, and §5.1's sequencer objective does. The field is editable and
+ * publishable because the sequencer genuinely reads it
+ * (`sequencer.py:1222`: `churn=int(weights.get(WEIGHT_CHURN, 30))`) and prices it into every run's
+ * `objective.churn_cost`.
  */
 export const CHURN_KEY = 'P_churn'
+
+/**
+ * The churn coefficient as a weight field.
+ *
+ * Like `FAIRNESS_WEIGHT_FIELD`, **deliberately not in `ROUTINE_WEIGHT_FIELDS`** -- but for the
+ * opposite reason. Fairness is separated because it carries a Danger-Zone gate; churn is separated
+ * because it is the one editable weight on this tab that **no simulation can preview**. Bundling it
+ * with the four Stage-2 coefficients would let it inherit copy ("compare against the last 30 days")
+ * that is untrue of it.
+ */
+export const CHURN_WEIGHT_FIELD: WeightField = {
+  key: CHURN_KEY,
+  label: 'Churn',
+  symbol: 'P_churn',
+}
 
 /**
  * The two cap keys `_score` reads out of the same `weights` dict (`admin_governance_service.py`'s
@@ -63,6 +85,25 @@ export const ROUTINE_WEIGHT_FIELDS: WeightField[] = [
   { key: 'compatible_but_not_exact_dock_penalty', label: 'Dock mismatch', symbol: 'P_dock' },
 ]
 
+/**
+ * The fairness coefficient, as a weight field — but **deliberately not a member of
+ * `ROUTINE_WEIGHT_FIELDS`**.
+ *
+ * `components.md` §4: *"This is the one weight field with its own confirmation gate, deliberately
+ * inconsistent with every other field in §3's editor — the inconsistency *is* the point."* Keeping
+ * it out of the routine array is what makes that structural rather than a rendering condition: no
+ * loop over the routine fields can accidentally start editing it, and `buildProposedWeights` has to
+ * be handed the unlock explicitly before it will read a draft for it.
+ *
+ * It is the same wire key the engine reads (`feasibility.WEIGHT_FAIRNESS` /
+ * `admin_governance_service.WEIGHT_FAIRNESS`), and the symbol matches §5 Stage 2's formula.
+ */
+export const FAIRNESS_WEIGHT_FIELD: WeightField = {
+  key: FAIRNESS_KEY,
+  label: 'Fairness',
+  symbol: 'w_fairness',
+}
+
 const ROUTINE_KEYS = new Set(ROUTINE_WEIGHT_FIELDS.map((field) => field.key))
 
 /** `mockup.html` §10.B: "Counts use tabular figures and en-IN grouping." */
@@ -88,6 +129,14 @@ export function unitFor(field: WeightField, live: PolicyWeights): string {
   if (field.key === 'lateness_per_minute') return capUnit('per minute', live[LATENESS_CAP_KEY])
   if (field.key === 'fit_slack_per_minute') return capUnit('per minute', live[FIT_SLACK_CAP_KEY])
   if (field.key === 'wait_after_eta_per_minute') return 'per minute'
+  // The fairness unit is not in `mockup.html` §8 -- the artboard never renders this field as an
+  // input, because when it was drawn the term did not exist. Taken from what the engine actually
+  // multiplies (`feasibility.py`: `w_fairness * carrier_concentration`) rather than left blank:
+  // §8's own rule is "every field has a visible label AND a visible unit -- never a bare number",
+  // and this is the field where a bare number would be least interpretable.
+  if (field.key === FAIRNESS_KEY) return 'per other appointment this carrier holds that day'
+  // SS5.1's own unit, verbatim from `mockup.html` section 8's fifth row.
+  if (field.key === CHURN_KEY) return 'weighted-min-equivalent per moved promise'
   return 'flat penalty, unitless'
 }
 
@@ -127,17 +176,34 @@ export function parseWeightInput(raw: string): number | null {
  *     make it permanently `false` even for an unchanged republish, turning a real divergence
  *     signal into noise.
  *
- * `w_fairness` therefore round-trips **unchanged** while issue #69's Danger Zone is gated off: the
- * console neither edits it nor drops it.
+ * `w_fairness` round-trips **unchanged** unless the Danger-Zone gate has been passed in this
+ * session (`fairnessUnlocked`). That is Flow 7 step 2 expressed as a data rule rather than a
+ * rendering one: until the gate is passed there is no draft for it to read, so the console
+ * structurally cannot edit the field even if a form somewhere rendered it.
+ *
+ * Once unlocked, the fairness value re-enters the **ordinary** discipline with no exemption --
+ * `edge-cases.md` #6: *"there is no separate bypass for the fairness field; it re-enters the
+ * ordinary weight-editor discipline the instant the Danger-zone gate has been passed."* Because it
+ * lands in the same returned object the staleness comparison runs over, changing it after a
+ * simulation marks that simulation stale automatically, exactly like any other weight.
+ *
+ * **`P_churn` is never added here under any condition.** It is not a live key, the API refuses it
+ * with a 422 naming its own reason, and starting from `live` is what makes sending it structurally
+ * impossible rather than merely unlikely.
  */
 export function buildProposedWeights(
   live: PolicyWeights,
   drafts: Record<string, string>,
+  fairnessUnlocked = false,
+  churnEnabled = false,
 ): PolicyWeights | null {
   const proposed: PolicyWeights = { ...live }
-  for (const field of ROUTINE_WEIGHT_FIELDS) {
-    // A routine key the engine does not currently define is not invented into existence: if
+  const fields = editableFields(live, fairnessUnlocked, churnEnabled)
+  for (const field of fields) {
+    // A key the engine does not currently define is not invented into existence: if
     // constraints.json ever drops one, the field is not rendered and nothing is sent for it.
+    // This is also the guard that keeps a fairness draft from creating the key on a deploy whose
+    // engine predates #69 -- which would be the 422 this whole file is built to avoid.
     if (!(field.key in live)) continue
     const parsed = parseWeightInput(drafts[field.key] ?? '')
     if (parsed === null) return null
@@ -146,9 +212,27 @@ export function buildProposedWeights(
   return proposed
 }
 
-/** The routine fields the server actually defines, in display order. */
-export function editableFields(live: PolicyWeights): WeightField[] {
-  return ROUTINE_WEIGHT_FIELDS.filter((field) => field.key in live)
+/**
+ * The fields the server actually defines, in display order.
+ *
+ * The fairness row is appended only once the Danger-Zone gate has been passed, which is Flow 7
+ * step 2's *"`w_fairness` becomes an editable field in the ordinary weight editor"* -- literally
+ * the ordinary editor, so it inherits every rule the other rows already follow rather than getting
+ * a bespoke input of its own.
+ */
+export function editableFields(
+  live: PolicyWeights,
+  fairnessUnlocked = false,
+  churnEnabled = false,
+): WeightField[] {
+  const fields = [...ROUTINE_WEIGHT_FIELDS]
+  // Churn sits with the routine coefficients (it is `mockup.html` section 8's fifth row) but is
+  // gated on its own flag, because its dependency is the sequencer rather than the Danger Zone.
+  if (churnEnabled) fields.push(CHURN_WEIGHT_FIELD)
+  if (fairnessUnlocked) fields.push(FAIRNESS_WEIGHT_FIELD)
+  // A key the engine does not define is never invented into existence -- if constraints.json drops
+  // one, the field is not rendered and nothing is sent for it.
+  return fields.filter((field) => field.key in live)
 }
 
 /**
@@ -158,9 +242,10 @@ export function editableFields(live: PolicyWeights): WeightField[] {
  * they are changing *from*, and a key that silently participates in every score while being
  * invisible in the editor is the same class of problem the whole tab exists to prevent.
  */
-export function passthroughKeys(live: PolicyWeights): string[] {
+export function passthroughKeys(live: PolicyWeights, editable: WeightField[] = []): string[] {
+  const shown = new Set([...ROUTINE_KEYS, ...editable.map((f) => f.key)])
   return Object.keys(live)
-    .filter((key) => !ROUTINE_KEYS.has(key))
+    .filter((key) => !shown.has(key))
     .sort((a, b) => a.localeCompare(b))
 }
 
@@ -170,7 +255,12 @@ export function passthroughKeys(live: PolicyWeights): string[] {
  */
 export function draftsFrom(live: PolicyWeights): Record<string, string> {
   const drafts: Record<string, string> = {}
-  for (const field of ROUTINE_WEIGHT_FIELDS) {
+  // The fairness draft is seeded unconditionally, unlike the field's EDITABILITY. Seeding it costs
+  // nothing (an unlocked field would otherwise open empty, reading as a cleared value rather than
+  // the engine's current 0) and it cannot leak into a payload: `buildProposedWeights` only reads a
+  // draft for a field it was told is unlocked, and every key it does not read is round-tripped from
+  // `live` regardless.
+  for (const field of [...ROUTINE_WEIGHT_FIELDS, CHURN_WEIGHT_FIELD, FAIRNESS_WEIGHT_FIELD]) {
     if (field.key in live) drafts[field.key] = String(live[field.key])
   }
   return drafts
