@@ -205,6 +205,7 @@ export function ProposalOverlay({
               <AppliedNotice result={outcome} onClose={() => onOpenChange(false)} />
             ) : outcome.code === 'SNAPSHOT_DRIFT' ? (
               <SnapshotDrift
+                result={outcome}
                 onRequestFresh={() => {
                   onOpenChange(false)
                   onRequestFresh()
@@ -565,8 +566,40 @@ export function AppliedNotice({
  * **One action, and it is not a retry.** *"Never a blind retry of the stale proposal"* --
  * `onRequestFresh` closes this overlay and asks the console to compute a new run. The stale run's
  * id and hash are dropped with the overlay, so there is nothing left for a later press to re-send.
+ *
+ * ## Two causes, and only one of them is "the schedule changed"
+ *
+ * Measured against the live route on 2026-09-02: the refusal payload carries three hashes --
+ * `expected_snapshot_hash` (the run's own), `current_snapshot_hash` (the facility's digest now) and
+ * `supplied_snapshot_hash` (what the caller sent). Genuine drift is `expected !== current`: the
+ * world moved under the proposal, which is the case `edge-cases.md` section 5 describes and the only
+ * one this console can reach, since it always sends the run's hash verbatim.
+ *
+ * A malformed or stale *supplied* hash produces the same `SNAPSHOT_DRIFT` code while
+ * `expected === current` -- nothing changed at all. Rendering the design's sentence in that case
+ * would have the UI assert something untrue, so the two are told apart. The distinction costs one
+ * comparison and keeps the one screen whose whole job is explaining *why* honest.
+ *
+ * **The run is retired either way**, and that is the server's deliberate behaviour rather than a
+ * side effect: a drifted run comes back `status: SUPERSEDED` with `superseded_reason:
+ * SNAPSHOT_DRIFT`, which enforces "the fix is a fresh proposal, not forcing the stale one through"
+ * and frees the facility's one-active-run index so the button below can immediately succeed.
  */
-export function SnapshotDrift({ onRequestFresh }: { onRequestFresh: () => void }) {
+export function SnapshotDrift({
+  result,
+  onRequestFresh,
+}: {
+  result?: ApplyProposalResult
+  onRequestFresh: () => void
+}) {
+  const drift = (result?.drift ?? {}) as Record<string, unknown>
+  const expected = drift.expected_snapshot_hash
+  const current = drift.current_snapshot_hash
+  // Only claim the schedule moved when the two server-side digests actually differ. Unknown fields
+  // fall back to the design's sentence, which is the common and expected case.
+  const scheduleMoved =
+    typeof expected === 'string' && typeof current === 'string' ? expected !== current : true
+
   return (
     <div
       role="alert"
@@ -575,10 +608,13 @@ export function SnapshotDrift({ onRequestFresh }: { onRequestFresh: () => void }
       <p className="flex items-start gap-2">
         <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <span>
-          <strong className="font-semibold">Nothing was applied.</strong> The schedule changed after
-          this proposal was calculated, so it can no longer be applied safely.
+          <strong className="font-semibold">Nothing was applied.</strong>{' '}
+          {scheduleMoved
+            ? 'The schedule changed after this proposal was calculated, so it can no longer be applied safely.'
+            : 'This proposal was submitted with a snapshot the server did not recognise, so it was refused rather than applied against capacity nobody re-checked.'}
         </span>
       </p>
+      <p>This run has been retired — a fresh one is the only way forward, never a retry of this one.</p>
       <Button variant="constructive" className="self-start" onClick={onRequestFresh}>
         Request a fresh proposal
       </Button>

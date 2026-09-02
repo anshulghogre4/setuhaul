@@ -226,6 +226,13 @@ def _coerce_hold_id(hold_id: str) -> int | None:
 # ------------------------------------------------------------------------------------------
 
 
+
+def _blocking_event_types() -> tuple[str, ...]:
+    """The shared dock-block vocabulary (#109), imported lazily: snapshot.py's edge back into
+    this module is function-deferred to avoid a cycle, so this side must be too."""
+    from app.scheduling.snapshot import BLOCKING_EVENT_TYPES
+    return BLOCKING_EVENT_TYPES
+
 async def create_hold(
     session: AsyncSession,
     *,
@@ -705,6 +712,8 @@ async def confirm_held_slot(
                 SELECT dock_event_id
                 FROM public.dock_status_events
                 WHERE dock_id = :dock_id
+                  -- #109: blocking types only (see snapshot.BLOCKING_EVENT_TYPES).
+                  AND event_type = ANY(:blocking_types)
                   AND event_start_ts < :slot_end_ts
                   AND (event_end_ts IS NULL OR event_end_ts > :slot_start_ts)
                 ORDER BY event_start_ts DESC
@@ -712,6 +721,7 @@ async def confirm_held_slot(
                 """
             ),
             {
+                "blocking_types": list(_blocking_event_types()),
                 "dock_id": hold["dock_id"],
                 "slot_start_ts": hold["slot_start_ts"],
                 "slot_end_ts": hold["slot_end_ts"],

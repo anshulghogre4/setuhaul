@@ -269,7 +269,33 @@ export function PlannerStatesGallery() {
               }}
               onClose={() => {}}
             />
+            {/* Both drift causes. Only the first is reachable from this console (it always sends
+                the run's own hash), but the second exists because the server answers the same code
+                for a malformed supplied hash -- measured 2026-09-02 -- and the copy must not claim
+                the schedule moved when the two server-side digests are identical. */}
             <SnapshotDrift onRequestFresh={() => {}} />
+            <SnapshotDrift
+              onRequestFresh={() => {}}
+              result={{
+                as_of: PROPOSAL_RUN.as_of,
+                code: 'SNAPSHOT_DRIFT',
+                scheduling_run_id: PROPOSAL_RUN.scheduling_run_id,
+                status: 'SUPERSEDED',
+                notification_batch_id: null,
+                notifications_enqueued: 0,
+                moved: 0,
+                newly_placed: 0,
+                unchanged: 0,
+                drift: {
+                  expected_snapshot_hash: 'sha256/same',
+                  current_snapshot_hash: 'sha256/same',
+                  supplied_snapshot_hash: 'sha256/stale',
+                },
+                infeasible: [],
+                idempotency_key: null,
+                idempotent_replay: false,
+              }}
+            />
             <PartiallyInfeasible
               result={{
                 as_of: PROPOSAL_RUN.as_of,

@@ -17,6 +17,12 @@ from app.repositories.scope import assert_shipment_visible
 from app.scheduling.constraints import load_scheduling_constraints
 from app.scheduling.occupancy import claim_window_sql, live_blocking_occupancy_sql
 
+# Issue #109. Imported, never restated -- see `_DOCK_BLOCK_JOIN_SQL` below for why, and for why a
+# module-level import of `snapshot` is safe from here. Re-exported by that import so the proof
+# suite can assert `feasibility.BLOCKING_EVENT_TYPES is snapshot.BLOCKING_EVENT_TYPES` -- an
+# identity, which a copied tuple cannot satisfy however equal it looks.
+from app.scheduling.snapshot import BLOCKING_EVENT_TYPES
+
 ACTIVE_APPOINTMENT_STATUSES = frozenset({"PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS"})
 CANCELLED_SHIPMENT_STATUSES = frozenset({"COMPLETED", "CANCELLED"})
 PRIORITY_RANK = {"CRITICAL": 0, "HIGH": 1, "NORMAL": 2, "LOW": 3}
@@ -181,6 +187,47 @@ def _blocking_occupancy_join(*, enabled: bool, exclude_appointment: bool = False
                     AND {live_blocking_occupancy_sql(alias="o", now_param="now")}{own_claim}
                   LIMIT 1
                 ) occ ON TRUE"""
+
+
+# ---------------------------------------------------------------------------
+# The dock-outage join (issue #109)
+# ---------------------------------------------------------------------------
+# Both candidate scans in this module LEFT JOIN `dock_status_events` to answer one boolean:
+# "is this dock down across this slot". Neither carried an `event_type` filter, so EVERY row on
+# the dock counted -- including `REOPENED`, which the live CHECK constraint admits
+# (`20260805201923_setuhaul_baseline.sql:234`: MAINTENANCE / BREAKDOWN / CAPACITY_REDUCTION /
+# REOPENED / MANUAL_BLOCK) and which means the dock came back UP. So a REOPENED row overlapping an
+# otherwise-free slot removed it from the driver's options, while the sequencer
+# (`sequencer.py:843-847`), the planner queue's displacement preview
+# (`snapshot._DOCK_BLOCK_CONFLICTS_SQL`) and the board (`planner_service._board_blocks`) all went
+# on calling that same slot open. Same read/write divergence family as #84/#88/#97, on the driver
+# path this time: the two halves of the product disagreed about what "blocked" means.
+#
+# The blocking set is IMPORTED from `snapshot.py`, not restated. That is the entire fix: four
+# consumers now derive "blocked" from one tuple, so a future edit to it cannot move three of them
+# and leave this one behind. A module-level import is safe in this direction and was checked
+# rather than assumed -- `snapshot`'s own top-level imports are `core.settings` and the leaf
+# `scheduling.occupancy`, neither of which reaches this module, and its one import back into this
+# package (`holds`) is deferred inside a function precisely because that edge is the cyclic one.
+#
+# ONE literal for BOTH scans, for the same reason at a smaller scale: `find_feasible_slots` and
+# `explain_slot_eligibility` are the option list and the "why not this slot" answer shown to the
+# same driver about the same slot, and they held two byte-identical copies of this join. Two
+# copies is how they drift.
+#
+# The overlap test is unchanged and stays half-open on both edges
+# (`event_start_ts < slot_end_ts AND event_end_ts > slot_start_ts`), matching
+# `snapshot._DOCK_BLOCK_CONFLICTS_SQL` and `planner_service._overlapping_block`;
+# `event_end_ts IS NULL` is an open-ended outage and overlaps everything after its start. Only the
+# `event_type` line is new.
+#
+# Round-trip cost: zero. This is a narrowing predicate on a join that already ran, not a new read.
+_DOCK_BLOCK_JOIN_SQL = """
+                LEFT JOIN public.dock_status_events de
+                  ON de.dock_id = sl.dock_id
+                 AND de.event_type = ANY(:blocking_types)
+                 AND de.event_start_ts < sl.slot_end_ts
+                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts)"""
 
 
 class FeasibleSlotOption(BaseModel):
@@ -1088,6 +1135,10 @@ async def find_feasible_slots(
         "facility_id": shipment_data["destination_facility_id"],
         "eta_ts": eta_dt,
         "horizon_end_ts": horizon_end,
+        # Issue #109. Always bound, because `_DOCK_BLOCK_JOIN_SQL` is unconditional -- unlike
+        # `unload_min`/`now` below, which are only bound when the D2 fragment that names them is
+        # present.
+        "blocking_types": list(BLOCKING_EVENT_TYPES),
     }
     if capacity_join:
         # Only bound when the fragment that names them is present: SQLAlchemy's `text()` raises on
@@ -1109,11 +1160,7 @@ async def find_feasible_slots(
                 JOIN public.docks d ON d.dock_id = sl.dock_id
                 LEFT JOIN public.appointments a
                   ON a.slot_id = sl.slot_id
-                 AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
-                LEFT JOIN public.dock_status_events de
-                  ON de.dock_id = sl.dock_id
-                 AND de.event_start_ts < sl.slot_end_ts
-                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts){capacity_join}
+                 AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS'){_DOCK_BLOCK_JOIN_SQL}{capacity_join}
                 WHERE sl.facility_id = :facility_id
                   AND sl.slot_end_ts > :eta_ts
                   AND sl.slot_start_ts < :horizon_end_ts
@@ -1316,6 +1363,12 @@ async def explain_slot_eligibility(
     candidate_params: dict[str, Any] = {
         "slot_id": slot_id,
         "facility_id": shipment_data["destination_facility_id"],
+        # Issue #109, and this is the sharper half of it: FR-DRV-006's whole job is to say *why*
+        # a slot cannot be booked. Counting a REOPENED event as an outage made this tool answer
+        # "a dock event overlaps this slot" about a dock that had come back up -- a wrong reason,
+        # which is worse than no reason, and one `find_feasible_slots` would not have agreed with
+        # after its own half of this fix.
+        "blocking_types": list(BLOCKING_EVENT_TYPES),
     }
     if capacity_join:
         candidate_params["unload_min"] = int(shipment_data["expected_unload_min"])
@@ -1337,11 +1390,7 @@ async def explain_slot_eligibility(
                 JOIN public.docks d ON d.dock_id = sl.dock_id
                 LEFT JOIN public.appointments a
                   ON a.slot_id = sl.slot_id
-                 AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
-                LEFT JOIN public.dock_status_events de
-                  ON de.dock_id = sl.dock_id
-                 AND de.event_start_ts < sl.slot_end_ts
-                 AND (de.event_end_ts IS NULL OR de.event_end_ts > sl.slot_start_ts){capacity_join}
+                 AND a.appointment_status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS'){_DOCK_BLOCK_JOIN_SQL}{capacity_join}
                 WHERE sl.slot_id = :slot_id AND sl.facility_id = :facility_id
                 """
             ),

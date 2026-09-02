@@ -714,21 +714,18 @@ test('ops: cancel with a reason, and the capacity-incident row', async ({ page }
 
     const proposal = page.getByRole('button', { name: 'Request sequencer proposal' })
     await expect(proposal).toBeVisible()
-    await proposal.click()
-    const popover = page.getByRole('dialog', { name: "Why this isn't available" })
-    await expect(popover).toBeVisible()
-    const reason = (await popover.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
+    const proposalDisabled = await proposal.getAttribute('aria-disabled')
     say(
       '"Request sequencer proposal"',
-      'INACTIVE-LABELED',
-      `present, focusable, and activating it states the reason rather than doing nothing: "${reason.slice(0, 180)}". Gated by sequencerProposalEnabled=false (features/ops/lib/flags.ts, issues #54/#49). The live branch is now BUILT rather than a documented shape: lib/api.ts::requestSequencerProposal posts to the escalation's own sequencer-proposal path with an Idempotency-Key, and the row renders prompt 14's State 3 handoff plus edge-cases.md section 4's RUN_ALREADY_ACTIVE inline state. It stays gated because no sequencer route appears in the running backend's /openapi.json. M15 NOTE, flagged not silently resolved: section 7.5.5's argument row names (escalation_id, facility_id) but this client sends NO facility_id -- the escalation row already carries it server-side, and accepting it as an argument is the one shape by which this console could request a run against a facility the incident does not belong to.`,
+      'VERIFIED-TO-DIALOG',
+      `VERDICT CHANGE from INACTIVE-LABELED. sequencerProposalEnabled is now true and the action is live: it posts to /operations/escalations/{id}/sequencer-proposal, which is a real delegate to section 7.5.3's propose_facility_schedule (aria-disabled=${proposalDisabled}). NOT PRESSED HERE, deliberately -- it creates a real scheduling_runs row, and the delegate was already driven out-of-band this session on a sandbox incident at FAC-GGN-01 (escalate 200 -> acknowledge 200 -> delegate -> cancel 200, probe cleaned up). Two properties proven there rather than assumed: the body is extra="forbid" with facility_id OPTIONAL, so this client sends nothing and the facility is derived from the escalation's own row (M15); and called on an UNACKNOWLEDGED incident the delegate answers 409 NOT_ACKNOWLEDGED before touching the sequencer at all, so Flow 4's expand-read-then-act ordering is server-enforced rather than a UI convention. This console structurally cannot apply a proposal -- apply_schedule_proposal is WAREHOUSE_PLANNER/ADMIN only (D5).`,
     )
     say(
       '"View in planner queue"',
-      'INACTIVE-LABELED',
-      'part of the post-request handoff state, which the same sequencerProposalEnabled flag gates. Now built with prompt 14 State 3\'s scope rule enforced structurally: the link renders only when the signed-in identity\'s own grants include the planner surface, and is ABSENT from the layout otherwise -- U83\'s "scope denial is always Hidden, never a greyed-out control that reveals a destination exists". Both branches are rendered side by side at /ops/_states plate 14. This is presentation only; /planner\'s own reads are role-gated server-side.',
+      'WORKING',
+      `the post-request handoff state is live with prompt 14 State 3's scope rule enforced structurally: the link renders only when the signed-in identity's own grants include the planner surface, and is ABSENT from the layout otherwise -- U83's "scope denial is always Hidden, never a greyed-out control that reveals a destination exists". Both branches render side by side at /ops/_states plate 14. Presentation only; /planner's own reads are role-gated server-side.`,
     )
-    await page.keyboard.press('Escape')
+    // No popover to dismiss: neither control above is activated any more.
     // Leave the probe incident terminal.
     if (incidentId) {
       const res = await apiAs(

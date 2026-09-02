@@ -72,34 +72,41 @@ export const opsLiveUpdatesEnabled = true
  * and `scheduling_runs`' partial unique index makes a double-press produce one run plus a named
  * refusal, which is stronger than two runs sharing a key.
  *
- * ## Why it is STILL OFF, and the blocker was measured this time rather than inferred
+ * ## ON since 2026-09-02, on a driven round trip rather than a source read
  *
- * The route is mounted and **it 500s**. Driven live on 2026-09-02 against the restarted backend,
- * on a real sandbox capacity incident at `FAC-GGN-01`:
+ * This flag stayed off through two earlier checkpoints. First `request_sequencer_proposal` did not
+ * exist; then it was mounted but **500'd** on
+ * `UndefinedTableError: relation "public.scheduling_runs" does not exist` -- the migration was
+ * written and unapplied. That is why *"the route appears in `/openapi.json`"* was never accepted
+ * here as evidence: a mounted route is not a working feature, and flipping then would have put a
+ * 500 behind the only action this console has on an incident.
+ *
+ * The owner applied the migration and the engine now answers. Verified end to end on the live
+ * stack, against a real sandbox capacity incident at `FAC-GGN-01`:
  *
  * ```
  * POST /api/v1/operations/escalate              -> 200  (incident created)
  * POST /operations/escalations/{id}/acknowledge -> 200
- * POST /operations/escalations/{id}/sequencer-proposal -> 500 INTERNAL_ERROR
- *   asyncpg.exceptions.UndefinedTableError:
- *   relation "public.scheduling_runs" does not exist
+ * POST /operations/escalations/{id}/sequencer-proposal -> a real SchedulingRunResult
+ * POST /operations/escalations/{id}/cancel      -> 200  (probe cleaned up)
  * ```
  *
- * **The migration `supabase/migrations/20260902160000_scheduling_runs.sql` is written but has not
- * been applied to this database.** The code shipped; the schema did not. Flipping on "the route is
- * in `/openapi.json`" would have put a 500 behind the only action this console has on an incident.
- * (Both probe incidents were cancelled; the sandbox is clean.)
+ * plus the engine's own round trip on the planner side -- propose -> replay -> list -> debounce
+ * (`RUN_ALREADY_ACTIVE`) -> deliberate `SNAPSHOT_DRIFT` refusal -- recorded in
+ * `features/planner/lib/flags.ts::sequencerProposalEnabled`. **No proposal was ever applied**: this
+ * console structurally cannot apply one (D5), and the planner-side probe left its run un-applied.
  *
- * **One real guard was proven along the way, and it is worth keeping:** called on an *unacknowledged*
- * incident the delegate answers **409 `NOT_ACKNOWLEDGED`** (`escalation_status=OPEN, stepper=0`)
- * before it touches the sequencer at all. So Flow 4's ordering -- expand, read, *then* act -- is
- * enforced server-side, not merely by the UI's layout.
+ * **One real guard proven along the way, and worth keeping in mind when reading Flow 4:** called on
+ * an *unacknowledged* incident the delegate answers **409 `NOT_ACKNOWLEDGED`**
+ * (`escalation_status=OPEN, stepper=0`) before it touches the sequencer at all. So Flow 4's
+ * ordering -- expand, read, *then* act -- is enforced server-side, not merely by this UI's layout.
+ * The row surfaces it through the same failure path as any other refusal rather than pretending it
+ * cannot happen.
  *
- * **Exit criterion, now a single step:** apply the migration, then re-run the sweep row
- * *"Sequencer engine — live round trip"* in `tests/sweep/03-planner.spec.ts`. Flip only when it
- * stops reporting `BLOCKED-ENV`. Nothing else in this folder needs touching.
+ * **To revert:** set this to `false`. The action returns to Inactive with its reason and the
+ * handoff state stops rendering; nothing else needs touching.
  */
-export const sequencerProposalEnabled = false
+export const sequencerProposalEnabled = true
 
 /**
  * Gates the whole coordinator reply path: the takeover control, the thread composer and its Send

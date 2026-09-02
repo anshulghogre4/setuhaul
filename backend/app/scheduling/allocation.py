@@ -34,6 +34,7 @@ from app.scheduling.feasibility import (  # noqa: E402  (grouped with its own ex
     _to_local,
 )
 from app.scheduling.snapshot import (
+    BLOCKING_EVENT_TYPES,
     batch_snapshot_hash,
     describe_snapshot_drift,
     displacement_conflicts,
@@ -1787,6 +1788,9 @@ async def request_slot(
                 SELECT dock_event_id
                 FROM public.dock_status_events
                 WHERE dock_id = :dock_id
+                  -- #109: only the four blocking types block; REOPENED is a dock coming BACK
+                  -- up. Same literal every other consumer uses (snapshot.BLOCKING_EVENT_TYPES).
+                  AND event_type = ANY(:blocking_types)
                   AND event_start_ts < :slot_end_ts
                   AND (event_end_ts IS NULL OR event_end_ts > :slot_start_ts)
                 ORDER BY event_start_ts DESC
@@ -1794,6 +1798,7 @@ async def request_slot(
                 """
             ),
             {
+                "blocking_types": list(BLOCKING_EVENT_TYPES),
                 "dock_id": slot["dock_id"],
                 "slot_start_ts": slot["slot_start_ts"],
                 "slot_end_ts": slot["slot_end_ts"],

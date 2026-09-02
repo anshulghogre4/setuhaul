@@ -63,7 +63,10 @@ def psql(sql):
     if r.returncode != 0:
         print(r.stderr[-400:])
         sys.exit(f"psql FAILED: {sql[:80]}")
-    return r.stdout.strip()
+    # Last line only: the preceding -c "SET lock_timeout" prints its own 'SET' command tag
+    # into stdout ahead of the query result, which broke every equality check on the first
+    # owner run (2026-09-02) even though the migration itself had applied.
+    return r.stdout.strip().splitlines()[-1].strip() if r.stdout.strip() else ""
 
 
 print(f"[1/4] applying {MIGRATION.name}")

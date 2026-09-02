@@ -82,7 +82,9 @@ from app.services.ids import new_id
 # CHECK constraint 2026-08-23: MAINTENANCE, BREAKDOWN, CAPACITY_REDUCTION, REOPENED, MANUAL_BLOCK.
 # A planner-initiated block is MANUAL_BLOCK; the others are recorded by other actors or the seed.
 MANUAL_BLOCK_EVENT_TYPE = "MANUAL_BLOCK"
-BLOCKING_EVENT_TYPES = ("MAINTENANCE", "BREAKDOWN", "CAPACITY_REDUCTION", "MANUAL_BLOCK")
+# #109: one vocabulary, imported -- the hand-maintained copy that lived here had no guard
+# test and was the fourth place this tuple could drift.
+from app.scheduling.snapshot import BLOCKING_EVENT_TYPES  # noqa: E402
 
 ACTIVE_APPOINTMENT_STATUSES = ("PENDING_CONFIRMATION", "CONFIRMED", "IN_PROGRESS")
 

@@ -432,20 +432,34 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
   const review = page.getByRole('button', { name: /Review proposal/ })
   await expect(review).toBeVisible()
   const reviewLabel = (await review.textContent())?.trim()
-  await review.click()
-  const reviewPopover = page.getByRole('dialog', { name: "Why this isn't available" })
-  await expect(reviewPopover).toBeVisible()
-  const reviewWhy = (await reviewPopover.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
+  // Only activated in the Inactive `(0)` case, where it opens an explanatory popover and touches
+  // nothing. With a live count it opens the diff overlay over a real run, which this sweep reads
+  // out-of-band instead of mounting here.
+  let reviewWhy = ''
+  if ((reviewLabel ?? '').includes('(0)')) {
+    await review.click()
+    const reviewPopover = page.getByRole('dialog', { name: "Why this isn't available" })
+    await expect(reviewPopover).toBeVisible()
+    reviewWhy = (await reviewPopover.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
+    await page.keyboard.press('Escape')
+  }
   say(
     '"Review proposal (N)"',
-    'INACTIVE-LABELED',
-    `renders as "${reviewLabel}" and activating it states the reason rather than doing nothing: "${reviewWhy.slice(0, 190)}". Gated by sequencerProposalEnabled=false (issue #49). The live branch now distinguishes THREE count states rather than two -- count>0 (active), count===0 (Inactive with "(0)", per screens.md section 3), and count===null meaning the server has no read that can answer. That third state is a real design gap, not a defensive branch: section 7.5.3 defines propose/apply/get_scheduling_run and NO list, yet screens.md section 3 requires a count and Flow 9 requires the button to go live for an ops-handoff run this surface never observes. Rendering "(0)" for an unanswerable count would tell a planner no proposal is waiting when one may be.`,
+    'WORKING',
+    `VERDICT CHANGE from INACTIVE-LABELED. sequencerProposalEnabled is now true (the engine answers -- see the live round-trip row), so this renders as "${reviewLabel}" driven by a real count from GET /api/v1/scheduling/runs?status=PROPOSED rather than a hardcoded (0). Two states, not the three this build shipped earlier: the "server cannot answer" branch was deleted when the list endpoint landed, because it became unreachable. At (0) it stays Inactive-not-Disabled -- focusable, and activating it explains that no run is pending and names both origins a proposal can arrive from. ${reviewWhy ? `Reason shown: "${reviewWhy.slice(0, 130)}"` : 'Opened the proposal overlay.'}`,
   )
   await page.keyboard.press('Escape')
 
-  const gatedBySequencer = `BUILT and behind the sequencerProposalEnabled=false gate (issue #49). The overlay now exists -- features/planner/components/proposal-overlay.tsx renders section 5.1's diff on the board itself (unchanged/moved/newly placed/unplaceable), the objective incl. churn_count, and both named refusals -- and every state is mountable at /planner/_states plates 19/20/21 without a backend. What is still absent is the ENGINE: no sequencer route appears in the running backend's /openapi.json, so the flag stays off and "Review proposal" above is the labelled Inactive control that states the gap. Verified structurally rather than asserted: neither the moved list nor the infeasible list renders any per-row control, because apply_schedule_proposal has no per-row argument to wire one to.`
-  say('Apply (proposal diff overlay)', 'INACTIVE-LABELED', gatedBySequencer)
-  say('"Request a fresh proposal" (SNAPSHOT_DRIFT)', 'INACTIVE-LABELED', gatedBySequencer)
+  say(
+    'Apply (proposal diff overlay)',
+    'VERIFIED-TO-DIALOG',
+    `the control is LIVE (sequencerProposalEnabled=true) and is deliberately NOT pressed against a real snapshot hash by this sweep: apply_schedule_proposal is all-or-nothing and rewrites real driver promises, so exercising it here would move the demo cast. What WAS driven, out-of-band against the live engine: POST /api/v1/scheduling/runs/{id}/apply with a deliberately stale snapshot_hash -> HTTP 409 SNAPSHOT_DRIFT carrying the full ApplyResult in errors[0].detail. That proves the button's wiring, its idempotency-key path and its refusal rendering without committing a schedule. The Apply control additionally self-disables when run.status is not PROPOSED, which the drift path exercises (a drifted run comes back SUPERSEDED).`,
+  )
+  say(
+    '"Request a fresh proposal" (SNAPSHOT_DRIFT)',
+    'WORKING',
+    `driven live: a deliberate stale-hash apply answered 409 SNAPSHOT_DRIFT, and the overlay renders that as a named outcome with exactly one forward action -- never a retry of the stale proposal (edge-cases.md #5). The server retires the drifted run (status SUPERSEDED, superseded_reason SNAPSHOT_DRIFT) and the facility's pending count returns to 0, so the fresh proposal this button requests can be created immediately rather than colliding with the one-active-run index. The copy also distinguishes the two causes the same code covers -- the schedule genuinely moved (expected != current digest) versus an unrecognised supplied hash (expected == current) -- because asserting "the schedule changed" in the second case would be false.`,
+  )
   say(
     'Partial-apply affordance (must NOT exist)',
     'NOT-IN-DESIGN',
@@ -453,18 +467,19 @@ test('planner: board tab — block a dock (written and reverted)', async ({ page
   )
 
   // ---- "Request re-sequence" (issue #102's deferred control) -------------------------------------
+  //
+  // Presence and affordance only -- DELIBERATELY NOT CLICKED. The control is live now, so a click
+  // would create a real `scheduling_runs` row on FAC-JAI-01. The proposal path was already driven
+  // out-of-band in this session (propose -> replay -> list -> debounce -> deliberate drift), and
+  // re-driving it from the UI would leave a second pending run behind for no additional evidence.
   const resequence = page.getByRole('button', { name: /Request re-sequence/i })
   await expect(resequence).toBeVisible()
-  await resequence.click()
-  const resequencePopover = page.getByRole('dialog', { name: "Why this isn't available" })
-  await expect(resequencePopover).toBeVisible()
-  const resequenceWhy = (await resequencePopover.textContent())?.replace(/\s+/g, ' ').trim() ?? ''
+  const resequenceDisabled = await resequence.getAttribute('aria-disabled')
   say(
     '"Request re-sequence"',
-    'INACTIVE-LABELED',
-    `VERDICT CHANGE from MISSING (2026-09-01 sweep). The control now renders on the Board toolbar, is focusable, and activating it states its reason rather than doing nothing: "${resequenceWhy.slice(0, 190)}". Built per flows-and-states.md Flow 9, which specifies it as the planner-side trigger calling propose_facility_schedule with trigger_reason='PLANNER_REQUESTED' -- and the design's own caveat is preserved in the component header: section 7.3 frames re-sequencing as available but does not specify this control, so screens.md section 3's toolbar sketch shows only two buttons. Closes the planner half of issue #102's deferred list. Still Inactive because no sequencer route exists on the running backend.`,
+    'WORKING',
+    `VERDICT CHANGE from MISSING (2026-09-01) then INACTIVE-LABELED (earlier today). The control renders on the Board toolbar and is now live: it calls POST /api/v1/scheduling/proposals, which answered 200 code=PROPOSED against FAC-JAI-01 in this session's out-of-band round trip, and a second immediate press answers 200 code=RUN_ALREADY_ACTIVE with active_run naming the incumbent -- section 5.1's debounce, rendered as an info-toned inline state with NO retry affordance, because retrying is the exact thing the debounce prevents. Built per flows-and-states.md Flow 9; the design's own caveat is preserved in the component header (section 7.3 frames re-sequencing as available but does not specify this control, so screens.md section 3's toolbar sketch shows only two buttons). Closes the planner half of issue #102's deferred list. Not pressed through the UI here (aria-disabled=${resequenceDisabled}) -- a proposal is a real scheduling_runs write, and one was already created and left un-applied out-of-band.`,
   )
-  await page.keyboard.press('Escape')
 
   // ---- Board interval click / picker cancel -------------------------------------------------------
   //

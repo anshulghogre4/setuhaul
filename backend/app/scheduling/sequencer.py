@@ -856,12 +856,11 @@ async def _load_candidates(
                 "facility_id": facility_id,
                 "horizon_start": horizon_start,
                 "horizon_end": horizon_end,
-                # `find_feasible_slots`' own dock-event join carries no event_type filter, which
-                # means a REOPENED event blocks a slot there. Filtering here to the four genuinely
-                # blocking types matches `snapshot.BLOCKING_EVENT_TYPES` and
-                # `planner_service._board_blocks` -- the two reads a planner actually looks at --
-                # so the proposal and the board agree about which docks are down. Reported as a
-                # found-not-fixed divergence on the driver path rather than changed there.
+                # Filtering to the four genuinely blocking types via `snapshot.BLOCKING_EVENT_TYPES`
+                # -- the ONE vocabulary every consumer now shares. (Historical note: when this was
+                # written the driver path's join carried no event_type filter; that divergence was
+                # #109, fixed 2026-09-02 across feasibility, allocation's pre-check, the hold path
+                # and planner_service's duplicate tuple.)
                 "blocking_types": list(_blocking_event_types()),
                 "limit": MAX_CANDIDATE_SLOTS,
             },

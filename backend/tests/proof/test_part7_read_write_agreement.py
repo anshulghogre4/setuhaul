@@ -53,6 +53,7 @@ would, so these tests run unchanged against both revisions and fail loudly again
 
 from __future__ import annotations
 
+import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -63,15 +64,21 @@ from sqlalchemy import text
 
 from app.core.errors import AppError
 from app.core.execution_context import ExecutionContext, RoleName
-from app.scheduling import allocation, holds, snapshot
+from app.scheduling import allocation, feasibility, holds, snapshot
 from app.scheduling.allocation import RequestSlotCommand, request_slot
 from app.scheduling.constraints import load_scheduling_constraints
-from app.scheduling.feasibility import find_feasible_slots
+from app.scheduling.feasibility import explain_slot_eligibility, find_feasible_slots
 from app.scheduling.occupancy import live_blocking_occupancy_sql
 from app.services import planner_service
 from app.services.planner_service import get_planner_queue
 from tests.proof.evidence import record_evidence
-from tests.proof.harness import CONTESTED_DOCK, FACILITY_ID, RaceFixture, seed_race
+from tests.proof.harness import (
+    ALTERNATIVE_DOCK,
+    CONTESTED_DOCK,
+    FACILITY_ID,
+    RaceFixture,
+    seed_race,
+)
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -86,6 +93,12 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 OFFSET_LIVE_HOLD = 2880       # 2099-03-03 10:00 IST
 OFFSET_LAPSED_HOLD = 4320     # 2099-03-04 10:00 IST
 OFFSET_AGREEMENT = 5760       # 2099-03-05 10:00 IST
+# The rest of this module's registry, declared beside their own sections further down but listed
+# here so the whole file's claim on `CONTESTED_DOCK` can be read in one place:
+#   OFFSET_DISPLACEMENT = 7200   # 2099-03-06   (section D)
+#   OFFSET_DOCK_BLOCK   = 10080  # 2099-03-08   (section E)
+#   OFFSET_REOPENED     = 12960  # 2099-03-10   (section F)
+# 8640 (2099-03-07) belongs to `test_part11_hold_for_information.py`, not to this file.
 
 
 async def _set_hold_deadline(session, *, occupancy_id: int, expires_at: datetime) -> None:
@@ -1161,4 +1174,306 @@ async def test_e_blocking_a_dock_does_not_invalidate_the_outstanding_snapshot(
     assert before.displacement.status == "NONE" and after.displacement.status == "CONFLICT", (
         "the displacement column did not change across the block, so the hash assertion above is "
         "vacuous"
+    )
+
+
+# =================================================================================================
+# F. Issue #109 -- "blocked" must mean the same event types on the driver path as everywhere else
+# =================================================================================================
+#
+# The fifth member of the family, and the first one that over-refuses on the DRIVER path rather
+# than the planner's. #97/#98 were about the interval leg; #88 about the block leg's *visibility*;
+# this is about the block leg's *vocabulary*.
+#
+# `dock_status_events.event_type` has five legal values -- the live CHECK constraint
+# (`20260805201923_setuhaul_baseline.sql:234`) admits MAINTENANCE, BREAKDOWN, CAPACITY_REDUCTION,
+# REOPENED and MANUAL_BLOCK -- and exactly four of them mean "this dock is down". REOPENED means
+# the opposite: the dock came back. Every consumer that had thought about it filtered to the four
+# (`snapshot.BLOCKING_EVENT_TYPES`, reached by the planner queue's displacement preview, the
+# write path's refusal, the board's outage hatches and the sequencer's candidate scan). Both of
+# `feasibility.py`'s candidate scans filtered to none of them, so a REOPENED row overlapping an
+# otherwise-free slot removed that slot from the driver's options while the planner's own screen
+# went on showing it as bookable -- and `explain_slot_eligibility`, whose entire job under
+# FR-DRV-006 is to say *why*, answered "a dock event overlaps this slot" about a dock that was up.
+#
+# The fix is the same one-predicate-two-consumers discipline #88 and #97 established, applied one
+# level down: `feasibility` now *imports* `snapshot.BLOCKING_EVENT_TYPES` rather than restating it,
+# and its two scans share one join literal (`feasibility._DOCK_BLOCK_JOIN_SQL`) instead of holding
+# two byte-identical copies. The first test below asserts that sharing structurally, for the same
+# reason `test_e_the_block_predicate_is_one_literal_shared_by_both_consumers` does: a behavioural
+# test alone could be satisfied by a second copy that happens to agree today.
+#
+# ## Why these two rows are written by hand rather than through a tool
+#
+# Section E deliberately builds its outage through `planner_service.block_dock`, and that is the
+# right call there. It is the wrong call here, twice over:
+#
+#   * **No production path writes REOPENED at all.** `block_dock` writes MANUAL_BLOCK, and
+#     `end_dock_block` ends an outage by truncating `event_end_ts` rather than by appending a
+#     REOPENED row (`planner_service.py:1187-1209`). REOPENED is a value the schema sanctions, the
+#     seed's own vocabulary carries, and `driver_reads.py` renders back to drivers -- reachable
+#     from an import, a backfill, or the next writer of that column -- but not one any tool emits
+#     today. A test cannot obtain one through a tool because no tool produces one.
+#   * **The contrast is the claim.** The two rows below differ in exactly ONE column, `event_type`,
+#     and are otherwise the same shape over the same kind of window. Building one through
+#     `block_dock` and one by hand would make them differ in reason text, `created_at`, and an
+#     opened `CAPACITY_EVENT_CASCADE` as well -- and "the slot came back because event_type
+#     changed" would no longer be the only available explanation.
+#
+# That REOPENED has no live writer is stated plainly rather than buried: it makes this a latent
+# divergence today, not a reproducing incident. The divergence itself is real the moment such a
+# row exists, and four consumers disagreeing about a five-value enum is a defect whether or not
+# the fifth value is currently in use.
+
+OFFSET_REOPENED = 12960  # 2099-03-10 10:00 IST -- clear of every other fixture's 48-hour horizon
+
+# Both events are widened 15 minutes either side of their slot so the overlap is unambiguous at
+# both edges of the half-open predicate, rather than resting on a boundary case that would make a
+# failure ambiguous between "the type filter is wrong" and "the overlap arithmetic is wrong".
+_EVENT_PAD = timedelta(minutes=15)
+
+
+async def _insert_dock_event(
+    session,
+    *,
+    dock_event_id: str,
+    dock_id: str,
+    event_type: str,
+    start: datetime,
+    end: datetime,
+    reason: str,
+) -> None:
+    """One `dock_status_events` row, with the column-type asymmetry this table actually has.
+
+    `event_start_ts`/`event_end_ts` became real `timestamptz` in
+    `20260823060000_d1_correctness_bedrock.sql` and take datetimes; `created_at` on this table was
+    never converted and is still `text`, so it takes an ISO string and would raise a `DataError`
+    given a datetime. `planner_service.block_dock` documents the same split at its own INSERT --
+    this mirrors it rather than guessing.
+    """
+    await session.execute(
+        text(
+            """
+            INSERT INTO public.dock_status_events (
+              dock_event_id, dock_id, event_type, event_start_ts, event_end_ts, reason, created_at
+            ) VALUES (
+              :dock_event_id, :dock_id, :event_type, :start, :end, :reason, :created_at
+            )
+            """
+        ),
+        {
+            "dock_event_id": dock_event_id,
+            "dock_id": dock_id,
+            "event_type": event_type,
+            "start": start,
+            "end": end,
+            "reason": reason,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    await session.commit()
+
+
+async def test_f_the_blocking_type_set_is_one_tuple_and_one_join_literal():
+    """Structural, and deliberately first: the behavioural tests below rest on this.
+
+    Two claims, both of which a copied-and-edited implementation would fail:
+
+      1. `feasibility` and `snapshot` name the **same object**, not two equal tuples. Identity is
+         the assertion `test_snapshot_hash_matches_the_planner_queue_producer_byte_for_byte`
+         already uses for the digest, and for the same reason -- equality passes right up until
+         someone edits one copy.
+      2. `public.dock_status_events` is named exactly ONCE in the whole module, inside the shared
+         join literal. Both candidate scans consume that literal, so the option list and the
+         "why not this slot" explanation cannot answer differently.
+    """
+    assert feasibility.BLOCKING_EVENT_TYPES is snapshot.BLOCKING_EVENT_TYPES, (
+        "feasibility carries its own copy of the blocking-type set -- the copy is exactly what "
+        "issue #109 is about"
+    )
+    assert "REOPENED" not in feasibility.BLOCKING_EVENT_TYPES, (
+        "REOPENED means the dock came back up and must never be in the blocking set"
+    )
+    fragment = feasibility._DOCK_BLOCK_JOIN_SQL
+    assert ":blocking_types" in fragment, "the shared join literal carries no event_type filter"
+
+    source = inspect.getsource(feasibility)
+    occurrences = source.count("public.dock_status_events")
+    record_evidence(
+        "7. #109: dock-event join",
+        f"one literal, {occurrences} occurrence(s) of the table in feasibility.py",
+    )
+    assert occurrences == 1, (
+        f"`public.dock_status_events` appears {occurrences} times in feasibility.py -- the two "
+        "candidate scans are meant to share one join literal, so anything above 1 is a second copy"
+    )
+    for name, func in (
+        ("find_feasible_slots", feasibility.find_feasible_slots),
+        ("explain_slot_eligibility", feasibility.explain_slot_eligibility),
+    ):
+        body = inspect.getsource(func)
+        assert "_DOCK_BLOCK_JOIN_SQL" in body, f"{name} no longer uses the shared join literal"
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def reopened_event_case(work_sessionmaker):
+    """Two free slots on two docks, then one REOPENED event and one genuine outage -- one each.
+
+    The paired shape is the point. A single REOPENED case that passed could be satisfied by an
+    implementation that had simply stopped looking at `dock_status_events` altogether, which would
+    be a far worse defect than the one being fixed (it would offer slots on a dock that is down).
+    Asserting both directions from ONE `find_feasible_slots` call over ONE facility read means no
+    implementation can satisfy one half by giving up the other.
+
+    The pre-event render is taken first and asserted in its own test, so "the slot is still offered
+    afterwards" cannot pass because the slot was never offered at all.
+    """
+    run_id = f"R{uuid4().hex[:7].upper()}"
+    async with work_sessionmaker() as session:
+        fixture = await seed_race(
+            session,
+            run_id=run_id,
+            contenders=1,
+            start_offset_minutes=OFFSET_REOPENED,
+            alternatives=1,
+        )
+    driver = fixture.contenders[0]
+    alt_slot_id = fixture.alternative_slot_ids[0]
+    # `seed_race` puts alternative N at slot_start + N*SLOT_MINUTES on `ALTERNATIVE_DOCK`; derived
+    # here rather than re-queried so the outage window and the slot cannot drift apart.
+    alt_start = fixture.slot_end
+    alt_end = alt_start + (fixture.slot_end - fixture.slot_start)
+
+    async with work_sessionmaker() as session:
+        before = await find_feasible_slots(session, driver.ctx(), driver.shipment_id, limit=5)
+
+    reopened_id = f"DEVT-P7RE-{run_id}"
+    outage_id = f"DEVT-P7MT-{run_id}"
+    async with work_sessionmaker() as session:
+        # The dock came BACK UP across the contested slot. Not an outage; must not hide the slot.
+        await _insert_dock_event(
+            session,
+            dock_event_id=reopened_id,
+            dock_id=CONTESTED_DOCK,
+            event_type="REOPENED",
+            start=fixture.slot_start - _EVENT_PAD,
+            end=fixture.slot_end + _EVENT_PAD,
+            reason="issue #109: dock returned to service",
+        )
+        # A genuine outage across the alternative slot, on the other dock. The control: it must
+        # still remove its slot, or this fix would have traded one defect for a worse one.
+        await _insert_dock_event(
+            session,
+            dock_event_id=outage_id,
+            dock_id=ALTERNATIVE_DOCK,
+            event_type="MAINTENANCE",
+            start=alt_start - _EVENT_PAD,
+            end=alt_end + _EVENT_PAD,
+            reason="issue #109: planned maintenance control",
+        )
+
+    async with work_sessionmaker() as session:
+        after = await find_feasible_slots(session, driver.ctx(), driver.shipment_id, limit=5)
+    async with work_sessionmaker() as session:
+        explained_reopened = await explain_slot_eligibility(
+            session, driver.ctx(), driver.shipment_id, fixture.slot_id
+        )
+    async with work_sessionmaker() as session:
+        explained_outage = await explain_slot_eligibility(
+            session, driver.ctx(), driver.shipment_id, alt_slot_id
+        )
+
+    return {
+        "fixture": fixture,
+        "alt_slot_id": alt_slot_id,
+        "reopened_event_id": reopened_id,
+        "outage_event_id": outage_id,
+        "options_before": [option.slot_id for option in before.options],
+        "options_after": [option.slot_id for option in after.options],
+        "rejected_after": {r.slot_id: r for r in after.rejected_reasons},
+        "explained_reopened": explained_reopened,
+        "explained_outage": explained_outage,
+    }
+
+
+async def test_f_both_slots_were_offered_before_either_event_existed(reopened_event_case):
+    """The precondition. Without it every assertion below could pass vacuously."""
+    case = reopened_event_case
+    fixture: RaceFixture = case["fixture"]
+    assert fixture.slot_id in case["options_before"], (
+        f"the contested slot was not offered even before any dock event: {case['options_before']}"
+    )
+    assert case["alt_slot_id"] in case["options_before"], (
+        f"the alternative slot was not offered before any dock event: {case['options_before']}"
+    )
+
+
+async def test_f_a_reopened_event_does_not_hide_a_free_slot_from_the_driver(reopened_event_case):
+    """The defect itself, stated as the read a driver actually gets.
+
+    Against pre-fix code this slot is absent from `options` and present in `rejected_reasons` with
+    `DOCK_UNAVAILABLE` -- refused because the dock came back up.
+    """
+    case = reopened_event_case
+    fixture: RaceFixture = case["fixture"]
+    rejected = case["rejected_after"].get(fixture.slot_id)
+    record_evidence(
+        "7. #109: slot under a REOPENED event",
+        "offered" if fixture.slot_id in case["options_after"] else
+        f"WITHHELD ({rejected.failure_code if rejected else 'no reason given'})",
+    )
+    assert fixture.slot_id in case["options_after"], (
+        "a REOPENED event -- the dock coming back UP -- removed an otherwise-free slot from the "
+        f"driver's options. Reason given: "
+        f"{rejected.failure_code if rejected else 'none'}. The planner queue, the board and the "
+        "sequencer all still call this slot bookable; issue #109 is exactly that disagreement."
+    )
+
+
+async def test_f_a_genuine_outage_still_removes_the_slot(reopened_event_case):
+    """The control, in the same read. `find_feasible_slots` must not have gone blind instead.
+
+    Same failure code the pre-fix engine gave every dock event, so this half of the behaviour is
+    asserted to be *unchanged* rather than merely still-failing for some reason.
+    """
+    case = reopened_event_case
+    alt_slot_id = case["alt_slot_id"]
+    rejected = case["rejected_after"].get(alt_slot_id)
+    record_evidence(
+        "7. #109: slot under a MAINTENANCE event",
+        f"withheld ({rejected.failure_code})" if rejected else "OFFERED",
+    )
+    assert alt_slot_id not in case["options_after"], (
+        "a MAINTENANCE outage overlapping this slot did not remove it -- the event_type filter is "
+        "letting real outages through, which is worse than the defect it was added to fix"
+    )
+    assert rejected is not None and rejected.failure_code == "DOCK_UNAVAILABLE", (
+        f"expected DOCK_UNAVAILABLE for the outage slot, got "
+        f"{rejected.failure_code if rejected else 'no rejection at all'}"
+    )
+
+
+async def test_f_explain_slot_eligibility_gives_the_same_two_answers(reopened_event_case):
+    """FR-DRV-006's half of the same defect, and the reason it is not merely a duplicate test.
+
+    `explain_slot_eligibility` is a second statement in the same module with its own copy of the
+    join, so it can diverge from the option list independently. It is also the tool whose entire
+    contract is to name the *reason* -- so under the pre-fix code it did not just withhold the
+    slot, it actively told the driver a dock event was in the way of a dock that was working.
+    """
+    case = reopened_event_case
+    reopened = case["explained_reopened"]
+    outage = case["explained_outage"]
+    record_evidence(
+        "7. #109: explain_slot_eligibility",
+        f"reopened={reopened.eligible} ({reopened.failure_code}) / "
+        f"outage={outage.eligible} ({outage.failure_code})",
+    )
+    assert reopened.eligible, (
+        "explain_slot_eligibility refused a slot whose dock had come back up, with "
+        f"{reopened.failure_code}: {reopened.message}"
+    )
+    assert not outage.eligible and outage.failure_code == "DOCK_UNAVAILABLE", (
+        f"the genuine outage stopped being explained: eligible={outage.eligible}, "
+        f"code={outage.failure_code}"
     )

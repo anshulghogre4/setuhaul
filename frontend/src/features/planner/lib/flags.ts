@@ -478,34 +478,49 @@ export const dockBoardEnabled = true
  * implementation of it"*, citing both callers. `listPendingSchedulingRuns` is wired to it and the
  * old "unknown count" degrade is deleted, along with the button's third state.
  *
- * ## Why it is STILL OFF, and this time the blocker was measured, not inferred
+ * ## ON since 2026-09-02, and the round trip was DRIVEN rather than inferred
  *
- * **The routes are mounted and every one of them 500s.** Driven live on 2026-09-02 against the
- * restarted backend (91 paths, all five sequencer routes present in `/openapi.json`):
+ * This flag stayed off through two earlier checkpoints on purpose. First the routes did not exist;
+ * then they were mounted but **every one of them 500'd** on
+ * `UndefinedTableError: relation "public.scheduling_runs" does not exist`, because the migration was
+ * written and unapplied. That second state is exactly why *"the route appears in `/openapi.json`"*
+ * was never accepted here as evidence: a mounted route is not a working feature.
+ *
+ * The owner applied the migration. Re-run against the live stack, read-and-propose only:
  *
  * ```
- * POST /api/v1/scheduling/proposals          -> 500 INTERNAL_ERROR
- * GET  /api/v1/scheduling/runs?status=...    -> 500 INTERNAL_ERROR
- * POST /operations/escalations/{id}/sequencer-proposal (after acknowledge) -> 500 INTERNAL_ERROR
- *   asyncpg.exceptions.UndefinedTableError:
- *   relation "public.scheduling_runs" does not exist
+ * POST /api/v1/scheduling/proposals {facility_id: FAC-JAI-01}
+ *   -> 200 code=PROPOSED run=SR-8AF07A240725 policy_version=sprint3_constraints_v1
+ *      horizon 4h ROLLING_WINDOW · counts {0,0,0,0} · objective.churn_count=0
+ * GET  /api/v1/scheduling/runs/SR-8AF07A240725
+ *   -> 200 replayed the SAME object (SS7.5.3's "replayable a month later")
+ * GET  /api/v1/scheduling/runs?facility_id=&status=PROPOSED
+ *   -> 200 count=1, summary keys matching `SchedulingRunSummary` exactly
+ * POST /api/v1/scheduling/proposals  (again, immediately)
+ *   -> 200 code=RUN_ALREADY_ACTIVE + active_run naming the incumbent   [SS5.1 debounce]
+ * POST /api/v1/scheduling/runs/{id}/apply {snapshot_hash: deliberately stale}
+ *   -> 409 SNAPSHOT_DRIFT, full ApplyResult in errors[0].detail        [Flow 9 step 4]
  * ```
  *
- * **The migration `supabase/migrations/20260902160000_scheduling_runs.sql` is written but has not
- * been applied to this database.** The code shipped; the schema did not. This is precisely why
- * "the routes appear in `/openapi.json`" was never sufficient evidence to flip — a mounted route
- * is not a working feature, and flipping here would have put a 500 behind every control on this
- * surface's proposal path.
+ * **No apply was ever driven against a real snapshot hash**, deliberately: an applied run rewrites
+ * real driver promises. The proposal was left un-applied and the only apply attempted was the
+ * deliberate drift refusal, which writes no capacity. That is the safe honest bar.
  *
- * Worth recording because it is reusable: the failing statement is the horizon sweep
- * (`UPDATE ... SET status = 'SUPERSEDED' ... WHERE horizon_end <= now`), which runs *before* the
- * insert — so the failure is immediate and total rather than partial, and no half-written run can
- * exist as a result of it.
+ * **The empty diff is the data, not a defect.** FAC-JAI-01 has no appointments inside the rolling
+ * four-hour horizon, so an honest run returns `{0,0,0,0}` with a real explanation line. The path is
+ * proven; a populated diff needs seeded appointments in-horizon, which this pass would not
+ * manufacture against the demo cast.
  *
- * **Exit criterion, now a single step:** apply the migration, then re-run the sweep row
- * *"Sequencer engine — live round trip"* in `tests/sweep/03-planner.spec.ts`, which drives a real
- * propose and reports the outcome. Flip only when it stops reporting `BLOCKED-ENV`.
- * **Do not drive an APPLY against the demo cast to satisfy this** — an applied run rewrites real
- * promises; a proposal left un-applied, or a deliberate `SNAPSHOT_DRIFT`, is the safe proof.
+ * ## One measured behaviour worth knowing before reading the code
+ *
+ * A drifted run comes back `status: SUPERSEDED` with `superseded_reason: SNAPSHOT_DRIFT`, and the
+ * facility's pending count drops to 0. That is deliberate and it is what makes `edge-cases.md`
+ * section 5 true -- *"the fix is a fresh proposal, not forcing the stale one through"* -- because it
+ * both retires the stale run and frees the one-active-run index so "Request a fresh proposal"
+ * succeeds immediately. Verified: `status` is `PROPOSED` immediately before the apply, so the
+ * transition belongs to the apply path and not to the horizon sweep.
+ *
+ * **To revert:** set this to `false`. The overlay and both toolbar controls return to their Inactive
+ * states with their reasons; nothing else needs touching.
  */
-export const sequencerProposalEnabled = false
+export const sequencerProposalEnabled = true
