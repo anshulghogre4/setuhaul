@@ -22,7 +22,7 @@
 | **Database** | Supabase PostgreSQL, `ap-south-1` | Decided |
 | **Session/cache** | Upstash Redis, `ap-south-1`, **native protocol over persistent connection** | Decided |
 | **Identity** | Supabase Auth (user) + AgentCore Identity (workload); scope from `user_scopes`, enforced in the repository | Decided |
-| **Background jobs** | EventBridge Scheduler (1-min) → FastAPI internal endpoint — expiry sweeper + outbox drain | Decided |
+| **Background jobs** | EventBridge scheduled rule → API destination → FastAPI internal endpoint (1-min) — expiry sweeper + outbox drain *(Correction 2026-09-02, #111: EventBridge **Scheduler** cannot target an HTTPS API destination -- its targets are templated AWS services + the AWS-SDK universal target only. The built shape is an EventBridge **scheduled rule** (default bus, `rate(1 minute)`) -> connection (API_KEY header) -> API destination -> the FastAPI route via CloudFront. Same 1-minute floor, same route; artifacts in `deploy/eventbridge-scheduler/`.)* | Decided |
 | **Notifications** | Web push (VAPID) + SES email. **SMS dropped** — not free, DLT registration required | Decided |
 | **Observability** | LangSmith — thread-scoped nested traces, background flush | Decided |
 | **Frontend** | React 19 + Vite + TypeScript + Tailwind; driver = PWA | Decided |
@@ -180,7 +180,7 @@ architecture already solved.
 
 | Concern | Decision | Why |
 |---|---|---|
-| Trigger | **EventBridge Scheduler, 1-minute rate**, `ap-south-1` | Native, no infrastructure to run, adequate per the reasoning above |
+| Trigger | **EventBridge scheduled rule → API destination, 1-minute rate**, `ap-south-1` (corrected 2026-09-02, #111 -- see §1's note) | Native, no infrastructure to run, adequate per the reasoning above |
 | Target | An **authenticated internal endpoint on the FastAPI service** — not a separate Lambda | Reuses the existing connection pool and stays inside the co-located tier; a Lambda would need its own VPC config, cold starts, and a second DB connection path |
 | Transactionality | The sweeper's transition and `confirm_request` **take the row under the same transaction** — exactly one commits, loser gets `ALREADY_ACTIONED` with the winning transition named | §7.5.1's stated resolution to §9.2's nastiest race. **This is the correctness requirement**, not the cadence |
 | Clock | Uses the **injectable clock** threaded through the engine, TTL sweepers and sequencer (§9.1) | Makes `pending_expiry_vs_planner_confirm` reproducible on demand rather than by timing luck |
@@ -228,7 +228,7 @@ satisfied a regulatory constraint for free. Worth remembering if SMS is ever rev
 
 ### Outbox drain
 
-Same mechanism as §5's sweeper — EventBridge Scheduler → the FastAPI service. The outbox row is written
+Same mechanism as §5's sweeper — an EventBridge scheduled rule → API destination → the FastAPI service (corrected 2026-09-02, #111). The outbox row is written
 **in the same transaction** as the business change; delivery is a separate, retryable step. Delivery status
 lands in `operational_messages`, and a `FAILED` send raises `NOTIFICATION_FAILED` (§7.4) — *"a confirmation
 nobody received is not a confirmation."*

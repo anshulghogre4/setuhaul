@@ -1,0 +1,110 @@
+{
+  "family": "default-setuhaul-api",
+  "taskRoleArn": "arn:aws:iam::118490268011:role/setuhaul-bff-task-role",
+  "executionRoleArn": "arn:aws:iam::118490268011:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "Main",
+      "image": "118490268011.dkr.ecr.ap-south-1.amazonaws.com/setuhaul-api:latest",
+      "cpu": 1024,
+      "memoryReservation": 2048,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp",
+          "name": "main-8000-tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "ap-south-1"
+        },
+        {
+          "name": "PORT",
+          "value": "8000"
+        },
+        {
+          "name": "CORS_ORIGINS",
+          "value": "http://localhost:5173,http://127.0.0.1:5173"
+        },
+        {
+          "name": "LANGSMITH_PROJECT",
+          "value": "setuhaul-agentcore"
+        },
+        {
+          "name": "AGENTCORE_RUNTIME_ARN",
+          "value": "arn:aws:bedrock-agentcore:ap-south-1:118490268011:runtime/SetuHaulAgent_SetuHaulAgent-E9mrbf5VGD"
+        },
+        {
+          "name": "JOB_ACTOR_USER_ID",
+          "value": "USR-SYSTEM-SWEEPER"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "GOOGLE_API_KEY",
+          "valueFrom": "/setuhaul/google-api-key"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "/setuhaul/openai-api-key"
+        },
+        {
+          "name": "UPSTASH_REDIS_REST_URL",
+          "valueFrom": "/setuhaul/upstash-redis-rest-url"
+        },
+        {
+          "name": "UPSTASH_REDIS_REST_TOKEN",
+          "valueFrom": "/setuhaul/upstash-redis-rest-token"
+        },
+        {
+          "name": "LANGSMITH_API_KEY",
+          "valueFrom": "/setuhaul/langsmith-api-key"
+        },
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "/setuhaul/database-url"
+        },
+        {
+          "name": "SUPABASE_URL",
+          "valueFrom": "/setuhaul/supabase-url"
+        },
+        {
+          "name": "JOB_AUTH_TOKEN",
+          "valueFrom": "arn:aws:ssm:ap-south-1:118490268011:parameter/setuhaul/job-auth-token"
+        },
+        {
+          "name": "SENTRY_DSN",
+          "valueFrom": "arn:aws:ssm:ap-south-1:118490268011:parameter/setuhaul/sentry-dsn"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/ecs/default/setuhaul-api-ap-south-1",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "cpuArchitecture": "ARM64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "enableFaultInjection": false
+}

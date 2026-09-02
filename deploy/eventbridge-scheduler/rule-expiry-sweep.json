@@ -1,0 +1,7 @@
+{
+  "Name": "setuhaul-expiry-sweep-every-minute",
+  "Description": "Issue #20/#111: fires the M8 expiry sweeper once a minute. Scheduled rules only exist on the default event bus and one minute is EventBridge's finest resolution.",
+  "ScheduleExpression": "rate(1 minute)",
+  "State": "ENABLED",
+  "EventBusName": "default"
+}

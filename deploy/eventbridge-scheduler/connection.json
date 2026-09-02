@@ -1,0 +1,11 @@
+{
+  "Name": "setuhaul-internal-jobs",
+  "Description": "API_KEY auth for SetuHaul internal job routes. ApiKeyName is the literal HTTP header name the FastAPI guard reads (require_job_token in backend/app/api/v1/routers/internal.py). ApiKeyValue is substituted at apply time from SSM /setuhaul/job-auth-token and is NEVER checked in.",
+  "AuthorizationType": "API_KEY",
+  "AuthParameters": {
+    "ApiKeyAuthParameters": {
+      "ApiKeyName": "X-SetuHaul-Job-Token",
+      "ApiKeyValue": "__JOB_AUTH_TOKEN__"
+    }
+  }
+}

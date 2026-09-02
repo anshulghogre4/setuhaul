@@ -1,0 +1,8 @@
+{
+  "Name": "setuhaul-notification-drain",
+  "Description": "#94 outbox drain. POSTs the FastAPI internal route through the CloudFront front door (the ap-south-1 ALB listens on HTTP:80 only; API destinations require https).",
+  "ConnectionArn": "__CONNECTION_ARN__",
+  "InvocationEndpoint": "https://d382h70qmz3ife.cloudfront.net/internal/jobs/notification-drain",
+  "HttpMethod": "POST",
+  "InvocationRateLimitPerSecond": 1
+}

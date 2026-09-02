@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SetuHaulInvokeInternalJobApiDestinations",
+      "Effect": "Allow",
+      "Action": "events:InvokeApiDestination",
+      "Resource": [
+        "arn:aws:events:ap-south-1:118490268011:api-destination/setuhaul-expiry-sweep",
+        "arn:aws:events:ap-south-1:118490268011:api-destination/setuhaul-expiry-sweep/*",
+        "arn:aws:events:ap-south-1:118490268011:api-destination/setuhaul-notification-drain",
+        "arn:aws:events:ap-south-1:118490268011:api-destination/setuhaul-notification-drain/*"
+      ]
+    }
+  ]
+}

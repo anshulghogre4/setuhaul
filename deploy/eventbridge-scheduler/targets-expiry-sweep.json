@@ -1,0 +1,16 @@
+{
+  "Rule": "setuhaul-expiry-sweep-every-minute",
+  "EventBusName": "default",
+  "Targets": [
+    {
+      "Id": "expiry-sweep-api-destination",
+      "Arn": "__API_DESTINATION_ARN__",
+      "RoleArn": "arn:aws:iam::118490268011:role/setuhaul-eventbridge-jobs-role",
+      "Input": "{}",
+      "RetryPolicy": {
+        "MaximumEventAgeInSeconds": 60,
+        "MaximumRetryAttempts": 2
+      }
+    }
+  ]
+}

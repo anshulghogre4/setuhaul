@@ -1,0 +1,7 @@
+{
+  "Name": "setuhaul-notification-drain-every-minute",
+  "Description": "Issue #94/#111: fires the notification outbox drain once a minute. Scheduled rules only exist on the default event bus and one minute is EventBridge's finest resolution.",
+  "ScheduleExpression": "rate(1 minute)",
+  "State": "ENABLED",
+  "EventBusName": "default"
+}

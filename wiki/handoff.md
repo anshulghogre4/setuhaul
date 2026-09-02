@@ -10,6 +10,9 @@ last_updated: 2026-09-01
 
 ## Latest work
 
+- **2026-09-02 21:30 IST: #111 code half done; commit message handed.** **Owner runbook (deploy/README.md #111 section): generate token -> aws ssm put-parameter --region ap-south-1 /setuhaul/job-auth-token (SecureString) [+ /setuhaul/sentry-dsn optional] -> deploy/apply_ecs_task_definition.ps1 -> deploy/eventbridge-scheduler/apply_eventbridge_jobs.ps1 -> python docs/scripts/run_internal_job.py expiry-sweep (expect 200). Then the #92 cleanup delete (command on #92), #45 console, #110 rulings.** Sandbox reseeded after the local sweep. Local stack healthy.
+
+
 - **2026-09-02 20:40 IST: deploy day 2 complete; commit message handed.** Uncommitted: resolver fix + test, wrapper print fix, writeback. **Owner: (1) push; (2) deploy/README.md IAM cleanup (confirm CDK grant, then delete hand-patched policy); (3) #111 -- JOB_AUTH_TOKEN into the ECS task def (+ SENTRY_DSN when ready) and the EventBridge leg for expiry-sweep + notification-drain; (4) #45 console; (5) #110 rulings.** Next agent work only when a ruling or provisioning lands. Local stack: uvicorn:8000 + vite:5173 (restart backend to pick up today's last two edits).
 
 

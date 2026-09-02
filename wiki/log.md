@@ -1180,3 +1180,7 @@ last_updated: 2026-08-29
 ## 2026-09-02 20:40 IST | deployment | night live on prod: ECS + AgentCore v5 (self-smoke OK); free-key Gemini wire-proven; #111 filed; resolver fix
 
 - 8 prod probes green; generativelanguage host x8 / aiplatform x0; outbox producers write; drain blocked by missing JOB_AUTH_TOKEN (#111 -- both internal jobs refuse on prod). Escalation-only recipient resolver fixed (46/46 unit, proof 169/0). Wrapper print made console-safe (crashed after a green smoke). #109 closed on evidence. Updated [[current-state]], [[handoff]], root CHANGELOG.
+
+## 2026-09-02 21:30 IST | infra | #111 code half (task-def + EventBridge rule->API-destination IaC + runner + smoke); #92 grant verified live; #45 roles mapped; TECH_STACK corrected
+
+- Second blocker found (JOB_ACTOR_USER_ID). Scheduler cannot target HTTPS -- rule/connection/API-destination shape, doc-cited. Local runs: sweep 200, drain 8/8. Read-only AWS: no IAM change needed for ECS secrets; zero rules today; live role carries the CDK SSM grant (cleanup safe); retired us-east-1 runtime -> role CR9xksGyWbGA. Updated [[current-state]], [[handoff]], root CHANGELOG.

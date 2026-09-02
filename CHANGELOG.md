@@ -2,6 +2,18 @@
 
 This append-only log records material implementation, architecture, workflow, debugging, and documentation changes. Entries use IST and state verification honestly.
 
+## 2026-09-02 21:30 IST - #111 code half built (task-def artifact, EventBridge rule->API-destination IaC, runner, deploy smoke); #92's IaC grant verified on the live role; #45's role mapping verified; TECH_STACK transport corrected
+
+**Agent/surface:** Claude Fable 5.1 (Claude Code) + one `deployment-engineer` subagent (Claude Opus 5); coordinator did the read-only AWS verifications.
+
+- **#111 code half** (owner runs the appliers; no AWS writes made): `deploy/ecs-task-definition.json` = the live rev-1 definition as the checked-in source of truth + `JOB_AUTH_TOKEN`/`SENTRY_DSN` as ap-south-1 SSM secrets + **`JOB_ACTOR_USER_ID`** -- a SECOND blocker of the same class the agent found: even with the token, expiry-sweep would 503 `SWEEPER_ACTOR_UNCONFIGURED` because the sweeper refuses unattributable audit rows (value: the seeded USR-SYSTEM-SWEEPER account). Appliers for task-def and EventBridge with $LASTEXITCODE guards. **Transport finding, doc-cited**: EventBridge *Scheduler* cannot target an HTTPS API destination (templated AWS targets + SDK universal target only) -- built as a scheduled rule (default bus, rate 1 min) -> connection (API_KEY header) -> API destination -> CloudFront -> the route; retries deliberately 60s/2 (the next minute IS the retry). `docs/scripts/run_internal_job.py` one-shot runner; guarded post-deploy smoke in both ECS scripts that FAILS the deploy on JOB_AUTH_UNCONFIGURED (loud skip when no local token). Verified: 10 JSON artifacts parse + validate against CLI skeletons; scripts parse; **real local job runs** -- expiry-sweep 200 (expired the sandbox's overdue pending row; reseeded after), notification-drain 200 (claimed 8 / delivered 8 -- the backlog #111 described); appliers dry-run; the task-def preflight correctly REFUSED against real AWS (both params missing). Read-only AWS facts: ecsTaskExecutionRole already has ssm:Get* and the params are under alias/aws/ssm, so NO IAM change; ALB is HTTP-only (hence CloudFront); zero rules/destinations/schedules exist today. Two script bugs found+fixed in verification (MSYS file:// paths for aws.exe; PS 5.1 draining the error stream).
+- **TECH_STACK.md corrected in place** (3 rows, dated): the scheduler transport is a rule->API destination, not Scheduler.
+- **#92 verified on the deployed role** (read-only IAM): the live runtime (v5) uses ...-WhTuGOyFcRID whose CDK DefaultPolicy now carries the SSM grant -- the IaC fix is real; the hand-patched SetuHaulSsmHydrate is redundant and its deletion is now SAFE (command on #92).
+- **#45 mapping verified** (read-only): the retired us-east-1 runtime 18B4pX4XF1 (v10, 2026-08-25) runs on ...-CR9xksGyWbGA (hand policy SetuHaulSsmRead, no CDK grant) -- decommission deletes both; us-east-1 also hosts an unrelated EricaAgent (do not touch). Checklist refined on the issue.
+- Found-not-fixed (recorded): /setuhaul/supabase-jwks-issuer-base exists in SSM but is not on the task def; put_hosting_ssm.py still hard-codes us-east-1 (#45 legacy -- runbook says put-parameter directly).
+
+**Tracker: #45 (owner console), #110 (owner rulings), #111 (owner provisioning: token -> SSM -> task-def applier -> EventBridge applier -> runner check). Every agent-buildable piece is in the tree.**
+
 ## 2026-09-02 20:40 IST - Deploy day 2: the whole night is LIVE on production and verified; free-key Gemini confirmed by wire log; #111 filed (job token never provisioned on ECS); outbox recipient resolver fixed
 
 **Agent/surface:** Claude Fable 5.1 (Claude Code) + owner (ECS script). 
